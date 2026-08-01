@@ -1,0 +1,4 @@
+{
+  "*": ["node scripts/check-secrets.mjs"],
+  "*.{ts,tsx,js,jsx,json,yaml,yml,css,md}": ["prettier --write"]
+}

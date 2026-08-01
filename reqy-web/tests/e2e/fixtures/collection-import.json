@@ -1,0 +1,38 @@
+{
+  "collections": [
+    {
+      "id": "imported-col-1",
+      "name": "Imported Collection",
+      "description": "A collection imported from fixture",
+      "color": "emerald",
+      "icon": "package",
+      "requests": [
+        {
+          "id": "req-import-1",
+          "name": "Imported request",
+          "method": "GET",
+          "url": "https://httpbin.org/get",
+          "endpoint": "/get",
+          "headers": {},
+          "body": "",
+          "queryParams": [],
+          "createdAt": 1670000000000,
+          "updatedAt": 1670000000000
+        }
+      ],
+      "createdAt": 1670000000000,
+      "updatedAt": 1670000000000
+    }
+  ],
+  "environments": [
+    {
+      "id": "env-global",
+      "name": "Global",
+      "color": "slate",
+      "variables": [],
+      "createdAt": 1670000000000,
+      "updatedAt": 1670000000000
+    }
+  ],
+  "variableMappings": []
+}

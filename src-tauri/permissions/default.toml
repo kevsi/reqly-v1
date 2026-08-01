@@ -1,0 +1,232 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "allow-fetch-proxy"
+description = "Allows the fetch_proxy command"
+commands.allow = ["fetch_proxy"]
+
+[[permission]]
+identifier = "allow-export-json"
+description = "Allows the export_json command"
+commands.allow = ["export_json"]
+
+[[permission]]
+identifier = "allow-open-external"
+description = "Allows the open_external command"
+commands.allow = ["open_external"]
+
+[[permission]]
+identifier = "allow-start-capture-proxy"
+description = "Allows the start_capture_proxy command"
+commands.allow = ["start_capture_proxy"]
+
+[[permission]]
+identifier = "allow-stop-capture-proxy"
+description = "Allows the stop_capture_proxy command"
+commands.allow = ["stop_capture_proxy"]
+
+[[permission]]
+identifier = "allow-start-mcp-server"
+description = "Allows the start_mcp_server command"
+commands.allow = ["start_mcp_server"]
+
+[[permission]]
+identifier = "allow-stop-mcp-server"
+description = "Allows the stop_mcp_server command"
+commands.allow = ["stop_mcp_server"]
+
+[[permission]]
+identifier = "allow-get-mcp-server-status"
+description = "Allows the get_mcp_server_status command"
+commands.allow = ["get_mcp_server_status"]
+
+[[permission]]
+identifier = "allow-read-mcp-bundle"
+description = "Allows the read_mcp_bundle command"
+commands.allow = ["read_mcp_bundle"]
+
+[[permission]]
+identifier = "allow-sync-mcp-collections"
+description = "Allows the sync_mcp_collections command"
+commands.allow = ["sync_mcp_collections"]
+
+[[permission]]
+identifier = "allow-save-file"
+description = "Allows the save_file command"
+commands.allow = ["save_file"]
+
+[[permission]]
+identifier = "allow-list-captured-sessions"
+description = "Allows the list_captured_sessions command"
+commands.allow = ["list_captured_sessions"]
+
+[[permission]]
+identifier = "allow-get-captured-session"
+description = "Allows the get_captured_session command"
+commands.allow = ["get_captured_session"]
+
+[[permission]]
+identifier = "allow-clear-captured-sessions"
+description = "Allows the clear_captured_sessions command"
+commands.allow = ["clear_captured_sessions"]
+
+[[permission]]
+identifier = "allow-set-bandwidth-limit"
+description = "Allows the set_bandwidth_limit command"
+commands.allow = ["set_bandwidth_limit"]
+
+[[permission]]
+identifier = "allow-enqueue-request"
+description = "Allows the enqueue_request command"
+commands.allow = ["enqueue_request"]
+
+[[permission]]
+identifier = "allow-list-pending"
+description = "Allows the list_pending command"
+commands.allow = ["list_pending"]
+
+[[permission]]
+identifier = "allow-dequeue-ready"
+description = "Allows the dequeue_ready command"
+commands.allow = ["dequeue_ready"]
+
+[[permission]]
+identifier = "allow-get-encryption-passphrase"
+description = "Allows the get_encryption_passphrase command"
+commands.allow = ["get_encryption_passphrase"]
+
+[[permission]]
+identifier = "allow-exchange-oauth-code"
+description = "Allows the exchange_oauth_code command"
+commands.allow = ["exchange_oauth_code"]
+
+[[permission]]
+identifier = "allow-get-oauth-client-id"
+description = "Allows the get_oauth_client_id command"
+commands.allow = ["get_oauth_client_id"]
+
+[[permission]]
+identifier = "allow-mark-sent"
+description = "Allows the mark_sent command"
+commands.allow = ["mark_sent"]
+
+# ── Git commands ─────────────────────────────────────────────────────────
+[[permission]]
+identifier = "allow-git-init"
+description = "Allows the git_init command"
+commands.allow = ["git_init"]
+
+[[permission]]
+identifier = "allow-git-open"
+description = "Allows the git_open command"
+commands.allow = ["git_open"]
+
+[[permission]]
+identifier = "allow-git-status"
+description = "Allows the git_status command"
+commands.allow = ["git_status"]
+
+[[permission]]
+identifier = "allow-git-log"
+description = "Allows the git_log command"
+commands.allow = ["git_log"]
+
+[[permission]]
+identifier = "allow-git-commit"
+description = "Allows the git_commit command"
+commands.allow = ["git_commit"]
+
+[[permission]]
+identifier = "allow-git-stage"
+description = "Allows the git_stage command"
+commands.allow = ["git_stage"]
+
+[[permission]]
+identifier = "allow-git-stage-all"
+description = "Allows the git_stage_all command"
+commands.allow = ["git_stage_all"]
+
+[[permission]]
+identifier = "allow-git-unstage"
+description = "Allows the git_unstage command"
+commands.allow = ["git_unstage"]
+
+[[permission]]
+identifier = "allow-git-diff"
+description = "Allows the git_diff command"
+commands.allow = ["git_diff"]
+
+[[permission]]
+identifier = "allow-git-branch-list"
+description = "Allows the git_branch_list command"
+commands.allow = ["git_branch_list"]
+
+[[permission]]
+identifier = "allow-git-branch-create"
+description = "Allows the git_branch_create command"
+commands.allow = ["git_branch_create"]
+
+[[permission]]
+identifier = "allow-git-branch-delete"
+description = "Allows the git_branch_delete command"
+commands.allow = ["git_branch_delete"]
+
+[[permission]]
+identifier = "allow-git-branch-switch"
+description = "Allows the git_branch_switch command"
+commands.allow = ["git_branch_switch"]
+
+[[permission]]
+identifier = "allow-git-remote-list"
+description = "Allows the git_remote_list command"
+commands.allow = ["git_remote_list"]
+
+[[permission]]
+identifier = "allow-git-remote-add"
+description = "Allows the git_remote_add command"
+commands.allow = ["git_remote_add"]
+
+[[permission]]
+identifier = "allow-git-remote-remove"
+description = "Allows the git_remote_remove command"
+commands.allow = ["git_remote_remove"]
+
+[[permission]]
+identifier = "allow-git-push"
+description = "Allows the git_push command"
+commands.allow = ["git_push"]
+
+[[permission]]
+identifier = "allow-git-push-force"
+description = "Allows the git_push_force command"
+commands.allow = ["git_push_force"]
+
+[[permission]]
+identifier = "allow-git-fetch"
+description = "Allows the git_fetch command"
+commands.allow = ["git_fetch"]
+
+[[permission]]
+identifier = "allow-git-pull"
+description = "Allows the git_pull command"
+commands.allow = ["git_pull"]
+
+[[permission]]
+identifier = "allow-git-clone"
+description = "Allows the git_clone command"
+commands.allow = ["git_clone"]
+
+[[permission]]
+identifier = "allow-git-sync-collections"
+description = "Allows the git_sync_collections command"
+commands.allow = ["git_sync_collections"]
+
+[[permission]]
+identifier = "allow-git-write-collection-file"
+description = "Allows the git_write_collection_file command"
+commands.allow = ["git_write_collection_file"]
+
+[[permission]]
+identifier = "allow-git-ls-remote"
+description = "Allows the git_ls_remote command"
+commands.allow = ["git_ls_remote"]

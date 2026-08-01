@@ -1,0 +1,71 @@
+import { isIP } from "node:net";
+import { isBlockedIp } from "@/lib/security/ssrf";
+import { resolveCached } from "@/lib/security/dns-cache";
+
+const BLOCKED_HOSTNAME_TOKENS = new Set([
+  "localhost",
+  "localdomain",
+  "local",
+  "internal",
+  "private",
+  "intranet",
+  "corp",
+  "home",
+  "lan",
+]);
+
+function isHostnameBlocked(hostname: string): boolean {
+  const lower = hostname.toLowerCase().trim();
+  if (!lower) return true;
+  if (lower === "localhost" || lower === "127.0.0.1" || lower === "0.0.0.0" || lower === "::1") {
+    return true;
+  }
+  const labels = lower.split(".");
+  return labels.some((label) => {
+    if (!label) return false;
+    if (BLOCKED_HOSTNAME_TOKENS.has(label)) return true;
+    return label.endsWith("local") || label.endsWith("internal");
+  });
+}
+
+async function resolveHostIfNeeded(hostname: string): Promise<string | null> {
+  if (isIP(hostname)) return hostname;
+  return await resolveCached(hostname);
+}
+
+export async function getCustomUrl(body: Record<string, unknown>): Promise<string> {
+  const raw = typeof body.openaiUrl === "string" ? body.openaiUrl.trim() : "";
+  if (!raw) {
+    throw new Error("Custom provider requires a base URL");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("Invalid custom provider URL");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("URL must use http or https");
+  }
+  if (isHostnameBlocked(parsed.hostname)) {
+    throw new Error("Custom provider URL cannot point to localhost or private IP");
+  }
+
+  const resolved = await resolveHostIfNeeded(parsed.hostname);
+  if (!resolved || isBlockedIp(resolved)) {
+    throw new Error("Custom provider URL cannot point to localhost or private IP");
+  }
+
+  return raw.replace(/\/+$/, "") + "/chat/completions";
+}
+
+export async function isOllamaHostAllowed(host: string): Promise<boolean> {
+  const lower = host.toLowerCase().trim();
+  if (!lower) return false;
+  if (isHostnameBlocked(lower)) return false;
+  if (isIP(lower) && isBlockedIp(lower)) return false;
+
+  const resolved = await resolveHostIfNeeded(lower);
+  if (!resolved) return false;
+  return !isBlockedIp(resolved);
+}

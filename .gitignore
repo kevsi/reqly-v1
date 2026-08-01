@@ -1,0 +1,68 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+
+# Environment variables
+.env
+.env*.local
+.env.local
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+target/
+src-tauri/target/
+*.log
+
+# ── Security: never commit secrets ────────────────────────────────
+keys.txt
+secrets.txt
+*.pem
+*.key
+
+# ── Build artifacts & generated files ──────────────────────────────
+**/tsconfig.tsbuildinfo
+**/lint-output.txt
+**/package-lock.json
+reqy-web/out/
+sync-server/dist/
+sync-server/data/
+reqy-mcp/dist/
+**/test-results/
+*.tsbuildinfo
+
+# ── Agent/tooling working directories ──────────────────────────
+.kilo/
+.claude/
+.kimchi/
+.imgtool-tmp/
+autoresearch/
+tasks/
+docs/superpowers/
+.freebuff/
+
+# ── Misc temp/debug files ──────────────────────────────────────────
+test.txt
+featurres.txt
+settings_tiny.jpg
+RECOVERY_STEPS.md
+"debug auth/"
+
+# ── Generated SDK output (produced by the SDK generator) ──────────
+general-typescript-fetch/
+general-typescript-fetch.zip
+
+# npm lockfiles (pnpm only)
+package-lock.json
+
+# Build artifacts
+recli/dist/
+packages/shared/dist/
+
+# OS artifacts
+*.deb

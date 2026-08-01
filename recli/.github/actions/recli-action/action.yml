@@ -1,0 +1,73 @@
+name: "Recli API Test Runner"
+description: "Run Recli API test collections in CI"
+author: "recli"
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  collection:
+    description: "Path to the collection JSON file"
+    required: true
+  env:
+    description: "Environment name to use"
+    required: false
+  timeout:
+    description: "Request timeout in milliseconds"
+    required: false
+    default: "30000"
+  reporter:
+    description: "Report format: cli, junit, html"
+    required: false
+    default: "junit"
+  output:
+    description: "Path for the report file"
+    required: false
+    default: "recli-report.xml"
+  parallel:
+    description: "Run requests in parallel"
+    required: false
+    default: "false"
+  iterations:
+    description: "Number of iterations"
+    required: false
+    default: "1"
+  data:
+    description: "Data file for iterations (CSV or JSON)"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Install recli
+      shell: bash
+      run: npm install -g recli
+
+    - name: Validate collection
+      shell: bash
+      run: recli validate "${{ inputs.collection }}"
+
+    - name: Run collection
+      shell: bash
+      run: |
+        RECLI_ARGS=""
+        if [ -n "${{ inputs.env }}" ]; then RECLI_ARGS="$RECLI_ARGS --env ${{ inputs.env }}"; fi
+        if [ -n "${{ inputs.timeout }}" ]; then RECLI_ARGS="$RECLI_ARGS --timeout ${{ inputs.timeout }}"; fi
+        if [ -n "${{ inputs.reporter }}" ]; then RECLI_ARGS="$RECLI_ARGS --reporter ${{ inputs.reporter }}"; fi
+        if [ -n "${{ inputs.output }}" ]; then RECLI_ARGS="$RECLI_ARGS --output ${{ inputs.output }}"; fi
+        if [ "${{ inputs.parallel }}" = "true" ]; then RECLI_ARGS="$RECLI_ARGS --parallel"; fi
+        if [ -n "${{ inputs.iterations }}" ]; then RECLI_ARGS="$RECLI_ARGS --iterations ${{ inputs.iterations }}"; fi
+        if [ -n "${{ inputs.data }}" ]; then RECLI_ARGS="$RECLI_ARGS --data ${{ inputs.data }}"; fi
+        recli run "${{ inputs.collection }}" $RECLI_ARGS
+
+    - name: Upload report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: recli-report
+        path: ${{ inputs.output }}

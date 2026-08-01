@@ -1,0 +1,179 @@
+# HTTP Status Codes — Guide de référence
+
+Ce document liste les principaux codes de statut HTTP, leurs significations et cas d'usage courants.
+
+## 1xx — Réponses informationnelles
+
+### 100 Continue
+Indique que la partie initiale de la requête a été reçue et que le client peut continuer.
+Cas d'usage : envoi de corps volumineux, vérification avant envoi.
+
+### 101 Switching Protocols
+Le serveur accepte de changer de protocole (ex: upgrade vers WebSocket).
+Cas d'usage : établissement d'une connexion WebSocket.
+
+### 102 Processing (WebDAV)
+Le serveur a reçu la requête mais n'a pas encore terminé le traitement.
+Cas d'usage : opérations WebDAV longues.
+
+### 103 Early Hints
+Permet au serveur d'envoyer des en-têtes préliminaires avant la réponse finale.
+Cas d'usage : préchargement de ressources (preload, preconnect).
+
+## 2xx — Succès
+
+### 200 OK
+Requête réussie. Signification standard pour les réponses HTTP réussies.
+Cas d'usage : GET réussi, POST/PUT avec réponse standard.
+
+### 201 Created
+Ressource créée avec succès.
+Cas d'usage : POST qui crée une nouvelle ressource (ex: nouveau compte utilisateur).
+
+### 202 Accepted
+Requête acceptée mais traitement non terminé (asynchrone).
+Cas d'usage : file d'attente, batch processing.
+
+### 203 Non-Authoritative Information
+Métadonnées de réponse transformées par un proxy.
+Cas d'usage : caches transparents, transformations CDN.
+
+### 204 No Content
+Requête réussie, mais aucune donnée à renvoyer.
+Cas d'usage : DELETE réussi, PUT sans corps de réponse.
+
+### 205 Reset Content
+Demande au client de réinitialiser la vue du document.
+Cas d'usage : formulaires après soumission.
+
+### 206 Partial Content
+Réponse partielle suite à une requête Range.
+Cas d'usage : téléchargements résumables, streaming vidéo.
+
+## 3xx — Redirections
+
+### 301 Moved Permanently
+La ressource a été déplacée définitivement à une nouvelle URL.
+Cas d'usage : migration de domaine, refactoring d'API.
+
+### 302 Found
+Redirection temporaire (parfois abusivement appelée "Moved Temporarily").
+Cas d'usage : redirection post-authentification.
+
+### 303 See Other
+Le client doit faire un GET sur une autre URL pour récupérer la ressource.
+Cas d'usage : redirection après POST (Pattern Post/Redirect/Get).
+
+### 304 Not Modified
+La ressource n'a pas été modifiée depuis la dernière requête (cache valide).
+Cas d'usage : utilisation des en-têtes If-Modified-Since, If-None-Match.
+
+### 307 Temporary Redirect
+Redirection temporaire qui préserve la méthode HTTP d'origine.
+Cas d'usage : redirection stricte sans changement de méthode.
+
+### 308 Permanent Redirect
+Redirection permanente qui préserve la méthode HTTP d'origine.
+Cas d'usage : migration d'API avec préservation du verbe.
+
+## 4xx — Erreurs client
+
+### 400 Bad Request
+La requête est mal formée ou syntaxiquement invalide.
+Cas d'usage : JSON invalide, paramètres manquants.
+
+### 401 Unauthorized
+Authentification requise ou échouée.
+Cas d'usage : token manquant, expiré ou invalide.
+
+### 403 Forbidden
+Le serveur refuse la requête, même authentifiée.
+Cas d'usage : permissions insuffisantes, accès à une ressource protégée.
+
+### 404 Not Found
+La ressource demandée n'existe pas.
+Cas d'usage : URL invalide, ressource supprimée.
+
+### 405 Method Not Allowed
+La méthode HTTP n'est pas supportée pour cette ressource.
+Cas d'usage : GET sur une route qui n'accepte que POST.
+
+### 406 Not Acceptable
+Le serveur ne peut pas produire une réponse correspondant aux en-têtes Accept.
+Cas d'usage : négociation de contenu échouée.
+
+### 408 Request Timeout
+Le serveur a timeout en attendant la requête complète.
+Cas d'usage : connexions lentes, client inactif.
+
+### 409 Conflict
+La requête entre en conflit avec l'état actuel de la ressource.
+Cas d'usage : édition concurrente, violation de contrainte d'unicité.
+
+### 410 Gone
+La ressource a été intentionnellement supprimée et ne reviendra pas.
+Cas d'usage : ressource purgée définitivement (vs 404 temporaire).
+
+### 413 Payload Too Large
+Le corps de la requête dépasse la limite acceptée par le serveur.
+Cas d'usage : upload de fichiers trop volumineux.
+
+### 415 Unsupported Media Type
+Le type MIME de la requête n'est pas supporté.
+Cas d'usage : envoi XML à une API qui n'accepte que JSON.
+
+### 418 I'm a teapot (RFC 2324)
+Code humoristique du RFC 2324 (Hyper Text Coffee Pot Control Protocol).
+Cas d'usage : poisson d'avril, easter eggs, Easter egg historique.
+
+### 422 Unprocessable Entity
+La requête est syntaxiquement correcte mais sémantiquement invalide.
+Cas d'usage : validation de formulaire échouée (champs requis manquants).
+
+### 429 Too Many Requests
+Le client a dépassé la limite de taux (rate limiting).
+Cas d'usage : API publique avec quotas.
+
+## 5xx — Erreurs serveur
+
+### 500 Internal Server Error
+Erreur générique côté serveur.
+Cas d'usage : exception non gérée, bug applicatif.
+
+### 501 Not Implemented
+Le serveur ne supporte pas la fonctionnalité demandée.
+Cas d'usage : méthode HTTP non implémentée, feature manquante.
+
+### 502 Bad Gateway
+Le serveur agissant comme proxy a reçu une réponse invalide d'un serveur amont.
+Cas d'usage : microservice en aval en panne.
+
+### 503 Service Unavailable
+Le serveur est temporairement indisponible (surcharge ou maintenance).
+Cas d'usage : déploiement en cours, maintenance planifiée.
+
+### 504 Gateway Timeout
+Le serveur agissant comme proxy n'a pas reçu de réponse à temps du serveur amont.
+Cas d'usage : dépendance externe trop lente.
+
+### 507 Insufficient Storage (WebDAV)
+Le serveur ne peut pas stocker la représentation nécessaire pour compléter la requête.
+Cas d'usage : quota disque atteint.
+
+### 508 Loop Detected
+Le serveur a détecté une boucle infinie dans le traitement de la requête.
+Cas d'usage : redirection circulaire dans une chaîne de proxies.
+
+## Notes sur l'utilisation des codes
+
+### Codes 4xx vs 5xx
+Les codes 4xx indiquent une erreur côté client (requête mal formée ou non autorisée). Les codes 5xx indiquent une erreur côté serveur (impossibilité de traiter une requête valide).
+
+### Bonnes pratiques
+- Toujours retourner le code le plus précis possible
+- Inclure un message d'erreur lisible dans le corps de la réponse
+- Logger côté serveur toutes les erreurs 5xx pour diagnostic
+- Documenter les codes d'erreur spécifiques dans l'API
+
+### Codes personnalisés
+Certaines APIs utilisent des codes personnalisés dans le corps de la réponse (RFC 7807 — Problem Details for HTTP APIs) pour des erreurs métier plus granulaires tout en utilisant un code 4xx ou 5xx générique dans le statut HTTP.

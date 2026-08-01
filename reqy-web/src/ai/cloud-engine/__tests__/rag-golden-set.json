@@ -1,0 +1,62 @@
+[
+  {
+    "id": "q-401",
+    "question": "Comment corriger une erreur 401 Unauthorized sur une API REST ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "401"
+  },
+  {
+    "id": "q-404",
+    "question": "Que signifie une erreur 404 Not Found ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "404"
+  },
+  {
+    "id": "q-422",
+    "question": "Mon API retourne 422, qu'est-ce que cela veut dire ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "422"
+  },
+  {
+    "id": "q-429",
+    "question": "J'obtiens 429 Too Many Requests, comment gérer le rate limiting ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "429"
+  },
+  {
+    "id": "q-500",
+    "question": "Différence entre 500 Internal Server Error et 502 Bad Gateway ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "500"
+  },
+  {
+    "id": "q-503",
+    "question": "503 Service Unavailable, est-ce une erreur client ou serveur ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "503"
+  },
+  {
+    "id": "q-301-vs-307",
+    "question": "Différence entre 301, 302, 307 et 308 redirect ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "301"
+  },
+  {
+    "id": "q-200-vs-201",
+    "question": "Quand utiliser 200 OK plutôt que 201 Created ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "200"
+  },
+  {
+    "id": "q-413",
+    "question": "413 Payload Too Large, comment gérer un body trop gros ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "413"
+  },
+  {
+    "id": "q-415",
+    "question": "415 Unsupported Media Type, comment fixer ?",
+    "expectedSource": "iana-status-codes",
+    "expectedMatch": "415"
+  }
+]

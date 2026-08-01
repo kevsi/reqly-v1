@@ -1,0 +1,271 @@
+/**
+ * Phase 2.3 — LLM client (SSE streaming + tool calling)
+ *
+ * Streams tokens from /api/proxy-ai for any configured provider.
+ * - OpenAI-compatible (openai, openrouter, opencode-zen, deepseek): server
+ *   returns text/event-stream, we parse chunks.
+ * - Anthropic / Gemini / Ollama: server ignores stream flag; yields single JSON
+ *   content token.
+ *
+ * When `tools` is provided, the stream emits structured `LLMToken` events
+ * instead of plain strings, so the caller can execute tool calls.
+ */
+import type { AIProvider, Diagnostic, RequestContext, RetrievedChunk } from "@/src/ai/types";
+import { SYSTEM_PROMPT, buildUserPrompt } from "@/src/ai/cloud-engine/prompt";
+import {
+  type ToolDefinition,
+  type ToolCall,
+  type ToolResult,
+  executeToolCall,
+} from "@/lib/llm-tools";
+import { proxyAuthHeaders } from "@/lib/proxy-auth";
+
+export interface StreamLLMOptions {
+  provider: AIProvider;
+  apiKey: string;
+  model?: string;
+  host?: string;
+  port?: number | string;
+  openaiUrl?: string;
+  question: string;
+  ctx: RequestContext;
+  diagnostics?: Diagnostic[];
+  signal?: AbortSignal;
+  /** Outils LLM exposés au modèle. Si absent, pas de function calling. */
+  tools?: ToolDefinition[];
+  /** Contrôle du comportement de sélection d'outils ("auto" par défaut). */
+  tool_choice?: string | { type: string; name?: string };
+  /** Tours précédents (tool_calls assistant + résultats) pour le multi-turn. */
+  previousTurns?: Array<{
+    assistantToolCalls: ToolCall[];
+    toolResults: ToolResult[];
+  }>;
+  /** Chunks RAG (résultats de recherche sémantique) injectés dans le prompt. */
+  retrievedChunks?: RetrievedChunk[];
+}
+
+export interface LLMToolCallEvent {
+  type: "tool_calls";
+  calls: ToolCall[];
+}
+
+export interface LLMTextEvent {
+  type: "text";
+  value: string;
+}
+
+export type LLMToken = LLMTextEvent | LLMToolCallEvent;
+
+export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken> {
+  const userPrompt = buildUserPrompt(
+    opts.question,
+    opts.ctx,
+    opts.diagnostics ?? [],
+    opts.retrievedChunks ?? [],
+  );
+
+  const body: Record<string, unknown> = {
+    provider: opts.provider,
+    apiKey: opts.apiKey,
+    model: opts.model,
+    host: opts.host,
+    port: opts.port,
+    openaiUrl: opts.openaiUrl,
+    system: SYSTEM_PROMPT,
+    message: userPrompt,
+    stream: true,
+  };
+
+  if (opts.tools && opts.tools.length > 0) {
+    body.tools = opts.tools;
+    body.tool_choice = opts.tool_choice ?? "auto";
+  }
+
+  if (opts.previousTurns && opts.previousTurns.length > 0) {
+    body.previousTurns = opts.previousTurns;
+  }
+
+  const res = await fetch("/api/proxy-ai", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...proxyAuthHeaders(),
+    },
+    body: JSON.stringify(body),
+    signal: opts.signal,
+  });
+
+  if (!res.ok) {
+    let errMsg = `Proxy error ${res.status}`;
+    try {
+      const j: Record<string, unknown> = await res.json();
+      errMsg = typeof j?.error === "string" ? j.error : errMsg;
+    } catch {
+      /* ignore non-JSON error body */
+    }
+    throw new Error(errMsg);
+  }
+
+  const contentType = res.headers.get("content-type") ?? "";
+
+  // Si tools sont demandés, on ne fait PAS de passthrough SSE :
+  // il faut parser delta.tool_calls au niveau du stream.
+  const canPassthrough =
+    contentType.includes("text/event-stream") && res.body && !opts.tools?.length;
+
+  if (canPassthrough) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
+        const rawEvent = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+
+        for (const line of rawEvent.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const json: any = JSON.parse(payload);
+            const token: unknown = json?.choices?.[0]?.delta?.content;
+            if (typeof token === "string" && token.length > 0) {
+              yield { type: "text", value: token };
+            }
+          } catch {
+            /* malformed line — skip */
+          }
+        }
+
+        sep = buffer.indexOf("\n\n");
+      }
+    }
+    return;
+  }
+
+  // Branche parsing SSE custom (tools présents ou pas SSE natif).
+  if (contentType.includes("text/event-stream") && res.body && opts.tools?.length) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    // Accumulateurs pour tool_calls OpenAI/DeepSeek/Ollama
+    const toolCallAcc: Record<
+      number,
+      {
+        id?: string;
+        index: number;
+        functionName?: string;
+        arguments: string;
+      }
+    > = {};
+    const toolCallOrder: number[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
+        const rawEvent = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+
+        for (const line of rawEvent.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const json: any = JSON.parse(payload);
+            const choice = json?.choices?.[0];
+            const delta = choice?.delta;
+
+            // Texte classique
+            const textToken = delta?.content;
+            if (typeof textToken === "string" && textToken.length > 0) {
+              yield { type: "text", value: textToken };
+            }
+
+            // Tool calls (format OpenAI-compatible)
+            const toolCalls = delta?.tool_calls;
+            if (Array.isArray(toolCalls)) {
+              for (const tc of toolCalls) {
+                const index = typeof tc?.index === "number" ? tc.index : 0;
+                if (!(index in toolCallAcc)) {
+                  toolCallAcc[index] = { index, arguments: "" };
+                  toolCallOrder.push(index);
+                }
+                const acc = toolCallAcc[index];
+                if (typeof tc?.id === "string" && !acc.id) {
+                  acc.id = tc.id;
+                }
+                const fn = tc?.function;
+                if (typeof fn?.name === "string" && !acc.functionName) {
+                  acc.functionName = fn.name;
+                }
+                if (typeof fn?.arguments === "string") {
+                  acc.arguments += fn.arguments;
+                }
+              }
+            }
+
+            // Fin de réponse : émettre les tool_calls accumulés
+            const finishReason = choice?.finish_reason;
+            if (finishReason === "tool_calls" || finishReason === "stop") {
+              const calls: ToolCall[] = toolCallOrder
+                .map((idx) => toolCallAcc[idx])
+                .filter((acc) => acc.id && acc.functionName)
+                .map((acc) => ({
+                  id: acc!.id!,
+                  name: acc!.functionName!,
+                  arguments: acc!.arguments || "{}",
+                }));
+              if (calls.length > 0) {
+                yield { type: "tool_calls", calls };
+              }
+              // Reset pour un éventuel appel suivant
+              for (const idx of toolCallOrder) delete toolCallAcc[idx];
+              toolCallOrder.length = 0;
+            }
+          } catch {
+            /* malformed line — skip */
+          }
+        }
+
+        sep = buffer.indexOf("\n\n");
+      }
+    }
+    return;
+  }
+
+  // JSON fallback (anthropic / gemini / ollama sans tools).
+  const data: any = await res.json();
+  if (typeof data?.error === "string") {
+    throw new Error(data.error);
+  }
+
+  // Support tool_calls unifiés renvoyés par le proxy pour Anthropic/Gemini
+  const returnedToolCalls = data?.tool_calls;
+  if (Array.isArray(returnedToolCalls) && returnedToolCalls.length > 0) {
+    yield {
+      type: "tool_calls",
+      calls: returnedToolCalls.map((tc: any) => ({
+        id: typeof tc.id === "string" ? tc.id : `call_${Math.random().toString(36).slice(2)}`,
+        name: typeof tc.name === "string" ? tc.name : "",
+        arguments:
+          typeof tc.arguments === "string" ? tc.arguments : JSON.stringify(tc.arguments ?? {}),
+      })),
+    };
+    return;
+  }
+
+  if (typeof data?.content === "string" && data.content.length > 0) {
+    yield { type: "text", value: data.content };
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "reqly",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --dir reqy-web dev",
+    "build": "pnpm turbo build",
+    "recli:dev": "pnpm --dir recli dev",
+    "recli:build": "pnpm --dir recli build",
+    "lint": "pnpm turbo lint",
+    "typecheck": "pnpm turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,yaml,yml,css,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,yaml,yml,css,md}\"",
+    "test": "pnpm turbo test",
+    "test:e2e": "pnpm --dir reqy-web test:e2e",
+    "generate": "pnpm --dir reqy-web generate",
+    "tauri:dev": "pnpm exec tauri dev",
+    "tauri:build": "pnpm exec tauri build",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@vitest/coverage-v8": "^3.2.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.4.0",
+    "turbo": "^2.5.0"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
+  }
+}

@@ -1,0 +1,233 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { Hono } from "hono";
+import { createHmac } from "node:crypto";
+import workspacesRoute from "../routes/workspaces.js";
+import db from "../db.js";
+import type { AuthContext } from "../auth.js";
+
+function makeSessionCookie(
+  userId: string,
+  overrides: Partial<{ email: string; name: string }> = {},
+): string {
+  const secret = process.env.AUTH_SIGNING_SECRET!;
+  const payload = {
+    email: overrides.email ?? `${userId}@example.com`,
+    name: overrides.name ?? userId,
+    provider: "github",
+    userId,
+    expires: Date.now() + 60_000,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
+  return `${encoded}.${sig}`;
+}
+
+function buildApp() {
+  const app = new Hono<{ Variables: { auth: AuthContext } }>();
+  app.route("/workspaces", workspacesRoute);
+  return app;
+}
+
+const WS = "ws-explicit";
+const USER_A = "user-a";
+const USER_B = "user-b";
+
+beforeEach(() => {
+  process.env.AUTH_SIGNING_SECRET = "test-secret-do-not-use-in-prod";
+  db.exec(`
+    DELETE FROM folders;
+    DELETE FROM environments;
+    DELETE FROM collections;
+    DELETE FROM memberships;
+    DELETE FROM invitations;
+    DELETE FROM workspaces;
+    DELETE FROM users;
+  `);
+  db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+    USER_A,
+    `${USER_A}@x`,
+    "A",
+    1,
+  );
+  db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+    USER_B,
+    `${USER_B}@x`,
+    "B",
+    1,
+  );
+});
+
+describe("routes/workspaces", () => {
+  describe("authentication", () => {
+    it("returns 401 when no cookie is provided", async () => {
+      const app = buildApp();
+      const res = await app.request(`/workspaces`);
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("POST /", () => {
+    it("creates a workspace and makes the user the owner", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({ name: "My Team" }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        workspace: { id: string; name: string; ownerId: string };
+      };
+      expect(body.workspace.name).toBe("My Team");
+      expect(body.workspace.ownerId).toBe(USER_A);
+
+      // Verify membership was created
+      const membership = db
+        .prepare("SELECT role FROM memberships WHERE workspace_id = ? AND user_id = ?")
+        .get(body.workspace.id, USER_A) as { role: string } | undefined;
+      expect(membership?.role).toBe("owner");
+    });
+
+    it("upserts the user record on workspace creation", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A, { email: "alice@team.io", name: "Alice" });
+      const res = await app.request(`/workspaces`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({ name: "Workspace" }),
+      });
+      expect(res.status).toBe(200);
+
+      const user = db.prepare("SELECT id, email, name FROM users WHERE id = ?").get(USER_A) as
+        { id: string; email: string; name: string } | undefined;
+      expect(user?.email).toBe("alice@team.io");
+      expect(user?.name).toBe("Alice");
+    });
+
+    it("returns 4xx on invalid name (empty string)", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({ name: "" }),
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+  });
+
+  describe("GET /", () => {
+    it("returns the list of workspaces the user belongs to", async () => {
+      // Pre-create a workspace and membership for USER_A
+      db.prepare(
+        "INSERT INTO workspaces (id, name, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).run(WS, "Pre-existing", USER_A, 1, 2);
+      db.prepare(
+        "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_A, "owner", 1);
+
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces`, {
+        headers: { cookie: `auth_session=${cookie}` },
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { workspaces: Array<{ id: string; name: string }> };
+      expect(body.workspaces).toHaveLength(1);
+      expect(body.workspaces[0].id).toBe(WS);
+      expect(body.workspaces[0].name).toBe("Pre-existing");
+    });
+
+    it("does not return workspaces the user is not a member of", async () => {
+      db.prepare(
+        "INSERT INTO workspaces (id, name, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).run(WS, "Other team", USER_B, 1, 1);
+      db.prepare(
+        "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_B, "owner", 1);
+
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces`, {
+        headers: { cookie: `auth_session=${cookie}` },
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { workspaces: unknown[] };
+      expect(body.workspaces).toHaveLength(0);
+    });
+  });
+
+  describe("POST /:id/invitations", () => {
+    beforeEach(() => {
+      db.prepare(
+        "INSERT INTO workspaces (id, name, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).run(WS, "W", USER_A, 1, 1);
+      db.prepare(
+        "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_A, "owner", 1);
+    });
+
+    it("lets the owner create an invitation token", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces/${WS}/invitations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { token: string; expiresAt: number; role: string };
+      expect(body.token).toMatch(/^inv-/);
+      expect(body.role).toBe("editor");
+      expect(body.expiresAt).toBeGreaterThan(Date.now());
+    });
+
+    it("rejects non-owners with 403", async () => {
+      // Make USER_B an editor
+      db.prepare(
+        "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_B, "editor", 1);
+
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_B);
+      const res = await app.request(`/workspaces/${WS}/invitations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("owner");
+    });
+
+    it("rejects non-members with 403", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie("intruder");
+      const res = await app.request(`/workspaces/${WS}/invitations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(403);
+    });
+  });
+});
