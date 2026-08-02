@@ -42,6 +42,8 @@ export interface StreamLLMOptions {
   }>;
   /** Chunks RAG (résultats de recherche sémantique) injectés dans le prompt. */
   retrievedChunks?: RetrievedChunk[];
+  /** Override du prompt système (défaut: SYSTEM_PROMPT). */
+  system?: string;
 }
 
 export interface LLMToolCallEvent {
@@ -54,7 +56,12 @@ export interface LLMTextEvent {
   value: string;
 }
 
-export type LLMToken = LLMTextEvent | LLMToolCallEvent;
+export interface LLMUsageEvent {
+  type: "usage";
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+export type LLMToken = LLMTextEvent | LLMToolCallEvent | LLMUsageEvent;
 
 export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken> {
   const userPrompt = buildUserPrompt(
@@ -71,7 +78,7 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
     host: opts.host,
     port: opts.port,
     openaiUrl: opts.openaiUrl,
-    system: SYSTEM_PROMPT,
+    system: opts.system ?? SYSTEM_PROMPT,
     message: userPrompt,
     stream: true,
   };
@@ -186,6 +193,18 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
             const choice = json?.choices?.[0];
             const delta = choice?.delta;
 
+            // Usage (chunk final OpenAI-compatible)
+            const rawUsage = json?.usage;
+            if (rawUsage) {
+              yield {
+                type: "usage",
+                usage: {
+                  inputTokens: Number(rawUsage?.prompt_tokens ?? rawUsage?.input_tokens ?? 0),
+                  outputTokens: Number(rawUsage?.completion_tokens ?? rawUsage?.output_tokens ?? 0),
+                },
+              };
+            }
+
             // Texte classique
             const textToken = delta?.content;
             if (typeof textToken === "string" && textToken.length > 0) {
@@ -267,5 +286,20 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
 
   if (typeof data?.content === "string" && data.content.length > 0) {
     yield { type: "text", value: data.content };
+  }
+
+  const usageRaw = data?.usage ?? data?.usageMetadata;
+  if (usageRaw && typeof usageRaw === "object") {
+    yield {
+      type: "usage",
+      usage: {
+        inputTokens: Number(
+          usageRaw?.input_tokens ?? usageRaw?.promptTokens ?? usageRaw?.promptTokenCount ?? usageRaw?.prompt_eval_count ?? 0,
+        ),
+        outputTokens: Number(
+          usageRaw?.output_tokens ?? usageRaw?.completionTokens ?? usageRaw?.candidatesTokenCount ?? usageRaw?.eval_count ?? 0,
+        ),
+      },
+    };
   }
 }
