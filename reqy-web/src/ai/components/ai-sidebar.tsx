@@ -213,6 +213,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                 onEditCancel={chat.handleEditCancel}
                 onEditConfirm={chat.handleEditConfirm}
                 onEditingTextChange={chat.setEditingText}
+                onConfirm={(_stepId, confirmed) => chat.confirmAction(confirmed)}
               />
             ))}
 

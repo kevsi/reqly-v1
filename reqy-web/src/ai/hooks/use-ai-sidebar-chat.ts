@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useRequestStore } from "@/hooks/use-request-store";
-import { useShallow } from "zustand/react/shallow";
 import { streamLLM } from "@/src/ai/cloud-engine/llm";
 import { buildRequestContext } from "@/src/ai/local-engine/context";
 import {
@@ -39,22 +38,6 @@ import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/ty
 
 export function useAiSidebarChat() {
   const pathname = usePathname();
-  const store = useRequestStore(
-    useShallow((s) => ({
-      currentRequest: s.currentRequest,
-      lastResponse: s.lastResponse,
-      environmentVariables: s.environmentVariables,
-      collectionHistory: s.collectionHistory,
-      activeCollection: s.activeCollection,
-      patchRequest: s.patchRequest,
-      addAssertions: s.addAssertions,
-      setVariable: s.setVariable,
-      setDoc: s.setDoc,
-      addNotification: s.addNotification,
-      executeRequest: s.executeRequest,
-      aiAutoApply: s.aiAutoApply ?? false,
-    })),
-  );
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -62,13 +45,6 @@ export function useAiSidebarChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assistantSteps, setAssistantSteps] = useState<AssistantStep[]>([]);
-  const [pendingConfirmation, setPendingConfirmation] = useState<{
-    stepId: string;
-    toolCall: { callId: string; name: string; arguments: string };
-    toolCallsThisTurn: Array<{ callId: string; name: string; arguments: string }>;
-    results: ToolResult[];
-    turnSteps: AssistantStep[];
-  } | null>(null);
 
   // Editing
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -90,6 +66,7 @@ export function useAiSidebarChat() {
   const [rulesPanelOpen, setRulesPanelOpen] = useState(false);
   const [permissionsPanelOpen, setPermissionsPanelOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -149,40 +126,47 @@ export function useAiSidebarChat() {
       // ── Step builder: accumulates process steps and syncs to the UI ──
       const steps: ProcessStep[] = [];
 
-      try {
-        const syncSteps = () => {
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last && last.role === "assistant") {
-              copy[copy.length - 1] = { ...last, steps: [...steps] };
-            } else {
-              copy.push({ role: "assistant", content: "", steps: [...steps] });
-            }
-            return copy;
-          });
-        };
+      const syncSteps = () => {
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === "assistant") {
+            copy[copy.length - 1] = { ...last, steps: [...steps] };
+          } else {
+            copy.push({ role: "assistant", content: "", steps: [...steps] });
+          }
+          return copy;
+        });
+      };
 
-        const addStep = (type: ProcessStep["type"], label: string) => {
-          steps.push({ type, label, status: "in_progress" });
+      const addStep = (type: ProcessStep["type"], label: string) => {
+        steps.push({ type, label, status: "in_progress" });
+        syncSteps();
+      };
+
+      const doneStep = () => {
+        if (steps.length > 0) {
+          steps[steps.length - 1].status = "done";
           syncSteps();
-        };
+        }
+      };
 
-        const doneStep = () => {
-          if (steps.length > 0) {
-            steps[steps.length - 1].status = "done";
-            syncSteps();
-          }
-        };
+      const failStep = (labelOverride?: string) => {
+        if (steps.length > 0) {
+          steps[steps.length - 1].status = "error";
+          if (labelOverride) steps[steps.length - 1].label = labelOverride;
+          syncSteps();
+        }
+      };
 
-        const failStep = (labelOverride?: string) => {
-          if (steps.length > 0) {
-            steps[steps.length - 1].status = "error";
-            if (labelOverride) steps[steps.length - 1].label = labelOverride;
-            syncSteps();
-          }
-        };
+      const finishThrough = () => {
+        for (const s of steps) {
+          if (s.type === "through" && s.status === "in_progress") s.status = "done";
+        }
+        syncSteps();
+      };
 
+      try {
         // Step 0: through
         addStep("through", "Through...");
 
@@ -417,22 +401,44 @@ export function useAiSidebarChat() {
             syncSteps();
           }
 
-          // Check for requireConfirmation
-          const confirmIdx = results.findIndex((r) => r.requireConfirmation);
-          if (confirmIdx !== -1) {
+          // Check for requireConfirmation — await user confirmation via UI buttons
+          let confirmIdx = results.findIndex((r) => r.requireConfirmation);
+          while (confirmIdx !== -1) {
             const targetTc = toolCallsThisTurn[confirmIdx];
-            steps.push({
-              type: "error",
+            steps[steps.length - toolCallsThisTurn.length + confirmIdx] = {
+              type: "create",
               label: `⚠ ${targetTc.name} — confirmation requise`,
-              status: "error",
-            });
+              status: "awaiting_confirmation",
+            };
             syncSteps();
-            store.addNotification?.({
-              title: "Action requiert confirmation",
-              body: "Utilise le panneau Assistant (icône IA) pour les actions destructives.",
-              type: "warning",
+            setIsLoading(false);
+            const confirmed = await new Promise<boolean>((resolve) => {
+              confirmResolverRef.current = resolve;
             });
-            return;
+            confirmResolverRef.current = null;
+            if (!confirmed) {
+              steps[steps.length - toolCallsThisTurn.length + confirmIdx] = {
+                type: "error",
+                label: `${targetTc.name} — annulé`,
+                status: "error",
+              };
+              syncSteps();
+              return;
+            }
+            const result = await gatedExecute(targetTc, true);
+            const toolUsage = result.usage;
+            if (toolUsage) {
+              setSessionUsage((prev) => addUsage(prev, toolUsage));
+            }
+            results[confirmIdx] = result;
+            steps[steps.length - toolCallsThisTurn.length + confirmIdx] = {
+              type: "create",
+              label: `${targetTc.name} — ${result.error ? "❌" : "✅"}`,
+              status: result.error ? "error" : "done",
+            };
+            syncSteps();
+            setIsLoading(true);
+            confirmIdx = results.findIndex((r) => r.requireConfirmation);
           }
 
           // Store turn for multi-turn context
@@ -459,6 +465,9 @@ export function useAiSidebarChat() {
 
         await runTurn();
 
+        // ── Resolve the "Through…" spinner so it doesn't loop forever ──
+        finishThrough();
+
         // ── Set final content ────────────────────────────────
         setMessages((prev) => {
           const copy = [...prev];
@@ -479,43 +488,64 @@ export function useAiSidebarChat() {
           return copy;
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Erreur de communication avec l'IA";
-        setError(msg);
-        // Resolve any in-flight steps so the spinners don't stay stuck forever.
-        for (const s of steps) {
-          if (s.status === "in_progress") {
-            s.status = "error";
-            s.label = "Erreur";
+        if ((err as { name?: string } | null)?.name === "AbortError") {
+          finishThrough();
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last && last.role === "assistant" && !last.content) {
+              copy[copy.length - 1] = { ...last, content: "⏹ Génération arrêtée.", steps: [...steps] };
+            }
+            return copy;
+          });
+        } else {
+          const msg = err instanceof Error ? err.message : "Erreur de communication avec l'IA";
+          setError(msg);
+          // Resolve any in-flight steps so the spinners don't stay stuck forever.
+          for (const s of steps) {
+            if (s.status === "in_progress") {
+              s.status = "error";
+              s.label = "Erreur";
+            }
           }
+          steps.push({ type: "error", label: msg, status: "error" });
+          // Update the existing assistant bubble (created by syncSteps) instead
+          // of pushing another one, so the error shows in a single message.
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last && last.role === "assistant") {
+              copy[copy.length - 1] = { ...last, content: `❌ ${msg}`, steps: [...steps] };
+            } else {
+              copy.push({ role: "assistant", content: `❌ ${msg}`, steps: [...steps] });
+            }
+            return copy;
+          });
         }
-        steps.push({ type: "error", label: msg, status: "error" });
-        // Update the existing assistant bubble (created by syncSteps) instead
-        // of pushing another one, so the error shows in a single message.
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last && last.role === "assistant") {
-            copy[copy.length - 1] = { ...last, content: `❌ ${msg}`, steps: [...steps] };
-          } else {
-            copy.push({ role: "assistant", content: `❌ ${msg}`, steps: [...steps] });
-          }
-          return copy;
-        });
       } finally {
+        confirmResolverRef.current = null;
+        abortRef.current = null;
         setIsLoading(false);
         setEditingIndex(null);
         setEditingText("");
       }
     },
-    [messages, isLoading, pathname, store, agentMode, autoApply, attachments, gatedExecute],
+    [messages, isLoading, pathname, agentMode, autoApply, attachments, gatedExecute],
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const stopStreaming = useCallback(() => {
+    confirmResolverRef.current?.(false);
+    confirmResolverRef.current = null;
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
+  }, []);
+
+  const confirmAction = useCallback((confirmed: boolean) => {
+    confirmResolverRef.current?.(confirmed);
+    confirmResolverRef.current = null;
   }, []);
 
   const attachContext = useCallback((a: ContextAttachment) => {
@@ -644,6 +674,7 @@ export function useAiSidebarChat() {
     modelUsed,
     abortRef,
     stopStreaming,
+    confirmAction,
     runSlashCommand,
     rulesPanelOpen,
     setRulesPanelOpen,

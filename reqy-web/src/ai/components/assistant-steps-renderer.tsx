@@ -246,7 +246,7 @@ export function AssistantStepsRenderer({
 export interface ProcessStep {
   type: "through" | "fill" | "execute" | "create" | "edit" | "done" | "error";
   label: string;
-  status: "pending" | "in_progress" | "done" | "error";
+  status: "pending" | "in_progress" | "done" | "error" | "awaiting_confirmation";
 }
 
 export function toAssistantSteps(steps: ProcessStep[]): AssistantStep[] {

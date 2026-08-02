@@ -19,6 +19,7 @@ interface AiChatMessageProps {
   onEditCancel: () => void;
   onEditConfirm: () => void;
   onEditingTextChange: (text: string) => void;
+  onConfirm?: (stepId: string, confirmed: boolean) => void;
 }
 
 export function AiChatMessage({
@@ -33,12 +34,13 @@ export function AiChatMessage({
   onEditCancel,
   onEditConfirm,
   onEditingTextChange,
+  onConfirm,
 }: AiChatMessageProps) {
   return (
     <div className="group relative">
       {/* Process steps timeline (assistant only) */}
       {message.role === "assistant" && message.steps && message.steps.length > 0 && (
-        <AssistantStepsRenderer steps={toAssistantSteps(message.steps)} />
+        <AssistantStepsRenderer steps={toAssistantSteps(message.steps)} onConfirm={onConfirm} />
       )}
 
       {/* Message bubble */}
