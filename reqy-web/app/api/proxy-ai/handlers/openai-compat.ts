@@ -123,8 +123,12 @@ export async function handleOpenAICompat(
     );
   }
 
-  // Stream passthrough when no tools (no tool_calls to parse)
-  if (body.stream && res.body && !tools?.length) return passthroughSSE(res);
+  // Stream passthrough when upstream actually streams (with or without tools).
+  // The client's streamLLM already parses text + tool_calls + usage from SSE,
+  // so buffering the whole stream here only delays every token unnecessarily.
+  const upstreamType = res.headers?.get("content-type") ?? "";
+  const isUpstreamSSE = upstreamType === "" || upstreamType.includes("text/event-stream");
+  if (body.stream && res.body && isUpstreamSSE) return passthroughSSE(res);
 
   const rawText = await res.text();
   let data: unknown;

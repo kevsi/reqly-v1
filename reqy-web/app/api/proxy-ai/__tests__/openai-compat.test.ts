@@ -123,10 +123,11 @@ describe("handleOpenAICompat", () => {
     expect(res.headers.get("cache-control")).toBe("no-cache, no-transform");
   });
 
-  it("does NOT stream passthrough when tools are present", async () => {
+  it("buffers JSON upstream even when tools are present", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
       text: () =>
         Promise.resolve(
           JSON.stringify({
@@ -141,6 +142,30 @@ describe("handleOpenAICompat", () => {
     );
     const body = await res.json();
     expect(body.content).toBe("non-streamed with tools");
+  });
+
+  it("stream passthrough with tools when upstream streams SSE", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Bonjour"}}]}\n\n'));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/event-stream" }),
+      body: stream,
+    } as Response);
+
+    const res = await handleOpenAICompat(
+      { ...validBody, stream: true, tools: [{ name: "test" } as any] },
+      {},
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/event-stream");
   });
 
   it("uses correct endpoint per provider", async () => {

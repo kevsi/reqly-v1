@@ -84,8 +84,11 @@ export async function handleDeepSeek(
     );
   }
 
-  // Stream passthrough when no tools
-  if (body.stream && res.body && !tools?.length) return passthroughSSE(res);
+  // Stream passthrough when upstream actually streams (with or without tools).
+  // The client's streamLLM already parses text + tool_calls + usage from SSE.
+  const upstreamType = res.headers?.get("content-type") ?? "";
+  const isUpstreamSSE = upstreamType === "" || upstreamType.includes("text/event-stream");
+  if (body.stream && res.body && isUpstreamSSE) return passthroughSSE(res);
 
   const rawText = await res.text();
   let data: unknown;
