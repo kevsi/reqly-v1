@@ -54,6 +54,8 @@ export interface ToolResult {
   error?: string;
   /** Si true, l'UI doit demander une confirmation explicite avant exécution. */
   requireConfirmation?: boolean;
+  /** Tokens consommés par cet appel (sous-agent), à remonter dans sessionUsage. */
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 // ─── Conversions par provider ──────────────────────────────────────────────
@@ -183,6 +185,8 @@ export function maskSensitiveObject(obj: Record<string, unknown>): Record<string
 import { requestStore } from "@/hooks/use-request-store";
 import type { Collection, Environment, RequestItem } from "@/hooks/request-types";
 import type { HttpMethod } from "@/lib/types";
+import { runSubAgent, assertDelegationAllowed } from "@/src/ai/agent/subagent";
+import { loadAIProvider, loadApiKey, loadAiBaseUrl, loadAiModel, loadOllamaConfig } from "@/lib/config";
 
 function findCollectionIdByName(name: string): string | undefined {
   const store = requestStore.getState();
@@ -218,9 +222,15 @@ function activeWorkspaceEnvironments(): Environment[] {
  * pour que l'UI demande une confirmation explicite avant exécution.
  */
 
+export interface ToolExecutionOptions {
+  confirmed?: boolean;
+  /** Profondeur de délégation courante (0 = agent principal). */
+  depth?: number;
+}
+
 export type ToolHandler = (
   args: Record<string, unknown>,
-  options?: { confirmed?: boolean },
+  options?: ToolExecutionOptions,
 ) => Promise<ToolResult>;
 
 export interface ReqlyTool extends ToolDefinition {
@@ -259,6 +269,51 @@ async function handleGetRequestContext(_args: Record<string, unknown>): Promise<
 }
 
 // ─── Handlers avec exécution réelle ────────────────────────────────────────
+
+async function handleDelegate(
+  args: Record<string, unknown>,
+  options?: ToolExecutionOptions,
+): Promise<ToolResult> {
+  const role = typeof args.role === "string" ? args.role : "Tu es un assistant spécialisé Reqly.";
+  const instruction = typeof args.instruction === "string" ? args.instruction.trim() : "";
+  const context = typeof args.context === "string" ? args.context.slice(0, 6000) : "";
+  if (!instruction) {
+    return { callId: "", name: "delegate", content: "", error: "Le champ instruction est requis." };
+  }
+  try {
+    assertDelegationAllowed(options?.depth ?? 0);
+  } catch (e: any) {
+    return { callId: "", name: "delegate", content: "", error: e?.message ?? "Délégation refusée." };
+  }
+  const provider = loadAIProvider();
+  const apiKey = loadApiKey(provider);
+  if (!apiKey) {
+    return { callId: "", name: "delegate", content: "", error: "Configure ton provider IA dans Settings." };
+  }
+  const ollama = loadOllamaConfig();
+  try {
+    const res = await runSubAgent({
+      provider,
+      apiKey,
+      model: loadAiModel(provider) || undefined,
+      openaiUrl: loadAiBaseUrl(provider) || undefined,
+      host: provider === "ollama" ? ollama.host : undefined,
+      port: provider === "ollama" ? ollama.port : undefined,
+      role,
+      instruction,
+      context,
+      depth: (options?.depth ?? 0) + 1,
+    });
+    return {
+      callId: "",
+      name: "delegate",
+      content: `[Sous-agent]\n${res.text.slice(0, 4000)}`,
+      usage: res.usage,
+    };
+  } catch (e: any) {
+    return { callId: "", name: "delegate", content: "", error: e?.message ?? "Le sous-agent a échoué." };
+  }
+}
 
 async function handleCreateCollection(args: Record<string, unknown>): Promise<ToolResult> {
   const name = typeof args.name === "string" ? args.name.trim() : "";
@@ -585,7 +640,10 @@ export function getToolByName(name: string): ReqlyTool | undefined {
   return REQLY_TOOLS.find((t) => t.name === name);
 }
 
-export async function executeToolCall(call: ToolCall, confirmed?: boolean): Promise<ToolResult> {
+export async function executeToolCall(
+  call: ToolCall,
+  options?: ToolExecutionOptions | boolean,
+): Promise<ToolResult> {
   const tool = getToolByName(call.name);
   if (!tool) {
     return {
@@ -608,8 +666,11 @@ export async function executeToolCall(call: ToolCall, confirmed?: boolean): Prom
     };
   }
 
+  const opts: ToolExecutionOptions =
+    typeof options === "boolean" ? { confirmed: options } : (options ?? {});
+
   try {
-    const result = await tool.handler(args, { confirmed });
+    const result = await tool.handler(args, opts);
     return { ...result, callId: call.id };
   } catch (e: any) {
     return {
@@ -708,5 +769,16 @@ export const REQLY_TOOLS: ReqlyTool[] = [
       value: { type: "string", description: "Valeur de la variable.", required: true },
     },
     handler: handleUpdateEnvironmentVariable,
+  },
+  {
+    name: "delegate",
+    description:
+      "Délègue une sous-tâche ciblée à un sous-agent avec un rôle dédié, puis retourne son résultat. Utilise pour découper une demande complexe en sous-tâches parallélisables.",
+    parameters: {
+      role: { type: "string", description: "Persona du sous-agent (ex: analyste API, testeur, expert auth)." },
+      instruction: { type: "string", description: "La sous-tâche précise à accomplir.", required: true },
+      context: { type: "string", description: "Contexte pertinent pour la sous-tâche (limité à 6000 caractères)." },
+    },
+    handler: handleDelegate,
   },
 ];
