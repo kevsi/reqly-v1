@@ -23,7 +23,7 @@ interface AiSidebarProps {
 export function AiSidebar({ open, onClose }: AiSidebarProps) {
   const { width, isResizing, sidebarRef, handleResizeStart } = useAiSidebarWidth();
   const chat = useAiSidebarChat();
-  const history = useAiSidebarHistory(chat.messages);
+  const history = useAiSidebarHistory(chat.messages, chat.modelUsed);
 
   // ── Focus input when sidebar opens ───────────────────────────────────────
 

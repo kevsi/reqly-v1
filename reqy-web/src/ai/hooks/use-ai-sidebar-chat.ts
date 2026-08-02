@@ -4,8 +4,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
-import { callAIText, callAITextStream } from "@/src/ai/engine/providers";
-import { dispatchAIActions } from "@/src/ai/engine";
+import { streamLLM } from "@/src/ai/cloud-engine/llm";
+import { buildRequestContext } from "@/src/ai/local-engine/context";
 import {
   loadAIProvider,
   loadApiKey,
@@ -13,10 +13,29 @@ import {
   loadAiModel,
   loadOllamaConfig,
 } from "@/lib/config";
-import type { AIContext, CurrentRequest, TestAssertion } from "@/src/ai/engine/types";
+import {
+  REQLY_TOOLS,
+  executeToolCall,
+  maskSensitiveObject,
+  type ToolResult,
+  type ToolCall,
+} from "@/lib/llm-tools";
+import {
+  buildStep,
+  type AssistantStep,
+} from "@/src/ai/components/assistant-steps-renderer";
 import type { ProcessStep } from "@/src/ai/components/assistant-steps-renderer";
 import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
-import { parseRequestFromMessage, parseActionsFromAIResponse } from "@/lib/ai-parse-utils";
+import { getPermission } from "@/src/ai/agent/permissions";
+import { loadRules, buildRulesSystemPrompt } from "@/src/ai/agent/rules";
+import { attachmentsToPrompt } from "@/src/ai/agent/context-picker";
+import { emptyUsage, addUsage } from "@/src/ai/agent/usage";
+import {
+  parseSlashCommand,
+  createDefaultCommands,
+  type SlashCommandContext,
+} from "@/src/ai/agent/commands";
+import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
 
 export function useAiSidebarChat() {
   const pathname = usePathname();
@@ -33,7 +52,7 @@ export function useAiSidebarChat() {
       setDoc: s.setDoc,
       addNotification: s.addNotification,
       executeRequest: s.executeRequest,
-      aiAutoApply: s.aiAutoApply ?? true,
+      aiAutoApply: s.aiAutoApply ?? false,
     })),
   );
 
@@ -42,6 +61,14 @@ export function useAiSidebarChat() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assistantSteps, setAssistantSteps] = useState<AssistantStep[]>([]);
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    stepId: string;
+    toolCall: { callId: string; name: string; arguments: string };
+    toolCallsThisTurn: Array<{ callId: string; name: string; arguments: string }>;
+    results: ToolResult[];
+    turnSteps: AssistantStep[];
+  } | null>(null);
 
   // Editing
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -49,6 +76,20 @@ export function useAiSidebarChat() {
 
   // Copy state
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // ── Agent state ───────────────────────────────────────────────────────────
+  const [agentMode, setAgentMode] = useState<AgentMode>("act");
+  const [autoApply, setAutoApply] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<{
+    planText: string;
+    toolCalls: ToolCall[];
+  } | null>(null);
+  const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
+  const [sessionUsage, setSessionUsage] = useState<AgentUsage>(emptyUsage());
+  const [modelUsed, setModelUsed] = useState<string | null>(null);
+  const [rulesPanelOpen, setRulesPanelOpen] = useState(false);
+  const [permissionsPanelOpen, setPermissionsPanelOpen] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -67,6 +108,34 @@ export function useAiSidebarChat() {
   // (the parent passes a separate `open` prop; focus is handled there)
 
   // ── Send message ──────────────────────────────────────────────────────────
+  const gatedExecute = useCallback(
+    async (
+      tc: { callId: string; name: string; arguments: string },
+      confirmed: boolean,
+    ): Promise<ToolResult> => {
+      const perm = getPermission(tc.name);
+      if (perm === "deny") {
+        return {
+          callId: tc.callId,
+          name: tc.name,
+          content: "",
+          error: "Outil refusé par la politique de permissions.",
+        };
+      }
+      if (perm === "ask" && !confirmed) {
+        return {
+          callId: tc.callId,
+          name: tc.name,
+          content: "",
+          error: "Confirmation requise par la politique de permissions.",
+          requireConfirmation: true,
+        };
+      }
+      return executeToolCall({ id: tc.callId, name: tc.name, arguments: tc.arguments }, { depth: 0 });
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     async (content: string) => {
       if (!content.trim() || isLoading) return;
@@ -123,314 +192,396 @@ export function useAiSidebarChat() {
         const aiModel = loadAiModel(provider);
         const aiBaseUrl = loadAiBaseUrl(provider);
         const ollamaConfig = loadOllamaConfig();
+        setModelUsed(aiModel || null);
 
-        const aiConfig = {
-          provider,
-          apiKey,
-          model: aiModel || undefined,
-          openaiUrl:
-            provider === "openai" || provider === "custom" ? aiBaseUrl || undefined : undefined,
-          ollamaUrl:
-            provider === "ollama"
-              ? `http://${ollamaConfig.host || "127.0.0.1"}:${ollamaConfig.port ?? 11434}`
-              : undefined,
-        };
-
-        // Parse method + URL from user message
-        const parsed = parseRequestFromMessage(content);
-
-        // Build actions from parsed data
-        const actions: import("@/src/ai/engine/types").AIAction[] = [];
-
-        if (parsed) {
-          actions.push({
-            type: "FILL_REQUEST",
-            payload: {
-              method: parsed.method as any,
-              url: parsed.url,
-              reason: `Set request from user message`,
-            },
-          });
-          doneStep(); // through done
-
-          addStep("fill", `Création de requête ${parsed.method} ${parsed.url}`);
-
-          const wantsExecute =
-            /\b(exécute|exécuter|lance|lancer|execute|run|go|envoie|envoyer)\b/i.test(content);
-          if (wantsExecute) {
-            doneStep(); // fill done
-            addStep("execute", `Exécution ${parsed.method} ${parsed.url}`);
-            actions.push({
-              type: "EXECUTE_REQUEST",
-              payload: {
-                method: parsed.method as any,
-                url: parsed.url,
-                reason: `Execute ${parsed.method} ${parsed.url}`,
-              },
-            });
-          }
-        }
-
-        // Dispatch actions to control the app
-        if (actions.length > 0) {
-          const handlers = {
-            setRequest: async (patch: any) => {
-              store.patchRequest?.(patch);
-            },
-            addAssertions: async (assertions: any) => {
-              store.addAssertions?.(assertions);
-            },
-            setVariable: async (name: string, value: string, description?: string) => {
-              store.setVariable?.(name, value, description);
-            },
-            applyFix: async (patch: any) => {
-              store.patchRequest?.(patch);
-            },
-            setDoc: async (markdown: string, title?: string) => {
-              store.setDoc?.(markdown, title);
-            },
-            notify: async (message: string) => {
-              store.addNotification?.({ title: "Assistant IA", body: message, type: "info" });
-            },
-            executeRequest: async (request: any) => {
-              if (request) {
-                store.patchRequest?.(request);
-                return store.executeRequest?.(request);
+        // Get fresh context for prompt building
+        const fresh = useRequestStore.getState();
+        const requestCtx = buildRequestContext(
+          {
+            method: fresh.currentRequest?.method ?? "GET",
+            url: fresh.currentRequest?.url ?? "",
+            headers: fresh.currentRequest?.headers ?? {},
+            body:
+              typeof fresh.currentRequest?.body === "string"
+                ? fresh.currentRequest.body
+                : undefined,
+            authType: "none",
+          },
+          fresh.lastResponse
+            ? {
+                status: fresh.lastResponse.status,
+                statusText: "",
+                headers: fresh.lastResponse.headers ?? {},
+                body: fresh.lastResponse.body,
+                duration: fresh.lastResponse.durationMs ?? 0,
+                size: 0,
               }
-              return undefined;
-            },
-            runBatch: async () => [] as any[],
-            audit: async () => {},
+            : undefined,
+        );
+
+        addStep("through", "Analyse en cours…");
+
+        const rulesFile = loadRules(fresh.activeWorkspaceId ?? "ws-personal");
+        const rulesPrompt = buildRulesSystemPrompt(rulesFile);
+        const attachmentsPrompt = attachmentsToPrompt(attachments);
+
+        const systemPrompt = [
+          `Tu es un agent intégré à Reqly, dans l'esprit de Claude Code. Tu peux créer des collections, des requêtes, des environnements, et exécuter des requêtes directement.`,
+          `Page: ${pathname}`,
+          rulesPrompt || "Règles actives : aucune.",
+          agentMode === "plan"
+            ? "MODE PLAN : tu PROPOSES un plan d'actions, tu n'exécutes AUCUN outil. Décris ce que tu ferais, et listes les outils envisagés."
+            : "MODE ACT : tu peux exécuter les outils disponibles pour agir.",
+          autoApply
+            ? "Auto-approuver : tu peux exécuter les outils sans redemander, sauf si une permission l'interdit."
+            : "Avant toute action destructive, demande une confirmation explicite.",
+          "Réponds en français. Sois concis et actionnable.",
+        ].join("\n\n");
+
+        const contentWithContext = [content, attachmentsPrompt].filter(Boolean).join("\n\n");
+
+        // ── Streaming + tool-calling loop ────────────────────
+        // NOTE: the assistant message was already created by syncSteps()
+        // (first addStep). Do NOT push a second one here, or the sidebar
+        // shows duplicate "Through…" bubbles that stay stuck.
+        let fullText = "";
+        const MAX_TOOL_TURNS = 5;
+        let turnCount = 0;
+        const previousTurns: Array<{
+          assistantToolCalls: Array<{ id: string; name: string; arguments: string }>;
+          toolResults: ToolResult[];
+        }> = [];
+        let retriedWithoutTools = false;
+
+        const runTurn = async () => {
+          const controller = new AbortController();
+          abortRef.current = controller;
+          const opts = {
+            provider,
+            apiKey,
+            model: aiModel || undefined,
+            openaiUrl:
+              provider === "openai" || provider === "custom" ? aiBaseUrl || undefined : undefined,
+            host: ollamaConfig?.host,
+            port: ollamaConfig?.port,
+            question: contentWithContext,
+            ctx: requestCtx,
+            system: systemPrompt,
+            signal: controller.signal,
+            tools: retriedWithoutTools ? undefined : REQLY_TOOLS,
+            tool_choice: retriedWithoutTools ? undefined : "auto",
+            previousTurns:
+              previousTurns.length > 0 ? [...previousTurns] : undefined,
           };
 
-          const ctx: AIContext = {
-            currentRequest: store.currentRequest ?? {
-              method: "GET",
-              url: "",
-              headers: {},
-              params: {},
-            },
-            lastResponse: store.lastResponse ?? null,
-            environmentVariables: store.environmentVariables ?? {},
-            collectionHistory: (store.collectionHistory ?? []).slice(0, 10),
-            activeCollection: store.activeCollection ?? null,
-          };
+          const stream = streamLLM(opts);
+          const toolCallsThisTurn: Array<{
+            callId: string;
+            name: string;
+            arguments: string;
+          }> = [];
 
           try {
-            const dispatchResult = await dispatchAIActions(actions, handlers, ctx, {
-              allowAutoApply: Boolean(store.aiAutoApply),
-            });
-
-            if (dispatchResult.blocked.length > 0) {
-              const blockMsg =
-                "❌ Exécution bloquée — active 'Autoriser l'IA à appliquer automatiquement' dans les Settings.";
-              failStep(blockMsg);
-              setError(
-                "Action bloquée : l'application automatique n'est pas activée. Active-la dans Settings > IA.",
-              );
-            } else {
-              doneStep(); // mark last step (fill or execute) as done
+            for await (const token of stream) {
+              if (token.type === "usage") {
+                setSessionUsage((prev) => addUsage(prev, token.usage));
+                setMessages((prev) => {
+                  const copy = [...prev];
+                  const last = copy[copy.length - 1];
+                  if (last && last.role === "assistant") {
+                    copy[copy.length - 1] = {
+                      ...last,
+                      usage: addUsage(last.usage ?? emptyUsage(), token.usage),
+                    };
+                  }
+                  return copy;
+                });
+              } else if (token.type === "text") {
+                fullText += token.value;
+                setMessages((prev) => {
+                  const copy = [...prev];
+                  const last = copy[copy.length - 1];
+                  if (last && last.role === "assistant") {
+                    copy[copy.length - 1] = {
+                      ...last,
+                      content: fullText,
+                      steps: [...steps],
+                    };
+                  }
+                  return copy;
+                });
+              } else if (token.type === "tool_calls") {
+                 toolCallsThisTurn.push(
+                   ...token.calls.map((c: { id: string; name: string; arguments: string }) => ({
+                     callId: c.id,
+                     name: c.name,
+                     arguments: c.arguments,
+                   })),
+                 );
+              }
             }
-          } catch (e) {
-            failStep();
+          } catch (e: any) {
+            if (
+              opts.tools &&
+              !retriedWithoutTools &&
+              /tools|functions|function calling|tool_calls|unsupported/i.test(
+                e?.message ?? "",
+              )
+            ) {
+              retriedWithoutTools = true;
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last && last.role === "assistant") {
+                  copy[copy.length - 1] = {
+                    ...last,
+                    content: "",
+                    steps: [...steps],
+                  };
+                }
+                return copy;
+              });
+              fullText = "";
+              await runTurn();
+              return;
+            }
             throw e;
           }
-        } else {
-          doneStep(); // through done (no actions to dispatch)
-        }
 
-        // Get fresh state AFTER actions have been dispatched
-        const fresh = useRequestStore.getState();
-        const responseCtx = {
-          currentRequest: fresh.currentRequest ?? {
-            method: "GET",
-            url: "",
-            headers: {},
-            params: {},
-          },
-          lastResponse: fresh.lastResponse ?? null,
-          environmentVariables: fresh.environmentVariables ?? {},
-          collectionHistory: (fresh.collectionHistory ?? []).slice(0, 10),
-          activeCollection: fresh.activeCollection ?? null,
-        };
+          if (toolCallsThisTurn.length === 0) return;
 
-        const executedLabel =
-          actions.length > 0
-            ? `\n\nRésultat de l'action exécutée :\n${JSON.stringify(responseCtx.lastResponse, null, 2)}`
-            : "";
-
-        addStep("through", "Génération de la réponse...");
-
-        const systemPrompt = `Page: ${pathname}
-Context: ${JSON.stringify(responseCtx, null, 2)}${executedLabel}
-
-User request: ${content}
-
-Respond in French. If you executed or modified a request, explain what was done. If the user asked a question, answer it. Be concise and helpful.
-
-IMPORTANT — When you describe a request (made or suggested), ALWAYS include a JSON block at the end of your response with the exact method and URL:
-\`\`\`json
-{
-  "method": "GET",
-  "url": "https://example.com/api"
-}
-\`\`\`
-This lets the system execute the actual request you described.`;
-
-        // ── Streaming response ──────────────────────────────────────
-        // Insert an empty assistant message that will be progressively filled.
-        const assistantIndex = messages.length; // index in the next state after push
-        setMessages((prev) => [...prev, { role: "assistant", content: "", steps: [...steps] }]);
-
-        let streamedText = "";
-        const onToken = (token: string) => {
-          streamedText += token;
-          // Update the last assistant message with accumulated text
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last && last.role === "assistant") {
-              copy[copy.length - 1] = { ...last, content: streamedText, steps: [...steps] };
-            }
-            return copy;
-          });
-        };
-
-        await callAITextStream(content, { ...aiConfig, system: systemPrompt }, onToken);
-        doneStep(); // réponse générée
-
-        // ── Post-AI actions (JSON block detection) ───────────────────
-        // If no actions were dispatched by regex, try parsing the AI's
-        // response for structured action data (method + URL in a JSON block).
-        let finalContent = streamedText;
-
-        if (actions.length === 0) {
-          const aiActions = parseActionsFromAIResponse(streamedText);
-          if (aiActions && aiActions.length > 0) {
-            const a = aiActions[0];
-            addStep("fill", `Création de requête ${a.method} ${a.url}`);
-
-            const postActions: import("@/src/ai/engine/types").AIAction[] = [
-              {
-                type: "FILL_REQUEST",
-                payload: {
-                  method: a.method as any,
-                  url: a.url,
-                  reason: `AI detected: ${a.method} ${a.url}`,
-                },
-              },
-              {
-                type: "EXECUTE_REQUEST",
-                payload: {
-                  method: a.method as any,
-                  url: a.url,
-                  reason: `Execute ${a.method} ${a.url}`,
-                },
-              },
-            ];
-
-            try {
-              doneStep(); // fill done
-              addStep("execute", `Exécution ${a.method} ${a.url}`);
-
-              const postCtx: AIContext = {
-                currentRequest: store.currentRequest ?? {
-                  method: "GET",
-                  url: "",
-                  headers: {},
-                  params: {},
-                },
-                lastResponse: store.lastResponse ?? null,
-                environmentVariables: store.environmentVariables ?? {},
-                collectionHistory: (store.collectionHistory ?? []).slice(0, 10),
-                activeCollection: store.activeCollection ?? null,
-              };
-
-              const dispatchResult = await dispatchAIActions(
-                postActions,
-                {
-                  setRequest: async (patch: any) => {
-                    store.patchRequest?.(patch);
-                  },
-                  addAssertions: async () => {},
-                  setVariable: async () => {},
-                  applyFix: async (patch: any) => {
-                    store.patchRequest?.(patch);
-                  },
-                  setDoc: async () => {},
-                  notify: async (message: string) => {
-                    store.addNotification?.({ title: "Assistant IA", body: message, type: "info" });
-                  },
-                  executeRequest: async (request: any) => {
-                    if (request) {
-                      store.patchRequest?.(request);
-                      return store.executeRequest?.(request);
-                    }
-                    return undefined;
-                  },
-                  runBatch: async () => [] as any[],
-                  audit: async () => {},
-                },
-                postCtx,
-                { allowAutoApply: Boolean(store.aiAutoApply) },
-              );
-
-              if (dispatchResult.blocked.length > 0) {
-                const blockMsg =
-                  "❌ Exécution bloquée — active 'Autoriser l'IA à appliquer automatiquement' dans les Settings.";
-                failStep(blockMsg);
-                setError(
-                  "Action bloquée : l'application automatique n'est pas activée. Active-la dans Settings > IA.",
-                );
-              } else {
-                doneStep(); // execute done
-                const fresh2 = useRequestStore.getState();
-                const status = fresh2.lastResponse?.status ?? "?";
-                const durationMs = fresh2.lastResponse?.durationMs ?? 0;
-                finalContent =
-                  streamedText +
-                  `\n\n✅ Requête \`${a.method} ${a.url}\` exécutée — status ${status} (${durationMs}ms)`;
-              }
-            } catch (e) {
-              failStep();
-              console.error("[ai-sidebar] post-AI action dispatch failed:", e);
-            }
+          if (agentMode === "plan") {
+            setPendingPlan({
+              planText: fullText,
+              toolCalls: toolCallsThisTurn.map((tc) => ({
+                id: tc.callId,
+                name: tc.name,
+                arguments: tc.arguments,
+              })),
+            });
+            steps.push({
+              type: "error",
+              label: `⏸ Mode plan — ${toolCallsThisTurn.length} action(s) proposée(s)`,
+              status: "error",
+            });
+            syncSteps();
+            return;
           }
-        }
 
-        // ── Set final content ────────────────────────────────────────
+          // Create pending steps for tool calls
+          for (const tc of toolCallsThisTurn) {
+            let safeArgs: Record<string, unknown> = {};
+            try {
+              safeArgs = JSON.parse(tc.arguments);
+            } catch {
+              /* ignore */
+            }
+            const masked = maskSensitiveObject(safeArgs);
+            steps.push({
+              type: "create",
+              label: `${tc.name}(${JSON.stringify(masked)})`,
+              status: "in_progress",
+            });
+            syncSteps();
+          }
+
+          // Execute tools sequentially, gated by permissions
+          const results: ToolResult[] = [];
+          for (let i = 0; i < toolCallsThisTurn.length; i++) {
+            const tc = toolCallsThisTurn[i];
+            try {
+              const result = await gatedExecute(tc, autoApply);
+              const toolUsage = result.usage;
+              if (toolUsage) {
+                setSessionUsage((prev) => addUsage(prev, toolUsage));
+              }
+              results.push(result);
+              steps[steps.length - toolCallsThisTurn.length + i] = {
+                type: "create",
+                label: `${tc.name} — ${result.error ? "❌" : "✅"}`,
+                status: result.error ? "error" : "done",
+              };
+            } catch (e: any) {
+              results.push({
+                callId: tc.callId,
+                name: tc.name,
+                content: "",
+                error: e?.message ?? "Erreur inconnue",
+              });
+              steps[steps.length - toolCallsThisTurn.length + i] = {
+                type: "error",
+                label: `${tc.name} — Erreur`,
+                status: "error",
+              };
+            }
+            syncSteps();
+          }
+
+          // Check for requireConfirmation
+          const confirmIdx = results.findIndex((r) => r.requireConfirmation);
+          if (confirmIdx !== -1) {
+            const targetTc = toolCallsThisTurn[confirmIdx];
+            steps.push({
+              type: "error",
+              label: `⚠ ${targetTc.name} — confirmation requise`,
+              status: "error",
+            });
+            syncSteps();
+            store.addNotification?.({
+              title: "Action requiert confirmation",
+              body: "Utilise le panneau Assistant (icône IA) pour les actions destructives.",
+              type: "warning",
+            });
+            return;
+          }
+
+          // Store turn for multi-turn context
+          previousTurns.push({
+            assistantToolCalls: toolCallsThisTurn.map((tc) => ({
+              id: tc.callId,
+              name: tc.name,
+              arguments: tc.arguments,
+            })),
+            toolResults: results,
+          });
+          turnCount++;
+
+          if (turnCount >= MAX_TOOL_TURNS) {
+            setError(
+              "L'assistant a atteint la limite de 5 tours d'outils.",
+            );
+            return;
+          }
+
+          // Continue loop
+          await runTurn();
+        };
+
+        await runTurn();
+
+        // ── Set final content ────────────────────────────────
         setMessages((prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
           if (last && last.role === "assistant") {
-            copy[copy.length - 1] = { ...last, content: finalContent, steps: [...steps] };
+            copy[copy.length - 1] = {
+              ...last,
+              content: fullText,
+              steps: [...steps],
+            };
           } else {
-            copy.push({ role: "assistant", content: finalContent, steps: [...steps] });
+            copy.push({
+              role: "assistant",
+              content: fullText,
+              steps: [...steps],
+            });
           }
           return copy;
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Erreur de communication avec l'IA";
         setError(msg);
-        steps.push({ type: "error", label: "Erreur", status: "error" });
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `❌ ${msg}`, steps: [...steps] },
-        ]);
+        // Resolve any in-flight steps so the spinners don't stay stuck forever.
+        for (const s of steps) {
+          if (s.status === "in_progress") {
+            s.status = "error";
+            s.label = "Erreur";
+          }
+        }
+        steps.push({ type: "error", label: msg, status: "error" });
+        // Update the existing assistant bubble (created by syncSteps) instead
+        // of pushing another one, so the error shows in a single message.
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === "assistant") {
+            copy[copy.length - 1] = { ...last, content: `❌ ${msg}`, steps: [...steps] };
+          } else {
+            copy.push({ role: "assistant", content: `❌ ${msg}`, steps: [...steps] });
+          }
+          return copy;
+        });
       } finally {
         setIsLoading(false);
         setEditingIndex(null);
         setEditingText("");
       }
     },
-    [messages, isLoading, pathname, store],
+    [messages, isLoading, pathname, store, agentMode, autoApply, attachments, gatedExecute],
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsLoading(false);
+  }, []);
+
+  const attachContext = useCallback((a: ContextAttachment) => {
+    setAttachments((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
+  }, []);
+
+  const rejectPlan = useCallback(() => {
+    setPendingPlan(null);
+  }, []);
+
+  const approvePlan = useCallback(() => {
+    setPendingPlan(null);
+    setAgentMode("act");
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (lastUser) void sendMessage(lastUser.content);
+  }, [messages, sendMessage]);
+
+  // Expose setInput for the parent to clear on new session
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    setError(null);
+    setEditingIndex(null);
+    setEditingText("");
+  }, []);
+
+  const runSlashCommand = useCallback(
+    (name: string, args: string) => {
+      const cmdCtx: SlashCommandContext = {
+        clearMessages,
+        newSession: () => {
+          clearMessages();
+        },
+        setMode: setAgentMode,
+        openRules: () => setRulesPanelOpen(true),
+        openPermissions: () => setPermissionsPanelOpen(true),
+        compact: () => {
+          const lastUser = [...messages].reverse().find((m) => m.role === "user");
+          if (lastUser) void sendMessage(`Résume la conversation puis réponds à : ${lastUser.content}`);
+        },
+        exportSession: () => {
+          const blob = new Blob([JSON.stringify(messages, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "reqly-session.json";
+          a.click();
+          URL.revokeObjectURL(url);
+        },
+      };
+      const cmd = createDefaultCommands().find((c) => c.name === name);
+      if (cmd) void cmd.run(args, cmdCtx);
+    },
+    [clearMessages, messages, sendMessage],
+  );
+
   const handleSend = useCallback(() => {
+    const parsed = parseSlashCommand(input);
+    if (parsed) {
+      runSlashCommand(parsed.name, parsed.args);
+      setInput("");
+      return;
+    }
     sendMessage(input);
-  }, [input, sendMessage]);
+  }, [input, sendMessage, runSlashCommand]);
 
   const handleEditStart = useCallback((index: number, content: string) => {
     setEditingIndex(index);
@@ -469,14 +620,6 @@ This lets the system execute the actual request you described.`;
     setError(null);
   }, []);
 
-  // Expose setInput for the parent to clear on new session
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-    setError(null);
-    setEditingIndex(null);
-    setEditingText("");
-  }, []);
-
   return {
     // State
     messages,
@@ -486,6 +629,26 @@ This lets the system execute the actual request you described.`;
     editingIndex,
     editingText,
     copiedIndex,
+    // Agent state
+    agentMode,
+    setAgentMode,
+    autoApply,
+    setAutoApply,
+    pendingPlan,
+    approvePlan,
+    rejectPlan,
+    attachments,
+    setAttachments,
+    attachContext,
+    sessionUsage,
+    modelUsed,
+    abortRef,
+    stopStreaming,
+    runSlashCommand,
+    rulesPanelOpen,
+    setRulesPanelOpen,
+    permissionsPanelOpen,
+    setPermissionsPanelOpen,
     // Refs
     messagesEndRef,
     inputRef,

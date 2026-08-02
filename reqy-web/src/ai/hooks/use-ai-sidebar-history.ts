@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { persistence } from "@/lib/persistence";
+import { emptyUsage, mergeUsages } from "@/src/ai/agent/usage";
 import type { ChatMessage, ConversationSession } from "@/src/ai/components/ai-sidebar-types";
 
 const HISTORY_KEY = "ai-sidebar-history";
 const MAX_HISTORY = 50;
 
-export function useAiSidebarHistory(messages: ChatMessage[]) {
+export function useAiSidebarHistory(messages: ChatMessage[], model?: string | null) {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -40,11 +41,22 @@ export function useAiSidebarHistory(messages: ChatMessage[]) {
 
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === currentSessionId);
+      const totalUsage = mergeUsages(
+        messages.filter((m) => m.role === "assistant").map((m) => m.usage ?? emptyUsage()),
+      );
       let updated: ConversationSession[];
 
       if (existing) {
         updated = prev.map((s) =>
-          s.id === currentSessionId ? { ...s, messages, updatedAt: new Date().toISOString() } : s,
+          s.id === currentSessionId
+            ? {
+                ...s,
+                messages,
+                totalUsage,
+                model: s.model ?? model ?? undefined,
+                updatedAt: new Date().toISOString(),
+              }
+            : s,
         );
       } else {
         const title =
@@ -55,6 +67,8 @@ export function useAiSidebarHistory(messages: ChatMessage[]) {
             id: currentSessionId,
             title: title.length > 40 ? title.slice(0, 37) + "..." : title,
             messages,
+            totalUsage,
+            model: model ?? undefined,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
@@ -64,7 +78,7 @@ export function useAiSidebarHistory(messages: ChatMessage[]) {
       persistence.setItem(HISTORY_KEY, updated.slice(0, MAX_HISTORY));
       return updated;
     });
-  }, [messages, currentSessionId]);
+  }, [messages, currentSessionId, model]);
 
   const handleNewSession = useCallback(() => {
     setCurrentSessionId(crypto.randomUUID());
