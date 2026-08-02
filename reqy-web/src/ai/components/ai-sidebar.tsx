@@ -109,6 +109,17 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
 
   const sessionUsageLabel = formatTokens(chat.sessionUsage);
 
+  const hasLiveSteps = chat.messages.some(
+    (m) =>
+      m.role === "assistant" &&
+      (m.steps ?? []).some(
+        (s) =>
+          s.status === "in_progress" ||
+          s.status === "pending" ||
+          s.status === "awaiting_confirmation",
+      ),
+  );
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -289,7 +300,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               />
             )}
 
-            {chat.isLoading && (
+            {chat.isLoading && !hasLiveSteps && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground mr-6">
                 <Loader2 className="size-3.5 animate-spin" />
                 Réflexion…

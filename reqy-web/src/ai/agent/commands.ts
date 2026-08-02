@@ -8,6 +8,8 @@ export interface SlashCommandContext {
   openPermissions: () => void;
   compact: () => void;
   exportSession: () => void;
+  /** Ajoute une réponse texte de l'assistant (utilisée par /help). */
+  reply: (text: string) => void;
 }
 
 export interface SlashCommand {
@@ -32,9 +34,14 @@ export function buildCommandMenu(query: string, commands: SlashCommand[]): Slash
     .slice(0, 8);
 }
 
+function helpText(commands: SlashCommand[]): string {
+  const lines = commands.map((c) => `${c.usage} — ${c.description}`).join("\n");
+  return `## Commandes disponibles\n\n${lines}`;
+}
+
 export function createDefaultCommands(): SlashCommand[] {
   return [
-    { name: "help", description: "Liste des commandes", usage: "/help", run: (args, ctx) => { void args; void ctx; } },
+    { name: "help", description: "Liste des commandes", usage: "/help", run: (args, ctx) => { void args; ctx.reply(helpText(createDefaultCommands())); } },
     { name: "clear", description: "Efface la conversation", usage: "/clear", run: (_a, c) => c.clearMessages() },
     { name: "new", description: "Nouvelle session", usage: "/new", run: (_a, c) => c.newSession() },
     { name: "plan", description: "Passe en mode plan (propose sans agir)", usage: "/plan", run: (_a, c) => c.setMode("plan") },

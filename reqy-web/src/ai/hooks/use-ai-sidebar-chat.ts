@@ -625,6 +625,9 @@ export function useAiSidebarChat() {
           a.click();
           URL.revokeObjectURL(url);
         },
+        reply: (text) => {
+          setMessages((prev) => [...prev, { role: "assistant", content: text }]);
+        },
       };
       const cmd = createDefaultCommands().find((c) => c.name === name);
       if (cmd) void cmd.run(args, cmdCtx);

@@ -9,6 +9,7 @@ const ctx: SlashCommandContext = {
   openPermissions: vi.fn(),
   compact: vi.fn(),
   exportSession: vi.fn(),
+  reply: vi.fn(),
 };
 
 describe("ai-agent commands", () => {
@@ -35,5 +36,15 @@ describe("ai-agent commands", () => {
     const plan = cmds.find((c) => c.name === "plan")!;
     plan.run("", ctx);
     expect(ctx.setMode).toHaveBeenCalledWith("plan");
+  });
+
+  it("help replies with the command list", () => {
+    const cmds = createDefaultCommands();
+    const help = cmds.find((c) => c.name === "help")!;
+    help.run("", ctx);
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    const text = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(text).toContain("/clear");
+    expect(text).toContain("/plan");
   });
 });
