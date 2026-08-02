@@ -36,6 +36,8 @@ import {
 } from "@/src/ai/agent/commands";
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
 
+const STALL_TIMEOUT_MS = 45_000;
+
 export function useAiSidebarChat() {
   const pathname = usePathname();
 
@@ -265,8 +267,20 @@ export function useAiSidebarChat() {
             arguments: string;
           }> = [];
 
+          // Stall timeout: si aucun token ne progresse, on abandonne le stream
+          // pour éviter un "Réflexion…" infini quand le provider amont ne répond pas.
+          let lastActivity = Date.now();
+          let didTimeout = false;
+          const stallTimer = setInterval(() => {
+            if (Date.now() - lastActivity > STALL_TIMEOUT_MS) {
+              didTimeout = true;
+              controller.abort();
+            }
+          }, 5000);
+
           try {
             for await (const token of stream) {
+              lastActivity = Date.now();
               if (token.type === "usage") {
                 setSessionUsage((prev) => addUsage(prev, token.usage));
                 setMessages((prev) => {
@@ -305,6 +319,15 @@ export function useAiSidebarChat() {
               }
             }
           } catch (e: any) {
+            if (didTimeout) {
+              steps.push({
+                type: "error",
+                label: "Aucune réponse du modèle (timeout).",
+                status: "error",
+              });
+              syncSteps();
+              return;
+            }
             if (
               opts.tools &&
               !retriedWithoutTools &&
@@ -330,6 +353,8 @@ export function useAiSidebarChat() {
               return;
             }
             throw e;
+          } finally {
+            clearInterval(stallTimer);
           }
 
           if (toolCallsThisTurn.length === 0) return;
