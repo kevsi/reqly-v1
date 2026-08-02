@@ -119,7 +119,11 @@ export function useAiSidebarChat() {
     async (content: string) => {
       if (!content.trim() || isLoading) return;
       setError(null);
-      const userMsg: ChatMessage = { role: "user", content: content.trim() };
+      const userMsg: ChatMessage = {
+        role: "user",
+        content: content.trim(),
+        attachments: attachments.length > 0 ? attachments : undefined,
+      };
       const updated = [...messages, userMsg];
       setMessages(updated);
       setInput("");

@@ -5,13 +5,22 @@ import { useEffect, useCallback } from "react";
 import { Sparkles, PanelRightClose, Clock, Loader2, GripVerticalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useRequestStore } from "@/hooks/use-request-store";
 import type { ConversationSession } from "@/src/ai/components/ai-sidebar-types";
+import type { ContextAttachment } from "@/src/ai/agent/types";
 import { AiHistoryPanel } from "@/src/ai/components/ai-history-panel";
 import { AiChatMessage } from "@/src/ai/components/ai-chat-message";
 import { AiChatInput } from "@/src/ai/components/ai-chat-input";
+import { AiAgentControls } from "@/src/ai/components/ai-agent-controls";
+import { AiPlanPanel } from "@/src/ai/components/ai-plan-panel";
+import { AiRulesPanel } from "@/src/ai/components/ai-rules-panel";
+import { AiPermissionsPopover } from "@/src/ai/components/ai-permissions-popover";
 import { useAiSidebarWidth } from "@/src/ai/hooks/use-ai-sidebar-width";
 import { useAiSidebarChat } from "@/src/ai/hooks/use-ai-sidebar-chat";
 import { useAiSidebarHistory } from "@/src/ai/hooks/use-ai-sidebar-history";
+import { useAiAgentInput } from "@/src/ai/hooks/use-ai-agent-input";
+import { createDefaultCommands, parseSlashCommand } from "@/src/ai/agent/commands";
+import { formatTokens } from "@/src/ai/agent/usage";
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -24,6 +33,9 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
   const { width, isResizing, sidebarRef, handleResizeStart } = useAiSidebarWidth();
   const chat = useAiSidebarChat();
   const history = useAiSidebarHistory(chat.messages, chat.modelUsed);
+  const activeWorkspaceId = useRequestStore((s) => s.activeWorkspaceId) ?? "ws-personal";
+
+  const inputState = useAiAgentInput(createDefaultCommands(), chat.runSlashCommand);
 
   // ── Focus input when sidebar opens ───────────────────────────────────────
 
@@ -44,29 +56,58 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // ── Handlers combining chat + history ────────────────────────────────────
+  // ── Handlers combining chat + history + input ────────────────────────────
 
   const handleSelectSession = useCallback(
     (session: ConversationSession) => {
       history.handleLoadSessionMessages(session, chat.handleNewMessages);
+      chat.setAttachments([]);
+      inputState.clear();
     },
-    [history, chat],
+    [history, chat, inputState],
   );
 
   const handleNewSession = useCallback(() => {
     history.handleNewSession();
     chat.clearMessages();
-  }, [history, chat]);
+    chat.setAttachments([]);
+    inputState.clear();
+  }, [history, chat, inputState]);
 
   const handleDeleteSession = useCallback(
     (id: string) => {
       if (id === history.currentSessionId) {
         chat.clearMessages();
+        chat.setAttachments([]);
+        inputState.clear();
       }
       history.handleDeleteSession(id);
     },
-    [history, chat],
+    [history, chat, inputState],
   );
+
+  const handleSend = () => {
+    const text = inputState.value.trim();
+    if (!text || chat.isLoading) return;
+    const parsed = parseSlashCommand(text);
+    if (parsed) {
+      chat.runSlashCommand(parsed.name, parsed.args);
+    } else {
+      void chat.sendMessage(text);
+    }
+    inputState.clear();
+  };
+
+  const handleSelectMention = (a: ContextAttachment) => {
+    chat.attachContext(a);
+    inputState.acceptMention(a);
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    chat.setAttachments(chat.attachments.filter((x) => x.id !== id));
+  };
+
+  const sessionUsageLabel = formatTokens(chat.sessionUsage);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -127,6 +168,19 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
             <span className="text-sm font-semibold">Assistant IA</span>
           </div>
           <div className="flex items-center gap-1">
+            <AiAgentControls
+              mode={chat.agentMode}
+              onModeChange={chat.setAgentMode}
+              autoApply={chat.autoApply}
+              onAutoApplyChange={chat.setAutoApply}
+              onOpenRules={() => chat.setRulesPanelOpen(true)}
+              onOpenPermissions={() => chat.setPermissionsPanelOpen(true)}
+            />
+            {sessionUsageLabel && (
+              <span className="text-[10px] text-muted-foreground/60 px-1">
+                {sessionUsageLabel}
+              </span>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -154,6 +208,15 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
             </Button>
           </div>
         </div>
+
+        {chat.rulesPanelOpen && (
+          <AiRulesPanel
+            workspaceId={activeWorkspaceId}
+            onClose={() => chat.setRulesPanelOpen(false)}
+          />
+        )}
+
+        {chat.permissionsPanelOpen && <AiPermissionsPopover />}
 
         {history.historyOpen && (
           <AiHistoryPanel
@@ -187,7 +250,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                       type="button"
                       variant="ghost"
                       onClick={() => {
-                        chat.setInput(hint);
+                        inputState.setValue(hint);
                         chat.inputRef.current?.focus();
                       }}
                       className="block w-full justify-start rounded-lg border border-border/50 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -217,6 +280,15 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               />
             ))}
 
+            {chat.pendingPlan && (
+              <AiPlanPanel
+                planText={chat.pendingPlan.planText}
+                toolCalls={chat.pendingPlan.toolCalls}
+                onApprove={chat.approvePlan}
+                onReject={chat.rejectPlan}
+              />
+            )}
+
             {chat.isLoading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground mr-6">
                 <Loader2 className="size-3.5 animate-spin" />
@@ -233,11 +305,18 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
         </div>
 
         <AiChatInput
-          value={chat.input}
-          onValueChange={chat.setInput}
-          onSend={chat.handleSend}
+          value={inputState.value}
+          onValueChange={inputState.handleChange}
+          onSend={handleSend}
+          onStop={chat.stopStreaming}
           isLoading={chat.isLoading}
           inputRef={chat.inputRef}
+          attachments={chat.attachments}
+          onRemoveAttachment={handleRemoveAttachment}
+          commandResults={inputState.commandResults}
+          mentionResults={inputState.mentionResults}
+          onSelectCommand={inputState.acceptCommand}
+          onSelectMention={handleSelectMention}
         />
       </div>
     </>

@@ -1,11 +1,12 @@
 "use client";
 
-import { Copy, Check, Edit3, RotateCcw, Loader2 } from "lucide-react";
+import { Copy, Check, Edit3, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AssistantStepsRenderer, toAssistantSteps } from "@/src/ai/components/assistant-steps-renderer";
 import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
+import { formatTokens } from "@/src/ai/agent/usage";
 
 interface AiChatMessageProps {
   message: ChatMessage;
@@ -36,11 +37,27 @@ export function AiChatMessage({
   onEditingTextChange,
   onConfirm,
 }: AiChatMessageProps) {
+  const usageLabel =
+    message.role === "assistant" && message.usage ? formatTokens(message.usage) : "";
   return (
     <div className="group relative">
       {/* Process steps timeline (assistant only) */}
       {message.role === "assistant" && message.steps && message.steps.length > 0 && (
         <AssistantStepsRenderer steps={toAssistantSteps(message.steps)} onConfirm={onConfirm} />
+      )}
+
+      {/* Attachment chips (user only) */}
+      {message.role === "user" && message.attachments && message.attachments.length > 0 && (
+        <div className="mb-1 flex flex-wrap gap-1">
+          {message.attachments.map((a) => (
+            <span
+              key={a.id}
+              className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+            >
+              {a.type} → {a.label}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* Message bubble */}
@@ -60,6 +77,13 @@ export function AiChatMessage({
       >
         {message.content}
       </div>
+
+      {/* Usage badge (assistant only) */}
+      {usageLabel && (
+        <div className="mt-1 text-[10px] text-muted-foreground/60" data-testid="ai-usage-badge">
+          {usageLabel}
+        </div>
+      )}
 
       {/* Actions */}
       <div
