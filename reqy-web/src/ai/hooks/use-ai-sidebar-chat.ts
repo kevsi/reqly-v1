@@ -69,6 +69,11 @@ export function useAiSidebarChat() {
   const [permissionsPanelOpen, setPermissionsPanelOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+  const pendingPlanRef = useRef<{ toolCalls: ToolCall[] } | null>(null);
+  const agentModeRef = useRef<AgentMode>(agentMode);
+  useEffect(() => {
+    agentModeRef.current = agentMode;
+  }, [agentMode]);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -116,17 +121,18 @@ export function useAiSidebarChat() {
   );
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, options?: { planCalls?: ToolCall[] }) => {
       if (!content.trim() || isLoading) return;
       setError(null);
-      const userMsg: ChatMessage = {
-        role: "user",
-        content: content.trim(),
-        attachments: attachments.length > 0 ? attachments : undefined,
-      };
-      const updated = [...messages, userMsg];
-      setMessages(updated);
-      setInput("");
+      if (!options?.planCalls?.length) {
+        const userMsg: ChatMessage = {
+          role: "user",
+          content: content.trim(),
+          attachments: attachments.length > 0 ? attachments : undefined,
+        };
+        setMessages([...messages, userMsg]);
+        setInput("");
+      }
       setIsLoading(true);
 
       // ── Step builder: accumulates process steps and syncs to the UI ──
@@ -219,8 +225,8 @@ export function useAiSidebarChat() {
           `Tu es un agent intégré à Reqly, dans l'esprit de Claude Code. Tu peux créer des collections, des requêtes, des environnements, et exécuter des requêtes directement.`,
           `Page: ${pathname}`,
           rulesPrompt || "Règles actives : aucune.",
-          agentMode === "plan"
-            ? "MODE PLAN : tu PROPOSES un plan d'actions, tu n'exécutes AUCUN outil. Décris ce que tu ferais, et listes les outils envisagés."
+          agentModeRef.current === "plan"
+            ? "MODE PLAN : tu PROPOSES un plan d'actions en APPELANT les outils que tu exécuterais (function calling, arguments réels) — ces appels ne seront PAS exécutés, ils sont capturés pour validation par l'utilisateur. Ajoute un court texte décrivant le plan."
             : "MODE ACT : tu peux exécuter les outils disponibles pour agir.",
           autoApply
             ? "Auto-approuver : tu peux exécuter les outils sans redemander, sauf si une permission l'interdit."
@@ -353,7 +359,19 @@ export function useAiSidebarChat() {
                 return copy;
               });
               fullText = "";
-              await runTurn();
+        if (options?.planCalls?.length) {
+          addStep("execute", "Exécution du plan approuvé…");
+          await executeTools(
+            options.planCalls.map((c) => ({
+              callId: c.id,
+              name: c.name,
+              arguments: c.arguments,
+            })),
+            true,
+          );
+        } else {
+          await runTurn();
+        }
               return;
             }
             throw e;
@@ -363,15 +381,14 @@ export function useAiSidebarChat() {
 
           if (toolCallsThisTurn.length === 0) return;
 
-          if (agentMode === "plan") {
-            setPendingPlan({
-              planText: fullText,
-              toolCalls: toolCallsThisTurn.map((tc) => ({
-                id: tc.callId,
-                name: tc.name,
-                arguments: tc.arguments,
-              })),
-            });
+          if (agentModeRef.current === "plan") {
+            const planCalls: ToolCall[] = toolCallsThisTurn.map((tc) => ({
+              id: tc.callId,
+              name: tc.name,
+              arguments: tc.arguments,
+            }));
+            pendingPlanRef.current = { toolCalls: planCalls };
+            setPendingPlan({ planText: fullText, toolCalls: planCalls });
             steps.push({
               type: "error",
               label: `⏸ Mode plan — ${toolCallsThisTurn.length} action(s) proposée(s)`,
@@ -381,8 +398,15 @@ export function useAiSidebarChat() {
             return;
           }
 
+          await executeTools(toolCallsThisTurn);
+        };
+
+        const executeTools = async (
+          calls: Array<{ callId: string; name: string; arguments: string }>,
+          preApproved = false,
+        ) => {
           // Create pending steps for tool calls
-          for (const tc of toolCallsThisTurn) {
+          for (const tc of calls) {
             let safeArgs: Record<string, unknown> = {};
             try {
               safeArgs = JSON.parse(tc.arguments);
@@ -400,16 +424,16 @@ export function useAiSidebarChat() {
 
           // Execute tools sequentially, gated by permissions
           const results: ToolResult[] = [];
-          for (let i = 0; i < toolCallsThisTurn.length; i++) {
-            const tc = toolCallsThisTurn[i];
+          for (let i = 0; i < calls.length; i++) {
+            const tc = calls[i];
             try {
-              const result = await gatedExecute(tc, autoApply);
+              const result = await gatedExecute(tc, preApproved || autoApply);
               const toolUsage = result.usage;
               if (toolUsage) {
                 setSessionUsage((prev) => addUsage(prev, toolUsage));
               }
               results.push(result);
-              steps[steps.length - toolCallsThisTurn.length + i] = {
+              steps[steps.length - calls.length + i] = {
                 type: "create",
                 label: `${tc.name} — ${result.error ? "❌" : "✅"}`,
                 status: result.error ? "error" : "done",
@@ -421,7 +445,7 @@ export function useAiSidebarChat() {
                 content: "",
                 error: e?.message ?? "Erreur inconnue",
               });
-              steps[steps.length - toolCallsThisTurn.length + i] = {
+              steps[steps.length - calls.length + i] = {
                 type: "error",
                 label: `${tc.name} — Erreur`,
                 status: "error",
@@ -433,8 +457,8 @@ export function useAiSidebarChat() {
           // Check for requireConfirmation — await user confirmation via UI buttons
           let confirmIdx = results.findIndex((r) => r.requireConfirmation);
           while (confirmIdx !== -1) {
-            const targetTc = toolCallsThisTurn[confirmIdx];
-            steps[steps.length - toolCallsThisTurn.length + confirmIdx] = {
+            const targetTc = calls[confirmIdx];
+            steps[steps.length - calls.length + confirmIdx] = {
               type: "create",
               label: `⚠ ${targetTc.name} — confirmation requise`,
               status: "awaiting_confirmation",
@@ -446,7 +470,7 @@ export function useAiSidebarChat() {
             });
             confirmResolverRef.current = null;
             if (!confirmed) {
-              steps[steps.length - toolCallsThisTurn.length + confirmIdx] = {
+              steps[steps.length - calls.length + confirmIdx] = {
                 type: "error",
                 label: `${targetTc.name} — annulé`,
                 status: "error",
@@ -460,7 +484,7 @@ export function useAiSidebarChat() {
               setSessionUsage((prev) => addUsage(prev, toolUsage));
             }
             results[confirmIdx] = result;
-            steps[steps.length - toolCallsThisTurn.length + confirmIdx] = {
+            steps[steps.length - calls.length + confirmIdx] = {
               type: "create",
               label: `${targetTc.name} — ${result.error ? "❌" : "✅"}`,
               status: result.error ? "error" : "done",
@@ -472,7 +496,7 @@ export function useAiSidebarChat() {
 
           // Store turn for multi-turn context
           previousTurns.push({
-            assistantToolCalls: toolCallsThisTurn.map((tc) => ({
+            assistantToolCalls: calls.map((tc) => ({
               id: tc.callId,
               name: tc.name,
               arguments: tc.arguments,
@@ -559,7 +583,7 @@ export function useAiSidebarChat() {
         setEditingText("");
       }
     },
-    [messages, isLoading, pathname, agentMode, autoApply, attachments, gatedExecute],
+    [messages, isLoading, pathname, autoApply, attachments, gatedExecute],
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -586,10 +610,18 @@ export function useAiSidebarChat() {
   }, []);
 
   const approvePlan = useCallback(() => {
+    const plan = pendingPlanRef.current;
+    pendingPlanRef.current = null;
     setPendingPlan(null);
     setAgentMode("act");
+    agentModeRef.current = "act";
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    if (lastUser) void sendMessage(lastUser.content);
+    if (!lastUser) return;
+    if (plan?.toolCalls.length) {
+      void sendMessage(lastUser.content, { planCalls: plan.toolCalls });
+    } else {
+      void sendMessage(lastUser.content);
+    }
   }, [messages, sendMessage]);
 
   // Expose setInput for the parent to clear on new session
