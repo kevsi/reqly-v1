@@ -144,4 +144,20 @@ describe("handleAnthropic", () => {
     const body = await res.json();
     expect(body.error).toBe("Server Error");
   });
+
+  it("forwards anthropic usage in the response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          content: [{ type: "text", text: "salut" }],
+          usage: { input_tokens: 5, output_tokens: 2 },
+        }),
+    } as Response);
+
+    const res = await handleAnthropic(validBody, {});
+    const body = await res.json();
+    expect(body.usage).toEqual({ input_tokens: 5, output_tokens: 2 });
+  });
 });

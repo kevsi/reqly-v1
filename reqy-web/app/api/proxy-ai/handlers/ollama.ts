@@ -94,5 +94,28 @@ export async function handleOllama(
       : undefined;
   const msg = firstChoice?.message as Record<string, unknown> | undefined;
   const content = typeof msg?.content === "string" ? msg.content : "";
-  return NextResponse.json({ content });
+
+  const dataObj = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
+  const usageRaw =
+    dataObj?.usage ?? (typeof dataObj?.prompt_eval_count === "number" ? dataObj : undefined);
+  const usage =
+    usageRaw && typeof usageRaw === "object"
+      ? {
+          input_tokens: Number(
+            (usageRaw as Record<string, unknown>).prompt_tokens ??
+              (usageRaw as Record<string, unknown>).prompt_eval_count ??
+              0,
+          ),
+          output_tokens: Number(
+            (usageRaw as Record<string, unknown>).completion_tokens ??
+              (usageRaw as Record<string, unknown>).eval_count ??
+              0,
+          ),
+        }
+      : undefined;
+
+  return NextResponse.json({
+    content,
+    ...(usage ? { usage } : {}),
+  });
 }

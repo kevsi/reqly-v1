@@ -29,6 +29,14 @@ interface GeminiCandidateExt {
   functionCall?: GeminiFunctionCall;
 }
 
+function mapGeminiUsage(m: Record<string, unknown> | undefined) {
+  if (!m || typeof m !== "object") return undefined;
+  const input_tokens = Number(m.promptTokenCount ?? 0);
+  const output_tokens = Number(m.candidatesTokenCount ?? 0);
+  if (input_tokens === 0 && output_tokens === 0) return undefined;
+  return { input_tokens, output_tokens };
+}
+
 export async function handleGemini(
   body: GeminiBody & Record<string, unknown>,
   extra: ExtraOptions,
@@ -86,6 +94,7 @@ export async function handleGemini(
   if (contentType.includes("text/event-stream")) {
     const rawText = await res.text();
     let combined = "";
+    let usageMetadata: Record<string, unknown> | undefined;
     const functionCallCalls: Array<{
       id?: string;
       name?: string;
@@ -99,6 +108,7 @@ export async function handleGemini(
         try {
           const chunk: GeminiChunk & {
             candidates?: Array<GeminiCandidateExt>;
+            usageMetadata?: Record<string, unknown>;
           } = JSON.parse(jsonStr);
           const text =
             chunk.candidates?.[0]?.content?.parts?.[0]?.text ||
@@ -106,6 +116,8 @@ export async function handleGemini(
             chunk.text ||
             "";
           if (text) combined += text;
+
+          if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
 
           const fc = chunk.candidates?.[0]?.functionCall;
           if (fc?.name) {
@@ -126,15 +138,21 @@ export async function handleGemini(
       return NextResponse.json({ error: errData }, { status: res.status });
     }
 
+    const usage = mapGeminiUsage(usageMetadata);
+
     if (functionCallCalls.length > 0) {
       return NextResponse.json({
         content: combined,
         tool_calls: functionCallCalls,
         provider_tool_format: "gemini" as const,
+        ...(usage ? { usage } : {}),
       });
     }
 
-    return NextResponse.json({ content: combined });
+    return NextResponse.json({
+      content: combined,
+      ...(usage ? { usage } : {}),
+    });
   }
 
   // Non-streaming JSON response
@@ -176,6 +194,7 @@ export async function handleGemini(
 
   // Detect functionCall in non-streamed response
   const functionCall = firstCandidate?.functionCall as GeminiFunctionCall | undefined;
+  const usage = mapGeminiUsage(data.usageMetadata as Record<string, unknown> | undefined);
   if (functionCall?.name) {
     return NextResponse.json({
       content,
@@ -187,8 +206,12 @@ export async function handleGemini(
         },
       ],
       provider_tool_format: "gemini" as const,
+      ...(usage ? { usage } : {}),
     });
   }
 
-  return NextResponse.json({ content });
+  return NextResponse.json({
+    content,
+    ...(usage ? { usage } : {}),
+  });
 }

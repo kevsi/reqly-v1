@@ -50,6 +50,7 @@ export async function handleDeepSeek(
     body: JSON.stringify({
       model,
       stream: Boolean(body.stream),
+      ...(body.stream && tools?.length ? { stream_options: { include_usage: true } } : {}),
       ...(tools?.length ? { tools } : {}),
       ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
       messages: [
@@ -93,6 +94,24 @@ export async function handleDeepSeek(
   } catch {
     data = {};
   }
+
+  // Usage (chunk final du flux stream+tools, sinon data.usage non-stream)
+  let usage: Record<string, unknown> | undefined;
+  if (body.stream && tools?.length) {
+    const usageMatches = rawText.match(/"usage"\s*:\s*\{[^}]*\}/g);
+    const last = usageMatches?.[usageMatches.length - 1];
+    if (last) {
+      try {
+        const parsed = JSON.parse(`{${last}}`) as { usage?: Record<string, unknown> };
+        if (parsed.usage) usage = parsed.usage;
+      } catch {
+        /* ignore malformed usage chunk */
+      }
+    }
+  } else if (data && typeof data === "object" && (data as Record<string, unknown>).usage) {
+    usage = (data as Record<string, unknown>).usage as Record<string, unknown>;
+  }
+
   const choices =
     data && typeof data === "object" ? (data as Record<string, unknown>).choices : undefined;
   const firstChoice =
@@ -120,5 +139,6 @@ export async function handleDeepSeek(
           ? firstText
           : "",
     ...(toolCalls.length > 0 ? { tool_calls: toolCalls, provider_tool_format: "openai" } : {}),
+    ...(usage ? { usage } : {}),
   });
 }

@@ -91,6 +91,16 @@ export async function handleAnthropic(
     )
     .reduce((acc: string, item) => (item.type === "text" ? acc + (item.text || "") : acc), "");
 
+  const usageRaw =
+    data && typeof data === "object" ? (data as Record<string, unknown>).usage : undefined;
+  const usage =
+    usageRaw && typeof usageRaw === "object"
+      ? {
+          input_tokens: Number((usageRaw as Record<string, unknown>).input_tokens ?? 0),
+          output_tokens: Number((usageRaw as Record<string, unknown>).output_tokens ?? 0),
+        }
+      : undefined;
+
   const toolUses = contentArray
     .filter(
       (
@@ -114,8 +124,12 @@ export async function handleAnthropic(
       tool_calls: toolUses,
       provider_tool_format: "anthropic" as const,
       stop_reason: (data as Record<string, unknown>).stop_reason,
+      ...(usage ? { usage } : {}),
     });
   }
 
-  return NextResponse.json({ content: textContent });
+  return NextResponse.json({
+    content: textContent,
+    ...(usage ? { usage } : {}),
+  });
 }
