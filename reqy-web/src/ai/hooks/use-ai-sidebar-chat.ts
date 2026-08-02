@@ -34,6 +34,7 @@ import {
   createDefaultCommands,
   type SlashCommandContext,
 } from "@/src/ai/agent/commands";
+import { extractTextToolCalls, stripToolCallText } from "@/src/ai/agent/text-tools";
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
 
 const STALL_TIMEOUT_MS = 45_000;
@@ -379,7 +380,53 @@ export function useAiSidebarChat() {
             clearInterval(stallTimer);
           }
 
-          if (toolCallsThisTurn.length === 0) return;
+          if (toolCallsThisTurn.length === 0) {
+            // Text-fallback: some models write tool calls as plain text
+            // (e.g. <create_collection><name>Test</name></create_collection>)
+            // instead of emitting real function-calling delta.tool_calls.
+            // Detect those and execute them for real.
+            const textCalls = extractTextToolCalls(fullText);
+            if (textCalls.length > 0) {
+              fullText = stripToolCallText(fullText, textCalls);
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last && last.role === "assistant") {
+                  copy[copy.length - 1] = {
+                    ...last,
+                    content: fullText,
+                    steps: [...steps],
+                  };
+                }
+                return copy;
+              });
+              if (agentModeRef.current === "plan") {
+                const planCalls: ToolCall[] = textCalls.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  arguments: c.arguments,
+                }));
+                pendingPlanRef.current = { toolCalls: planCalls };
+                setPendingPlan({ planText: fullText, toolCalls: planCalls });
+                steps.push({
+                  type: "error",
+                  label: `⏸ Mode plan — ${textCalls.length} action(s) proposée(s)`,
+                  status: "error",
+                });
+                syncSteps();
+                return;
+              }
+              await executeTools(
+                textCalls.map((c) => ({
+                  callId: c.id,
+                  name: c.name,
+                  arguments: c.arguments,
+                })),
+              );
+              return;
+            }
+            return;
+          }
 
           if (agentModeRef.current === "plan") {
             const planCalls: ToolCall[] = toolCallsThisTurn.map((tc) => ({
