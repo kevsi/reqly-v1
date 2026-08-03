@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #060b08;
+  --color-ink-900: #0b130f;
+  --color-ink-850: #0e1712;
+  --color-ink-800: #101b15;
+  --color-ink-700: #17261d;
+  --color-ink-600: #20352a;
+  --color-ink-500: #2c4637;
+  --color-mint-200: #a7f3d0;
+  --color-mint-300: #6ee7b7;
+  --color-mint-400: #34d399;
+  --color-mint-500: #10b981;
+  --color-mint-600: #059669;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono",
+    "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background-color: var(--color-ink-950);
+    color: #d4d4d4;
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-mint-400) 35%, transparent);
+    color: #fff;
+  }
+
+  /* Focus visible : anneau clair, cohérent sur toute la page */
+  :focus-visible {
+    outline: 2px solid var(--color-mint-400);
+    outline-offset: 2px;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-ink-950);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-600);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-500);
+  }
+}
+
+/* ── Utilitaires maison ─────────────────────────────── */
+
+@utility grid-pattern {
+  background-image: linear-gradient(
+      to right,
+      rgb(52 211 153 / 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgb(52 211 153 / 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@utility text-gradient {
+  background: linear-gradient(120deg, #ffffff 0%, #a7f3d0 55%, #34d399 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility glow {
+  box-shadow:
+    0 0 0 1px rgb(52 211 153 / 0.14),
+    0 24px 80px -24px rgb(16 185 129 / 0.35);
+}
+
+@utility card-hover {
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    background-color 0.3s ease;
+  &:hover {
+    transform: translateY(-4px);
+    border-color: rgb(52 211 153 / 0.4);
+    box-shadow: 0 18px 50px -20px rgb(16 185 129 / 0.35);
+  }
+}
+
+@utility hide-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Carte avec halo qui suit la souris (--spot-x / --spot-y pilotés en JS) */
+@utility spotlight-card {
+  position: relative;
+  overflow: hidden;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: radial-gradient(
+      320px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+      rgb(52 211 153 / 0.09),
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+  &:hover::before {
+    opacity: 1;
+  }
+  /* Le contenu passe au-dessus du halo */
+  & > * {
+    position: relative;
+  }
+}
+
+/* ── Animations ─────────────────────────────────────── */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes bounce-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 36s linear infinite;
+}
+.animate-marquee-paused:hover .animate-marquee {
+  animation-play-state: paused;
+}
+.animate-float {
+  animation: float 7s ease-in-out infinite;
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+.animate-bounce-soft {
+  animation: bounce-soft 2.2s ease-in-out infinite;
+}
+
+/* Accessibilité : respect des préférences de mouvement */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-marquee,
+  .animate-float,
+  .animate-pulse-dot,
+  .animate-bounce-soft {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -148,7 +148,17 @@ auth.post("/signup", async (c) => {
     await sendVerificationCode(email, code);
   } catch (err) {
     console.error("[auth] Failed to send verification email:", err);
-    // Still created the account — user can request code resend
+    // Account is created but the code could not be delivered.
+    // Return an error so the client knows to check the email config / resend.
+    return c.json(
+      {
+        error:
+          "Compte créé mais impossible d'envoyer le code de vérification. Vérifiez la configuration email du serveur, puis utilisez « Renvoyer le code ».",
+        userId: id,
+        email,
+      },
+      502,
+    );
   }
 
   return c.json({
@@ -269,6 +279,15 @@ auth.post("/login", async (c) => {
 
   // Block unverified accounts
   if (!user.verified) {
+    // Send a fresh verification code so the user always has a valid one.
+    // A code from signup may have expired (15 min TTL) or failed to deliver.
+    const code = generateVerificationCode();
+    setVerificationCode(user.id, code);
+    try {
+      await sendVerificationCode(email, code);
+    } catch (err) {
+      console.error("[auth] Failed to send verification code on login:", err);
+    }
     return c.json(
       {
         error: "Veuillez vérifier votre adresse email avant de vous connecter.",

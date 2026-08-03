@@ -3,6 +3,8 @@
 import { useState, useCallback } from "react"
 import { toast } from "sonner"
 import { proxyAuthHeaders } from "@/lib/proxy-auth"
+import { isTauriAvailable } from "@/lib/tauri"
+import { callAiProxyTauri } from "@/lib/tauri-ai"
 import type { AIProvider } from "@/lib/types"
 
 export interface TestResult {
@@ -56,35 +58,71 @@ export function useTestConnection() {
         body.openaiUrl = baseUrl
       }
 
-      const res = await fetch("/api/proxy-ai", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...proxyAuthHeaders(),
-        },
-        body: JSON.stringify(body),
-      })
+      let res: Response | { status: number; body: string }
 
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        if (data.code === "PROXY_AUTH_REQUIRED") {
-          throw new Error("Authentification du proxy refusée. Vérifie la configuration du token dans .env.local")
+      if (isTauriAvailable()) {
+        const tauriBody: Record<string, unknown> = {
+          provider,
+          apiKey: provider === "ollama" ? "" : apiKey,
+          model: testModel,
+          message: "Réponds uniquement par 'ok' si tu reçois ce message.",
+          system: "Tu es un assistant de test. Réponds uniquement par 'ok'.",
         }
-        const errMsg = data.error || `HTTP ${res.status}`
-        throw new Error(`Clé API ${errMsg.includes("key") ? "" : "invalide"} : ${errMsg}`)
+        if (isCustom || provider === "openai") tauriBody.openaiUrl = baseUrl
+        const { content: text } = await callAiProxyTauri(tauriBody)
+        res = { status: 200, body: JSON.stringify({ content: text }) }
+      } else {
+        res = await fetch("/api/proxy-ai", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...proxyAuthHeaders(),
+          },
+          body: JSON.stringify({
+            provider,
+            apiKey: provider === "ollama" ? "" : apiKey,
+            model: testModel,
+            message: "Réponds uniquement par 'ok' si tu reçois ce message.",
+            system: "Tu es un assistant de test. Réponds uniquement par 'ok'.",
+            ...(isCustom || provider === "openai" ? { openaiUrl: baseUrl } : {}),
+          }),
+        })
       }
 
-      const content = typeof data.content === "string" ? data.content.trim() : ""
-      if (content.toLowerCase().includes("ok")) {
-        setTestResult({ success: true, message: "Connexion réussie ! Le modèle répond." })
-        toast.success("Test réussi !")
+      const data = await (res instanceof Response ? res.json().catch(() => ({})) : Promise.resolve({}))
+
+      if (res instanceof Response) {
+        if (!res.ok) {
+          if (data.code === "PROXY_AUTH_REQUIRED") {
+            throw new Error("Authentification du proxy refusée. Vérifie la configuration du token dans .env.local")
+          }
+          const errMsg = data.error || `HTTP ${res.status}`
+          throw new Error(`Clé API ${errMsg.includes("key") ? "" : "invalide"} : ${errMsg}`)
+        }
+
+        const content = typeof data.content === "string" ? data.content.trim() : ""
+        if (content.toLowerCase().includes("ok")) {
+          setTestResult({ success: true, message: "Connexion réussie ! Le modèle répond." })
+          toast.success("Test réussi !")
+        } else {
+          setTestResult({
+            success: true,
+            message: `Réponse reçue (vérifiez que c'est correct) : "${content.slice(0, 100)}"`,
+          })
+          toast.success("Réponse reçue du modèle.")
+        }
       } else {
-        setTestResult({
-          success: true,
-          message: `Réponse reçue (vérifiez que c'est correct) : "${content.slice(0, 100)}"`,
-        })
-        toast.success("Réponse reçue du modèle.")
+        const text = typeof res.body === "string" ? res.body : ""
+        if (text.toLowerCase().includes("ok")) {
+          setTestResult({ success: true, message: "Connexion réussie ! Le modèle répond." })
+          toast.success("Test réussi !")
+        } else {
+          setTestResult({
+            success: true,
+            message: `Réponse reçue (vérifiez que c'est correct) : "${text.slice(0, 100)}"`,
+          })
+          toast.success("Réponse reçue du modèle.")
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

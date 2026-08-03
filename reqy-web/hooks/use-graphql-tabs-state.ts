@@ -10,6 +10,7 @@ import { executeGraphQL } from "@/lib/graphql/execute"
 import { subscribeGraphQL } from "@/lib/graphql/subscribe"
 import { introspectSchema } from "@/lib/graphql/introspect"
 import { formatGraphQL } from "@/lib/graphql/format"
+import { toast } from "@/hooks/use-toast"
 
 const DEFAULT_ENDPOINT = "https://countries.trevorblades.com/"
 const DEFAULT_QUERY = `# Welcome to Reqly GraphQL Explorer
@@ -42,7 +43,14 @@ export interface UseGraphqlTabsState {
   updateTab: (id: string, patch: Partial<GraphqlTab>) => void
   addNewTab: () => void
   closeTab: (id: string) => void
+  forceCloseTab: (id: string) => void
   duplicateTab: (id: string) => void
+  closeOthers: (id: string) => void
+  closeToRight: (id: string) => void
+  closeAllTabs: () => void
+  saveAllTabs: () => void
+  pendingCloseTab: GraphqlTab | null
+  setPendingCloseTab: (tab: GraphqlTab | null) => void
   runQuery: () => Promise<void>
   stopSubscription: () => void
   introspect: () => Promise<void>
@@ -63,6 +71,7 @@ export function useGraphqlTabsState(): UseGraphqlTabsState {
   const [tabs, setTabs] = useState<GraphqlTab[]>([initial])
   const [activeTabId, setActiveTabId] = useState(initial.id)
   const [isLoading, setIsLoading] = useState(false)
+  const [pendingCloseTab, setPendingCloseTab] = useState<GraphqlTab | null>(null)
   const subscriptionRef = useRef<{ close: () => void } | null>(null)
   const messageCounter = useRef(0)
 
@@ -83,20 +92,34 @@ export function useGraphqlTabsState(): UseGraphqlTabsState {
     setActiveTabId(newTab.id)
   }, [])
 
+  const forceCloseTab = useCallback((id: string) => {
+    setTabs((prev) => {
+      const remaining = prev.filter((t) => t.id !== id)
+      if (remaining.length === 0) {
+        const fresh = makeDefaultTab()
+        setActiveTabId(fresh.id)
+        return [fresh]
+      }
+      setActiveTabId((current) => {
+        if (current !== id) return current
+        const idx = prev.findIndex((t) => t.id === id)
+        const fallback = remaining[Math.max(0, idx - 1)] ?? remaining[0]
+        return fallback.id
+      })
+      return remaining
+    })
+  }, [])
+
   const closeTab = useCallback(
     (id: string) => {
-      setTabs((prev) => {
-        if (prev.length <= 1) return prev
-        const remaining = prev.filter((t) => t.id !== id)
-        if (id === activeTabId) {
-          const idx = prev.findIndex((t) => t.id === id)
-          const fallback = remaining[Math.max(0, idx - 1)] ?? remaining[0]
-          if (fallback) setActiveTabId(fallback.id)
-        }
-        return remaining
-      })
+      const tab = tabs.find((t) => t.id === id)
+      if (tab && tab.dirty) {
+        setPendingCloseTab(tab)
+        return
+      }
+      forceCloseTab(id)
     },
-    [activeTabId],
+    [tabs, forceCloseTab],
   )
 
   const duplicateTab = useCallback(
@@ -117,6 +140,47 @@ export function useGraphqlTabsState(): UseGraphqlTabsState {
     },
     [tabs],
   )
+
+  const closeOthers = useCallback((id: string) => {
+    setTabs((prev) => prev.filter((t) => t.id === id))
+    setActiveTabId(id)
+  }, [])
+
+  const closeToRight = useCallback((id: string) => {
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id)
+      if (idx === -1) return prev
+      setActiveTabId((current) => {
+        const activeIdx = prev.findIndex((t) => t.id === current)
+        return activeIdx > idx ? id : current
+      })
+      return prev.slice(0, idx + 1)
+    })
+  }, [])
+
+  const closeAllTabs = useCallback(() => {
+    const fresh = makeDefaultTab()
+    setTabs([fresh])
+    setActiveTabId(fresh.id)
+  }, [])
+
+  const saveAllTabs = useCallback(() => {
+    let count = 0
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (!tab.saved) {
+          count++
+          return { ...tab, saved: true, dirty: false }
+        }
+        return tab
+      }),
+    )
+    if (count > 0) {
+      toast({ title: `Saved ${count} tab${count > 1 ? "s" : ""}` })
+    } else {
+      toast({ title: "All tabs are already saved" })
+    }
+  }, [])
 
   const loadGraphqlRequest = useCallback(
     (req: {
@@ -298,7 +362,14 @@ export function useGraphqlTabsState(): UseGraphqlTabsState {
     updateTab,
     addNewTab,
     closeTab,
+    forceCloseTab,
     duplicateTab,
+    closeOthers,
+    closeToRight,
+    closeAllTabs,
+    saveAllTabs,
+    pendingCloseTab,
+    setPendingCloseTab,
     runQuery,
     stopSubscription,
     introspect,

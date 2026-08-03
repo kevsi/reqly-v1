@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Bell, Clock, Command, GitBranch, X, Sparkles } from "lucide-react";
+import { Search, Bell, Clock, Command, GitBranch, X, Sparkles, Menu } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { Text } from "@/components/ui/text";
@@ -34,7 +34,12 @@ import { useShallow } from "zustand/react/shallow";
 import { useRouter } from "next/navigation";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
 
-export function ApiHeader() {
+interface ApiHeaderProps {
+  /** Ouvre le drawer de navigation sur mobile. */
+  onOpenMobileSidebar?: () => void;
+}
+
+export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
   // Data slices: subscribe only to what we render. Each atomic selector returns
   // the same reference unless that slice actually changes, so the header does
   // NOT re-render on unrelated mutations (e.g. editing a request body).
@@ -79,32 +84,46 @@ export function ApiHeader() {
   }, [handleKeyDown]);
 
   return (
-    <header className="flex h-12 items-center justify-between border-b border-border bg-gradient-to-r from-background via-muted/10 to-background px-4">
-      {/* Logo + Workspace */}
-      <div className="flex items-center gap-2">
-        <div className="group/logo flex size-8 items-center justify-center rounded-lg border border-border bg-muted/30 transition-all duration-200 hover:border-primary/30 hover:bg-primary/5">
+    <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-gradient-to-r from-background via-muted/10 to-background px-3 sm:px-4 @container">
+      {/* Menu mobile + Logo + Workspace */}
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        {onOpenMobileSidebar && (
+          <button
+            type="button"
+            onClick={onOpenMobileSidebar}
+            aria-label="Ouvrir le menu de navigation"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground md:hidden"
+          >
+            <Menu className="size-5" />
+          </button>
+        )}
+        <div className="group/logo hidden size-8 items-center justify-center rounded-lg border border-border bg-muted/30 transition-all duration-200 hover:border-primary/30 hover:bg-primary/5 sm:flex">
           <div className="size-4 rounded-sm bg-foreground transition-all duration-200 group-hover/logo:bg-primary" />
         </div>
         <WorkspaceSelector />
       </div>
 
       {/* Search — Ctrl+K palette */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         <button
           onClick={() => setSearchOpen(true)}
           aria-label="Search"
           className="group/search relative transition-all duration-200 hover:scale-[1.02]"
           title="Search (Ctrl+K)"
         >
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none transition-colors group-hover/search:text-muted-foreground" />
-          <div className="flex h-9 w-full max-w-80 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none transition-colors group-hover/search:text-muted-foreground hidden @min-[40rem]:block" />
+          <div className="hidden h-9 w-56 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20 @min-[40rem]:flex lg:w-80">
             <span className="flex-1 text-left text-muted-foreground/70">
               Search APIs, endpoints...
             </span>
-            <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 font-mono text-[10px] font-medium text-muted-foreground/70">
+            <kbd className="hidden @min-[40rem]:inline-flex h-5 select-none items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 font-mono text-[10px] font-medium text-muted-foreground/70">
               <Command className="size-3" />K
             </kbd>
           </div>
+          {/* Icône seule quand le conteneur est étroit (mobile ou sidebar ouverte) */}
+          <span className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground @min-[40rem]:hidden">
+            <Search className="size-4" />
+          </span>
         </button>
 
         <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
@@ -153,15 +172,19 @@ export function ApiHeader() {
             </CommandGroup>
           </CommandList>
         </CommandDialog>
-        <EnvironmentSelector />
-        <VariablesPanel />
+        <span className="hidden @min-[36rem]:block">
+          <EnvironmentSelector />
+        </span>
+        <span className="hidden @min-[44rem]:block">
+          <VariablesPanel />
+        </span>
         <ThemeSwitcher />
         <AccountMenu />
 
         {/* AI Sidebar Toggle */}
         <AiSidebarToggle />
 
-        <div className="flex items-center gap-1.5">
+        <div className="hidden items-center gap-1.5 @min-[26rem]:flex">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

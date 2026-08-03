@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { callAIText, PROMPTS } from "@/src/ai/engine"
+import { PROMPTS } from "@/src/ai/cloud-engine/actions"
+import { callAITextViaStream } from "@/src/ai/cloud-engine/text"
 import { extractGraphqlReply } from "@/lib/graphql/extract-reply"
 import { loadAIProvider, loadApiKey, loadOllamaConfig, loadAiBaseUrl, loadAiModel } from "@/lib/config"
 import { toast } from "@/hooks/use-toast"
@@ -12,6 +13,9 @@ export interface GraphqlAIConfig {
   model?: string
   openaiUrl?: string
   ollamaUrl?: string
+  /** Host/port Ollama dérivés de loadOllamaConfig par parseAiConfig. */
+  host?: string
+  port?: number
   system?: string
 }
 
@@ -85,6 +89,8 @@ function parseAiConfig(): GraphqlAIConfig {
       provider === "ollama"
         ? `http://${ollamaConfig.host || "127.0.0.1"}:${ollamaConfig.port ?? 11434}`
         : undefined,
+    host: provider === "ollama" ? ollamaConfig.host : undefined,
+    port: provider === "ollama" ? ollamaConfig.port : undefined,
   }
 }
 
@@ -114,9 +120,15 @@ export function useGraphqlAI(): UseGraphqlAIResult {
         const config = parseAiConfig()
         const schemaHint = schema ? JSON.stringify(schema) : undefined
         const prompt = PROMPTS.graphqlFromDescription(description, schemaHint)
-        const raw = await callAIText(prompt, {
-          ...config,
+        const raw = await callAITextViaStream({
+          provider: config.provider,
+          apiKey: config.apiKey ?? "",
+          model: config.model,
+          openaiUrl: config.openaiUrl,
+          host: config.host,
+          port: config.port,
           system: GRAPHQL_AI_SYSTEM_PROMPT,
+          rawMessage: prompt,
         })
         const suggestion = extractGraphqlReply(raw)
         if (!suggestion) throw new Error("Empty AI response")
@@ -158,9 +170,15 @@ export function useGraphqlAI(): UseGraphqlAIResult {
       try {
         const config = parseAiConfig()
         const prompt = PROMPTS.graphqlFixFromError(query, errorMessage)
-        const raw = await callAIText(prompt, {
-          ...config,
+        const raw = await callAITextViaStream({
+          provider: config.provider,
+          apiKey: config.apiKey ?? "",
+          model: config.model,
+          openaiUrl: config.openaiUrl,
+          host: config.host,
+          port: config.port,
           system: GRAPHQL_AI_SYSTEM_PROMPT,
+          rawMessage: prompt,
         })
         const suggestion = extractGraphqlReply(raw)
         if (!suggestion) throw new Error("Empty AI response")

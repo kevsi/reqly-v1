@@ -1,4 +1,4 @@
-import type { TestAssertion } from "@/src/ai/engine"
+import type { TestAssertion } from "@/src/ai/cloud-engine/actions"
 import type { RequestTestAssertion } from "@/lib/types"
 import type { Assertion } from "@/lib/test-runner/types"
 

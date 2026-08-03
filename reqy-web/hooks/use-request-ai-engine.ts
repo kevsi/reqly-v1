@@ -6,7 +6,7 @@ import {
   convertToRequestTestAssertions,
   convertToRunnerAssertions,
 } from "@/lib/ai-assertion-converter";
-import type { TestAssertion } from "@/src/ai/engine";
+import type { TestAssertion } from "@/src/ai/cloud-engine/actions";
 import { useAIEngine, type AIEngineHandlers } from "@/src/ai/hooks/use-ai-engine";
 import { generateFollowUpRequest } from "@/lib/ai-request-generator";
 import { buildAiProxyPayload } from "@/lib/ai-config";

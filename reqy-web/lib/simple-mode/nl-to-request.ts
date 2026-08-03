@@ -3,11 +3,10 @@
  *
  * This module is the pure, unit-testable core of "Mode simple" (Task 13).
  * It turns a natural-language description into a structured request by reusing
- * the EXISTING AI engine's text-completion path (the same `callAIText` +
- * JSON-extraction path used by Task 5's `propose-correction`). No new AI
- * client is introduced: callers inject the engine's text completion function
- * (in the UI this is `useAIEngine().sendMessage`, which wraps `callAIText`
- * with the configured provider).
+ * the cloud-engine mono-shot text completion (`callAITextViaStream`, via
+ * `useAIEngine().sendMessage`) + JSON extraction. No new AI client is
+ * introduced: callers inject the engine's text completion function (in the UI
+ * this is `useAIEngine().sendMessage`).
  *
  * Responsibilities:
  *   - `normalizeMethod` / `nlArgsToRequest`: map a `build_request` args object
@@ -148,7 +147,7 @@ Description : ${description}`;
  * Generate a request from a natural-language description by calling the
  * injected AI text-completion function (the existing engine). Returns a
  * savable `RequestItem`. `askAI` is the engine's text completion (in the UI:
- * `useAIEngine().sendMessage`, which reuses `callAIText`).
+ * `useAIEngine().sendMessage`, which routes through `callAITextViaStream`).
  */
 export async function generateRequestFromNL(
   description: string,

@@ -3,7 +3,7 @@ import {
   proposeAssertionCorrection,
   assertionToInput,
   suggestionToAssertion,
-} from "@/src/ai/engine/propose-correction";
+} from "@/src/ai/cloud-engine/actions/propose-correction";
 import type { Assertion } from "@/lib/test-runner/types";
 
 function mockAskAIWith(suggestion: unknown, rationale = "The response differs.") {

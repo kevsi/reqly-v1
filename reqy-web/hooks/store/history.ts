@@ -1,7 +1,7 @@
 "use client";
 
 import type { RequestStore, HttpMethod, HistoryItem, RequestItem } from "@/hooks/request-types";
-import type { CurrentRequest, LastResponse } from "@/src/ai/engine";
+import type { CurrentRequest, LastResponse } from "@/src/ai/cloud-engine/actions";
 import { executeRequest as executeRequestCore } from "@/lib/request-executor";
 import type { RequestTab } from "@/lib/request-executor";
 import { runProactiveAnalysis } from "@/hooks/store-analysis";

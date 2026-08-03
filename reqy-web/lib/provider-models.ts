@@ -1,5 +1,7 @@
 import { proxyAuthHeaders } from "@/lib/proxy-auth"
 import type { AIProvider } from "@/lib/types"
+import { isTauriAvailable } from "@/lib/tauri"
+import { fetchModelsTauri } from "@/lib/tauri-ai"
 
 export interface ModelOption {
   id: string
@@ -10,11 +12,11 @@ export interface ModelOption {
  * Providers whose model list cannot be fetched dynamically
  * (no public endpoint or API doesn't support listing).
  */
-export const ANTHROPIC_NO_FETCH = new Set<AIProvider>(["anthropic", "deepseek"])
+export const ANTHROPIC_NO_FETCH = new Set<AIProvider>(["anthropic"])
 
 /**
  * Static fallback model lists for providers that don't expose
- * a public model listing endpoint (anthropic, deepseek).
+ * a public model listing endpoint (anthropic).
  * Also used as initial suggestions before fetching.
  */
 export const STATIC_MODELS: Record<string, ModelOption[]> = {
@@ -70,6 +72,10 @@ async function proxyFetchModels(
   apiKey: string,
   baseUrl: string,
 ): Promise<ModelOption[]> {
+  if (isTauriAvailable()) {
+    return fetchModelsTauri(provider, apiKey, baseUrl)
+  }
+
   const body: Record<string, string> = { provider }
   if (apiKey) body.apiKey = apiKey
   if (baseUrl) body.baseUrl = baseUrl

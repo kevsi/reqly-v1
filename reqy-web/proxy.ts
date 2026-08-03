@@ -36,8 +36,8 @@ function extractBearerToken(authorization: string | null): string | null {
 }
 
 function buildCsp(nonce: string): string {
-  const syncUrl = (process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly-sync.fly.dev").replace(/\/$/, "");
-  let syncConnectTargets = "https://reqly-sync.fly.dev wss://reqly-sync.fly.dev";
+  const syncUrl = (process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly.duckdns.org").replace(/\/$/, "");
+  let syncConnectTargets = "https://reqly.duckdns.org wss://reqly.duckdns.org";
   try {
     const syncOrigin = new URL(syncUrl).origin;
     const wsScheme = syncOrigin.startsWith("https") ? "wss:" : "ws:";

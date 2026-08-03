@@ -23,6 +23,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAiChatHidden, setAiChatHidden } from "@/src/ai/hooks/use-ai-chat-visibility";
 
 const navItems = [
@@ -42,18 +43,32 @@ interface ApiSidebarProps {
   activePage?: string;
   collapsed?: boolean;
   onCollapse?: (v: boolean) => void;
+  /** Mobile drawer: open state + close handler (off-canvas below md). */
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export function ApiSidebar({
   activePage = "api-endpoints",
   collapsed: controlledCollapsed,
   onCollapse,
+  mobileOpen = false,
+  onMobileClose,
 }: ApiSidebarProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const collapsed = controlledCollapsed ?? internalCollapsed;
+  const isMobile = useIsMobile(768);
+  // Sur mobile, le drawer est TOUJOURS en pleine largeur avec les libellés,
+  // indépendamment de l'état `collapsed` du contexte (forcé à true sous 916px).
+  const expanded = isMobile ? true : !collapsed;
   const setCollapsed = (v: boolean) => {
     setInternalCollapsed(v);
     onCollapse?.(v);
+  };
+
+  // Navigation sur mobile : ferme le drawer après un clic sur un lien.
+  const handleNavClick = () => {
+    if (isMobile) onMobileClose?.();
   };
   // Atomic selectors: this sidebar no longer re-renders on unrelated store
   // mutations (tab switches, response updates, etc.) — only when the workspace
@@ -70,22 +85,32 @@ export function ApiSidebar({
   return (
     <aside
       aria-label="Main navigation"
+      aria-hidden={isMobile && !mobileOpen}
       className={cn(
-        "group/sidebar fixed inset-y-0 left-0 z-30 flex h-screen flex-col border-r bg-sidebar transition-[width] duration-200 ease-out will-change-auto",
-        collapsed ? "w-[60px]" : "w-64",
+        "group/sidebar fixed inset-y-0 left-0 z-30 flex h-screen flex-col border-r bg-sidebar transition-all duration-200 ease-out will-change-auto",
+        // Desktop: rail replié ou déplié
+        !isMobile && (collapsed ? "w-[60px]" : "w-64"),
+        // Mobile: drawer off-canvas (pleine hauteur, glissé hors-écran quand fermé)
+        isMobile &&
+          cn(
+            "w-72 shadow-2xl shadow-black/30",
+            mobileOpen
+              ? "translate-x-0"
+              : "-translate-x-full invisible pointer-events-none",
+          ),
       )}
     >
       {/* Header */}
       <div
         className={cn(
           "flex items-center border-b border-sidebar-border px-3 py-4",
-          collapsed ? "justify-center" : "gap-3 px-4",
+          expanded ? "gap-3 px-4" : "justify-center",
         )}
       >
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 shadow-sm">
           <AppIcon aria-hidden="true" className="size-5" />
         </div>
-        {!collapsed && (
+        {expanded && (
           <div className="flex flex-col overflow-hidden">
             <span className="truncate text-sm font-semibold text-foreground">Reqly</span>
             <span className="inline-flex items-center gap-1 truncate rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
@@ -94,7 +119,7 @@ export function ApiSidebar({
             </span>
           </div>
         )}
-        {!collapsed && (
+        {expanded && (
           <ChevronDown
             aria-hidden="true"
             className="ml-auto size-4 shrink-0 text-muted-foreground/60"
@@ -106,7 +131,7 @@ export function ApiSidebar({
       <nav
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden px-2 scrollbar-discreet",
-          collapsed ? "py-2" : "py-4",
+          expanded ? "py-4" : "py-2",
         )}
       >
         <ul className="space-y-0.5">
@@ -119,10 +144,11 @@ export function ApiSidebar({
                 )}
                 <Link
                   href={item.href}
-                  title={collapsed ? item.label : undefined}
+                  onClick={handleNavClick}
+                  title={!expanded ? item.label : undefined}
                   className={cn(
                     "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150",
-                    collapsed ? "justify-center" : "gap-3 px-3",
+                    expanded ? "gap-3 px-3" : "justify-center",
                     isActive
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -136,14 +162,12 @@ export function ApiSidebar({
                       !isActive && "group-hover/nav-item:text-foreground",
                     )}
                   />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {expanded && <span className="truncate">{item.label}</span>}
                   {isActive && (
                     <span
                       className={cn(
                         "rounded-full bg-primary shadow-sm shadow-primary/50",
-                        collapsed
-                          ? "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2"
-                          : "ml-auto flex size-1.5",
+                        expanded ? "ml-auto flex size-1.5" : "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2",
                       )}
                     />
                   )}
@@ -151,24 +175,25 @@ export function ApiSidebar({
               </li>
             );
           })}
-          <ModuleNavList activePage={activePage} collapsed={collapsed} />
+          <ModuleNavList activePage={activePage} collapsed={!expanded} />
         </ul>
         <ToolsSection />
       </nav>
 
       {/* AI Assistant */}
-      <div className={cn("py-2", collapsed ? "px-2" : "px-3")}>
+      <div className={cn("py-2", expanded ? "px-3" : "px-2")}>
         <Link
           href="/ai-insights"
+          onClick={handleNavClick}
           className={cn(
             "group/ai relative flex items-center rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-accent/30 px-3 py-2.5 text-sm font-medium text-foreground transition-all duration-200 hover:from-primary/15 hover:via-primary/10 hover:to-accent/50 hover:animate-pulse-glow",
-            collapsed ? "justify-center px-2" : "gap-3",
+            expanded ? "gap-3" : "justify-center px-2",
           )}
         >
           <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-sm shadow-primary/20">
             <Sparkles aria-hidden="true" className="size-4 text-primary-foreground" />
           </div>
-          {!collapsed && (
+          {expanded && (
             <>
               <span className="font-medium">Ask Monu AI</span>
               <span className="ml-auto flex size-2 rounded-full bg-success shadow-sm shadow-success/50 group-hover/ai:animate-pulse" />
@@ -178,7 +203,7 @@ export function ApiSidebar({
       </div>
 
       {/* Restore hidden AI chat (only visible when the user has hidden it) */}
-      {!collapsed && aiHidden && (
+      {expanded && aiHidden && (
         <div className="border-t border-sidebar-border p-2">
           <Button
             variant="ghost"
@@ -193,7 +218,7 @@ export function ApiSidebar({
         </div>
       )}
 
-      {/* Collapse toggle button — always visible on hover */}
+      {/* Collapse toggle button — desktop only (mobile uses the drawer) */}
       <button
         onClick={() => setCollapsed(!collapsed)}
         aria-label="Collapse sidebar"

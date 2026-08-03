@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const SYNC_URL =
-  (process.env.NEXT_PUBLIC_SYNC_URL ?? "https://reqly-sync.fly.dev").replace(/\/$/, "");
+  (process.env.NEXT_PUBLIC_SYNC_URL ?? "https://reqly.duckdns.org").replace(/\/$/, "");
 
 /**
  * Forward a request to the sync server.

@@ -1,5 +1,9 @@
 /**
- * AI engine — shared types.
+ * Cloud engine — action vocabulary types (migré depuis le moteur legacy
+ * `src/ai/engine/types.ts`).
+ *
+ * Types partagés du flux « actions » REST : contexte de requête, réponse,
+ * assertions et le vocabulaire d'actions que les modèles peuvent produire.
  */
 
 import type { HttpMethod } from "@/lib/types";

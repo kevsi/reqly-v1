@@ -95,7 +95,10 @@ export async function handleOpenAICompat(
       messages: [
         { role: "system", content: system },
         { role: "user", content: message },
-        ...buildOpenAIToolHistory(previousTurns),
+        // Round-trip `reasoning_content` (DeepSeek reasoner / thinking via
+        // openrouter, custom, grok...). Le champ n'est ajouté que si le tour
+        // en contient réellement, donc inerte pour les modèles sans reasoning.
+        ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
       ],
     }),
   });

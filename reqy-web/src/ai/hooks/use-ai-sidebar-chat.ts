@@ -62,6 +62,7 @@ export function useAiSidebarChat() {
   const [pendingPlan, setPendingPlan] = useState<{
     planText: string;
     toolCalls: ToolCall[];
+    reasoningContent?: string;
   } | null>(null);
   const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
   const [sessionUsage, setSessionUsage] = useState<AgentUsage>(emptyUsage());
@@ -70,7 +71,9 @@ export function useAiSidebarChat() {
   const [permissionsPanelOpen, setPermissionsPanelOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
-  const pendingPlanRef = useRef<{ toolCalls: ToolCall[] } | null>(null);
+  const pendingPlanRef = useRef<{ toolCalls: ToolCall[]; reasoningContent?: string } | null>(
+    null,
+  );
   const agentModeRef = useRef<AgentMode>(agentMode);
   useEffect(() => {
     agentModeRef.current = agentMode;
@@ -81,8 +84,16 @@ export function useAiSidebarChat() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
+  // Note: `messagesEndRef` pointe sur le conteneur scrollable lui-même (voir
+  // AiSidebar). `scrollIntoView` ne scrollerait pas son propre contenu — on
+  // positionne donc `scrollTop` sur la hauteur totale du contenu.
+  // On ne force le défilement que si l'utilisateur est déjà proche du bas,
+  // pour ne pas le tirer vers le bas pendant qu'il remonte lire du contenu.
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesEndRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
   }, []);
 
   useEffect(() => {
@@ -122,14 +133,25 @@ export function useAiSidebarChat() {
   );
 
   const sendMessage = useCallback(
-    async (content: string, options?: { planCalls?: ToolCall[] }) => {
+    async (
+      content: string,
+      options?: {
+        planCalls?: ToolCall[];
+        skipUserMessage?: boolean;
+        /** Override des attachments à envoyer au modèle (utilisé par l'édition). */
+        attachmentsOverride?: ContextAttachment[];
+        /** `reasoning_content` du tour de plan (DeepSeek thinking). */
+        reasoningContent?: string;
+      },
+    ) => {
       if (!content.trim() || isLoading) return;
       setError(null);
-      if (!options?.planCalls?.length) {
+      const effectiveAttachments = options?.attachmentsOverride ?? attachments;
+      if (!options?.planCalls?.length && !options?.skipUserMessage) {
         const userMsg: ChatMessage = {
           role: "user",
           content: content.trim(),
-          attachments: attachments.length > 0 ? attachments : undefined,
+          attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
         };
         setMessages([...messages, userMsg]);
         setInput("");
@@ -153,6 +175,20 @@ export function useAiSidebarChat() {
       };
 
       const addStep = (type: ProcessStep["type"], label: string) => {
+        // Une seule étape « through » : si le raisonnement précédent est encore
+        // en cours, on met à jour son libellé (« Through… » → « Analyse en
+        // cours… ») au lieu d'empiler un second spinner redondant.
+        const prev = steps[steps.length - 1];
+        if (
+          type === "through" &&
+          prev &&
+          prev.type === "through" &&
+          prev.status === "in_progress"
+        ) {
+          prev.label = label;
+          syncSteps();
+          return;
+        }
         steps.push({ type, label, status: "in_progress" });
         syncSteps();
       };
@@ -220,7 +256,7 @@ export function useAiSidebarChat() {
 
         const rulesFile = loadRules(fresh.activeWorkspaceId ?? "ws-personal");
         const rulesPrompt = buildRulesSystemPrompt(rulesFile);
-        const attachmentsPrompt = attachmentsToPrompt(attachments);
+        const attachmentsPrompt = attachmentsToPrompt(effectiveAttachments);
 
         const systemPrompt = [
           `Tu es un agent intégré à Reqly, dans l'esprit de Claude Code. Tu peux créer des collections, des requêtes, des environnements, et exécuter des requêtes directement.`,
@@ -247,10 +283,16 @@ export function useAiSidebarChat() {
         const previousTurns: Array<{
           assistantToolCalls: Array<{ id: string; name: string; arguments: string }>;
           toolResults: ToolResult[];
+          reasoningContent?: string;
         }> = [];
         let retriedWithoutTools = false;
 
         const runTurn = async () => {
+          // Texte du tour courant uniquement : on remplace le texte des tours
+          // précédents (narration « je vais créer… ») pour que le message final
+          // ne contienne que la réponse du dernier tour, pas un collage des
+          // narrations successives + des résultats d'outils déjà affichés.
+          fullText = "";
           const controller = new AbortController();
           abortRef.current = controller;
           const opts = {
@@ -277,6 +319,9 @@ export function useAiSidebarChat() {
             name: string;
             arguments: string;
           }> = [];
+          // `reasoning_content` du tour (DeepSeek thinking mode) — renvoyé dans
+          // l'historique du tour suivant, obligatoire sinon HTTP 400.
+          let reasoningThisTurn = options?.reasoningContent ?? "";
 
           // Stall timeout: si aucun token ne progresse, on abandonne le stream
           // pour éviter un "Réflexion…" infini quand le provider amont ne répond pas.
@@ -320,6 +365,7 @@ export function useAiSidebarChat() {
                   return copy;
                 });
               } else if (token.type === "tool_calls") {
+                 reasoningThisTurn += token.reasoningContent ?? "";
                  toolCallsThisTurn.push(
                    ...token.calls.map((c: { id: string; name: string; arguments: string }) => ({
                      callId: c.id,
@@ -369,6 +415,7 @@ export function useAiSidebarChat() {
               arguments: c.arguments,
             })),
             true,
+            options.reasoningContent,
           );
         } else {
           await runTurn();
@@ -434,8 +481,12 @@ export function useAiSidebarChat() {
               name: tc.name,
               arguments: tc.arguments,
             }));
-            pendingPlanRef.current = { toolCalls: planCalls };
-            setPendingPlan({ planText: fullText, toolCalls: planCalls });
+            pendingPlanRef.current = { toolCalls: planCalls, reasoningContent: reasoningThisTurn };
+            setPendingPlan({
+              planText: fullText,
+              toolCalls: planCalls,
+              reasoningContent: reasoningThisTurn,
+            });
             steps.push({
               type: "error",
               label: `⏸ Mode plan — ${toolCallsThisTurn.length} action(s) proposée(s)`,
@@ -445,13 +496,19 @@ export function useAiSidebarChat() {
             return;
           }
 
-          await executeTools(toolCallsThisTurn);
+          await executeTools(toolCallsThisTurn, false, reasoningThisTurn);
         };
 
         const executeTools = async (
           calls: Array<{ callId: string; name: string; arguments: string }>,
           preApproved = false,
+          reasoningContent?: string,
         ) => {
+          // Le raisonnement (« Through… ») est terminé dès que les outils
+          // commencent : résoudre l'étape pour que le spinner ne tourne pas
+          // en parallèle des étapes d'exécution (mode timeline).
+          finishThrough();
+
           // Create pending steps for tool calls
           for (const tc of calls) {
             let safeArgs: Record<string, unknown> = {};
@@ -549,6 +606,7 @@ export function useAiSidebarChat() {
               arguments: tc.arguments,
             })),
             toolResults: results,
+            ...(reasoningContent ? { reasoningContent } : {}),
           });
           turnCount++;
 
@@ -625,6 +683,9 @@ export function useAiSidebarChat() {
       } finally {
         confirmResolverRef.current = null;
         abortRef.current = null;
+        // Filet de sécurité : ne jamais laisser le spinner « Through… » bloqué,
+        // quel que soit le chemin de sortie (happy path, abort, erreur, plan).
+        finishThrough();
         setIsLoading(false);
         setEditingIndex(null);
         setEditingText("");
@@ -665,7 +726,10 @@ export function useAiSidebarChat() {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUser) return;
     if (plan?.toolCalls.length) {
-      void sendMessage(lastUser.content, { planCalls: plan.toolCalls });
+      void sendMessage(lastUser.content, {
+        planCalls: plan.toolCalls,
+        reasoningContent: plan.reasoningContent,
+      });
     } else {
       void sendMessage(lastUser.content);
     }
@@ -737,8 +801,26 @@ export function useAiSidebarChat() {
   const handleEditConfirm = useCallback(() => {
     if (editingIndex === null || !editingText.trim()) return;
     const truncated = messages.slice(0, editingIndex);
-    setMessages([...truncated, { role: "user", content: editingText.trim() }]);
-    sendMessage(editingText.trim());
+    const original = messages[editingIndex];
+    const preservedAttachments =
+      original?.role === "user" && original.attachments?.length
+        ? original.attachments
+        : undefined;
+    const userMsg: ChatMessage = {
+      role: "user",
+      content: editingText.trim(),
+      // Conserver les attachments du message édité (sinon ils seraient perdus).
+      ...(preservedAttachments ? { attachments: preservedAttachments } : {}),
+    };
+    // Appliquer la troncature ici, puis envoyer SANS ré-ajouter le message
+    // utilisateur (sendMessage le ferait avec un `messages` obsolète et
+    // annulerait la troncature). On repasse les attachments préservés pour
+    // que le prompt du modèle soit cohérent avec les chips affichées.
+    setMessages([...truncated, userMsg]);
+    void sendMessage(editingText.trim(), {
+      skipUserMessage: true,
+      attachmentsOverride: preservedAttachments,
+    });
   }, [editingIndex, editingText, messages, sendMessage]);
 
   const handleRetry = useCallback(() => {

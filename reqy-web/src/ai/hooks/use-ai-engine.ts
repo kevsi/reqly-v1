@@ -2,19 +2,20 @@
 
 import { useCallback, useState } from "react";
 import {
-  AIAction,
   AIContext,
   AIResponse,
   CurrentRequest,
   LastResponse,
   TestAssertion,
-  callAI,
-  callAIText,
+  ACTIONS_SYSTEM_PROMPT,
   dispatchAIActions,
+  parseAIResponse,
   PROMPTS,
   AIProvider,
-} from "@/src/ai/engine";
+} from "@/src/ai/cloud-engine/actions";
 import { buildSearchText, searchIndex } from "@/src/ai/cloud-engine/search-index";
+import { callAITextViaStream } from "@/src/ai/cloud-engine/text";
+import { DEFAULT_MODELS } from "@/lib/ai-config";
 import {
   loadAIProvider,
   loadApiKey,
@@ -30,6 +31,9 @@ export interface AIConfig {
   model?: string;
   openaiUrl?: string;
   ollamaUrl?: string;
+  /** Host/port Ollama dérivés de loadOllamaConfig par parseAiConfig. */
+  host?: string;
+  port?: number;
 }
 
 interface AIRequestStore {
@@ -88,7 +92,10 @@ function parseAiConfig(override?: Partial<AIConfig>): AIConfig {
   return {
     provider,
     apiKey: apiKey.trim(),
-    model: modelOverride?.trim() || (provider === "ollama" ? ollamaConfig.model : undefined),
+    model:
+      modelOverride?.trim() ||
+      (provider === "ollama" ? ollamaConfig.model : undefined) ||
+      DEFAULT_MODELS[provider],
     openaiUrl:
       provider === "openai" || provider === "custom" || provider === "grok"
         ? openaiUrl?.trim() || undefined
@@ -97,6 +104,8 @@ function parseAiConfig(override?: Partial<AIConfig>): AIConfig {
       provider === "ollama"
         ? `http://${ollamaConfig.host || "127.0.0.1"}:${ollamaConfig.port ?? 11434}`
         : undefined,
+    host: provider === "ollama" ? ollamaConfig.host || "127.0.0.1" : undefined,
+    port: provider === "ollama" ? ollamaConfig.port ?? 11434 : undefined,
   };
 }
 
@@ -187,7 +196,21 @@ export function useAIEngine(handlerOverrides?: AIEngineHandlers): UseAIEngineRes
   const runAiCall = useCallback(
     async (prompt: string, ctx: AIContext): Promise<AIResponse> => {
       const config = parseAiConfig();
-      const aiRes = await callAI(prompt, config);
+      // Étape 4 : transport migré vers le cloud-engine (streamLLM via le proxy),
+      // mais le contrat legacy est préservé à l'identique — SYSTEM_PROMPT
+      // JSON-actions legacy, parseAIResponse et dispatchAIActions (gate
+      // allowAutoApply intacte). L'équivalent exact de l'ancien `callAI`.
+      const text = await callAITextViaStream({
+        provider: config.provider,
+        apiKey: config.apiKey ?? "",
+        model: config.model,
+        openaiUrl: config.openaiUrl,
+        host: config.host,
+        port: config.port,
+        system: ACTIONS_SYSTEM_PROMPT,
+        rawMessage: prompt,
+      });
+      const aiRes = parseAIResponse(text);
       await dispatchAIActions(aiRes.actions, mergeHandlers(store, handlerOverrides), ctx, {
         allowAutoApply: Boolean(store.aiAutoApply),
       });
@@ -201,11 +224,11 @@ export function useAIEngine(handlerOverrides?: AIEngineHandlers): UseAIEngineRes
        setError(null);
        setIsLoading(true);
        try {
-         const query = buildSearchText(
-           ctx.currentRequest.method,
-           ctx.currentRequest.url ?? "",
-           ctx.currentRequest.url ?? "",
-         );
+          const query = buildSearchText(
+            ctx.currentRequest.method,
+            ctx.currentRequest.url ?? "",
+            (ctx.currentRequest.body as string | undefined) ?? "",
+          );
          const results = await searchIndex(query, 5);
          const retrievedChunks = results.map((r) => ({
            source: `${r.item.collectionName} · ${r.item.method} ${r.item.url}`,
@@ -281,7 +304,16 @@ export function useAIEngine(handlerOverrides?: AIEngineHandlers): UseAIEngineRes
       setIsLoading(true);
       try {
         const config = parseAiConfig(configOverride);
-        const text = await callAIText(message, { ...config, system: systemPrompt });
+        const text = await callAITextViaStream({
+          provider: config.provider,
+          apiKey: config.apiKey ?? "",
+          model: config.model,
+          openaiUrl: config.openaiUrl,
+          host: config.host,
+          port: config.port,
+          system: systemPrompt,
+          rawMessage: message,
+        });
         return text;
       } catch (err) {
         const messageText = err instanceof Error ? err.message : String(err);

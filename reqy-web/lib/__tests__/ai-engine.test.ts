@@ -1,26 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  SYSTEM_PROMPT,
+  ACTIONS_SYSTEM_PROMPT,
   PROMPTS,
   parseAIResponse,
   dispatchAIActions,
-  callAI,
-  callAIText,
-} from "@/src/ai/engine";
-import type { AIContext, AIAction, AIResponse } from "@/src/ai/engine";
-
-// Mock fetch globally
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
+} from "@/src/ai/cloud-engine/actions";
+import type { AIContext, AIAction, AIResponse } from "@/src/ai/cloud-engine/actions";
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("SYSTEM_PROMPT", () => {
+describe("ACTIONS_SYSTEM_PROMPT", () => {
   it("is a non-empty string", () => {
-    expect(typeof SYSTEM_PROMPT).toBe("string");
-    expect(SYSTEM_PROMPT.length).toBeGreaterThan(100);
+    expect(typeof ACTIONS_SYSTEM_PROMPT).toBe("string");
+    expect(ACTIONS_SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
   it("contains all action types documented in the prompt", () => {
@@ -33,12 +27,12 @@ describe("SYSTEM_PROMPT", () => {
       "EXPLAIN",
     ];
     for (const action of actions) {
-      expect(SYSTEM_PROMPT).toContain(action);
+      expect(ACTIONS_SYSTEM_PROMPT).toContain(action);
     }
   });
 
   it("forbids markdown fences in output", () => {
-    expect(SYSTEM_PROMPT.toLowerCase()).toContain("json");
+    expect(ACTIONS_SYSTEM_PROMPT.toLowerCase()).toContain("json");
   });
 });
 
@@ -350,77 +344,4 @@ describe("dispatchAIActions", () => {
   });
 });
 
-describe("callAI", () => {
-  it("returns error summary when provider requires apiKey but none given", async () => {
-    const result = await callAI("test", { provider: "openai", apiKey: "" });
-    expect(result.summary).toBe("AI call failed.");
-    expect(result.actions[0].type).toBe("EXPLAIN");
-  });
 
-  it("returns error for unsupported provider", async () => {
-    const result = await callAI("test", { provider: "unknown" as any });
-    expect(result.summary).toBe("AI call failed.");
-    expect(result.actions[0].type).toBe("EXPLAIN");
-  });
-
-  it("parses valid response from proxy", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        content:
-          '{"summary": "ok", "actions": [{"type": "EXPLAIN", "payload": {"message": "test"}}]}',
-      }),
-    });
-    const result = await callAI("test prompt", { provider: "openai", apiKey: "sk-test" });
-    expect(result.summary).toBe("ok");
-    expect(result.actions).toHaveLength(1);
-  });
-
-  it("handles proxy error response", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      text: async () => "Unauthorized",
-    });
-    const result = await callAI("test", { provider: "openai", apiKey: "bad-key" });
-    expect(result.summary).toBe("AI call failed.");
-  });
-});
-
-describe("callAIText", () => {
-  it("rejects missing apiKey for openai", async () => {
-    await expect(callAIText("test", { provider: "openai", apiKey: "" })).rejects.toThrow("apiKey");
-  });
-
-  it("rejects missing apiKey for anthropic", async () => {
-    await expect(callAIText("test", { provider: "anthropic", apiKey: "" })).rejects.toThrow(
-      "apiKey",
-    );
-  });
-
-  it("rejects unsupported provider", async () => {
-    await expect(callAIText("test", { provider: "unknown" as any, apiKey: "x" })).rejects.toThrow(
-      "Unsupported provider",
-    );
-  });
-
-  it("returns content from successful proxy call", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ content: "Hello from AI" }),
-    });
-    const result = await callAIText("test", { provider: "openai", apiKey: "sk-test" });
-    expect(result).toBe("Hello from AI");
-  });
-
-  it("throws on proxy error", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      text: async () => "Server Error",
-    });
-    await expect(callAIText("test", { provider: "openai", apiKey: "sk-test" })).rejects.toThrow(
-      "Erreur HTTP 500",
-    );
-  });
-});

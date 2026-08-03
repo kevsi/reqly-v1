@@ -6,6 +6,7 @@ import { useGraphqlAI } from "@/hooks/use-graphql-ai";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
 import { GraphqlTabBar } from "./graphql-tab-bar";
+import { GraphqlUnsavedCloseDialog } from "./graphql-unsaved-close-dialog";
 import { GraphqlActiveToolbar } from "./graphql-active-toolbar";
 import { GraphqlRequestPanel } from "./graphql-request-panel";
 import { GraphqlResponsePanel } from "./graphql-response-panel";
@@ -15,6 +16,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { CollectionsModal } from "@/components/collections-modal";
 import { RequestSaveDialog } from "@/components/request-save-dialog";
 import { toast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export function GraphqlTabsManager() {
   const {
@@ -25,7 +27,14 @@ export function GraphqlTabsManager() {
     updateTab,
     addNewTab,
     closeTab,
+    forceCloseTab,
     duplicateTab,
+    closeOthers,
+    closeToRight,
+    closeAllTabs,
+    saveAllTabs,
+    pendingCloseTab,
+    setPendingCloseTab,
     runQuery,
     stopSubscription,
     introspect,
@@ -61,6 +70,9 @@ export function GraphqlTabsManager() {
   );
 
   const { assistGraphql, fixGraphqlError, isLoading: aiLoading, error: aiError } = useGraphqlAI();
+
+  // Sur mobile, on empile requête/réponse verticalement au lieu du split horizontal.
+  const isMobile = useIsMobile(768);
 
   const handleSave = useCallback(() => {
     setSaveName(activeTab.name);
@@ -211,6 +223,12 @@ export function GraphqlTabsManager() {
         onAdd={addNewTab}
         onClose={closeTab}
         onDuplicate={duplicateTab}
+        onCloseOthers={closeOthers}
+        onCloseToRight={closeToRight}
+        onCloseAll={closeAllTabs}
+        onSaveActive={handleSave}
+        onSaveAll={saveAllTabs}
+        onRename={(id, name) => updateTab(id, { name })}
       />
       <GraphqlActiveToolbar
         activeTab={activeTab}
@@ -226,8 +244,16 @@ export function GraphqlTabsManager() {
         onLoadFromCollection={() => setCollectionsOpen(true)}
         running={isLoading || !!activeTab.schemaLoading}
       />
-      <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
-        <ResizablePanel defaultSize={55} minSize={25} className="min-w-0 min-h-0 overflow-hidden">
+      <ResizablePanelGroup
+        key={isMobile ? "mobile" : "desktop"}
+        direction={isMobile ? "vertical" : "horizontal"}
+        className="flex-1 min-h-0"
+      >
+        <ResizablePanel
+          defaultSize={55}
+          minSize={25}
+          className="min-w-0 min-h-0 overflow-hidden"
+        >
           <GraphqlRequestPanel
             tab={activeTab}
             onUpdate={(patch) => updateTab(activeTab.id, patch)}
@@ -240,8 +266,12 @@ export function GraphqlTabsManager() {
             running={isLoading || !!activeTab.schemaLoading}
           />
         </ResizablePanel>
-        <ResizableHandle withHandle className="bg-border" />
-        <ResizablePanel defaultSize={45} minSize={25} className="min-w-0 min-h-0 overflow-hidden">
+        <ResizableHandle withHandle className="bg-border max-md:hidden" />
+        <ResizablePanel
+          defaultSize={45}
+          minSize={25}
+          className="min-w-0 min-h-0 overflow-hidden"
+        >
           <GraphqlResponsePanel
             response={activeTab.response}
             error={activeTab.response?.errors?.[0]?.message}
@@ -295,6 +325,15 @@ export function GraphqlTabsManager() {
         onCollectionIdChange={setSaveCollectionId}
         collections={collections}
         onSubmit={handleSaveSubmit}
+      />
+
+      <GraphqlUnsavedCloseDialog
+        pendingTab={pendingCloseTab}
+        onOpenChange={(open) => !open && setPendingCloseTab(null)}
+        onDiscard={() => {
+          if (pendingCloseTab) forceCloseTab(pendingCloseTab.id);
+          setPendingCloseTab(null);
+        }}
       />
 
       <GraphqlAIDialog

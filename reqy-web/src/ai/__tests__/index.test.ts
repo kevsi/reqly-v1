@@ -1,17 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock fetch so callAI / callAIText don't hit the network.
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 // Runtime surface
 import {
-  callAI,
-  callAIText,
   parseAIResponse,
   dispatchAIActions,
   PROMPTS,
@@ -30,12 +24,10 @@ import type {
   TestAssertion,
 } from "@/src/ai";
 
-import * as engine from "@/src/ai/engine";
+import * as actions from "@/src/ai/cloud-engine/actions";
 
 describe("@/src/ai public API surface", () => {
-  it("re-exports every runtime function declared on @/src/ai/engine", () => {
-    expect(typeof callAI).toBe("function");
-    expect(typeof callAIText).toBe("function");
+  it("re-exports every runtime function declared on cloud-engine/actions", () => {
     expect(typeof parseAIResponse).toBe("function");
     expect(typeof dispatchAIActions).toBe("function");
     expect(typeof PROMPTS).toBe("object");
@@ -46,12 +38,12 @@ describe("@/src/ai public API surface", () => {
     // Re-exports must be the same references, not copies — otherwise
     // consumers that depend on identity (e.g. instanceof, memoization)
     // would break.
-    expect(callAI).toBe(engine.callAI);
-    expect(callAIText).toBe(engine.callAIText);
-    expect(parseAIResponse).toBe(engine.parseAIResponse);
-    expect(dispatchAIActions).toBe(engine.dispatchAIActions);
-    expect(PROMPTS).toBe(engine.PROMPTS);
-    expect(SYSTEM_PROMPT).toBe(engine.SYSTEM_PROMPT);
+    expect(parseAIResponse).toBe(actions.parseAIResponse);
+    expect(dispatchAIActions).toBe(actions.dispatchAIActions);
+    expect(PROMPTS).toBe(actions.PROMPTS);
+    // Le barrel public garde le nom historique SYSTEM_PROMPT via un alias vers
+    // ACTIONS_SYSTEM_PROMPT (distinct du persona ReqlyAI interne).
+    expect(SYSTEM_PROMPT).toBe(actions.ACTIONS_SYSTEM_PROMPT);
   });
 
   it("does not leak implementation-internal action payload types as values", async () => {
@@ -62,16 +54,9 @@ describe("@/src/ai public API surface", () => {
     const mod = await import("@/src/ai");
     const runtimeKeys = Object.keys(mod).sort();
     // `export type` is erased at compile time, so the runtime surface is
-    // only the six values/functions listed below.
+    // only the four values/functions listed below.
     expect(runtimeKeys).toEqual(
-      [
-        "PROMPTS",
-        "SYSTEM_PROMPT",
-        "callAI",
-        "callAIText",
-        "dispatchAIActions",
-        "parseAIResponse",
-      ].sort(),
+      ["PROMPTS", "SYSTEM_PROMPT", "dispatchAIActions", "parseAIResponse"].sort(),
     );
     // None of the internal payload-type names should be re-exported as values.
     for (const internal of [
@@ -84,6 +69,8 @@ describe("@/src/ai public API surface", () => {
       "ExecuteRequestAction",
       "RunBatchAction",
       "HTTPMethod",
+      "callAI",
+      "callAIText",
     ]) {
       expect(runtimeKeys).not.toContain(internal);
     }
@@ -138,36 +125,6 @@ describe("@/src/ai re-exports work end-to-end", () => {
     const actions: AIAction[] = [{ type: "EXPLAIN", payload: { message: "hello via re-export" } }];
     await dispatchAIActions(actions, { notify });
     expect(notify).toHaveBeenCalledWith("hello via re-export");
-  });
-
-  it("callAI returns an EXPLAIN action when the provider rejects the key", async () => {
-    const result = await callAI("hi", { provider: "openai", apiKey: "" });
-    expect(result.summary).toBe("AI call failed.");
-    expect(result.actions[0]?.type).toBe("EXPLAIN");
-  });
-
-  it("callAI surfaces valid proxy output through parseAIResponse", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        content: JSON.stringify({
-          summary: "from proxy",
-          actions: [{ type: "EXPLAIN", payload: { message: "proxy-ok" } }],
-        }),
-      }),
-    });
-    const result = await callAI("test", {
-      provider: "openai",
-      apiKey: "sk-test",
-    });
-    expect(result.summary).toBe("from proxy");
-    expect(result.actions[0]?.type).toBe("EXPLAIN");
-  });
-
-  it("callAIText throws for unsupported provider via the re-export", async () => {
-    await expect(
-      callAIText("test", { provider: "nope" as unknown as AIProvider, apiKey: "x" }),
-    ).rejects.toThrow(/Unsupported provider/);
   });
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Sparkles, Loader2, Send, Bell, ChevronsUpDown, Check, Bot } from "lucide-react";
+import { Sparkles, Loader2, Send, Bell, ChevronsUpDown, Check, Bot, Plus, Clock } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { EnvironmentSelector } from "@/components/environment-selector";
@@ -24,6 +24,7 @@ import {
 } from "@/lib/config";
 import { isAiConfigured } from "@/lib/ai-config";
 import { useAIEngine } from "@/src/ai/hooks/use-ai-engine";
+import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 import { toast } from "@/hooks/use-toast";
 import { fireSystemNotification, pushInAppNotification } from "@/lib/system-notifications";
 import { cn } from "@/lib/utils";
@@ -474,16 +475,18 @@ export default function AiInsightsPage() {
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
-        <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded border border-border bg-card">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4 sm:px-6 @container">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded border border-border bg-card">
             <Sparkles className="size-4 text-foreground" />
           </div>
-          <span className="font-semibold text-sm text-foreground">Monu IA</span>
+          <span className="truncate font-semibold text-sm text-foreground @max-[22rem]:hidden">
+            Monu IA
+          </span>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden items-center gap-2 sm:flex">
+        <div className="flex items-center gap-1.5 sm:gap-4 min-w-0">
+          <span className="hidden @min-[44rem]:block shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed font-normal">
@@ -511,7 +514,8 @@ export default function AiInsightsPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-
+          </span>
+          <span className="hidden @min-[40rem]:block shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed font-normal">
@@ -538,25 +542,33 @@ export default function AiInsightsPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          </span>
 
-            <button
-              type="button"
-              onClick={startNewConversation}
-              className="h-8 rounded-2xl border border-border bg-card px-3 text-sm text-foreground transition hover:border-primary/50 hover:bg-primary/5"
-            >
-              Nouvelle conversation
-            </button>
+          <button
+            type="button"
+            onClick={startNewConversation}
+            title="Nouvelle conversation"
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-2xl border border-border bg-card px-2 text-sm text-foreground transition hover:border-primary/50 hover:bg-primary/5 sm:px-3"
+          >
+            <Plus className="size-4 @min-[36rem]:hidden" />
+            <span className="hidden @min-[36rem]:inline">Nouvelle conversation</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setHistoryOpen((prev) => !prev)}
-              className="h-8 rounded-2xl border border-border bg-card px-3 text-sm text-foreground transition hover:border-primary/50 hover:bg-primary/5"
-            >
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((prev) => !prev)}
+            title={historyOpen ? "Fermer l’historique" : "Historique"}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-2xl border border-border bg-card px-2 text-sm text-foreground transition hover:border-primary/50 hover:bg-primary/5 sm:px-3"
+          >
+            <Clock className="size-4 @min-[36rem]:hidden" />
+            <span className="hidden @min-[36rem]:inline">
               {historyOpen ? "Fermer l’historique" : "Historique"}
-            </button>
-          </div>
+            </span>
+          </button>
 
-          <EnvironmentSelector />
+          <span className="hidden @min-[32rem]:block shrink-0">
+            <EnvironmentSelector />
+          </span>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -692,7 +704,7 @@ export default function AiInsightsPage() {
                         <Bot className="size-5 text-foreground" />
                       </div>
                       <div className="group/message relative max-w-[85%] rounded-[28px] border border-border bg-card px-5 py-4 text-[15px] text-foreground shadow-sm">
-                        <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                        <AiMarkdown content={message.content} className="text-[15px]" />
                         <MessageActions
                           messageId={`msg-${index}`}
                           content={message.content}

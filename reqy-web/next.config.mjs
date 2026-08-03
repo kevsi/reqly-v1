@@ -14,10 +14,10 @@ if (!AUTH_SIGNING_SECRET || AUTH_SIGNING_SECRET.length < 32) {
 
 // Allow the configured sync backend as a `connect-src` target. In dev it is
 // typically http://localhost:4000 (auth + live sync); in production this is
-// https://reqly-sync.fly.dev (wss for the live WebSocket). The explicit origin
+// https://reqly.duckdns.org (wss for the live WebSocket). The explicit origin
 // keeps the CSP correct if NEXT_PUBLIC_SYNC_URL is overridden.
-const SYNC_URL = (process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly-sync.fly.dev").replace(/\/$/, "")
-let syncConnectTargets = "https://reqly-sync.fly.dev wss://reqly-sync.fly.dev"
+const SYNC_URL = (process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly.duckdns.org").replace(/\/$/, "")
+let syncConnectTargets = "https://reqly.duckdns.org wss://reqly.duckdns.org"
 try {
   const syncOrigin = new URL(SYNC_URL).origin
   const wsScheme = syncOrigin.startsWith("https") ? "wss:" : "ws:"

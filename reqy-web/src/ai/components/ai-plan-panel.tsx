@@ -40,8 +40,9 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject }: Props)
         </div>
       )}
       <div className="mt-3 flex gap-2 justify-end">
-        <Button type="button" variant="ghost" size="sm" onClick={onReject} className="h-7 px-2 text-xs">
-          <X className="size-3 mr-1" /> Réviser
+        <Button type="button" variant="ghost" size="sm" onClick={onReject} className="h-7 px-2 text-xs" title="Réviser">
+          <X className="size-3 mr-1" />
+          <span className="@max-[22rem]:hidden">Réviser</span>
         </Button>
         <Button
           type="button"
@@ -49,9 +50,11 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject }: Props)
           size="sm"
           onClick={onApprove}
           className="h-7 px-2 text-xs"
+          title="Approuver & exécuter"
           data-testid="ai-plan-approve"
         >
-          <Check className="size-3 mr-1" /> Approuver & exécuter
+          <Check className="size-3 mr-1" />
+          <span className="@max-[22rem]:hidden">Approuver & exécuter</span>
         </Button>
       </div>
     </div>

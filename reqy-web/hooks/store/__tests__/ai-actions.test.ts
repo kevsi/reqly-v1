@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import type { RequestStore } from "@/hooks/request-types"
-import type { TestAssertion, CurrentRequest } from "@/src/ai/engine"
+import type { TestAssertion, CurrentRequest } from "@/src/ai/cloud-engine/actions"
 import { createAiActionsMutations } from "../ai-actions"
 import { WORKSPACE_PERSONAL_ID } from "../types"
 

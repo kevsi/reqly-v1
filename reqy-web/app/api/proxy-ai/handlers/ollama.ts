@@ -68,7 +68,8 @@ export async function handleOllama(
       messages: [
         { role: "system", content: system },
         { role: "user", content: message },
-        ...buildOpenAIToolHistory(previousTurns),
+        // Round-trip `reasoning_content` si un tour en contient (qwen3 thinking…).
+        ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
       ],
     }),
   });

@@ -184,6 +184,38 @@ describe("buildOpenAIToolHistory", () => {
     const result = buildOpenAIToolHistory([turnWithError]);
     expect(result[1].content).toBe("Tool error");
   });
+
+  it("omits reasoning_content by default", () => {
+    const turn: PreviousTurn = {
+      reasoningContent: "Let me think...",
+      assistantToolCalls: [{ id: "call_1", name: "get_weather", arguments: "{}" }],
+      toolResults: [{ callId: "call_1", name: "get_weather", content: "ok" }],
+    };
+    const result = buildOpenAIToolHistory([turn]);
+    expect(result[0].reasoning_content).toBeUndefined();
+  });
+
+  it("includes reasoning_content on the assistant message when includeReasoning is set", () => {
+    const turn: PreviousTurn = {
+      reasoningContent: "Let me think...",
+      assistantToolCalls: [{ id: "call_1", name: "get_weather", arguments: "{}" }],
+      toolResults: [{ callId: "call_1", name: "get_weather", content: "ok" }],
+    };
+    const result = buildOpenAIToolHistory([turn], { includeReasoning: true });
+    expect(result[0]).toMatchObject({
+      role: "assistant",
+      reasoning_content: "Let me think...",
+    });
+  });
+
+  it("skips reasoning_content when empty even with includeReasoning", () => {
+    const turn: PreviousTurn = {
+      assistantToolCalls: [{ id: "call_1", name: "get_weather", arguments: "{}" }],
+      toolResults: [{ callId: "call_1", name: "get_weather", content: "ok" }],
+    };
+    const result = buildOpenAIToolHistory([turn], { includeReasoning: true });
+    expect(result[0].reasoning_content).toBeUndefined();
+  });
 });
 
 describe("buildAnthropicToolHistory", () => {

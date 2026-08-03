@@ -4,6 +4,8 @@ import path from "path"
 import type { AIProvider, SavedProject, AnalysisMode } from "@/lib/types"
 import { loadOllamaConfig } from "@/lib/config"
 import { proxyAuthHeaders } from "@/lib/proxy-auth"
+import { isTauriAvailable } from "@/lib/tauri"
+import { callAiProxyTauri } from "@/lib/tauri-ai"
 import { readDir, readTextFile } from "@tauri-apps/plugin-fs"
 import {
   type DetectedRoute,
@@ -612,6 +614,20 @@ function parseJsonResponse(text: string): unknown {
 
 async function queryAI(provider: AIProvider, apiKey: string | undefined, message: string): Promise<string> {
   const ollamaConfig = provider === "ollama" ? loadOllamaConfig() : null
+
+  if (isTauriAvailable()) {
+    const { content } = await callAiProxyTauri({
+      provider,
+      apiKey,
+      model: provider === "anthropic" ? "claude-sonnet-4-20250514" : provider === "openai" ? "gpt-4o" : provider === "gemini" ? "gemini-2.0-flash" : ollamaConfig?.model || "llama2",
+      host: ollamaConfig?.host,
+      port: ollamaConfig?.port,
+      system: "You are an API route analysis assistant. Analyze backend routes and provide structured metadata: authentication, body types, middleware, confidence. Always respond with valid JSON only — no markdown, no prose, just a JSON array.",
+      message,
+    })
+    return content
+  }
+
   const response = await fetch("/api/proxy-ai", {
     method: "POST",
     headers: {

@@ -17,7 +17,7 @@ import { ResponseHeadersTab } from "@/components/response-headers-tab";
 import { ResponseCookiesTab } from "@/components/response-cookies-tab";
 import { CodeSnippet } from "@/components/response-code-snippet";
 import { TestResultsSection } from "@/components/response-test-results";
-import type { CorrectionSuggestion } from "@/src/ai/engine/propose-correction";
+import type { CorrectionSuggestion } from "@/src/ai/cloud-engine/actions/propose-correction";
 import type { TauriCookie } from "@/lib/tauri";
 import dynamic from "next/dynamic";
 

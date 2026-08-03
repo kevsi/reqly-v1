@@ -1,15 +1,21 @@
 /**
- * AI engine — system prompt and user-prompt templates.
+ * Cloud engine — action vocabulary prompts (migré depuis le moteur legacy
+ * `src/ai/engine/prompts.ts`).
+ *
+ * `ACTIONS_SYSTEM_PROMPT` force les modèles à répondre uniquement en JSON
+ * d'actions ; `PROMPTS` génère les prompts utilisateur du flux REST et
+ * GraphQL. Nom préfixé pour le distinguer du `SYSTEM_PROMPT` persona du
+ * copilote (`cloud-engine/prompt.ts`).
  */
 
 import type { AIContext, CurrentRequest, RetrievedChunk } from "./types";
 
 /**
- * SYSTEM_PROMPT: Force models to return only JSON describing actions.
+ * ACTIONS_SYSTEM_PROMPT: Force models to return only JSON describing actions.
  * - Forbids free text replies
  * - Explains each action and provides an example JSON
  */
-export const SYSTEM_PROMPT: string = `You are an AI assistant integrated into an API request playground. You must NOT produce free-form text output under any circumstances. You must respond ONLY with valid JSON following exactly this shape: { "summary": string, "actions": [ ... ] }.
+export const ACTIONS_SYSTEM_PROMPT: string = `You are an AI assistant integrated into an API request playground. You must NOT produce free-form text output under any circumstances. You must respond ONLY with valid JSON following exactly this shape: { "summary": string, "actions": [ ... ] }.
 
 Allowed actions (exact types):
 

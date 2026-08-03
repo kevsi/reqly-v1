@@ -21,13 +21,15 @@ export function AiHistoryPanel({
 }: AiHistoryPanelProps) {
   return (
     <div className="border-b border-border bg-muted/20">
-      <div className="flex items-center justify-between px-4 py-2">
-        <span className="text-xs font-medium text-muted-foreground">Conversations</span>
+      <div className="flex items-center justify-between gap-2 px-4 py-2 min-w-0">
+        <span className="truncate text-xs font-medium text-muted-foreground">Conversations</span>
         <button
           onClick={onNewSession}
-          className="flex items-center gap-1 text-xs text-primary hover:underline"
+          title="Nouvelle conversation"
+          className="flex shrink-0 items-center gap-1 text-xs text-primary hover:underline"
         >
-          <Plus className="size-3" /> Nouvelle
+          <Plus className="size-3" />
+          <span className="@max-[20rem]:hidden">Nouvelle</span>
         </button>
       </div>
       <div className="max-h-48 overflow-y-auto px-2 pb-2 space-y-0.5">

@@ -38,10 +38,10 @@ export interface RequestStore {
   activeEnvironmentId: string | null
   projects: import("@/lib/types").SavedProject[]
   selectedProjectId: string | null
-  currentRequest?: import("@/src/ai/engine").CurrentRequest | null
-  lastResponse?: import("@/src/ai/engine").LastResponse | null
+  currentRequest?: import("@/src/ai/cloud-engine/actions").CurrentRequest | null
+  lastResponse?: import("@/src/ai/cloud-engine/actions").LastResponse | null
   environmentVariables?: Record<string, string>
-  collectionHistory?: import("@/src/ai/engine").CurrentRequest[]
+  collectionHistory?: import("@/src/ai/cloud-engine/actions").CurrentRequest[]
   activeCollection?: string | null
   aiAutoApply?: boolean
   aiAudit?: Array<{ id: string; actionType: string; detail?: any; result?: any; timestamp: number }>

@@ -4,7 +4,7 @@ import { CheckCircle, XCircle, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TestResult } from "@/lib/types";
 import { AssertionCorrection } from "@/components/assertion-correction";
-import type { CorrectionSuggestion } from "@/src/ai/engine/propose-correction";
+import type { CorrectionSuggestion } from "@/src/ai/cloud-engine/actions/propose-correction";
 
 interface TestResultsSectionProps {
   testResults: TestResult[];

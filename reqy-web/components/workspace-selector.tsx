@@ -210,7 +210,8 @@ export function WorkspaceSelector() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            aria-label="Switch workspace"
+            aria-label={`Workspace : ${activeWorkspace?.name ?? "Workspace"}`}
+            title={activeWorkspace?.name ?? "Workspace"}
             className="group/ws flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 text-sm font-medium text-foreground transition-all duration-200 hover:border-border hover:bg-accent/50"
           >
             <div
@@ -223,7 +224,9 @@ export function WorkspaceSelector() {
             >
               <IconComponent className="size-3.5 text-white" />
             </div>
-            <span className="max-w-[140px] truncate">{activeWorkspace?.name ?? "Workspace"}</span>
+            <span className="max-w-[140px] truncate @max-[26rem]:hidden">
+              {activeWorkspace?.name ?? "Workspace"}
+            </span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[240px] animate-scale-in">

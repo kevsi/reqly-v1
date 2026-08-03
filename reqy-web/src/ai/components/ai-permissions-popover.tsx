@@ -30,9 +30,11 @@ export function AiPermissionsPopover() {
           variant="ghost"
           size="sm"
           className="h-7 px-2 text-xs gap-1 text-muted-foreground"
+          title="Permissions des outils"
           data-testid="ai-permissions-trigger"
         >
-          <ShieldCheck className="size-3" /> Permissions
+          <ShieldCheck className="size-3" />
+          <span className="@max-[20rem]:hidden">Permissions</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 max-h-80 overflow-y-auto">

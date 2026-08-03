@@ -196,11 +196,7 @@ export async function POST(req: NextRequest) {
 
       case "openai": {
         if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 400 });
-        const raw = await fetchOpenAICompatible(baseUrl || "https://api.openai.com/v1", apiKey);
-        // Filter to gpt-* models for OpenAI
-        result = {
-          data: (raw.data ?? []).filter((m) => m.id.startsWith("gpt-")),
-        };
+        result = await fetchOpenAICompatible(baseUrl || "https://api.openai.com/v1", apiKey);
         break;
       }
 

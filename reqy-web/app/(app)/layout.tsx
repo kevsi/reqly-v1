@@ -44,7 +44,8 @@ function getActivePage(pathname: string): string {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { isCollapsed, toggleSidebar } = useSidebar();
+  const { isCollapsed, toggleSidebar, isMobile, mobileOpen, openMobileSidebar, closeMobileSidebar } =
+    useSidebar();
   const pathname = usePathname();
   const activePage = getActivePage(pathname);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
@@ -64,17 +65,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AiSidebarContext.Provider value={{ aiSidebarOpen, setAiSidebarOpen }}>
       <div className="flex h-screen bg-background bg-dot-pattern">
-        <ApiSidebar activePage={activePage} collapsed={isCollapsed} onCollapse={toggleSidebar} />
+        {/* Mobile backdrop — clic pour fermer le drawer */}
+        {isMobile && mobileOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/40 backdrop-blur-[1px] md:hidden"
+            onClick={closeMobileSidebar}
+            aria-hidden
+          />
+        )}
+
+        <ApiSidebar
+          activePage={activePage}
+          collapsed={isCollapsed}
+          onCollapse={toggleSidebar}
+          mobileOpen={mobileOpen}
+          onMobileClose={closeMobileSidebar}
+        />
 
         <div
           className={cn(
             "flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-out main-content relative",
-            isCollapsed ? "ml-[60px]" : "ml-64",
-            "max-[916px]:ml-[60px]",
+            // Mobile: drawer off-canvas → contenu pleine largeur.
+            // Desktop: marge selon l'état replié (force 60px sous 916px).
+            isMobile ? "ml-0" : isCollapsed ? "ml-[60px]" : "ml-64",
+            !isMobile && "max-[916px]:ml-[60px]",
           )}
         >
           <ShortcutsRegistrar />
-          <ApiHeader />
+          <ApiHeader
+            onOpenMobileSidebar={openMobileSidebar}
+          />
           {children}
         </div>
 

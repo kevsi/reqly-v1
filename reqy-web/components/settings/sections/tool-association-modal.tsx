@@ -13,9 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { useToast } from "@/hooks/use-toast";
-import { useOAuthConnect } from "@/hooks/use-oauth-connect";
+import { useOAuthConnect, type DeviceFlowInit } from "@/hooks/use-oauth-connect";
 import { isOAuthTool } from "@/hooks/use-tool-connections";
 import { isTauriAvailable } from "@/lib/tauri";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface Tool {
   id: string;
@@ -145,14 +146,20 @@ function OAuthFlow({
 }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [deviceInit, setDeviceInit] = useState<DeviceFlowInit | null>(null);
   const tauri = isTauriAvailable();
-  const { connect } = useOAuthConnect(tauri && isOAuthTool(tool.id) ? tool.id : "github");
+  const { start, waitForToken } = useOAuthConnect(tauri && isOAuthTool(tool.id) ? tool.id : "github");
   const native = tauri && isOAuthTool(tool.id);
   async function handleAssociate() {
     if (native) {
       setLoading(true);
       try {
-        await connect();
+        const init = await start();
+        setDeviceInit(init);
+        await invoke("open_external", {
+          url: init.verification_uri_complete ?? init.verification_uri,
+        });
+        await waitForToken(init);
         toast({ title: "Connecté", description: `Outil ${tool.name} associé avec succès.` });
         onOpenChange(false);
         onConnected?.();
@@ -190,6 +197,19 @@ function OAuthFlow({
           </ul>
         </div>
       )}
+      {deviceInit && (
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+          <p className="mb-2 font-medium">
+            Saisissez ce code sur {new URL(deviceInit.verification_uri).host} :
+          </p>
+          <p className="mb-2 text-center font-mono text-2xl tracking-[0.3em]">
+            {deviceInit.user_code}
+          </p>
+          <p className="text-muted-foreground">
+            Le navigateur s'est ouvert. Autorisez la connexion, puis attendez que Reqly confirme.
+          </p>
+        </div>
+      )}
       <DialogFooter>
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
           Annuler
@@ -197,7 +217,9 @@ function OAuthFlow({
         <Button onClick={handleAssociate} disabled={loading}>
           {loading
             ? native
-              ? "Connexion en cours…"
+              ? deviceInit
+                ? "En attente d'autorisation…"
+                : "Connexion en cours…"
               : "Redirection…"
             : `Associer ${tool.name} →`}
         </Button>

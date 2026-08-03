@@ -16,9 +16,13 @@ export function AiRulesPanel({ workspaceId, onClose }: Props) {
 
   return (
     <div className="border-t border-border p-3" data-testid="ai-rules-panel">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <FileText className="size-3.5 text-primary" /> Règles du workspace (AGENTS-like)
+      <div className="mb-2 flex items-center justify-between gap-2 min-w-0">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground min-w-0">
+          <FileText className="size-3.5 shrink-0 text-primary" />
+          <span className="min-w-0 truncate">Règles du workspace</span>
+          <span className="shrink-0 text-muted-foreground/70 @max-[24rem]:hidden">
+            (AGENTS-like)
+          </span>
         </span>
         <Button
           type="button"

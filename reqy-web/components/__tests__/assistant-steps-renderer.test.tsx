@@ -157,4 +157,33 @@ describe("AssistantStepsRenderer", () => {
     // Rien d'affiché car toutes done et pas de finalText
     expect(container.innerHTML).toBe("");
   });
+
+  it("se replie automatiquement en une ligne résumée quand tout est terminé (collapsible)", () => {
+    const steps = [
+      buildStep({ kind: "thinking", label: "Through…", status: "done" }),
+      buildStep({ kind: "tool_call", label: "Création…", status: "done" }),
+    ];
+    render(<AssistantStepsRenderer steps={steps} mode="timeline" collapsible />);
+
+    // Les étapes sont repliées : seul le toggle résumé est visible
+    expect(screen.queryByText("Création…")).toBeNull();
+    expect(screen.getByTestId("ai-steps-toggle")).toBeDefined();
+    expect(screen.getByText(/exécution/i)).toBeDefined();
+
+    // Un clic rouvre la timeline
+    fireEvent.click(screen.getByTestId("ai-steps-toggle"));
+    expect(screen.getByText("Création…")).toBeDefined();
+  });
+
+  it("ne replie pas pendant l'exécution (collapsible mais pas terminé)", () => {
+    const steps = [
+      buildStep({ kind: "thinking", label: "Through…", status: "done" }),
+      buildStep({ kind: "tool_call", label: "Création…", status: "pending" }),
+    ];
+    render(<AssistantStepsRenderer steps={steps} mode="timeline" collapsible />);
+
+    // L'étape en cours reste visible, pas de toggle résumé
+    expect(screen.getByText("Création…")).toBeDefined();
+    expect(screen.queryByTestId("ai-steps-toggle")).toBeNull();
+  });
 });

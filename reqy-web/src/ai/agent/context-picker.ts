@@ -1,5 +1,6 @@
 import type { ContextAttachment } from "./types";
 import { requestStore } from "@/hooks/use-request-store";
+import type { RequestItem } from "@/lib/types";
 
 export function searchContextTargets(query: string): ContextAttachment[] {
   const store = requestStore.getState();
@@ -30,6 +31,35 @@ function maskEnvValue(v: string): string {
   return /^[A-Z0-9_.-]{6,}$/i.test(v) ? "••••••" : v;
 }
 
+/** Masque les valeurs de champs dont le nom évoque un secret (clé, token…). */
+const SENSITIVE_FIELD_RE = /(secret|key|token|password|auth|cookie)/i;
+
+function maskFieldValue(key: string, value: string): string {
+  return SENSITIVE_FIELD_RE.test(key) ? "••••••" : value;
+}
+
+/**
+ * Copie une requête en masquant tout ce qui pourrait exposer un secret au LLM :
+ * `authToken`, headers sensibles (Authorization, X-API-Key, Cookie…) et
+ * queryParams sensibles. Les autres champs sont conservés tels quels.
+ */
+function sanitizeRequestForSnippet(r: RequestItem): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...r };
+  if (r.authToken) copy.authToken = "••••••";
+  if (r.headers && typeof r.headers === "object") {
+    copy.headers = Object.fromEntries(
+      Object.entries(r.headers).map(([k, v]) => [k, maskFieldValue(k, v)]),
+    );
+  }
+  if (Array.isArray(r.queryParams)) {
+    copy.queryParams = r.queryParams.map((p) => ({
+      ...p,
+      value: maskFieldValue(p.key, p.value),
+    }));
+  }
+  return copy;
+}
+
 export function resolveAttachmentSnippet(a: ContextAttachment): string {
   const store = requestStore.getState();
   switch (a.type) {
@@ -42,7 +72,7 @@ export function resolveAttachmentSnippet(a: ContextAttachment): string {
     case "request": {
       for (const c of store.collections) {
         const r = (c.requests ?? []).find((x) => x.id === a.refId);
-        if (r) return JSON.stringify(r, null, 2);
+        if (r) return JSON.stringify(sanitizeRequestForSnippet(r), null, 2);
       }
       return "";
     }

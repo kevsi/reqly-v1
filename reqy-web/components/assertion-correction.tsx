@@ -7,7 +7,7 @@ import {
   proposeAssertionCorrection,
   type CorrectionAssertionInput,
   type CorrectionSuggestion,
-} from "@/src/ai/engine/propose-correction";
+} from "@/src/ai/cloud-engine/actions/propose-correction";
 import type { TestResult } from "@/lib/types";
 
 interface AssertionCorrectionProps {

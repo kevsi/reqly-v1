@@ -1,22 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Brain,
+  BrainCircuit,
   Loader2,
   Wrench,
-  FilePlus,
-  Trash2,
-  Play,
-  Download,
-  Upload,
-  AlertCircle,
   CheckCircle2,
-  HelpCircle,
+  CircleAlert,
+  ShieldQuestion,
+  Check,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +42,12 @@ export interface AssistantStepsRendererProps {
   mode?: StepDisplayMode;
   /** Callback quand l'utilisateur confirme/annule une étape en attente. */
   onConfirm?: (stepId: string, confirmed: boolean) => void;
+  /**
+   * Permet de replier automatiquement la timeline en une ligne résumée dès que
+   * toutes les étapes sont terminées (clic pour rouvrir).
+   * @default false
+   */
+  collapsible?: boolean;
 }
 
 // ── Icon mapping (given a kind + status, returns the right icon) ───────────
@@ -51,19 +56,19 @@ export function iconForKind(
   kind: AssistantStep["kind"],
   status: AssistantStep["status"],
 ): LucideIcon {
-  if (status === "error") return AlertCircle;
-  if (status === "awaiting_confirmation") return HelpCircle;
+  if (status === "error") return CircleAlert;
+  if (status === "awaiting_confirmation") return ShieldQuestion;
   switch (kind) {
     case "thinking":
-      return Brain;
+      return BrainCircuit;
     case "tool_call":
       return Wrench;
     case "result":
       return CheckCircle2;
     case "error":
-      return AlertCircle;
+      return CircleAlert;
     default:
-      return Brain;
+      return BrainCircuit;
   }
 }
 
@@ -97,83 +102,100 @@ function StepRow({
   const [showDetail, setShowDetail] = useState(false);
   const isActive = step.status === "pending";
   const isError = step.status === "error";
+  const isAwaiting = step.status === "awaiting_confirmation";
   const Icon = isActive && step.kind === "thinking" ? Loader2 : step.icon;
 
-  return (
-    <div className="flex items-start gap-2 py-0.5 group">
-      {/* Colonne icône */}
-      <span className="relative flex items-center justify-center size-4 mt-0.5 shrink-0">
-        <Icon
-          className={cn(
-            "size-4 transition-colors duration-200",
-            isActive &&
-              (step.kind === "thinking"
-                ? "animate-spin text-foreground"
-                : "animate-pulse text-foreground"),
-            !isActive && !isError && "text-muted-foreground",
-            isError && "text-destructive",
-          )}
-        />
-        {/* Overlay check en bas à droite pour les steps done */}
-        {step.status === "done" && (
-          <CheckCircle2 className="absolute -bottom-0.5 -right-0.5 size-2.5 text-success bg-background rounded-full" />
-        )}
-      </span>
+  const isDone = step.status === "done";
+  const badge = cn(
+    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md ring-1 transition-colors duration-300",
+    isError && "bg-destructive/10 text-destructive ring-destructive/20",
+    isAwaiting && "bg-warning/10 text-warning ring-warning/25",
+    isActive && "bg-primary/10 text-primary ring-primary/25",
+    isDone && "bg-success/10 text-success ring-success/25",
+    !isActive && !isError && !isAwaiting && !isDone && "bg-muted text-muted-foreground ring-border/60",
+  );
 
-      {/* Colonne label + détail */}
-      <div className="flex-1 min-w-0">
-        <button
-          type="button"
-          onClick={() => step.detail && setShowDetail(!showDetail)}
-          className={cn(
-            "text-sm text-left w-full leading-snug transition-colors duration-200",
-            isActive ? "text-foreground font-medium" : "text-muted-foreground",
-            isError && "text-destructive font-medium",
-            step.detail && "cursor-pointer hover:text-foreground",
-            !step.detail && "cursor-default",
+  return (
+    <div className="flex items-stretch gap-2">
+      {/* Colonne icône + connecteur vertical */}
+      <div className="flex flex-col items-center">
+        <span className={badge}>
+          <Icon
+            className={cn(
+              "size-3",
+              isActive && step.kind === "thinking" && "animate-spin",
+              isActive && step.kind !== "thinking" && "animate-pulse",
+            )}
+          />
+        </span>
+        {!isLast && <span className="my-1 w-px flex-1 bg-border/50" aria-hidden />}
+      </div>
+
+      {/* Colonne label + détail + actions */}
+      <div className="min-w-0 flex-1 pb-1">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => step.detail && setShowDetail(!showDetail)}
+            className={cn(
+              "text-sm text-left w-full leading-snug transition-colors duration-200",
+              isActive ? "text-foreground font-medium" : "text-muted-foreground",
+              isError && "text-destructive font-medium",
+              step.detail && "cursor-pointer hover:text-foreground",
+              !step.detail && "cursor-default",
+            )}
+          >
+            {step.label}
+          </button>
+
+          {/* Indicateur "en cours" discret */}
+          {isActive && (
+            <span className="flex shrink-0 items-center gap-0.5">
+              <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:0ms]" />
+              <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:150ms]" />
+              <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:300ms]" />
+            </span>
           )}
-        >
-          {step.label}
-        </button>
+
+          {/* Chip "en attente de confirmation" */}
+          {isAwaiting && (
+            <span className="shrink-0 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning ring-1 ring-warning/25">
+              En attente de confirmation
+            </span>
+          )}
+        </div>
 
         {/* Détail replié */}
         {showDetail && step.detail && (
-          <p className="text-xs text-muted-foreground/70 mt-0.5 pl-2 border-l-2 border-border leading-relaxed whitespace-pre-wrap">
+          <p className="mt-0.5 pl-2 border-l-2 border-border text-xs text-muted-foreground/70 leading-relaxed whitespace-pre-wrap">
             {step.detail}
           </p>
         )}
+
+        {/* Boutons Confirmer/Annuler pour les étapes en attente de confirmation */}
+        {isAwaiting && onConfirm && (
+          <div className="mt-1.5 flex gap-1.5">
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => onConfirm(step.id, true)}
+              className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
+            >
+              <Check className="size-3" />
+              Confirmer
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onConfirm(step.id, false)}
+              className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3" />
+              Annuler
+            </Button>
+          </div>
+        )}
       </div>
-
-      {/* Indicateur "en cours" discret */}
-      {isActive && (
-        <span className="flex items-center gap-0.5 mt-1 shrink-0">
-          <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:0ms]" />
-          <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:150ms]" />
-          <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:300ms]" />
-        </span>
-      )}
-
-      {/* Boutons Confirmer/Annuler pour les étapes en attente de confirmation */}
-      {step.status === "awaiting_confirmation" && onConfirm && (
-        <div className="flex gap-1 ml-auto shrink-0">
-          <Button
-            type="button"
-            variant="default"
-            onClick={() => onConfirm(step.id, true)}
-            className="h-auto gap-1 rounded bg-success px-2 py-1 text-[10px] font-semibold text-white hover:bg-success/90"
-          >
-            Confirmer
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onConfirm(step.id, false)}
-            className="h-auto gap-1 rounded bg-muted-foreground/30 px-2 py-1 text-[10px] font-semibold text-foreground hover:bg-muted-foreground/50"
-          >
-            Annuler
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
@@ -185,9 +207,18 @@ export function AssistantStepsRenderer({
   finalText,
   mode = "sequential",
   onConfirm,
+  collapsible = false,
 }: AssistantStepsRendererProps) {
   const allDone =
     steps.length > 0 && steps.every((s) => s.status === "done" || s.status === "error");
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Replie automatiquement la timeline dès que tout est terminé, et la rouvre
+  // quand une nouvelle exécution démarre (mode repliable uniquement).
+  useEffect(() => {
+    if (!collapsible) return;
+    setCollapsed(allDone);
+  }, [collapsible, allDone]);
 
   if (steps.length === 0 && !finalText) return null;
 
@@ -206,11 +237,41 @@ export function AssistantStepsRenderer({
   // Si en mode sequential et tout est done, ne montrer que le finalText
   if (mode === "sequential" && visibleSteps.length === 0 && allDone && !finalText) return null;
 
+  const canCollapse = collapsible && allDone && steps.length > 0;
+  const execCount = steps.filter((s) => s.kind !== "thinking").length;
+  const errorCount = steps.filter((s) => s.status === "error").length;
+
   return (
     <div className="space-y-0">
-      {/* Étapes visibles */}
-      {visibleSteps.length > 0 && (
-        <div className={cn(mode === "sequential" ? "flex flex-col" : "flex flex-col gap-0")}>
+      {/* Ligne résumée — affichée une fois tout terminé en mode repliable */}
+      {canCollapse && (
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex items-center gap-1.5 rounded-md px-1 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-expanded={!collapsed}
+          data-testid="ai-steps-toggle"
+        >
+          {errorCount > 0 ? (
+            <CircleAlert className="size-3.5 text-destructive" />
+          ) : (
+            <CheckCircle2 className="size-3.5 text-success" />
+          )}
+          <span>
+            {execCount > 0
+              ? `${execCount} exécution${execCount > 1 ? "s" : ""} terminée${execCount > 1 ? "s" : ""}`
+              : "Étapes terminées"}
+            {errorCount > 0 && ` · ${errorCount} erreur${errorCount > 1 ? "s" : ""}`}
+          </span>
+          <ChevronDown
+            className={cn("size-3.5 transition-transform duration-200", collapsed && "-rotate-90")}
+          />
+        </button>
+      )}
+
+      {/* Étapes visibles — masquées quand la timeline est repliée */}
+      {visibleSteps.length > 0 && !collapsed && (
+        <div className="flex flex-col">
           {visibleSteps.map((step, i) => (
             <StepRow
               key={step.id}
@@ -226,13 +287,12 @@ export function AssistantStepsRenderer({
       {allDone && finalText && (
         <div
           className={cn(
-            "text-sm text-foreground leading-relaxed whitespace-pre-wrap",
             mode === "sequential" && visibleSteps.length === 0
               ? ""
               : "mt-2 pt-2 border-t border-border/40",
           )}
         >
-          {finalText}
+          <AiMarkdown content={finalText} />
         </div>
       )}
     </div>

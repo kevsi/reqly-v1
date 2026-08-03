@@ -56,7 +56,9 @@ export async function handleDeepSeek(
       messages: [
         { role: "system", content: system },
         { role: "user", content: message },
-        ...buildOpenAIToolHistory(previousTurns),
+        // DeepSeek thinking mode : renvoyer `reasoning_content` des tours
+        // précédents, sinon l'API rejette l'historique (HTTP 400).
+        ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
       ],
     }),
   });

@@ -15,8 +15,6 @@
       "allow": ["$APPDATA/Reqly/**", "$APPDATA/com.reqly.app/**"]
     },
     "deep-link:default",
-    "oauth:allow-start",
-    "oauth:allow-cancel",
     "notification:default",
     "allow-fetch-proxy",
     "allow-export-json",
@@ -62,7 +60,7 @@
     "allow-git-write-collection-file",
     "allow-git-ls-remote",
     "allow-get-encryption-passphrase",
-    "allow-exchange-oauth-code",
-    "allow-get-oauth-client-id"
+    "allow-start-device-flow",
+    "allow-poll-device-token"
   ]
 }

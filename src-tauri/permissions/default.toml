@@ -96,14 +96,14 @@ description = "Allows the get_encryption_passphrase command"
 commands.allow = ["get_encryption_passphrase"]
 
 [[permission]]
-identifier = "allow-exchange-oauth-code"
-description = "Allows the exchange_oauth_code command"
-commands.allow = ["exchange_oauth_code"]
+identifier = "allow-start-device-flow"
+description = "Allows the start_device_flow_cmd command"
+commands.allow = ["start_device_flow_cmd"]
 
 [[permission]]
-identifier = "allow-get-oauth-client-id"
-description = "Allows the get_oauth_client_id command"
-commands.allow = ["get_oauth_client_id"]
+identifier = "allow-poll-device-token"
+description = "Allows the poll_device_token_cmd command"
+commands.allow = ["poll_device_token_cmd"]
 
 [[permission]]
 identifier = "allow-mark-sent"

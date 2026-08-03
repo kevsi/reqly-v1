@@ -1,11 +1,17 @@
 "use client";
 
 import { useRef, type FormEvent } from "react";
-import { Send, Loader2, Square, X } from "lucide-react";
+import { SendHorizontal, Square, X, Folder, Globe, Zap, Paperclip } from "lucide-react";
 import { AiContextPicker } from "@/src/ai/components/ai-context-picker";
 import { AiCommandMenu } from "@/src/ai/components/ai-command-menu";
-import type { ContextAttachment } from "@/src/ai/agent/types";
+import type { ContextAttachment, ContextAttachmentType } from "@/src/ai/agent/types";
 import type { SlashCommand } from "@/src/ai/agent/commands";
+
+const ATTACH_ICONS: Partial<Record<ContextAttachmentType, typeof Folder>> = {
+  collection: Folder,
+  request: Globe,
+  environment: Zap,
+};
 
 interface AiChatInputProps {
   /** Texte courant de l'input */
@@ -61,28 +67,32 @@ export function AiChatInput({
     <div className="border-t border-border p-3 shrink-0">
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1">
-          {attachments.map((a) => (
-            <span
-              key={a.id}
-              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] text-primary"
-            >
-              {a.label}
-              <button
-                type="button"
-                onClick={() => onRemoveAttachment?.(a.id)}
-                className="opacity-60 hover:opacity-100"
-                aria-label={`Retirer ${a.label}`}
+          {attachments.map((a) => {
+            const Icon = ATTACH_ICONS[a.type] ?? Paperclip;
+            return (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary ring-1 ring-primary/15"
               >
-                <X className="size-2.5" />
-              </button>
-            </span>
-          ))}
+                <Icon className="size-2.5" />
+                {a.label}
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachment?.(a.id)}
+                  className="ml-0.5 opacity-60 hover:opacity-100"
+                  aria-label={`Retirer ${a.label}`}
+                >
+                  <X className="size-2.5" />
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
 
       <form
         onSubmit={handleSubmit}
-        className="relative flex items-center rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
+        className="relative flex items-center rounded-lg border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
       >
         {onSelectCommand && (
           <AiCommandMenu commands={commandResults ?? []} onSelect={onSelectCommand} />
@@ -103,13 +113,9 @@ export function AiChatInput({
           type="submit"
           disabled={!value.trim() || isLoading}
           aria-label="Envoyer"
-          className="flex size-8 mr-1.5 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 disabled:pointer-events-none transition-colors shrink-0"
+          className="flex size-8 mr-1.5 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm transition-all hover:shadow-md hover:brightness-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none shrink-0"
         >
-          {isLoading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Send className="size-4" />
-          )}
+          <SendHorizontal className="size-4" />
         </button>
         {isLoading && onStop && (
           <button
@@ -117,7 +123,7 @@ export function AiChatInput({
             onClick={onStop}
             aria-label="Arrêter"
             title="Arrêter la génération"
-            className="flex size-8 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+            className="flex size-8 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10"
             data-testid="ai-stop"
           >
             <Square className="size-3.5" />

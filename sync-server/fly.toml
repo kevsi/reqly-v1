@@ -5,6 +5,12 @@ primary_region = "cdg"
   PORT = "4000"
   REQLY_DB_PATH = "/data/reqly-sync.db"
   NODE_ENV = "production"
+  EMAIL_PROVIDER = "smtp"
+  EMAIL_FROM = "Reqly <roughikev@gmail.com>"
+  SMTP_HOST = "smtp.gmail.com"
+  SMTP_PORT = "587"
+  SMTP_SECURE = "false"
+  SMTP_USER = "roughikev@gmail.com"
 
 [http_service]
   internal_port = 4000

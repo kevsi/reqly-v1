@@ -60,9 +60,8 @@ export function ModelSearchList({
   const selectedModelObj = models.find((m) => m.id === selectedModelId)
 
   const canFetchModels = Boolean(
-    apiKey &&
-      !fetchingModels &&
-      !ANTHROPIC_NO_FETCH.has(provider) &&
+    !fetchingModels &&
+      (provider === "ollama" || ANTHROPIC_NO_FETCH.has(provider) || apiKey) &&
       (!isCustom || baseUrl.trim()),
   )
 

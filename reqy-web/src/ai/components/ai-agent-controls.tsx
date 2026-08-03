@@ -36,7 +36,7 @@ export function AiAgentControls({
         data-testid="ai-mode-toggle"
       >
         {mode === "plan" ? <ListChecks className="size-3" /> : <Zap className="size-3" />}
-        {mode === "plan" ? "Plan" : "Action"}
+        <span className="@max-[24rem]:hidden">{mode === "plan" ? "Plan" : "Action"}</span>
       </Button>
       <Button
         type="button"

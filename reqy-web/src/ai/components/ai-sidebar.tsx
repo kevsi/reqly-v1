@@ -2,7 +2,17 @@
 /* eslint-disable react-hooks/refs */
 
 import { useEffect, useCallback } from "react";
-import { Sparkles, PanelRightClose, Clock, Loader2, GripVerticalIcon } from "lucide-react";
+import {
+  Sparkles,
+  PanelRightClose,
+  Clock,
+  Loader2,
+  GripVerticalIcon,
+  Play,
+  FolderPlus,
+  Import,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useRequestStore } from "@/hooks/use-request-store";
@@ -139,10 +149,12 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
         role="complementary"
         aria-label="Assistant IA"
         className={cn(
-          "relative flex flex-col border-l border-border bg-background",
+          "relative flex flex-col border-l border-border bg-background @container",
           "h-screen shrink-0 overflow-hidden",
           "transition-[width] duration-200 ease-out",
           isResizing && "transition-none",
+          // Sur mobile, la sidebar IA ne doit jamais dépasser la largeur de l'écran
+          "max-md:max-w-[calc(100vw-16px)]",
         )}
         style={{ width: open ? width : 0 }}
       >
@@ -173,12 +185,19 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
           </div>
         )}
         {/* ── Header ────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between border-b border-border px-4 h-12 shrink-0">
-          <div className="flex items-center gap-2">
-            <Sparkles className="size-4 text-primary" />
-            <span className="text-sm font-semibold">Assistant IA</span>
+        <div className="flex items-center justify-between border-b border-border px-4 h-12 shrink-0 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-sm">
+              <Sparkles className="size-4" />
+            </div>
+            <div className="leading-tight truncate @max-[22rem]:hidden">
+              <span className="block truncate text-sm font-semibold">Assistant IA</span>
+              <span className="block truncate text-[10px] text-muted-foreground/70 @max-[30rem]:hidden">
+                Reqly Copilot
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <AiAgentControls
               mode={chat.agentMode}
               onModeChange={chat.setAgentMode}
@@ -188,7 +207,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               onOpenPermissions={() => chat.setPermissionsPanelOpen(true)}
             />
             {sessionUsageLabel && (
-              <span className="text-[10px] text-muted-foreground/60 px-1">
+              <span className="text-[10px] text-muted-foreground/60 px-1 @max-[30rem]:hidden">
                 {sessionUsageLabel}
               </span>
             )}
@@ -244,18 +263,20 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
           <div className="p-4 space-y-4">
             {chat.messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-12">
-                <Sparkles className="size-10 mb-3 text-primary/40" />
-                <p className="text-sm font-medium">Assistant IA</p>
-                <p className="text-xs mt-1 max-w-[240px]">
+                <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/20 shadow-sm">
+                  <Sparkles className="size-7" />
+                </div>
+                <p className="mt-4 text-sm font-semibold text-foreground">Assistant IA</p>
+                <p className="mt-1 max-w-[240px] text-xs">
                   Demande-moi d'exécuter des requêtes, gérer des collections, ou naviguer dans
                   l'application.
                 </p>
-                <div className="mt-4 space-y-1.5">
+                <div className="mt-5 w-full max-w-[260px] space-y-1.5">
                   {[
-                    "Exécute GET /api/users",
-                    "Crée une collection 'Tests API'",
-                    "Importe le projet depuis GitHub",
-                  ].map((hint) => (
+                    { icon: Play, hint: "Exécute GET /api/users" },
+                    { icon: FolderPlus, hint: "Crée une collection 'Tests API'" },
+                    { icon: Import, hint: "Importe le projet depuis GitHub" },
+                  ].map(({ icon: HintIcon, hint }) => (
                     <Button
                       key={hint}
                       type="button"
@@ -264,11 +285,16 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                         inputState.setValue(hint);
                         chat.inputRef.current?.focus();
                       }}
-                      className="block w-full justify-start rounded-lg border border-border/50 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                      className="group/sugg flex w-full items-center justify-start gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     >
+                      <HintIcon className="size-3.5 shrink-0 text-primary/70 transition-colors group-hover/sugg:text-primary" />
                       {hint}
                     </Button>
                   ))}
+                </div>
+                <div className="mt-6 flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[10px] text-muted-foreground/70">
+                  <ShieldCheck className="size-3 text-success/80" />
+                  L&apos;IA n&apos;agit que sur demande explicite
                 </div>
               </div>
             )}
@@ -301,9 +327,14 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
             )}
 
             {chat.isLoading && !hasLiveSteps && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mr-6">
-                <Loader2 className="size-3.5 animate-spin" />
-                Réflexion…
+              <div className="flex items-center gap-2.5 text-sm text-muted-foreground mr-6">
+                <Loader2 className="size-3.5 animate-spin text-primary" />
+                Réflexion
+                <span className="flex items-center gap-0.5">
+                  <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:0ms]" />
+                  <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:150ms]" />
+                  <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:300ms]" />
+                </span>
               </div>
             )}
 

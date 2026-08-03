@@ -1,10 +1,22 @@
 "use client";
 
-import { Copy, Check, Edit3, RotateCcw } from "lucide-react";
+import {
+  Bot,
+  UserRound,
+  Copy,
+  Check,
+  RotateCcw,
+  SquarePen,
+  Gauge,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AssistantStepsRenderer, toAssistantSteps } from "@/src/ai/components/assistant-steps-renderer";
+import {
+  AssistantStepsRenderer,
+  toAssistantSteps,
+} from "@/src/ai/components/assistant-steps-renderer";
+import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
 import { formatTokens } from "@/src/ai/agent/usage";
 
@@ -37,22 +49,33 @@ export function AiChatMessage({
   onEditingTextChange,
   onConfirm,
 }: AiChatMessageProps) {
-  const usageLabel =
-    message.role === "assistant" && message.usage ? formatTokens(message.usage) : "";
+  const isAssistant = message.role === "assistant";
+  const usageLabel = isAssistant && message.usage ? formatTokens(message.usage) : "";
+
   return (
     <div className="group relative">
-      {/* Process steps timeline (assistant only) */}
-      {message.role === "assistant" && message.steps && message.steps.length > 0 && (
-        <AssistantStepsRenderer steps={toAssistantSteps(message.steps)} onConfirm={onConfirm} />
+      {/* Process steps timeline (assistant only) — mode "timeline" : toutes les
+          étapes restent visibles avec leur statut (Through…, exécutions, et les
+          boutons Confirmer/Annuler pour les actions en attente). Une fois la
+          réponse terminée, la timeline se replie en une ligne résumée. */}
+      {isAssistant && message.steps && message.steps.length > 0 && (
+        <div className="mb-1.5">
+          <AssistantStepsRenderer
+            steps={toAssistantSteps(message.steps)}
+            mode="timeline"
+            onConfirm={onConfirm}
+            collapsible
+          />
+        </div>
       )}
 
       {/* Attachment chips (user only) */}
       {message.role === "user" && message.attachments && message.attachments.length > 0 && (
-        <div className="mb-1 flex flex-wrap gap-1">
+        <div className="mb-1.5 flex flex-wrap gap-1 pl-9">
           {message.attachments.map((a) => (
             <span
               key={a.id}
-              className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary ring-1 ring-primary/15"
             >
               {a.type} → {a.label}
             </span>
@@ -60,77 +83,102 @@ export function AiChatMessage({
         </div>
       )}
 
-      {/* Message bubble */}
+      {/* Message row — avatar + bulle */}
       <div
         className={cn(
-          "rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
-          message.role === "user"
-            ? "bg-primary/10 text-foreground ml-6"
-            : "bg-muted/30 text-foreground mr-6 border border-border/50",
-          message.role === "assistant" &&
-            !message.content &&
-            message.steps &&
-            message.steps.length > 0
-            ? "min-h-[2px] py-0.5 border-dashed border-primary/30"
-            : "",
+          "flex items-start gap-2",
+          message.role === "user" ? "flex-row-reverse" : "flex-row",
         )}
       >
-        {message.content}
+        {/* Avatar */}
+        <div
+          className={cn(
+            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ring-1",
+            isAssistant
+              ? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary ring-primary/20"
+              : "bg-muted text-muted-foreground ring-border/70",
+          )}
+          aria-hidden
+        >
+          {isAssistant ? <Bot className="size-3.5" /> : <UserRound className="size-3.5" />}
+        </div>
+
+        {/* Bulle de message */}
+        <div
+          className={cn(
+            "rounded-xl px-3 py-2 text-sm leading-relaxed",
+            message.role === "user"
+              ? "whitespace-pre-wrap bg-primary/10 text-foreground ring-1 ring-primary/10"
+              : "bg-muted/30 text-foreground border border-border/50",
+            isAssistant && !message.content && message.steps && message.steps.length > 0
+              ? "min-h-[2px] py-0.5 border-dashed border-primary/30"
+              : "",
+          )}
+        >
+          {isAssistant ? <AiMarkdown content={message.content} /> : message.content}
+        </div>
       </div>
 
       {/* Usage badge (assistant only) */}
       {usageLabel && (
-        <div className="mt-1 text-[10px] text-muted-foreground/60" data-testid="ai-usage-badge">
+        <div
+          className="mt-1 flex items-center gap-1 pl-8 text-[10px] text-muted-foreground/60"
+          data-testid="ai-usage-badge"
+        >
+          <Gauge className="size-3" />
           {usageLabel}
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — barre pilule sous le message, révélée au survol */}
       <div
         className={cn(
-          "absolute top-1 hidden group-hover:flex gap-0.5",
-          message.role === "user" ? "right-0" : "left-0",
+          "mt-1 flex",
+          message.role === "user" ? "justify-end pr-8" : "justify-start pl-8",
+          "opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100",
         )}
       >
-        {message.role === "user" ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onEditStart(index, message.content)}
-            className="size-6 rounded [&_svg]:size-3 text-muted-foreground hover:text-foreground"
-            title="Modifier"
-          >
-            <Edit3 className="size-3" />
-          </Button>
-        ) : (
-          <>
+        <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/90 p-0.5 shadow-sm backdrop-blur">
+          {message.role === "user" ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => onCopy(message.content, index)}
-              className="size-6 rounded [&_svg]:size-3 text-muted-foreground hover:text-foreground"
-              title="Copier"
+              onClick={() => onEditStart(index, message.content)}
+              className="size-6 rounded-full [&_svg]:size-3 text-muted-foreground hover:text-foreground"
+              title="Modifier"
             >
-              {copiedIndex === index ? (
-                <Check className="size-3 text-success" />
-              ) : (
-                <Copy className="size-3" />
-              )}
+              <SquarePen className="size-3" />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onRetry}
-              className="size-6 rounded [&_svg]:size-3 text-muted-foreground hover:text-foreground"
-              title="Re-essayer"
-            >
-              <RotateCcw className="size-3" />
-            </Button>
-          </>
-        )}
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onCopy(message.content, index)}
+                className="size-6 rounded-full [&_svg]:size-3 text-muted-foreground hover:text-foreground"
+                title="Copier la réponse"
+              >
+                {copiedIndex === index ? (
+                  <Check className="size-3 text-success" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={onRetry}
+                className="size-6 rounded-full [&_svg]:size-3 text-muted-foreground hover:text-foreground"
+                title="Réessayer"
+              >
+                <RotateCcw className="size-3" />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Editing overlay */}
@@ -143,7 +191,7 @@ export function AiChatMessage({
             rows={3}
             autoFocus
           />
-          <div className="flex gap-1.5 justify-end">
+          <div className="flex justify-end gap-1.5">
             <Button
               type="button"
               variant="ghost"

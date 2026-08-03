@@ -10,6 +10,12 @@ export type PreviousTurn = {
     content: string;
     error?: string;
   }>;
+  /**
+   * `reasoning_content` du message assistant (DeepSeek reasoner / thinking).
+   * DeepSeek exige de le renvoyer tel quel dans l'historique, sinon HTTP 400
+   * « The reasoning_content ... must be passed back to the API ».
+   */
+  reasoningContent?: string;
 };
 
 export type GeminiChunk = {
@@ -20,11 +26,14 @@ export type GeminiChunk = {
   text?: string;
 };
 
-export function buildOpenAIToolHistory(prev?: PreviousTurn[]): Record<string, unknown>[] {
+export function buildOpenAIToolHistory(
+  prev?: PreviousTurn[],
+  opts?: { includeReasoning?: boolean },
+): Record<string, unknown>[] {
   if (!prev || prev.length === 0) return [];
   const msgs: Record<string, unknown>[] = [];
   for (const turn of prev) {
-    msgs.push({
+    const assistantMsg: Record<string, unknown> = {
       role: "assistant",
       content: null,
       tool_calls: turn.assistantToolCalls.map((tc) => ({
@@ -32,7 +41,14 @@ export function buildOpenAIToolHistory(prev?: PreviousTurn[]): Record<string, un
         type: "function",
         function: { name: tc.name, arguments: tc.arguments },
       })),
-    });
+    };
+    // DeepSeek thinking mode exige le round-trip de `reasoning_content` sur le
+    // message assistant d'historique. On ne l'ajoute que sur demande (deepseek)
+    // pour ne pas exposer le champ à des providers qui le rejetteraient.
+    if (opts?.includeReasoning && turn.reasoningContent) {
+      assistantMsg.reasoning_content = turn.reasoningContent;
+    }
+    msgs.push(assistantMsg);
     for (const r of turn.toolResults) {
       msgs.push({
         role: "tool",

@@ -22,6 +22,7 @@ import { useShallow } from "zustand/react/shallow";
 import { getMethodPanelClass, recordToHeaderArray } from "@/lib/request-tab-utils";
 import type { AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { RequestTab } from "@/lib/request-executor";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
@@ -31,8 +32,8 @@ import {
   proposeAssertionCorrection,
   suggestionToAssertion,
   type CorrectionSuggestion,
-} from "@/src/ai/engine/propose-correction";
-import { SYSTEM_PROMPT } from "@/src/ai/engine";
+} from "@/src/ai/cloud-engine/actions/propose-correction";
+import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions";
 import type { TestResult } from "@/lib/types";
 import { formatDataSize } from "@/lib/network/format";
 
@@ -53,6 +54,9 @@ export function RequestTabsManager() {
     }
   }, []);
   const execution = useRequestTabExecution(tabState);
+
+  // Sur mobile, on empile requête/réponse verticalement au lieu du split horizontal.
+  const isMobile = useIsMobile(768);
 
   const {
     tabs,
@@ -260,11 +264,11 @@ export function RequestTabsManager() {
   // The AI is only ever asked to *suggest* a corrected assertion. Applying it
   // requires an explicit user click ("Appliquer") — we never auto-apply, which
   // respects the existing store.aiAutoApply default-off guard. The askAI fn
-  // reuses the real engine's text completion (callAIText under the hood).
+  // reuses the real engine's text completion (callAITextViaStream under the hood).
   const correctionAskAI = useCallback(
     async (prompt: string) => {
       const ctx = aiEngine.buildContext();
-      return aiEngine.sendMessage(prompt, SYSTEM_PROMPT, ctx);
+      return aiEngine.sendMessage(prompt, ACTIONS_SYSTEM_PROMPT, ctx);
     },
     [aiEngine],
   );
@@ -425,7 +429,11 @@ export function RequestTabsManager() {
             getMethodPanelClass(activeTab.method),
           )}
         >
-          <ResizablePanelGroup direction="horizontal" className="min-h-0 h-full">
+          <ResizablePanelGroup
+            key={isMobile ? "mobile" : "desktop"}
+            direction={isMobile ? "vertical" : "horizontal"}
+            className="min-h-0 h-full"
+          >
             <ResizablePanel
               ref={requestPanelRef}
               order={1}
@@ -510,7 +518,7 @@ export function RequestTabsManager() {
               </div>
             </ResizablePanel>
 
-            <ResizableHandle withHandle className="bg-border" />
+            <ResizableHandle withHandle className="bg-border max-md:hidden" />
 
             <ResizablePanel
               ref={responsePanelRef}

@@ -1,6 +1,6 @@
 import type { RequestStore } from "@/hooks/request-types"
-import type { TestAssertion } from "@/src/ai/engine"
-import type { CurrentRequest } from "@/src/ai/engine"
+import type { TestAssertion } from "@/src/ai/cloud-engine/actions"
+import type { CurrentRequest } from "@/src/ai/cloud-engine/actions"
 import { CommitFn } from "./types"
 
 export function createAiActionsMutations(commit: CommitFn) {

@@ -49,7 +49,6 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1"
 git2 = { version = "0.19", features = ["vendored-libgit2"] }
-tauri-plugin-oauth = "2"
 dotenvy = "0.15"
 
 [dev-dependencies]

@@ -3,6 +3,8 @@ import type { HistoryItem } from "@/lib/types"
 
 import type { AIProvider } from "@/lib/types"
 import { proxyAuthHeaders } from "@/lib/proxy-auth"
+import { isTauriAvailable } from "@/lib/tauri"
+import { callAiProxyTauri } from "@/lib/tauri-ai"
 export const generatedRequestSchema = z.object({
   name: z.string().min(1),
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
@@ -118,6 +120,11 @@ export type AiProxyPayload = {
 }
 
 export async function callAiProxy(payload: AiProxyPayload): Promise<string> {
+  if (isTauriAvailable()) {
+    const { content } = await callAiProxyTauri(payload as Record<string, unknown>)
+    return content
+  }
+
   const response = await fetch("/api/proxy-ai", {
     method: "POST",
     headers: {

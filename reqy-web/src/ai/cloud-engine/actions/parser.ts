@@ -1,5 +1,6 @@
 /**
- * AI engine — response parsing and validation.
+ * Cloud engine — action response parsing and validation (migré depuis le
+ * moteur legacy `src/ai/engine/parser.ts`).
  */
 
 import type { AIResponse } from "./types";

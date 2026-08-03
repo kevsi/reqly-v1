@@ -1,5 +1,6 @@
 /**
- * AI engine — propose a correction for a failed assertion.
+ * Cloud engine — propose a correction for a failed assertion (migré depuis
+ * le moteur legacy `src/ai/engine/propose-correction.ts`).
  *
  * This module is the read-only counterpart of the auto-repair flow: given a
  * failed assertion and the actual response, it asks the AI engine for a
@@ -7,8 +8,8 @@
  * dispatches a mutating action (no EXECUTE_REQUEST / RUN_BATCH). The caller
  * decides whether to apply the suggestion, and only on an explicit user click.
  *
- * The AI call reuses the existing completion path (`callAIText` from
- * `./providers`) — no new AI client is introduced.
+ * The AI call reuses the cloud-engine mono-shot adapter
+ * (`callAITextViaStream`) — no new AI client is introduced.
  */
 
 import type { Assertion } from "@/lib/test-runner/types";
@@ -19,8 +20,8 @@ import {
   loadAiModel,
   loadOllamaConfig,
 } from "@/lib/config";
-import { callAIText } from "./providers";
-import { SYSTEM_PROMPT } from "./prompts";
+import { callAITextViaStream } from "@/src/ai/cloud-engine/text";
+import { ACTIONS_SYSTEM_PROMPT } from "./prompts";
 
 export interface CorrectionAssertionInput {
   expr?: string;
@@ -77,9 +78,9 @@ Do NOT apply the change — only propose it.`;
 }
 
 /**
- * Default AI completion: reuse the exact same provider path as
- * `handleGenerateTests` (via `callAIText`). Only invoked when the caller does
- * not inject its own `askAI` (the UI always injects the real engine fn).
+ * Default AI completion: routed through the cloud-engine mono-shot adapter
+ * (`callAITextViaStream`). Seul appelé quand le caller n'injecte pas son
+ * propre `askAI` (l'UI injecte toujours le vrai moteur).
  */
 function buildDefaultAskAI(): (prompt: string) => Promise<string> {
   return async (prompt: string) => {
@@ -92,20 +93,18 @@ function buildDefaultAskAI(): (prompt: string) => Promise<string> {
         ? loadAiBaseUrl(provider) || undefined
         : undefined;
     const ollamaConfig = loadOllamaConfig();
-    const ollamaUrl =
-      provider === "ollama"
-        ? `http://${ollamaConfig.host || "127.0.0.1"}:${ollamaConfig.port ?? 11434}`
-        : undefined;
     if (provider !== "ollama" && !apiKey.trim()) {
       throw new Error("Clé API manquante dans Settings");
     }
-    return callAIText(prompt, {
+    return callAITextViaStream({
       provider,
       apiKey: apiKey.trim(),
       model,
       openaiUrl,
-      ollamaUrl,
-      system: SYSTEM_PROMPT,
+      host: provider === "ollama" ? ollamaConfig.host : undefined,
+      port: provider === "ollama" ? ollamaConfig.port : undefined,
+      system: ACTIONS_SYSTEM_PROMPT,
+      rawMessage: prompt,
     });
   };
 }
@@ -150,9 +149,9 @@ function pickSuggestion(raw: unknown): CorrectionSuggestion {
 
 /**
  * Ask the AI for a corrected assertion. Does not mutate anything — returns a
- * suggestion object only. `askAI` is injected by the UI (the real engine's
- * text completion); when omitted it falls back to `callAIText` with the
- * locally configured provider.
+ * suggestion object only. `askAI` est injecté par l'UI (le vrai moteur,
+ * `useAIEngine().sendMessage` → `callAITextViaStream`) ; en son absence on
+ * retombe sur `callAITextViaStream` avec le provider configuré localement.
  */
 export async function proposeAssertionCorrection(
   input: ProposeCorrectionInput,

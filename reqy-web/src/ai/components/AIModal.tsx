@@ -83,6 +83,7 @@ import {
   buildStep,
   type AssistantStep,
 } from "@/src/ai/components/assistant-steps-renderer";
+import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 
 type AiTab = "analyse" | "assistant" | "explain";
 
@@ -154,6 +155,7 @@ export function AIModal(props: AIModalProps) {
     toolCallsThisTurn: Array<{ callId: string; name: string; arguments: string }>;
     results: ToolResult[];
     turnSteps: AssistantStep[];
+    reasoningContent?: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -163,6 +165,7 @@ export function AIModal(props: AIModalProps) {
     Array<{
       assistantToolCalls: ToolCall[];
       toolResults: ToolResult[];
+      reasoningContent?: string;
     }>
   >([]);
   const turnCountRef = useRef(0);
@@ -281,6 +284,9 @@ export function AIModal(props: AIModalProps) {
 
     const stream = streamLLM(opts);
     const toolCallsThisTurn: Array<{ callId: string; name: string; arguments: string }> = [];
+    // `reasoning_content` du tour (DeepSeek thinking mode) — renvoyé dans
+    // l'historique du tour suivant, obligatoire sinon HTTP 400.
+    let reasoningThisTurn = "";
 
     try {
       for await (const token of stream) {
@@ -288,6 +294,7 @@ export function AIModal(props: AIModalProps) {
           accRef.current += token.value;
           setLlmOutput(accRef.current);
         } else if (token.type === "tool_calls") {
+          reasoningThisTurn += token.reasoningContent ?? "";
           toolCallsThisTurn.push(
             ...token.calls.map((c) => ({ callId: c.id, name: c.name, arguments: c.arguments })),
           );
@@ -390,6 +397,7 @@ export function AIModal(props: AIModalProps) {
         toolCallsThisTurn,
         results,
         turnSteps,
+        ...(reasoningThisTurn ? { reasoningContent: reasoningThisTurn } : {}),
       });
       setLlmLoading(false);
       return;
@@ -405,6 +413,7 @@ export function AIModal(props: AIModalProps) {
           arguments: tc.arguments,
         })),
         toolResults: results,
+        ...(reasoningThisTurn ? { reasoningContent: reasoningThisTurn } : {}),
       },
     ];
     turnCountRef.current = turnNum + 1;
@@ -425,7 +434,7 @@ export function AIModal(props: AIModalProps) {
       const pending = pendingConfirmation;
       if (!pending || pending.stepId !== stepId) return;
 
-      const { toolCall, toolCallsThisTurn, results, turnSteps } = pending;
+      const { toolCall, toolCallsThisTurn, results, turnSteps, reasoningContent } = pending;
       setPendingConfirmation(null);
 
       // Marquer l'étape "en cours" pendant la ré-exécution
@@ -480,6 +489,7 @@ export function AIModal(props: AIModalProps) {
               arguments: tc.arguments,
             })),
             toolResults: updatedResults,
+            ...(reasoningContent ? { reasoningContent } : {}),
           },
         ];
         turnCountRef.current += 1;
@@ -751,8 +761,8 @@ export function AIModal(props: AIModalProps) {
               )}
 
               {llmOutput && steps.length === 0 && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs font-mono whitespace-pre-wrap max-h-60 overflow-y-auto">
-                  {llmOutput}
+                <div className="rounded-lg border border-border bg-muted/30 p-3 max-h-60 overflow-y-auto">
+                  <AiMarkdown content={llmOutput} />
                 </div>
               )}
               {steps.length > 0 && (

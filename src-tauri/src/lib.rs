@@ -67,7 +67,6 @@ pub fn run() {
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
-    .plugin(tauri_plugin_oauth::init())
       .manage(SharedClient { normal: http_client, insecure: insecure_client })
       .manage::<ManagedCaptureProxyState>(Arc::new(Mutex::new(capture::CaptureProxyState::default())))
       .manage::<mcp::ManagedMcpState>(Arc::new(Mutex::new(mcp::McpProcessState::default())))
@@ -117,8 +116,8 @@ pub fn run() {
       store::dequeue_ready,
       store::mark_sent,
       store::get_encryption_passphrase,
-      oauth::exchange_oauth_code,
-      oauth::get_oauth_client_id,
+      oauth::start_device_flow_cmd,
+      oauth::poll_device_token_cmd,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react"
 import { persistence } from "@/lib/persistence"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -9,6 +9,12 @@ interface SidebarContextType {
   toggleSidebar: () => void
   collapseSidebar: () => void
   expandSidebar: () => void
+  // Mobile drawer state (below md breakpoint, the sidebar becomes an
+  // off-canvas drawer instead of a fixed rail)
+  isMobile: boolean
+  mobileOpen: boolean
+  openMobileSidebar: () => void
+  closeMobileSidebar: () => void
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
@@ -17,6 +23,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(true)
 
   const isNarrow = useIsMobile(916)
+  const isMobile = useIsMobile(768)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   // Load from persistence (sync cache populated from localStorage on startup)
   useEffect(() => {
@@ -38,6 +46,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     }
   }, [isNarrow])
 
+  // Auto-close the mobile drawer when resizing up to desktop
+  useEffect(() => {
+    if (!isMobile && mobileOpen) setMobileOpen(false)
+  }, [isMobile, mobileOpen])
+
   // Save to persistence
   useEffect(() => {
     try { void persistence.setItem("sidebar-collapsed", JSON.stringify(isCollapsed)) } catch { /* ignore */ }
@@ -47,9 +60,21 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const collapseSidebar = () => setIsCollapsed(true)
   const expandSidebar = () => setIsCollapsed(false)
 
+  const openMobileSidebar = useCallback(() => setMobileOpen(true), [])
+  const closeMobileSidebar = useCallback(() => setMobileOpen(false), [])
+
   const ctxValue = useMemo(
-    () => ({ isCollapsed, toggleSidebar, collapseSidebar, expandSidebar }),
-    [isCollapsed, toggleSidebar, collapseSidebar, expandSidebar]
+    () => ({
+      isCollapsed,
+      toggleSidebar,
+      collapseSidebar,
+      expandSidebar,
+      isMobile,
+      mobileOpen,
+      openMobileSidebar,
+      closeMobileSidebar,
+    }),
+    [isCollapsed, toggleSidebar, collapseSidebar, expandSidebar, isMobile, mobileOpen, openMobileSidebar, closeMobileSidebar]
   )
 
   return (

@@ -1,5 +1,6 @@
 /**
- * AI engine — action dispatch.
+ * Cloud engine — action dispatch (migré depuis le moteur legacy
+ * `src/ai/engine/dispatch.ts`).
  *
  * `dispatchAIActions` walks a list of parsed AI actions and routes each one to
  * the corresponding handler. Missing handlers are skipped silently (with a

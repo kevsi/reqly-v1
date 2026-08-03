@@ -20,7 +20,7 @@ import { useAIEngine } from "@/src/ai/hooks/use-ai-engine";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { toast } from "@/hooks/use-toast";
 import { generateRequestFromNL, type SavableRequestItem } from "@/lib/simple-mode/nl-to-request";
-import { SYSTEM_PROMPT } from "@/src/ai/engine";
+import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions";
 
 const DRAFTS_NAME = "Drafts";
 
@@ -28,10 +28,11 @@ const DRAFTS_NAME = "Drafts";
  * "Mode simple" — a natural-language guided request builder for non-developers.
  *
  * Reuses the EXISTING AI engine: the "Générer" action calls the engine's text
- * completion (`useAIEngine().sendMessage`, which wraps `callAIText` with the
- * configured provider) through `generateRequestFromNL`. The produced args are
- * mapped into a `RequestItem` and, on "Crérer la requête", persisted via the
- * app's existing `addRequestToCollection` path (into the Drafts collection).
+ * completion (`useAIEngine().sendMessage`, which routes through
+ * `callAITextViaStream` with the configured provider) via
+ * `generateRequestFromNL`. The produced args are mapped into a `RequestItem`
+ * and, on "Crérer la requête", persisted via the app's existing
+ * `addRequestToCollection` path (into the Drafts collection).
  */
 export function SimpleRequestBuilder() {
   const { sendMessage, buildContext } = useAIEngine();
@@ -54,7 +55,7 @@ export function SimpleRequestBuilder() {
     setError(null);
     setPreview(null);
     try {
-      const askAI = (prompt: string) => sendMessage(prompt, SYSTEM_PROMPT, buildContext());
+      const askAI = (prompt: string) => sendMessage(prompt, ACTIONS_SYSTEM_PROMPT, buildContext());
       const req = await generateRequestFromNL(text, askAI);
       setPreview(req);
     } catch (e) {

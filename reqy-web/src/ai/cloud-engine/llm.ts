@@ -16,9 +16,12 @@ import {
   type ToolDefinition,
   type ToolCall,
   type ToolResult,
+  toOpenAITool,
   executeToolCall,
 } from "@/lib/llm-tools";
 import { proxyAuthHeaders } from "@/lib/proxy-auth";
+import { isTauriAvailable } from "@/lib/tauri";
+import { callAiProxyTauri } from "@/lib/tauri-ai";
 
 export interface StreamLLMOptions {
   provider: AIProvider;
@@ -44,11 +47,20 @@ export interface StreamLLMOptions {
   retrievedChunks?: RetrievedChunk[];
   /** Override du prompt système (défaut: SYSTEM_PROMPT). */
   system?: string;
+  /**
+   * Prompt utilisateur brut envoyé tel quel, SANS le wrapper de contexte de
+   * `buildUserPrompt`. Alternative à `question` + `ctx` (utilisé par les
+   * consommateurs migrés depuis `callAIText` du moteur legacy, dont les
+   * prompts sont déjà auto-suffisants).
+   */
+  rawMessage?: string;
 }
 
 export interface LLMToolCallEvent {
   type: "tool_calls";
   calls: ToolCall[];
+  /** `reasoning_content` du message assistant (DeepSeek reasoner / thinking). */
+  reasoningContent?: string;
 }
 
 export interface LLMTextEvent {
@@ -64,7 +76,39 @@ export interface LLMUsageEvent {
 export type LLMToken = LLMTextEvent | LLMToolCallEvent | LLMUsageEvent;
 
 export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken> {
-  const userPrompt = buildUserPrompt(
+  // Les providers attendent le format OpenAI ({type:"function", function:{...}}),
+  // pas le format unifié Reqly ({name, description, parameters}). Convertir ici
+  // garantit que les deux chemins (web et Tauri) envoient des tools valides.
+  const openAITools = opts.tools?.map(toOpenAITool);
+
+  if (isTauriAvailable()) {
+    const result = await callAiProxyTauri({
+      provider: opts.provider,
+      apiKey: opts.apiKey,
+      model: opts.model,
+      host: opts.host,
+      port: opts.port,
+      openaiUrl: opts.openaiUrl,
+      system: opts.system ?? SYSTEM_PROMPT,
+      message: opts.rawMessage ?? buildUserPrompt(opts.question, opts.ctx, opts.diagnostics ?? [], opts.retrievedChunks ?? []),
+      tools: openAITools,
+      tool_choice: opts.tool_choice,
+      previousTurns: opts.previousTurns,
+    })
+    if (result.content) {
+      yield { type: "text", value: result.content }
+    }
+    if (result.toolCalls?.length) {
+      yield {
+        type: "tool_calls",
+        calls: result.toolCalls,
+        ...(result.reasoningContent ? { reasoningContent: result.reasoningContent } : {}),
+      }
+    }
+    return
+  }
+
+  const userPrompt = opts.rawMessage ?? buildUserPrompt(
     opts.question,
     opts.ctx,
     opts.diagnostics ?? [],
@@ -83,8 +127,8 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
     stream: true,
   };
 
-  if (opts.tools && opts.tools.length > 0) {
-    body.tools = opts.tools;
+  if (openAITools && openAITools.length > 0) {
+    body.tools = openAITools;
     body.tool_choice = opts.tool_choice ?? "auto";
   }
 
@@ -173,6 +217,10 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
       }
     > = {};
     const toolCallOrder: number[] = [];
+    // `reasoning_content` est émis en chunks `delta.reasoning_content` par les
+    // modèles DeepSeek thinking mode. On l'accumule et on le joint à l'événement
+    // tool_calls pour que le client puisse le renvoyer dans l'historique (obligatoire).
+    let reasoningContent = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -211,6 +259,12 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
               yield { type: "text", value: textToken };
             }
 
+            // Raisonnement (DeepSeek thinking mode)
+            const reasoningToken = delta?.reasoning_content;
+            if (typeof reasoningToken === "string" && reasoningToken.length > 0) {
+              reasoningContent += reasoningToken;
+            }
+
             // Tool calls (format OpenAI-compatible)
             const toolCalls = delta?.tool_calls;
             if (Array.isArray(toolCalls)) {
@@ -246,7 +300,11 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
                   arguments: acc!.arguments || "{}",
                 }));
               if (calls.length > 0) {
-                yield { type: "tool_calls", calls };
+                yield {
+                  type: "tool_calls",
+                  calls,
+                  ...(reasoningContent ? { reasoningContent } : {}),
+                };
               }
               // Reset pour un éventuel appel suivant
               for (const idx of toolCallOrder) delete toolCallAcc[idx];
