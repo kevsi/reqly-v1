@@ -14,14 +14,13 @@ describe("ModulesSection", () => {
   it("lists available modules with their description", () => {
     render(<ModulesSection />);
     expect(screen.getByRole("heading", { name: "Modules" })).toBeTruthy();
-    // MTN MoMo is the only module seeded as available by default.
-    expect(screen.getByText("MTN MoMo")).toBeTruthy();
-    expect(screen.getByText(/Mobile Money callback simulator/)).toBeTruthy();
+    expect(screen.getByText("Encodeur / Décodeur")).toBeTruthy();
+    expect(screen.getByText(/Outils instantanés pour vos requêtes/)).toBeTruthy();
   });
 
   it("installs a module and reveals the enable switch", () => {
     render(<ModulesSection />);
-    const installBtn = screen.getByRole("button", { name: "Installer" });
+    const installBtn = screen.getAllByRole("button", { name: "Installer" })[0];
     fireEvent.click(installBtn);
     // A freshly installed module is enabled by default.
     const enableSwitch = screen.getByRole("switch");
@@ -31,7 +30,7 @@ describe("ModulesSection", () => {
 
   it("toggles the enable switch off and back on", () => {
     render(<ModulesSection />);
-    fireEvent.click(screen.getByRole("button", { name: "Installer" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Installer" })[0]);
     const enableSwitch = screen.getByRole("switch");
     fireEvent.click(enableSwitch);
     expect(enableSwitch.getAttribute("aria-checked")).toBe("false");

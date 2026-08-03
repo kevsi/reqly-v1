@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Smartphone, Boxes, type LucideIcon } from "lucide-react";
+import { Boxes, Binary, type LucideIcon } from "lucide-react";
 import { useEnabledModuleNav } from "@/hooks/use-modules-store";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * Unknown names fall back to a generic icon so a module never renders blank.
  */
 const ICONS: Record<string, LucideIcon> = {
-  Smartphone,
+  Binary,
 };
 const FALLBACK_ICON: LucideIcon = Boxes;
 

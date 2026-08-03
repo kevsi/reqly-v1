@@ -19,7 +19,6 @@ import {
 } from "@/hooks/use-tool-connections";
 import { Plug, Cloud, Wifi } from "lucide-react";
 import { PostmanIcon } from "@/components/icons/postman";
-import { StripeIcon } from "@/components/icons/stripe";
 import { GithubIcon } from "@/components/icons/github";
 import { GitlabIcon } from "@/components/icons/gitlab";
 import { JinaIcon } from "@/components/icons/jina";
@@ -37,21 +36,6 @@ const TOOLS: Tool[] = [
       placeholder: "PMAK-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
       instructions:
         "Allez sur go.postman.co → Settings → API Keys → Generate API Key. Copiez la clé (elle commence par PMAK-).",
-    },
-  },
-  {
-    id: "stripe",
-    name: "Stripe",
-    description: "Testez les endpoints Stripe en mode test.",
-    logoEmoji: "💳",
-    logo: StripeIcon,
-    scopes: [],
-    apiKey: {
-      endpoint: "/api/stripe-auth",
-      placeholder: "sk_test_xxxxxxxxxxxxxxxxxxxx",
-      instructions:
-        "Allez sur dashboard.stripe.com → Developers → API Keys. " +
-        "Copiez votre clé secrète de test (commence par sk_test_).",
     },
   },
   {
@@ -113,11 +97,9 @@ function useToolStatus(toolId: string, refreshKey = 0): ConnectionStatus {
     const url =
       toolId === "postman"
         ? "/api/postman-auth/status"
-        : toolId === "stripe"
-          ? "/api/stripe-auth/status"
-          : toolId === "jina"
-            ? "/api/jina-auth/status"
-            : null;
+        : toolId === "jina"
+          ? "/api/jina-auth/status"
+          : null;
     if (!url) {
       setStatus("disconnected");
       return;

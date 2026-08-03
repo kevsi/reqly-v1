@@ -175,7 +175,6 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           nativeMode,
           activeWorkspaceId: activeWorkspaceId ?? null,
         });
-
         // Post-response script
         if (tab.postResponseScript?.trim()) {
           const responseForScript = {

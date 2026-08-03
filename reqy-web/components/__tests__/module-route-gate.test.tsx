@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+﻿import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { ModuleRouteGate } from "@/components/modules/module-route-gate";
 import { getAvailableModules } from "@/lib/modules/registry";
@@ -13,7 +13,7 @@ describe("ModuleRouteGate", () => {
 
   it("shows a disabled notice (no children) when the module is not enabled", () => {
     render(
-      <ModuleRouteGate moduleId="mtn-momo">
+      <ModuleRouteGate moduleId="encode-decode">
         <div data-testid="child">contenu protégé</div>
       </ModuleRouteGate>,
     );
@@ -25,9 +25,9 @@ describe("ModuleRouteGate", () => {
   });
 
   it("renders children when the module is enabled", () => {
-    installModule("mtn-momo");
+    installModule("encode-decode");
     render(
-      <ModuleRouteGate moduleId="mtn-momo">
+      <ModuleRouteGate moduleId="encode-decode">
         <div data-testid="child">contenu protégé</div>
       </ModuleRouteGate>,
     );

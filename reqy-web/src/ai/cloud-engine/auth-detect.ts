@@ -24,8 +24,6 @@ interface AuthServicePattern {
 const KNOWN_PATTERNS: AuthServicePattern[] = [
   // GitHub
   { pattern: /api\.github\.com/i, authType: "bearer", headers: ["Authorization"], template: { Authorization: "Bearer {{GITHUB_TOKEN}}" } },
-  // Stripe
-  { pattern: /api\.stripe\.com/i, authType: "bearer", headers: ["Authorization"], template: { Authorization: "Bearer {{STRIPE_API_KEY}}" } },
   // OpenAI
   { pattern: /api\.openai\.com/i, authType: "bearer", headers: ["Authorization"], template: { Authorization: "Bearer {{OPENAI_API_KEY}}" } },
   // Anthropic
@@ -40,7 +38,7 @@ const KNOWN_PATTERNS: AuthServicePattern[] = [
 
 /**
  * Keyword-based detection from the free-form hint (e.g. "GitHub API",
- * "Stripe checkout", "use OAuth"). Light heuristic only.
+ * "use OAuth"). Light heuristic only.
  */
 function detectFromHint(hint: string | undefined): AuthType | null {
   if (!hint) return null;

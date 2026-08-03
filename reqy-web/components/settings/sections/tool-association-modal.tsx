@@ -50,21 +50,17 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
   const config = tool.apiKey!;
 
   const isValid =
-    tool.id === "stripe"
-      ? /^(sk_test|sk_live|rk_test|rk_live)_[A-Za-z0-9]+$/.test(apiKey.trim())
-      : tool.id === "jina"
-        ? /^jina_[A-Za-z0-9_-]+$/.test(apiKey.trim())
-        : /^PMAK-[A-Za-z0-9_-]+$/.test(apiKey.trim());
+    tool.id === "jina"
+      ? /^jina_[A-Za-z0-9_-]+$/.test(apiKey.trim())
+      : /^PMAK-[A-Za-z0-9_-]+$/.test(apiKey.trim());
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!isValid) {
       setError(
-        tool.id === "stripe"
-          ? "La clé doit commencer par sk_test_, rk_test_, sk_live_ ou rk_live_"
-          : tool.id === "jina"
-            ? "La clé doit commencer par jina_"
-            : "La clé doit commencer par PMAK-",
+        tool.id === "jina"
+          ? "La clé doit commencer par jina_"
+          : "La clé doit commencer par PMAK-",
       );
       return;
     }
@@ -241,11 +237,9 @@ function DisconnectView({ tool, onDisconnected }: { tool: Tool; onDisconnected: 
         ? "/api/gitlab-auth/logout"
         : tool.id === "postman"
           ? "/api/postman-auth"
-          : tool.id === "stripe"
-            ? "/api/stripe-auth"
-            : tool.id === "jina"
-              ? "/api/jina-auth"
-              : null;
+          : tool.id === "jina"
+            ? "/api/jina-auth"
+            : null;
 
   async function handleDisconnect() {
     setLoading(true);

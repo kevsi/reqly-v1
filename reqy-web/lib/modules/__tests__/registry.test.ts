@@ -14,8 +14,8 @@ import {
 } from "@/lib/modules/registry";
 import type { ModuleManifest, ModuleNavItem, ModuleRouteContribution } from "@/lib/modules/types";
 
-// Two extra manifests (NOT extracted from core yet) used only to prove the
-// contract is general and MTN MoMo is not special-cased.
+// An extra manifest (NOT extracted from core yet) used only to prove the
+// contract is general and first-party modules are not special-cased.
 const templatesModule: ModuleManifest = {
   id: "templates",
   name: "Templates & Recipes",
@@ -37,9 +37,9 @@ const sdkModule: ModuleManifest = {
 };
 
 describe("module registry (generalized contract)", () => {
-  it("has MTN MoMo available — no special case", () => {
+  it("seeds the first-party modules", () => {
     const ids = getAvailableModules().map((m) => m.id);
-    expect(ids).toContain("mtn-momo");
+    expect(ids).toEqual(["encode-decode"]);
   });
 
   it("starts with no module installed/enabled", () => {
@@ -47,31 +47,31 @@ describe("module registry (generalized contract)", () => {
     expect(getEnabledModules()).toHaveLength(0);
     expect(getModuleNavItems()).toHaveLength(0);
     expect(getModuleRoutes()).toHaveLength(0);
-    expect(isInstalled("mtn-momo")).toBe(false);
+    expect(isInstalled("encode-decode")).toBe(false);
   });
 
-  it("installs + enables MTN MoMo uniformly (surfaces nav + route)", () => {
-    installModule("mtn-momo");
-    expect(isInstalled("mtn-momo")).toBe(true);
-    expect(getEnabledModules().map((m) => m.id)).toEqual(["mtn-momo"]);
+  it("installs + enables a module uniformly (surfaces nav + route)", () => {
+    installModule("encode-decode");
+    expect(isInstalled("encode-decode")).toBe(true);
+    expect(getEnabledModules().map((m) => m.id)).toEqual(["encode-decode"]);
 
     const nav: ModuleNavItem[] = getModuleNavItems();
-    expect(nav).toEqual([{ label: "Mobile Money", href: "/mobile-money/", icon: "Smartphone" }]);
+    expect(nav).toEqual([{ label: "Encodeur", href: "/encode-decode/", icon: "Binary" }]);
 
     const routes: ModuleRouteContribution[] = getModuleRoutes();
-    expect(routes).toEqual([{ path: "/mobile-money/", type: "page" }]);
+    expect(routes).toEqual([{ path: "/encode-decode/", type: "page" }]);
   });
 
   it("can disable without uninstalling", () => {
-    setModuleEnabled("mtn-momo", false);
-    expect(isInstalled("mtn-momo")).toBe(true);
+    setModuleEnabled("encode-decode", false);
+    expect(isInstalled("encode-decode")).toBe(true);
     expect(getEnabledModules()).toHaveLength(0);
     expect(getModuleNavItems()).toHaveLength(0);
   });
 
   it("uninstalls back to a clean state", () => {
-    uninstallModule("mtn-momo");
-    expect(isInstalled("mtn-momo")).toBe(false);
+    uninstallModule("encode-decode");
+    expect(isInstalled("encode-decode")).toBe(false);
     expect(getInstalledModules()).toHaveLength(0);
   });
 
@@ -79,25 +79,25 @@ describe("module registry (generalized contract)", () => {
     registerAvailableModule(templatesModule);
     registerAvailableModule(sdkModule);
 
-    installModule("mtn-momo");
+    installModule("encode-decode");
     installModule("templates");
     installModule("sdk-generate");
 
-    // content module contributes no nav; feature module does
+    // content module contributes no nav; feature modules do
     const labels = getModuleNavItems()
       .map((n) => n.label)
       .sort();
-    expect(labels).toEqual(["Mobile Money", "SDKs"]);
+    expect(labels).toEqual(["Encodeur", "SDKs"]);
 
     // routes aggregate across kinds (page + api)
     const paths = getModuleRoutes()
       .map((r) => r.path)
       .sort();
-    expect(paths).toEqual(["/api/sdk-generate", "/mobile-money/", "/sdks/"]);
+    expect(paths).toEqual(["/api/sdk-generate", "/encode-decode/", "/sdks/"]);
   });
 
   it("looks up a module by id", () => {
-    expect(getModuleById("mtn-momo")?.name).toBe("MTN MoMo");
+    expect(getModuleById("encode-decode")?.name).toBe("Encodeur / Décodeur");
     expect(getModuleById("does-not-exist")).toBeUndefined();
   });
 });

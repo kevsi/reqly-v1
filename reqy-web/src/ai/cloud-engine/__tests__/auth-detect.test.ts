@@ -9,12 +9,6 @@ describe("detectAuth", () => {
     expect(r.confidence).toBeGreaterThan(0.9);
   });
 
-  it("detects Stripe", () => {
-    const r = detectAuth("https://api.stripe.com/v1/charges");
-    expect(r.authType).toBe("bearer");
-    expect(r.headers.Authorization).toContain("{{STRIPE_API_KEY}}");
-  });
-
   it("detects Anthropic with anthropic-version header", () => {
     const r = detectAuth("https://api.anthropic.com/v1/messages");
     expect(r.authType).toBe("bearer");

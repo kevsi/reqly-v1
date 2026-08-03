@@ -14,21 +14,21 @@ describe("ModuleNavList", () => {
   it("renders nothing when no module is enabled", () => {
     const { container } = render(<ModuleNavList activePage="api-endpoints" collapsed={false} />);
     expect(container.querySelector("li")).toBeNull();
-    expect(screen.queryByText("Mobile Money")).toBeNull();
+    expect(screen.queryByText("Encodeur")).toBeNull();
   });
 
   it("renders an enabled module's nav entry with the right href", () => {
-    installModule("mtn-momo");
+    installModule("encode-decode");
     render(<ModuleNavList activePage="api-endpoints" collapsed={false} />);
-    const link = screen.getByRole("link", { name: "Mobile Money" });
+    const link = screen.getByRole("link", { name: "Encodeur" });
     // next/link normalises the trailing slash from the manifest href.
-    expect(link.getAttribute("href")).toBe("/mobile-money");
+    expect(link.getAttribute("href")).toBe("/encode-decode");
   });
 
   it("marks the nav entry active when its route is active", () => {
-    installModule("mtn-momo");
-    render(<ModuleNavList activePage="mobile-money" collapsed={false} />);
-    const link = screen.getByRole("link", { name: "Mobile Money" });
+    installModule("encode-decode");
+    render(<ModuleNavList activePage="encode-decode" collapsed={false} />);
+    const link = screen.getByRole("link", { name: "Encodeur" });
     expect(link.getAttribute("aria-current")).toBe("page");
   });
 });

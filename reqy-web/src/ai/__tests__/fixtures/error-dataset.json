@@ -38,7 +38,7 @@
     "context": {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/customers/ch_2565o0zc17",
+        "url": "https://api.example.com/v1/customers/ch_2565o0zc17",
         "headers": {
           "accept": "application/json"
         },
@@ -1005,7 +1005,7 @@
     "context": {
       "request": {
         "method": "DELETE",
-        "url": "https://api.stripe.com/v1/setup_intents",
+        "url": "https://api.example.com/v1/setup_intents",
         "headers": {
           "authorization": "Bearer eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzc4OSIsInNjb3BlIjpbInJlYWQ6dXNlcnMiXX0.sig",
           "accept": "application/json"
@@ -1682,7 +1682,7 @@
     "context": {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/disputes",
+        "url": "https://api.example.com/v1/disputes",
         "headers": {
           "authorization": "Basic dXNlcjg6d3JvbmdwYXNz",
           "accept": "application/json"
@@ -1909,7 +1909,7 @@
     "context": {
       "request": {
         "method": "POST",
-        "url": "https://api.stripe.com/v1/subscriptions",
+        "url": "https://api.example.com/v1/subscriptions",
         "headers": {
           "authorization": "Bearer eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzc4OSIsInNjb3BlIjpbInJlYWQ6dXNlcnMiXX0.sig",
           "accept": "application/json"
@@ -26681,7 +26681,7 @@
     "context": {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/checkout/sessions",
+        "url": "https://api.example.com/v1/checkout/sessions",
         "headers": {
           "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Ik5qSTVNakkzTXpJNU9EQTROVFUzTXpVNE9UTXpNREU0T0RreE1qTTBNalkyIn0.payload.sig",
           "accept": "application/json"
@@ -26929,7 +26929,7 @@
     "context": {
       "request": {
         "method": "POST",
-        "url": "https://api.stripe.com/v1/payment_intents",
+        "url": "https://api.example.com/v1/payment_intents",
         "headers": {
           "authorization": "Bearer eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzQ1NiIsImVtYWlsIjoiam9obkBleGFtcGxlLmNvbSIsImV4cCI6MTcyOTAwMDAwMH0.signaturepart",
           "content-type": "application/json",

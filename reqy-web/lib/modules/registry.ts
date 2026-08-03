@@ -1,5 +1,5 @@
 import type { ModuleManifest, ModuleNavItem, ModuleRouteContribution } from "./types";
-import { mobileMoneyManifest } from "@/modules/mobile-money/manifest";
+import { encodeDecodeManifest } from "@/modules/encode-decode/manifest";
 
 /**
  * Central registry of Reqly modules.
@@ -18,7 +18,7 @@ import { mobileMoneyManifest } from "@/modules/mobile-money/manifest";
  * Modules are statically imported so their code can be tree-shaken; only
  * enabled modules are surfaced by the app (nav, routes, code loading).
  */
-const AVAILABLE: ModuleManifest[] = [mobileMoneyManifest];
+const AVAILABLE: ModuleManifest[] = [encodeDecodeManifest];
 
 const installState = new Map<string, boolean>();
 
