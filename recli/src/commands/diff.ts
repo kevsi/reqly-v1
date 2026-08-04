@@ -2,7 +2,10 @@
  * `recli diff <before> <after>` — compare two result JSON files.
  *
  * Matching is done by request name (not index) so reordering requests in a
- * collection does not produce false positives.
+ * collection does not produce false positives. Duplicate names are matched by
+ * URL first (identical reordered requests pair up cleanly), falling back to
+ * FIFO per name — nothing is silently dropped, and duplicates are reported as
+ * a warning.
  */
 
 import chalk from "chalk";
@@ -18,26 +21,47 @@ export function registerDiff(program: Command): void {
     .action((beforeFile: string, afterFile: string) => {
       const before = loadResultsFile(beforeFile);
       const after = loadResultsFile(afterFile);
+      for (const name of findDuplicateNames([...before, ...after])) {
+        console.warn(
+          chalk.yellow(`Warning: "${name}" appears multiple times — entries are matched in order`),
+        );
+      }
       const diffs = computeDiff(before, after);
       printDiff(diffs);
       if (diffs.some((d) => d.statusChanged || d.bodyChanged)) process.exit(1);
     });
 }
 
-function computeDiff(before: RunResult[], after: RunResult[]): DiffResult[] {
-  const afterByName = new Map<string, RunResult>();
+/** Names that occur more than once across a result set (matched in FIFO order). */
+export function findDuplicateNames(results: RunResult[]): string[] {
+  const counts = new Map<string, number>();
+  for (const r of results) counts.set(r.name, (counts.get(r.name) ?? 0) + 1);
+  return [...counts.entries()].filter(([, n]) => n > 1).map(([name]) => name);
+}
+
+export function computeDiff(before: RunResult[], after: RunResult[]): DiffResult[] {
+  // Per-name queues; entries are consumed on match. Same-name duplicates are
+  // paired by URL first (so reordered identical requests produce no spurious
+  // diff), falling back to FIFO order.
+  const afterByName = new Map<string, RunResult[]>();
   for (const r of after) {
-    // If duplicate names exist, keep the first occurrence
-    if (!afterByName.has(r.name)) afterByName.set(r.name, r);
+    const q = afterByName.get(r.name);
+    if (q) q.push(r);
+    else afterByName.set(r.name, [r]);
   }
 
-  const diffs: DiffResult[] = [];
-  const seen = new Set<string>();
+  const takeMatch = (name: string, url: string): RunResult | undefined => {
+    const q = afterByName.get(name);
+    if (!q) return undefined;
+    const byUrl = q.findIndex((r) => r.url === url);
+    return byUrl >= 0 ? q.splice(byUrl, 1)[0] : q.shift();
+  };
 
-  // Walk through "before" and match by name
+  const diffs: DiffResult[] = [];
+
+  // Walk through "before" and match by name (consume one after-entry per name)
   for (const b of before) {
-    seen.add(b.name);
-    const a = afterByName.get(b.name);
+    const a = takeMatch(b.name, b.url);
     if (!a) {
       diffs.push({
         name: b.name,
@@ -73,9 +97,9 @@ function computeDiff(before: RunResult[], after: RunResult[]): DiffResult[] {
     });
   }
 
-  // Handle "after" entries not in "before"
-  for (const a of after) {
-    if (!seen.has(a.name)) {
+  // Handle "after" entries not matched by any "before" entry
+  for (const q of afterByName.values()) {
+    for (const a of q) {
       diffs.push({
         name: a.name,
         url: a.url,

@@ -1,179 +1,129 @@
-// Recli types — complétés par les types canoniques dans @reqly/shared
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "TRACE" | "CONNECT" | "GRAPHQL"
+// Recli types — socle commun depuis @reqly/shared (types canoniques) + spécificités CLI.
+// Les formats de requêtes (recli: scripts/assert/capture + mcp: runnerAssertions/pre/post)
+// sont unifiés dans @reqly/shared ; ce fichier ne garde que ce qui est propre au CLI.
 
-export interface EnvironmentVariable {
-  key: string
-  value: string
-  enabled: boolean
-}
+import type {
+  HttpMethod,
+  EnvironmentVariable,
+  Environment,
+  QueryParam,
+  Assertion,
+  AssertionResult,
+  GraphQLConfig,
+  RequestItem,
+  Collection,
+  CollectionFolder,
+  CaptureRule,
+  ExportBundle,
+} from "@reqly/shared";
 
-export interface Environment {
-  id?: string
-  name: string
-  color?: string
-  variables: EnvironmentVariable[]
-}
-
-export interface QueryParam {
-  key: string
-  value: string
-}
-
-export interface Assertion {
-  expr?: string
-  name?: string
-  schema?: Record<string, unknown>
-}
-
-export interface CaptureRule {
-  name: string
-  expr: string
-}
-
-export interface GraphQLConfig {
-  query: string
-  variables?: Record<string, unknown>
-  operationName?: string
-}
-
-export interface RequestItem {
-  id?: string
-  name: string
-  method: HttpMethod
-  url: string
-  endpoint?: string
-  headers?: Record<string, string>
-  body?: string
-  bodyType?: "json" | "form-data" | "x-www-form" | "raw" | "binary" | "graphql"
-  authType?: "none" | "bearer" | "basic" | "api-key" | "oauth2"
-  authToken?: string
-  queryParams?: QueryParam[]
-  folderId?: string | null
-  assert?: Assertion[]
-  capture?: CaptureRule[]
-  scripts?: {
-    pre?: string
-    post?: string
-  }
-  graphql?: GraphQLConfig
-  skip?: boolean
-  description?: string
-}
-
-export interface Collection {
-  id?: string
-  name: string
-  description?: string
-  color?: string
-  icon?: string
-  requests: RequestItem[]
-  skip?: boolean
-}
-
-export interface VariableMapping {
-  id?: string
-  name: string
-  sourceRequestId: string
-  sourcePath: string
-  enabled?: boolean
-}
-
-export interface ExportBundle {
-  version?: string
-  exportedAt?: string
-  collections: Collection[]
-  environments?: Environment[]
-  variableMappings?: VariableMapping[]
-}
+export type {
+  HttpMethod,
+  EnvironmentVariable,
+  Environment,
+  QueryParam,
+  Assertion,
+  AssertionResult,
+  GraphQLConfig,
+  RequestItem,
+  Collection,
+  CollectionFolder,
+  CaptureRule,
+  ExportBundle,
+};
 
 export interface RunnerContext {
-  vars: Map<string, string>
-  envVars: Map<string, string>
-  cookies: Map<string, string>
-  iteration: number
-  data?: Record<string, string>
-}
-
-export interface AssertionResult {
-  name: string
-  passed: boolean
-  rawExpr?: string
-  expected: string
-  actual: string
-  error?: string
+  vars: Map<string, string>;
+  envVars: Map<string, string>;
+  cookies: Map<string, string>;
+  iteration: number;
+  data?: Record<string, string>;
 }
 
 export interface RunResult {
-  name: string
-  method: HttpMethod
-  url: string
-  status: number
-  statusText: string
-  durationMs: number
-  size: number
-  passed: boolean
-  error?: string
-  body?: string
-  assertions?: AssertionResult[]
-  capturedVars?: Record<string, string>
-  responseHeaders?: Record<string, string>
-  responseCookies?: Record<string, string>
-  snapshotChanged?: boolean
-  timestamp: number
+  name: string;
+  method: HttpMethod;
+  url: string;
+  status: number;
+  statusText: string;
+  durationMs: number;
+  size: number;
+  passed: boolean;
+  error?: string;
+  body?: string;
+  assertions?: AssertionResult[];
+  capturedVars?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  responseCookies?: Record<string, string>;
+  snapshotChanged?: boolean;
+  timestamp: number;
 }
 
 export interface RunnerOptions {
-  envName?: string
-  timeoutMs: number
-  requestName?: string
-  noColor?: boolean
-  json?: boolean
-  parallel?: boolean
-  delayMs?: number
-  iterations?: number
-  dataFile?: string
-  reporter?: string
-  output?: string
-  snapshot?: boolean
-  updateSnapshots?: boolean
-  dotenv?: string
-  workspace?: string
-  allowLocalHosts?: boolean
-  maxResponseSize?: number
+  envName?: string;
+  timeoutMs: number;
+  requestName?: string;
+  noColor?: boolean;
+  json?: boolean;
+  parallel?: boolean;
+  delayMs?: number;
+  iterations?: number;
+  dataFile?: string;
+  reporter?: string;
+  output?: string;
+  snapshot?: boolean;
+  updateSnapshots?: boolean;
+  dotenv?: string;
+  workspace?: string;
+  allowLocalHosts?: boolean;
+  maxResponseSize?: number;
+  /** Stop the collection at the first failed request (fail-fast). */
+  bail?: boolean;
+  /** Number of retries on transient failures (network errors or matching status codes). */
+  retries?: number;
+  /** HTTP status codes that trigger a retry (default: 429, 502, 503, 504). */
+  retryOnStatus?: number[];
+  /** Base delay in ms for exponential backoff between retries (default: 300). */
+  retryDelayMs?: number;
 }
 
 export interface RecliConfig {
-  env?: string
-  timeout?: number
-  parallel?: boolean
-  delay?: number
-  iterations?: number
-  reporter?: string
-  output?: string
-  data?: string
-  snapshot?: boolean
-  updateSnapshots?: boolean
-  dotenv?: string
+  env?: string;
+  timeout?: number;
+  parallel?: boolean;
+  delay?: number;
+  iterations?: number;
+  reporter?: string;
+  output?: string;
+  data?: string;
+  snapshot?: boolean;
+  updateSnapshots?: boolean;
+  dotenv?: string;
+  bail?: boolean;
+  retries?: number;
+  /** Comma-separated status codes, e.g. "429,503,504". */
+  retryOn?: string;
+  retryDelay?: number;
 }
 
 export interface ValidationError {
-  path: string
-  message: string
+  path: string;
+  message: string;
 }
 
-export type ReportFormat = "cli" | "json" | "junit" | "html"
+export type ReportFormat = "cli" | "json" | "junit" | "html";
 
 export interface DiffResult {
-  name: string
-  url: string
-  statusChanged: boolean
-  oldStatus: number
-  newStatus: number
-  bodyChanged: boolean
-  bodyDiff?: string
-  durationChanged: boolean
-  oldDuration: number
-  newDuration: number
-  passedBefore: boolean
-  passedAfter: boolean
+  name: string;
+  url: string;
+  statusChanged: boolean;
+  oldStatus: number;
+  newStatus: number;
+  bodyChanged: boolean;
+  bodyDiff?: string;
+  durationChanged: boolean;
+  oldDuration: number;
+  newDuration: number;
+  passedBefore: boolean;
+  passedAfter: boolean;
 }

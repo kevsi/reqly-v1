@@ -1,35 +1,84 @@
-import { executeRequest as cliExecuteRequest, isUrlAllowed, DEFAULT_MAX_RESPONSE_SIZE } from "../runner.js"
-import { evaluateAssertions, runResultToAssertionContext } from "./assertions.js"
-import type { RequestItem, HttpMethod, RunResult, RunnerOptions, AssertionResult } from "./types.js"
+import {
+  executeRequest as cliExecuteRequest,
+  isUrlAllowed,
+  DEFAULT_MAX_RESPONSE_SIZE,
+} from "../runner.js";
+import { evaluateAssertions, runResultToAssertionContext } from "./assertions.js";
+import type {
+  RequestItem,
+  HttpMethod,
+  RunResult,
+  RunnerOptions,
+  AssertionResult,
+} from "./types.js";
 
 export const VALID_METHODS: ReadonlyArray<string> = [
-  "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
-]
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+];
 
-function buildEnvVarMap(environments: Array<{ name: string; variables: Array<{ key: string; value: string; enabled: boolean }> }>, envName?: string): Map<string, string> {
-  const map = new Map<string, string>()
+function buildEnvVarMap(
+  environments: Array<{
+    name: string;
+    variables: Array<{ key: string; value: string; enabled: boolean }>;
+  }>,
+  envName?: string,
+): Map<string, string> {
+  const map = new Map<string, string>();
   if (envName && environments) {
-    const env = environments.find((e) => e.name.toLowerCase() === envName.toLowerCase())
+    const env = environments.find((e) => e.name.toLowerCase() === envName.toLowerCase());
     if (env && env.variables) {
       for (const v of env.variables) {
-        if (v.enabled) map.set(v.key, v.value)
+        if (v.enabled) map.set(v.key, v.value);
       }
     }
   }
-  return map
+  return map;
+}
+
+/** Coerce GraphQLConfig.variables (Record | string) vers Record pour l'exécution. */
+function normalizeVariables(
+  v?: string | Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v) as Record<string, unknown>;
+    } catch {
+      // ponytail: variables invalides -> {} plutôt que de faire échouer le run
+      // (le runner CLI, lui, propage l'erreur de parse — divergence assumée ici
+      // car MCP doit être robuste face à des arguments fournis par un agent).
+      return {};
+    }
+  }
+  return v;
 }
 
 export async function executeRequest(
   request: RequestItem,
   options: RunnerOptions,
-  environments?: Array<{ name: string; variables: Array<{ key: string; value: string; enabled: boolean }> }>
+  environments?: Array<{
+    name: string;
+    variables: Array<{ key: string; value: string; enabled: boolean }>;
+  }>,
 ): Promise<RunResult> {
   if (request.method === "GRAPHQL") {
-    const query = request.graphql?.query ?? request.body ?? ""
-    return executeGraphQL(request.url, query, request.graphql?.variables, request.graphql?.operationName, request.headers, options)
+    const query = request.graphql?.query ?? request.body ?? "";
+    return executeGraphQL(
+      request.url,
+      query,
+      normalizeVariables(request.graphql?.variables),
+      request.graphql?.operationName,
+      request.headers,
+      options,
+    );
   }
 
-  const urlCheck = isUrlAllowed(request.url, options.allowLocalHosts)
+  const urlCheck = await isUrlAllowed(request.url, options.allowLocalHosts);
   if (!urlCheck.allowed) {
     return {
       name: request.name,
@@ -41,11 +90,11 @@ export async function executeRequest(
       size: 0,
       passed: false,
       error: urlCheck.reason,
-    }
+    };
   }
 
-  const envVars = buildEnvVarMap(environments ?? [], options.envName)
-  const ctx = { vars: envVars, envVars, cookies: new Map<string, string>(), iteration: 0 }
+  const envVars = buildEnvVarMap(environments ?? [], options.envName);
+  const ctx = { vars: envVars, envVars, cookies: new Map<string, string>(), iteration: 0 };
 
   const result = await cliExecuteRequest(
     {
@@ -62,8 +111,12 @@ export async function executeRequest(
     },
     ctx,
     options.timeoutMs,
-    { timeoutMs: options.timeoutMs, allowLocalHosts: options.allowLocalHosts, maxResponseSize: options.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE },
-  )
+    {
+      timeoutMs: options.timeoutMs,
+      allowLocalHosts: options.allowLocalHosts,
+      maxResponseSize: options.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE,
+    },
+  );
 
   return {
     name: result.name,
@@ -76,34 +129,39 @@ export async function executeRequest(
     passed: result.passed,
     error: result.error,
     body: result.body,
-  }
+    responseHeaders: result.responseHeaders,
+    responseCookies: result.responseCookies,
+  };
 }
 
 export interface RunResultWithAssertions extends RunResult {
-  assertionResults?: AssertionResult[]
-  assertionsPassed?: boolean
+  assertionResults?: AssertionResult[];
+  assertionsPassed?: boolean;
 }
 
 export async function executeRequestWithAssertions(
   request: RequestItem,
   options: RunnerOptions,
-  environments?: Array<{ name: string; variables: Array<{ key: string; value: string; enabled: boolean }> }>
+  environments?: Array<{
+    name: string;
+    variables: Array<{ key: string; value: string; enabled: boolean }>;
+  }>,
 ): Promise<RunResultWithAssertions> {
-  const result = await executeRequest(request, options, environments)
-  const assertions = request.runnerAssertions?.filter((a) => a.enabled !== false)
+  const result = await executeRequest(request, options, environments);
+  const assertions = request.runnerAssertions?.filter((a) => a.enabled !== false);
   if (!assertions || assertions.length === 0) {
-    return result
+    return result;
   }
 
-  const assertionResults = evaluateAssertions(assertions, runResultToAssertionContext(result))
-  const assertionsPassed = assertionResults.every((r) => r.passed)
+  const assertionResults = evaluateAssertions(assertions, runResultToAssertionContext(result));
+  const assertionsPassed = assertionResults.every((r) => r.passed);
 
   return {
     ...result,
     passed: result.passed && assertionsPassed,
     assertionResults,
     assertionsPassed,
-  }
+  };
 }
 
 export async function executeGraphQL(
@@ -112,9 +170,9 @@ export async function executeGraphQL(
   variables?: Record<string, unknown>,
   operationName?: string,
   headers?: Record<string, string>,
-  options: RunnerOptions = { timeoutMs: 30000 }
+  options: RunnerOptions = { timeoutMs: 30000 },
 ): Promise<RunResult> {
-  const urlCheck = isUrlAllowed(url, options.allowLocalHosts)
+  const urlCheck = await isUrlAllowed(url, options.allowLocalHosts);
   if (!urlCheck.allowed) {
     return {
       name: "GraphQL",
@@ -126,24 +184,24 @@ export async function executeGraphQL(
       size: 0,
       passed: false,
       error: urlCheck.reason,
-    }
+    };
   }
 
   const body = JSON.stringify({
     query,
     variables: variables ?? {},
     operationName: operationName ?? undefined,
-  })
+  });
 
   const reqHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     ...(headers ?? {}),
-  }
+  };
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs)
-  const startTime = Date.now()
-  const maxSize = options.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  const startTime = Date.now();
+  const maxSize = options.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE;
 
   try {
     const response = await fetch(url, {
@@ -151,12 +209,12 @@ export async function executeGraphQL(
       headers: reqHeaders,
       body,
       signal: controller.signal,
-    })
+    });
 
-    const durationMs = Date.now() - startTime
-    const text = await response.text()
-    const size = Buffer.byteLength(text, "utf8")
-    const passed = response.status < 400
+    const durationMs = Date.now() - startTime;
+    const text = await response.text();
+    const size = Buffer.byteLength(text, "utf8");
+    const passed = response.status < 400;
 
     if (size > maxSize) {
       return {
@@ -169,7 +227,7 @@ export async function executeGraphQL(
         size,
         passed: false,
         error: `Response exceeds maximum allowed size of ${maxSize} bytes`,
-      }
+      };
     }
 
     return {
@@ -182,11 +240,11 @@ export async function executeGraphQL(
       size,
       passed,
       body: text,
-    }
+    };
   } catch (error) {
-    const durationMs = Date.now() - startTime
-    const message = error instanceof Error ? error.message : String(error)
-    const isTimeout = error instanceof DOMException && error.name === "AbortError"
+    const durationMs = Date.now() - startTime;
+    const message = error instanceof Error ? error.message : String(error);
+    const isTimeout = error instanceof DOMException && error.name === "AbortError";
     return {
       name: "GraphQL",
       method: "GRAPHQL" as HttpMethod,
@@ -197,46 +255,62 @@ export async function executeGraphQL(
       size: 0,
       passed: false,
       error: isTimeout ? `Request timed out after ${options.timeoutMs}ms` : message,
-    }
+    };
   } finally {
-    clearTimeout(timeout)
+    clearTimeout(timeout);
   }
 }
 
 export interface ValidationIssue {
-  field: string
-  severity: "error" | "warning"
-  message: string
+  field: string;
+  severity: "error" | "warning";
+  message: string;
 }
 
 export function validateRequest(request: Partial<RequestItem>): ValidationIssue[] {
-  const issues: ValidationIssue[] = []
+  const issues: ValidationIssue[] = [];
 
   if (!request.name || !request.name.trim()) {
-    issues.push({ field: "name", severity: "error", message: "Request name is required" })
+    issues.push({ field: "name", severity: "error", message: "Request name is required" });
   }
 
   if (!request.url || !request.url.trim()) {
-    issues.push({ field: "url", severity: "error", message: "Request URL is required" })
+    issues.push({ field: "url", severity: "error", message: "Request URL is required" });
   } else {
-    try { new URL(request.url) } catch {
-      issues.push({ field: "url", severity: "error", message: `Invalid URL: ${request.url}` })
+    try {
+      new URL(request.url);
+    } catch {
+      issues.push({ field: "url", severity: "error", message: `Invalid URL: ${request.url}` });
     }
   }
 
   if (request.method && !VALID_METHODS.includes(request.method)) {
-    issues.push({ field: "method", severity: "error", message: `Invalid HTTP method: ${request.method}` })
+    issues.push({
+      field: "method",
+      severity: "error",
+      message: `Invalid HTTP method: ${request.method}`,
+    });
   }
 
   if (request.body && request.bodyType === "json") {
-    try { JSON.parse(request.body) } catch {
-      issues.push({ field: "body", severity: "warning", message: "Body is marked as JSON but is not valid JSON" })
+    try {
+      JSON.parse(request.body);
+    } catch {
+      issues.push({
+        field: "body",
+        severity: "warning",
+        message: "Body is marked as JSON but is not valid JSON",
+      });
     }
   }
 
   if (request.authType && request.authType !== "none" && !request.authToken) {
-    issues.push({ field: "authToken", severity: "warning", message: `Auth type is ${request.authType} but no token provided` })
+    issues.push({
+      field: "authToken",
+      severity: "warning",
+      message: `Auth type is ${request.authType} but no token provided`,
+    });
   }
 
-  return issues
+  return issues;
 }

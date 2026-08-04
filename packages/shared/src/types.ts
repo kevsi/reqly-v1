@@ -42,6 +42,8 @@ export interface Environment {
   name: string;
   color?: string;
   variables: EnvironmentVariable[];
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface GraphQLConfig {
@@ -79,6 +81,15 @@ export interface AssertionResult {
 
 // ── Structures de données ──────────────────────────────────
 
+/**
+ * Règle de capture recli : extrait une valeur de la réponse (body.<path>,
+ * headers.<name>, status) et la stocke dans {{name}} pour les requêtes suivantes.
+ */
+export interface CaptureRule {
+  name: string;
+  expr: string;
+}
+
 export interface RequestItem {
   id?: string;
   name: string;
@@ -90,9 +101,28 @@ export interface RequestItem {
   bodyType?: BodyType | "graphql";
   authType?: AuthType;
   authToken?: string;
-  queryParams?: Array<{ key: string; value: string }>;
+  queryParams?: QueryParam[];
   folderId?: string | null;
-  sortOrder: number;
+  sortOrder?: number;
+  skip?: boolean;
+  description?: string;
+  /** recli: scripts pre/post (exécutés avant/après la requête) */
+  scripts?: { pre?: string; post?: string };
+  /** recli: assertions au format texte (expr: "status == 200") */
+  assert?: Assertion[];
+  /** recli: règles de capture {{var}} pour le chaining */
+  capture?: CaptureRule[];
+  /** reqy-mcp: script avant requête */
+  preRequestScript?: string;
+  /** reqy-mcp: script après réponse */
+  postResponseScript?: string;
+  /** reqy-mcp: assertions structurées (type/target/operator/value) */
+  runnerAssertions?: Assertion[];
+  /** reqy-mcp: protocole */
+  protocol?: "rest" | "graphql";
+  graphql?: GraphQLConfig;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface Collection {
@@ -103,6 +133,7 @@ export interface Collection {
   icon?: string;
   requests: RequestItem[];
   folders?: CollectionFolder[];
+  skip?: boolean;
 }
 
 export interface CollectionFolder {
@@ -113,6 +144,8 @@ export interface CollectionFolder {
   order?: number;
   requests?: string[];
   children?: CollectionFolder[];
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface ExportBundle {

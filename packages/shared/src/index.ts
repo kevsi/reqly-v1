@@ -14,6 +14,7 @@ export type {
   RequestItem,
   Collection,
   CollectionFolder,
+  CaptureRule,
   ExportBundle,
 } from "./types.js";
 
