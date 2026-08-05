@@ -8,7 +8,12 @@
   "type": "module",
   "main": "./dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.js.map",
+    "!dist/**/*.test.d.ts",
+    "!dist/**/*.test.d.ts.map"
   ],
   "publishConfig": {
     "access": "public"
