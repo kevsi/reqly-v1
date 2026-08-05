@@ -283,6 +283,8 @@ export function interpolate(
         }
         return v;
       }
+      // Unknown $ name: keep the literal so the typo surfaces in the URL.
+      ctx.unresolvedVars?.add(trimmed);
       return `{{${trimmed}}}`;
     }
     const value = ctx.vars.get(trimmed);
@@ -291,6 +293,9 @@ export function interpolate(
     if (envValue !== undefined) return envValue;
     const procValue = process.env[trimmed];
     if (procValue !== undefined) return procValue;
+    // Unresolved {{var}}: keep the literal (Newman semantics) but record it so
+    // the run can warn — a silent 404 with {{VAR}} in the URL is pure friction.
+    ctx.unresolvedVars?.add(trimmed);
     return `{{${trimmed}}}`;
   });
 }

@@ -645,3 +645,53 @@ describe("runResultToContext", () => {
     expect(ctx.headers).toEqual({ fallback: "yes" });
   });
 });
+
+// ── User-friendly shorthand (strings / Newman-style) ───────
+
+describe("user-friendly assertion shapes", () => {
+  const ctx = makeContext({ status: 200 });
+
+  it("evaluates a bare string as a text expression", () => {
+    const res = evaluateAssertions(["status == 200", "status == 404"], ctx);
+    expect(res[0].passed).toBe(true);
+    expect(res[1].passed).toBe(false);
+  });
+
+  it("supports Newman-style { type: status, expect } shorthand", () => {
+    const res = evaluateAssertion({ type: "status", expect: 200 }, ctx);
+    expect(res.passed).toBe(true);
+    const fail = evaluateAssertion({ type: "status", expect: 201 }, ctx);
+    expect(fail.passed).toBe(false);
+  });
+
+  it("supports statusCode / status-code aliases with operators", () => {
+    const ok = evaluateAssertion({ type: "statusCode", value: 200, operator: "eq" }, ctx);
+    expect(ok.passed).toBe(true);
+    const gt = evaluateAssertion({ type: "status-code", value: 199, operator: "gt" }, ctx);
+    expect(gt.passed).toBe(true);
+    const neq = evaluateAssertion({ type: "statusCode", expect: 404, operator: "neq" }, ctx);
+    expect(neq.passed).toBe(true);
+  });
+
+  it("supports responseTime shorthand", () => {
+    const ctx150 = makeContext({ durationMs: 150 });
+    const ok = evaluateAssertion({ type: "responseTime", value: 500 }, ctx150);
+    expect(ok.passed).toBe(true);
+    const fail = evaluateAssertion({ type: "response-time", expect: 100 }, ctx150);
+    expect(fail.passed).toBe(false);
+  });
+
+  it("keeps object-valued status expectations for the structured evaluator", () => {
+    const res = evaluateAssertion(
+      structuredAssertion({ type: "status-code", value: { in: [200, 201] } }),
+      ctx,
+    );
+    expect(res.passed).toBe(true);
+  });
+
+  it("gives a helpful error for unusable input", () => {
+    const res = evaluateAssertion("" as unknown, ctx);
+    expect(res.passed).toBe(false);
+    expect(res.error).toContain("text expression");
+  });
+});

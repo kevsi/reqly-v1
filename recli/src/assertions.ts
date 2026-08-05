@@ -9,51 +9,44 @@
 // The unified API in @reqly/shared preserves those signatures by adapting
 // RunResult → UnifiedEvalContext internally.
 
-import type { Assertion, AssertionResult } from "./types.js";
-import type { RunResult } from "./types.js";
+import type { AssertionResult, RunResult } from "./types.js";
 import {
-  evaluateTextAssertion,
-  evaluateTextAssertions,
+  evaluateAssertion as evaluateAssertionUnified,
+  evaluateAssertions as evaluateAssertionsUnified,
   evaluateSchemaAssertion as evaluateSchemaAssertionShared,
   assertsPassed as assertsPassedShared,
 } from "@reqly/shared/assertions";
 
+function toUnifiedCtx(result: RunResult) {
+  return {
+    status: result.status,
+    durationMs: result.durationMs,
+    headers: result.responseHeaders ?? {},
+    body: result.body,
+  };
+}
+
+// Unified dispatcher: accepts text `expr`, structured `type`, `schema`, and —
+// via normalizeAssertion — bare strings and Newman-style shorthand such as
+// { type: "status", expect: 200 } or "status == 200".
 export function evaluateAssertion(
-  assertion: Assertion,
+  assertion: unknown,
   result: RunResult,
   vars?: Map<string, string>,
 ): AssertionResult {
-  return evaluateTextAssertion(
-    assertion,
-    {
-      status: result.status,
-      durationMs: result.durationMs,
-      headers: result.responseHeaders ?? {},
-      body: result.body,
-    },
-    {
-      vars,
-    },
-  ) as unknown as AssertionResult;
+  return evaluateAssertionUnified(assertion, toUnifiedCtx(result), {
+    vars,
+  }) as unknown as AssertionResult;
 }
 
 export function evaluateAssertions(
-  assertions: Assertion[],
+  assertions: unknown[],
   result: RunResult,
   vars?: Map<string, string>,
 ): AssertionResult[] {
-  return evaluateTextAssertions(
-    assertions,
-    {
-      status: result.status,
-      durationMs: result.durationMs,
-      headers: result.responseHeaders ?? {},
-      body: result.body,
-    },
-    {
-      vars,
-    },
-  ) as unknown as AssertionResult[];
+  return evaluateAssertionsUnified(assertions, toUnifiedCtx(result), {
+    vars,
+  }) as unknown as AssertionResult[];
 }
 
 export { evaluateSchemaAssertion } from "@reqly/shared/assertions";

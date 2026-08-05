@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
 
-import { validateExportBundle } from "../validator.js";
+import { findUnresolvedVariables, validateExportBundle } from "../validator.js";
 import { flattenRequests } from "../runner.js";
 import { printError } from "../reporters.js";
 import { chalk, toCurl } from "../utils.js";
@@ -35,8 +35,13 @@ export function registerValidate(program: Command): void {
       }
 
       const errors = validateExportBundle(bundle);
+      const warnings = findUnresolvedVariables(bundle as ExportBundle);
       if (errors.length === 0) {
         console.log(chalk.green("Valid export bundle"));
+        if (warnings.length > 0) {
+          console.log(chalk.yellow("Warnings:"));
+          for (const w of warnings) console.log(chalk.yellow(`  - ${w.path}: ${w.message}`));
+        }
         process.exit(0);
       } else {
         for (const err of errors) printError(`  - ${err.path}: ${err.message}`);

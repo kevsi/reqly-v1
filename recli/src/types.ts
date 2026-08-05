@@ -42,6 +42,9 @@ export interface RunnerContext {
   cookies: Map<string, string>;
   iteration: number;
   data?: Record<string, string>;
+  /** Names of {{var}} placeholders that resolved to nothing during this run
+   * (filled by interpolate; used to warn the user instead of a silent 404). */
+  unresolvedVars?: Set<string>;
 }
 
 export interface RunResult {

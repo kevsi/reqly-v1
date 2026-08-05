@@ -637,6 +637,9 @@ export async function runCollection(
   const allResults: RunResult[] = [];
   const iters = options.iterations ?? 1;
   let dataRecords: Record<string, string>[] = [];
+  // Shared across iterations and parallel workers: warn once per unresolved
+  // name, deduplicated across the whole run.
+  const unresolvedVars = new Set<string>();
 
   if (options.dataFile) {
     dataRecords = await loadDataFile(options.dataFile);
@@ -649,6 +652,7 @@ export async function runCollection(
       cookies: new Map<string, string>(),
       iteration: iter,
       data: dataRecords[iter % (dataRecords.length || 1)] || {},
+      unresolvedVars,
     };
 
     for (const [k, v] of Object.entries(ctx.data || {})) {
@@ -662,6 +666,14 @@ export async function runCollection(
       : await runSequential(requests, ctx, options);
 
     allResults.push(...results);
+  }
+
+  if (unresolvedVars.size > 0) {
+    const names = [...unresolvedVars].sort().join(", ");
+    process.stderr.write(
+      `Warning: unresolved variable(s): ${names}. ` +
+        `Define them in bundle.variables, an environment (--env), or a .env file.\n`,
+    );
   }
 
   return allResults;
@@ -762,6 +774,8 @@ async function runParallel(
         cookies: new Map(parentCtx.cookies),
         iteration: parentCtx.iteration,
         data: { ...(parentCtx.data || {}) },
+        // Shared set so parallel workers record unresolved vars into one place.
+        unresolvedVars: parentCtx.unresolvedVars,
       };
 
       results[i] = await executeRequest(request, ctx, options.timeoutMs, options);

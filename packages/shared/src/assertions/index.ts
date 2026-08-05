@@ -533,14 +533,58 @@ export function evaluateStructuredAssertions(
 // ── Unified dispatch ───────────────────────────────────────
 
 /**
+ * Coerce user-friendly assertion shapes into a dispatchable Assertion:
+ *   - a bare string -> `{ expr: string }` (text format)
+ *   - Newman-style `{ type: "status" | "statusCode" | "status-code", expect | value, operator? }`
+ *     -> `{ expr: "status <op> value" }`
+ *   - Newman-style `{ type: "responseTime" | "response-time", expect | value, operator? }`
+ *     -> `{ expr: "duration <op> value" }`
+ * Anything else is returned unchanged (text `expr`, structured `type`, `schema`).
+ * Object-valued status expectations (`{ in: [...] }`, `{ not: n }`) are left
+ * for the structured evaluator, not mangled into a text expression.
+ */
+export function normalizeAssertion(input: unknown): Assertion {
+  if (typeof input === "string") return { expr: input };
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return {};
+  const a = input as Record<string, unknown>;
+  const type = typeof a.type === "string" ? a.type : undefined;
+  const value = a.expect ?? a.value;
+  const isScalar = typeof value === "number" || typeof value === "string";
+  const OP_SYMS: Record<string, string> = {
+    eq: "==",
+    neq: "!=",
+    gt: ">",
+    gte: ">=",
+    lt: "<",
+    lte: "<=",
+  };
+  // Only comparison operators are rewritten to text. An unknown operator (e.g.
+  // "regex" on a status) is left to the structured evaluator, which reports it
+  // as failing rather than silently changing it into an equality check.
+  const opRaw = a.operator === undefined ? undefined : String(a.operator);
+  const sym = opRaw === undefined ? undefined : OP_SYMS[opRaw];
+  if (isScalar && (type === "status" || type === "statusCode" || type === "status-code")) {
+    if (opRaw !== undefined && sym === undefined) return input as Assertion;
+    return { expr: `status ${sym ?? "=="} ${value}` };
+  }
+  if (isScalar && (type === "responseTime" || type === "response-time")) {
+    if (opRaw !== undefined && sym === undefined) return input as Assertion;
+    return { expr: `duration ${sym ?? "<"} ${value}` };
+  }
+  return input as Assertion;
+}
+
+/**
  * Auto-detect the format of an assertion and dispatch to the appropriate
- * evaluator. Text format takes precedence when `expr` is present.
+ * evaluator. Accepts strings and Newman-style shorthand via normalizeAssertion.
+ * Text format takes precedence when `expr` is present.
  */
 export function evaluateAssertion(
-  assertion: Assertion,
+  input: unknown,
   ctx: UnifiedEvalContext,
   options: TextEvaluateOptions = {},
 ): AssertionResult {
+  const assertion = normalizeAssertion(input);
   if (assertion.expr) {
     if (assertion.schema) {
       return evaluateSchemaAssertion(assertion.schema, ctx.body);
@@ -556,15 +600,19 @@ export function evaluateAssertion(
   return {
     name: assertion.name,
     passed: false,
-    error: "Assertion has no expression, type, or schema",
+    error:
+      `Unsupported assertion: expected a text expression (a string or { expr })` +
+      `, a structured { type }, or a { schema }` +
+      `${typeof input === "string" ? ` — got: "${input}"` : ""}`,
   };
 }
 
 /**
- * Evaluate a list of assertions of any supported format.
+ * Evaluate a list of assertions of any supported format. Entries may be
+ * strings or Newman-style shorthand — normalizeAssertion coerces them.
  */
 export function evaluateAssertions(
-  assertions: Assertion[],
+  assertions: unknown[],
   ctx: UnifiedEvalContext,
   options: TextEvaluateOptions = {},
 ): AssertionResult[] {
