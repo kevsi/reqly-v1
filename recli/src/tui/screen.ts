@@ -155,6 +155,18 @@ export class Tui {
   lastSummary = "";
   private timeoutMs: number;
   private allowLocalHosts: boolean;
+  /**
+   * Session context shared across single runs (Enter/r) so captures chain the
+   * way a sequential collection run does (List posts → Get first post). Rebuilt
+   * when the environment changes — never between two Enter runs.
+   *
+   * ponytail: script-set vars (pm.variables.set) survive across runAll runs —
+   * matches Postman's session model, but a long TUI session can accumulate
+   * stale script vars; switch env (e) for a clean slate.
+   */
+  private ctx: RunnerContext;
+  /** Set on exit so in-flight runs stop rendering after the screen is restored. */
+  private exited = false;
 
   private readonly sigintHandler = (): void => this.exit();
   private readonly sigtermHandler = (): void => this.exit();
@@ -166,6 +178,7 @@ export class Tui {
     this.allowLocalHosts = options.allowLocalHosts ?? false;
     this.requests = flattenRequests(bundle);
     this.filtered = [...this.requests];
+    this.ctx = this.makeCtx();
   }
 
   // ── lifecycle ──────────────────────────────────────────────
@@ -181,6 +194,8 @@ export class Tui {
   }
 
   private exit(): void {
+    if (this.exited) return;
+    this.exited = true;
     if (this.spinnerTimer) clearInterval(this.spinnerTimer);
     this.cleanupKeypress?.();
     process.removeListener("SIGINT", this.sigintHandler);
@@ -277,6 +292,11 @@ export class Tui {
       case "v":
         this.viewLastResult();
         break;
+      case "a":
+        // Documented in help/bar but was never bound — run the filtered set in
+        // sequence with the shared session context (chaining works).
+        void this.runAll();
+        return;
       case "e":
         this.mode = "env";
         break;
@@ -385,6 +405,8 @@ export class Tui {
         this.envIndex = Math.min(Math.max(0, count - 1), this.envIndex + 1);
         break;
       case "return":
+        // Environment switch resets the session context (fresh vars/cookies).
+        this.ctx = this.makeCtx();
         this.mode = "list";
         this.statusMessage = `Environment: ${this.env?.name ?? "none"}`;
         break;
@@ -425,12 +447,13 @@ export class Tui {
     this.statusMessage = "";
     this.lastSummary = "";
     this.render();
-    const result = await executeRequest(item, this.makeCtx(), this.timeoutMs, {
+    const result = await executeRequest(item, this.ctx, this.timeoutMs, {
       timeoutMs: this.timeoutMs,
       allowLocalHosts: this.allowLocalHosts,
     });
     this.results.set(item, result);
     this.running = null;
+    if (this.exited) return;
     // Keep the current tab across reruns/navigation so audits aren't interrupted.
     this.mode = "detail";
     this.render();
@@ -447,14 +470,21 @@ export class Tui {
   /** Run the current filtered selection (all requests when the filter is empty). */
   private async runAll(): Promise<void> {
     const runSet = this.filtered;
-    if (this.runningAll || runSet.length === 0) return;
+    // Guard against re-entry AND against a single Enter run in flight: two
+    // concurrent executeRequest calls on the shared ctx would interleave
+    // captures (vars/cookies mutated in parallel).
+    if (this.runningAll || this.running || runSet.length === 0) return;
     this.runningAll = true;
     this.runningCount = runSet.length;
     this.statusMessage = "";
     this.lastSummary = "";
     this.startSpinner();
-    const ctx = this.makeCtx();
+    // Shared session ctx: sequential runs chain (captures accumulate), matching
+    // a collection run. The env picker rebuilds it for a clean slate.
+    const ctx = this.ctx;
     const started = Date.now();
+    let executed = 0;
+    let passedCount = 0;
     try {
       for (const item of runSet) {
         this.running = item;
@@ -464,6 +494,8 @@ export class Tui {
           allowLocalHosts: this.allowLocalHosts,
         });
         this.results.set(item, result);
+        executed++;
+        if (result.passed) passedCount++;
       }
     } finally {
       // Even if a request throws, never leave the spinner running or the input frozen.
@@ -471,14 +503,14 @@ export class Tui {
       this.runningAll = false;
       this.stopSpinner();
     }
-    const passed = runSet.filter((i) => this.results.get(i)?.passed).length;
+    // Denominator = actually-executed requests (a throw mid-loop aborts early).
     const label =
       runSet.length < this.requests.length
         ? `${runSet.length} selected`
         : `${this.requests.length} requests`;
-    this.lastSummary = `${passed}/${runSet.length} passed (${label}) in ${((Date.now() - started) / 1000).toFixed(1)}s`;
+    this.lastSummary = `${passedCount}/${executed} passed (${label}) in ${((Date.now() - started) / 1000).toFixed(1)}s`;
     this.mode = "list";
-    this.render();
+    if (!this.exited) this.render();
   }
 
   private startSpinner(): void {
@@ -781,7 +813,7 @@ export class Tui {
       ["Space / i", "inspect request"],
       ["b / h / a", "result tabs (detail)"],
       ["v", "view last result"],
-      ["a", "run filtered"],
+      ["a", "run filtered (list)"],
       ["e", "environments"],
       ["/", "search"],
       ["Esc", "cancel / back"],

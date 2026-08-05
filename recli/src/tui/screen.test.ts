@@ -172,6 +172,34 @@ describe("Tui interactions (smoke, no network)", () => {
     expect(tui.envIndex).toBe(0);
   });
 
+  it("bind a (run filtered) — guarded against empty set and in-flight runs", () => {
+    const tui = new Tui(bundle) as unknown as {
+      mode: string;
+      runningAll: boolean;
+      filtered: RequestItem[];
+      running: RequestItem | null;
+      onKey(k: KeyInfo): void;
+    };
+    // "a" in list mode starts a run-all (network would run; guard on empty set is
+    // what we assert here by filtering everything out first).
+    tui.onKey(key("/"));
+    for (const ch of "zzzz") tui.onKey(key(ch));
+    tui.onKey(key("escape"));
+    expect(tui.filtered).toHaveLength(0);
+    tui.onKey(key("a"));
+    // Empty selection: run-all must not start.
+    expect(tui.runningAll).toBe(false);
+
+    // A single Enter run in flight (running set) must not let run-all start:
+    // two concurrent runs would interleave captures on the shared ctx.
+    tui.filtered = bundle.collections[0]!.requests as RequestItem[];
+    tui.onKey(key("/"));
+    tui.onKey(key("escape")); // clear the zzzz filter
+    tui.running = tui.filtered[0]!;
+    tui.onKey(key("a"));
+    expect(tui.runningAll).toBe(false);
+  });
+
   it("opens the inspect view with Space/i and navigates without running", () => {
     const tui = new Tui(bundle) as unknown as {
       cursor: number;
@@ -227,5 +255,23 @@ describe("Tui interactions (smoke, no network)", () => {
     expect(frame).toContain("Create user");
     expect(frame).toContain("↑↓ move");
     expect(frame).toContain("● dev");
+  });
+
+  it("keeps the session context across runs and rebuilds it on env switch", () => {
+    const tui = new Tui(bundle) as unknown as {
+      ctx: { vars: Map<string, string> };
+      onKey(k: KeyInfo): void;
+    };
+    // Session ctx is stable across sequential runs (chaining works):
+    // a capture stored in ctx.vars survives the next Enter/runAll.
+    const first = tui.ctx;
+    tui.onKey(key("e"));
+    tui.onKey(key("escape")); // cancel — must NOT rebuild ctx
+    expect(tui.ctx).toBe(first);
+    // Environment switch resets the ctx (fresh vars/cookies).
+    tui.onKey(key("e"));
+    tui.onKey(key("return"));
+    expect(tui.ctx).not.toBe(first);
+    expect(tui.ctx.vars.size).toBe(0);
   });
 });
