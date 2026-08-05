@@ -589,6 +589,110 @@ describe("scripting", () => {
         const sc = createScriptContext(makeCtx(), makeRequest());
         await executeScript('vars.set("ts", String(Date.now()))', sc, "pre");
       });
+
+      it("host-function constructor chains cannot reach the host realm (no RCE)", async () => {
+        // Regression: `parseInt.constructor('return process')()` used to execute
+        // in the HOST realm (the sandbox leaked the host Function constructor).
+        const ctx = makeCtx();
+        const sc = createScriptContext(ctx, makeRequest());
+        const payloads = [
+          'String(parseInt.constructor("return typeof process")() === "object")',
+          'String(console.log.constructor("return typeof process")() === "object")',
+          'String(env.get.constructor("return typeof process")() === "object")',
+          'String(pm.variables.get.constructor("return typeof process")() === "object")',
+          'String(JSON.parse.constructor("return typeof process")() === "object")',
+          'String(Math.constructor.constructor("return typeof process")() === "object")',
+        ];
+        for (const p of payloads) {
+          await executeScript(`vars.set("r", ${p})`, sc, "pre");
+          expect(ctx.vars.get("r")).toBe("false");
+        }
+      });
+
+      it("values returned into the sandbox are realm-safe (no .constructor ladder)", async () => {
+        const ctx = makeCtx();
+        const result = makeResult({ body: '{"token":"abc"}' });
+        const sc = createScriptContext(ctx, makeRequest(), result);
+        // Objects returned by host methods are proxied: .constructor is severed.
+        const blocked = [
+          'String(typeof response.json().constructor === "undefined")',
+          'String(typeof response.headers.constructor === "undefined")',
+        ];
+        for (const p of blocked) {
+          await executeScript(`vars.set("r", ${p})`, sc, "post");
+          expect(ctx.vars.get("r")).toBe("true");
+        }
+        // Primitive values resolve to the SANDBOX realm's own constructors,
+        // whose Function constructor still runs in the sandbox realm.
+        await executeScript(
+          'vars.set("r", String(response.json().token.constructor.constructor("return typeof process")() === "object"))',
+          sc,
+          "post",
+        );
+        expect(ctx.vars.get("r")).toBe("false");
+      });
+
+      it("blocks getter injection on host objects via defineProperty", async () => {
+        // Regression: the Proxy used to forward defineProperty to the host
+        // object, so a sandbox getter could later run with the HOST object as
+        // `this` (re-exposing host constructors when the runner/reporter read
+        // request.headers / responseHeaders).
+        const ctx = makeCtx();
+        const req = makeRequest({ headers: { "X-A": "1" } });
+        const sc = createScriptContext(ctx, req);
+        await executeScript(
+          `
+          try {
+            Object.defineProperty(request.headers, "evil", {
+              get() { pm.environment.set("pwned", String(this.constructor.constructor("return typeof process")())) }
+            })
+          } catch (e) {}
+        `,
+          sc,
+          "pre",
+        );
+        expect(Object.getOwnPropertyDescriptor(req.headers, "evil")).toBeUndefined();
+        expect(ctx.envVars.get("pwned")).toBeUndefined();
+      });
+
+      it("blocks constructor/__proto__ writes on host objects", async () => {
+        const ctx = makeCtx();
+        const req = makeRequest({ headers: { "X-A": "1" } });
+        const sc = createScriptContext(ctx, req);
+        await executeScript(
+          `
+          request.headers.__proto__ = { polluted: true }
+          request.headers.constructor = {} /* intentional misuse */
+        `,
+          sc,
+          "pre",
+        );
+        expect(Object.getPrototypeOf(req.headers)).toBe(Object.prototype);
+        expect((req.headers as Record<string, unknown>).constructor).toBe(Object);
+      });
+
+      it("pm.sendRequest rejection errors are sandbox-realm", async () => {
+        const ctx = makeCtx();
+        const sc = createScriptContext(ctx, makeRequest());
+        const outcome = await executeScript(
+          `
+          pm.test("leak check", async () => {
+            try {
+              await pm.sendRequest("http://127.0.0.1:7000/admin")
+              throw new Error("should have been blocked")
+            } catch (e) {
+              // e is a sandbox Error — its constructor chain must not reach
+              // the host realm (previously the host Error leaked here).
+              pm.expect(e.constructor.constructor("return typeof process")() === "object").to.be.false
+            }
+          })
+        `,
+          sc,
+          "pre",
+          { fetchFn: stubFetch() },
+        );
+        expect(outcome.tests[0].passed).toBe(true);
+      });
     });
   });
 });

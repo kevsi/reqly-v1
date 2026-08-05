@@ -193,6 +193,155 @@ export function createScriptContext(
   return { env, vars, request: requestAPI, response: responseAPI, __ctx: ctx };
 }
 
+// SECURITY: node:vm contexts are not sandboxes — values smuggled from the host
+// realm expose the host `Function` constructor through `.constructor`
+// (`parseInt.constructor('return process')()` runs in the HOST realm). This
+// bridge runs INSIDE the context (sandbox realm) and rewraps every host value
+// into sandbox-realm closures/proxies: host functions become closures whose
+// results are re-wrapped and whose errors are re-thrown as sandbox errors, and
+// host objects become live proxies whose reads are wrapped, whose writes
+// forward to the host, and whose `.constructor`/`__proto__` access is severed.
+// The bridge deletes the raw `__hostApi` handle once wrapped, so untrusted
+// scripts can never reach a host-realm object or function.
+const SANDBOX_BRIDGE = `
+(function () {
+  function bridgeError(e) {
+    var msg = e && typeof e === 'object' && typeof e.message === 'string' ? e.message : String(e);
+    var err = new Error(msg);
+    if (e && typeof e === 'object' && typeof e.name === 'string' && e.name && e.name !== 'Error') {
+      try { err.name = e.name; } catch (ignored) {}
+    }
+    return err;
+  }
+
+  function wrapValue(v) {
+    if (v === null || v === undefined) return v;
+    var t = typeof v;
+    if (t !== 'object' && t !== 'function') return v; // primitives are realm-safe
+    if (t === 'function') return wrapFn(v);
+    if (typeof v.then === 'function') {
+      // Promises cross as sandbox-realm promises resolving to wrapped values;
+      // rejections are re-thrown as sandbox errors (never the host error).
+      var p = Promise.resolve(v).then(
+        function (r) { return wrapValue(r); },
+        function (e) { throw bridgeError(e); },
+      );
+      // Callback-style pm.sendRequest returns a promise the user ignores; attach
+      // a no-op handler so a failing request cannot crash the host process as an
+      // unhandled rejection (users who await it still get the rejection).
+      p.catch(function () {});
+      return p;
+    }
+    if (Array.isArray(v)) {
+      var arr = [];
+      for (var i = 0; i < v.length; i++) arr.push(wrapValue(v[i]));
+      return arr;
+    }
+    return wrapObject(v);
+  }
+
+  function wrapFn(v) {
+    return function () {
+      var args = Array.prototype.slice.call(arguments).map(function (a) {
+        // Callbacks handed to the host are later invoked with HOST values;
+        // wrap them so those values are sanitized before user code sees them.
+        return typeof a === 'function' ? wrapArgForHost(a) : a;
+      });
+      try {
+        // Host methods are invoked with this = null: every host API method
+        // closes over its state and must never rely on this.
+        return wrapValue(v.apply(null, args));
+      } catch (e) {
+        throw bridgeError(e);
+      }
+    };
+  }
+
+  function wrapArgForHost(a) {
+    return function () {
+      var args = Array.prototype.map.call(arguments, function (x) { return wrapValue(x); });
+      return a.apply(null, args);
+    };
+  }
+
+  function wrapObject(v) {
+    return new Proxy(v, {
+      get: function (t, key) {
+        if (key === 'constructor' || key === '__proto__') return undefined;
+        var desc;
+        try { desc = Object.getOwnPropertyDescriptor(t, key); } catch (e) { desc = null; }
+        if (desc && desc.get) {
+          try { return wrapValue(desc.get.call(t)); } catch (e) { throw bridgeError(e); }
+        }
+        var raw;
+        try { raw = t[key]; } catch (e) { return undefined; }
+        return wrapValue(raw);
+      },
+      set: function (t, key, val) {
+        if (key === 'constructor' || key === '__proto__') return false;
+        try { t[key] = val; } catch (e) { return false; }
+        return true;
+      },
+      has: function (t, key) {
+        if (key === 'constructor' || key === '__proto__') return false;
+        return key in t;
+      },
+      ownKeys: function (t) {
+        var names = Object.getOwnPropertyNames(t);
+        var out = [];
+        for (var i = 0; i < names.length; i++) out.push(names[i]);
+        return out;
+      },
+      getOwnPropertyDescriptor: function (t, key) {
+        if (key === 'constructor' || key === '__proto__') return undefined;
+        var d = Object.getOwnPropertyDescriptor(t, key);
+        if (!d) return undefined;
+        var out = {};
+        if ('value' in d) { out.value = wrapValue(d.value); out.writable = d.writable; }
+        if (d.get) {
+          out.get = function () {
+            try { return wrapValue(d.get.call(t)); } catch (e) { throw bridgeError(e); }
+          };
+        }
+        if (d.set) {
+          out.set = function (val) {
+            try { d.set.call(t, val); } catch (e) { throw bridgeError(e); }
+          };
+        }
+        out.enumerable = d.enumerable;
+        out.configurable = d.configurable;
+        return out;
+      },
+      deleteProperty: function (t, key) {
+        if (key === 'constructor' || key === '__proto__') return false;
+        try { delete t[key]; return true; } catch (e) { return false; }
+      },
+      // Sandbox-defined getters/setters on a host object would later run with
+      // the HOST object as this (re-exposing host constructors): reject them.
+      defineProperty: function (t, key, desc) {
+        if (key === 'constructor' || key === '__proto__') return false;
+        if (desc && (typeof desc.get === 'function' || typeof desc.set === 'function')) {
+          return false;
+        }
+        try { Object.defineProperty(t, key, desc); return true; } catch (e) { return false; }
+      },
+      getPrototypeOf: function () { return null; },
+      setPrototypeOf: function () { return false; },
+      isExtensible: function () { return true; },
+      preventExtensions: function () { return false; },
+    });
+  }
+
+  var api = this.__hostApi;
+  for (var k in api) {
+    if (Object.prototype.hasOwnProperty.call(api, k)) {
+      try { this[k] = wrapValue(api[k]); } catch (e) { /* keep going */ }
+    }
+  }
+  delete this.__hostApi;
+}).call(this);
+`;
+
 export async function executeScript(
   scriptSource: string,
   scriptContext: ScriptContext,
@@ -206,60 +355,10 @@ export async function executeScript(
   const allowLocalHosts = options.allowLocalHosts;
   const ctx = scriptContext.__ctx;
 
-  // SECURITY: Create context with null prototype to prevent constructor-chain escapes.
-  // Only safe primitives and whitelisted APIs are passed. All objects that have
-  // a .constructor property (which can lead to the Function constructor) are
-  // wrapped or replaced with safe alternatives.
   const sandbox = vm.createContext(Object.create(null));
 
-  sandbox.env = scriptContext.env;
-  sandbox.environment = scriptContext.env; // legacy sandbox v1
-  sandbox.globals = scriptContext.env; // legacy sandbox v1
-  sandbox.vars = scriptContext.vars;
-  sandbox.request = scriptContext.request;
-  sandbox.console = createSandboxConsole();
-  sandbox.expect = createExpectFunction();
-
-  // Wrap JSON to strip constructor access while keeping parse/stringify
-  sandbox.JSON = {
-    parse: (text: string) => JSON.parse(text),
-    stringify: (value: unknown, space?: string | number) => JSON.stringify(value, null, space),
-  };
-
-  // Wrap Math to strip constructor access (Math.constructor === Object)
-  sandbox.Math = {
-    abs: Math.abs,
-    ceil: Math.ceil,
-    floor: Math.floor,
-    round: Math.round,
-    max: Math.max,
-    min: Math.min,
-    pow: Math.pow,
-    sqrt: Math.sqrt,
-    random: Math.random,
-    sin: Math.sin,
-    cos: Math.cos,
-    tan: Math.tan,
-    PI: Math.PI,
-    E: Math.E,
-  };
-
-  // Date is a constructor, so we expose only the safe static parts
-  sandbox.Date = {
-    now: Date.now,
-    parse: Date.parse,
-    UTC: Date.UTC,
-  };
-
-  // Plain functions — calling .constructor on them gives Function, but since
-  // Function("...")() runs in the sandbox (where dangerous globals are absent),
-  // this is acceptable. Safer than passing constructor-bearing objects.
-  sandbox.parseInt = parseInt;
-  sandbox.parseFloat = parseFloat;
-  sandbox.isNaN = isNaN;
-  sandbox.isFinite = isFinite;
-
-  // Explicitly shadow dangerous globals so they're undefined
+  // Explicitly shadow dangerous globals so they're undefined in the sandbox
+  // realm. Plain `undefined` assignments — primitives, so realm-safe.
   sandbox.setTimeout = undefined;
   sandbox.setInterval = undefined;
   sandbox.clearTimeout = undefined;
@@ -270,101 +369,126 @@ export async function executeScript(
   sandbox.globalThis = undefined;
   sandbox.fetch = undefined;
 
-  if (scriptType === "post" && scriptContext.response) {
-    sandbox.response = scriptContext.response;
-    // Legacy Postman sandbox v1 globals — used by pre-2.x collections and many
-    // real-world exports (e.g. Xero 2019) alongside tests[]/responseCode.
-    sandbox.responseBody = scriptContext.response.body ?? "";
-    sandbox.responseHeaders = scriptContext.response.headers;
-    sandbox.responseTime = scriptContext.response.durationMs;
-  }
-
   // ── Postman sandbox API ──────────────────────────────────────────────────
   const testResults: PmTestResult[] = [];
   const pendingTests: Promise<PmTestResult>[] = [];
   const pendingRequests: Promise<unknown>[] = [];
-  sandbox.pm = buildPmApi(
-    scriptContext,
-    testResults,
-    pendingTests,
-    pendingRequests,
-    fetchFn,
-    timeoutMs,
-    allowLocalHosts,
-  );
-
-  // Legacy `postman.*` helpers (sandbox v1). setNextRequest is Postman flow
-  // control we do not support — fail loudly instead of silently diverging.
-  sandbox.postman = {
-    // Real collections pass `undefined` values (e.g. a missing JSON field) —
-    // coerce so the var never stores an undefined and stays interpolable.
-    setEnvironmentVariable: (k: string, v?: string) => scriptContext.env.set(k, v ?? ""),
-    getEnvironmentVariable: (k: string) => scriptContext.env.get(k),
-    clearEnvironmentVariable: (k: string) => scriptContext.env.unset(k),
-    setGlobalVariable: (k: string, v?: string) => scriptContext.env.set(k, v ?? ""),
-    getGlobalVariable: (k: string) => scriptContext.env.get(k),
-    clearGlobalVariable: (k: string) => scriptContext.env.unset(k),
-    setNextRequest: () => {
-      throw new Error("postman.setNextRequest is not supported by recli");
-    },
-    setNextRequestName: () => {
-      throw new Error("postman.setNextRequestName is not supported by recli");
-    },
-  };
 
   // Legacy sandbox v1: tests["name"] = boolean / responseCode.code
   const tests: Record<string, unknown> = Object.create(null);
-  sandbox.tests = tests;
-  sandbox.responseCode = scriptContext.response
-    ? {
-        get code() {
-          return scriptContext.response!.status;
-        },
-        get name() {
-          return scriptContext.response!.statusText;
-        },
-      }
-    : {
-        get code() {
-          return 0;
-        },
-        get name() {
-          return "N/A";
-        },
-      };
 
-  // Appended await drains pm.test() callbacks (incl. awaited pm.sendRequest)
-  // before the script resolves, so results are complete when we read them.
-  // In-flight pm.sendRequest() calls are awaited too — Postman waits for them
-  // before proceeding, and their callbacks may set env vars the main request
-  // interpolates (the OAuth2 token dance is the canonical case). Rejections are
-  // swallowed here: the callback form already received the error.
-  sandbox.__recliFlushTests = async (): Promise<void> => {
-    for (;;) {
-      const batch = pendingTests.splice(0, pendingTests.length);
-      const reqBatch = pendingRequests.splice(0, pendingRequests.length);
-      if (batch.length === 0 && reqBatch.length === 0) return;
-      // Rejections are surfaced (not silently eaten): the callback form already
-      // received the error, and awaited-in-test failures are recorded by the
-      // test itself — a callback-less fire-and-forget failure gets a warning so
-      // a broken token fetch cannot pass unnoticed.
-      if (reqBatch.length) {
-        await Promise.all(
-          reqBatch.map((p) =>
-            p.catch((e: unknown) => {
-              console.warn(
-                `[script] pm.sendRequest failed: ${e instanceof Error ? e.message : String(e)}`,
-              );
-            }),
-          ),
-        );
+  // Every value the scripts may touch goes into hostApi — NOT directly onto the
+  // sandbox. SANDBOX_BRIDGE below rewraps each entry into a sandbox-realm
+  // closure/proxy and removes __hostApi, so no host-realm object or function
+  // (whose .constructor would expose the host `Function` constructor) is ever
+  // reachable by the untrusted script.
+  const hostApi: Record<string, unknown> = {
+    env: scriptContext.env,
+    environment: scriptContext.env, // legacy sandbox v1
+    globals: scriptContext.env, // legacy sandbox v1
+    vars: scriptContext.vars,
+    request: scriptContext.request,
+    console: createSandboxConsole(),
+    expect: createExpectFunction(),
+    tests,
+    pm: buildPmApi(
+      scriptContext,
+      testResults,
+      pendingTests,
+      pendingRequests,
+      fetchFn,
+      timeoutMs,
+      allowLocalHosts,
+    ),
+    // Legacy `postman.*` helpers (sandbox v1). setNextRequest is Postman flow
+    // control we do not support — fail loudly instead of silently diverging.
+    postman: {
+      // Real collections pass `undefined` values (e.g. a missing JSON field) —
+      // coerce so the var never stores an undefined and stays interpolable.
+      setEnvironmentVariable: (k: string, v?: string) => scriptContext.env.set(k, v ?? ""),
+      getEnvironmentVariable: (k: string) => scriptContext.env.get(k),
+      clearEnvironmentVariable: (k: string) => scriptContext.env.unset(k),
+      setGlobalVariable: (k: string, v?: string) => scriptContext.env.set(k, v ?? ""),
+      getGlobalVariable: (k: string) => scriptContext.env.get(k),
+      clearGlobalVariable: (k: string) => scriptContext.env.unset(k),
+      setNextRequest: () => {
+        throw new Error("postman.setNextRequest is not supported by recli");
+      },
+      setNextRequestName: () => {
+        throw new Error("postman.setNextRequestName is not supported by recli");
+      },
+    },
+    responseCode: scriptContext.response
+      ? {
+          get code() {
+            return scriptContext.response!.status;
+          },
+          get name() {
+            return scriptContext.response!.statusText;
+          },
+        }
+      : {
+          get code() {
+            return 0;
+          },
+          get name() {
+            return "N/A";
+          },
+        },
+    // Appended await drains pm.test() callbacks (incl. awaited pm.sendRequest)
+    // before the script resolves, so results are complete when we read them.
+    // In-flight pm.sendRequest() calls are awaited too — Postman waits for them
+    // before proceeding, and their callbacks may set env vars the main request
+    // interpolates (the OAuth2 token dance is the canonical case). Rejections
+    // are surfaced (not silently eaten): the callback form already received the
+    // error, and awaited-in-test failures are recorded by the test itself — a
+    // callback-less fire-and-forget failure gets a warning so a broken token
+    // fetch cannot pass unnoticed.
+    __recliFlushTests: async (): Promise<void> => {
+      for (;;) {
+        const batch = pendingTests.splice(0, pendingTests.length);
+        const reqBatch = pendingRequests.splice(0, pendingRequests.length);
+        if (batch.length === 0 && reqBatch.length === 0) return;
+        if (reqBatch.length) {
+          await Promise.all(
+            reqBatch.map((p) =>
+              p.catch((e: unknown) => {
+                console.warn(
+                  `[script] pm.sendRequest failed: ${e instanceof Error ? e.message : String(e)}`,
+                );
+              }),
+            ),
+          );
+        }
+        // Collect results in registration order — a sync throw in one pm.test
+        // must not reorder it ahead of an earlier still-awaiting test.
+        const results = await Promise.all(batch);
+        for (const r of results) testResults.push(r);
       }
-      // Collect results in registration order — a sync throw in one pm.test
-      // must not reorder it ahead of an earlier still-awaiting test.
-      const results = await Promise.all(batch);
-      for (const r of results) testResults.push(r);
-    }
+    },
   };
+
+  if (scriptType === "post" && scriptContext.response) {
+    hostApi.response = scriptContext.response;
+    // Legacy Postman sandbox v1 globals — used by pre-2.x collections and many
+    // real-world exports (e.g. Xero 2019) alongside tests[]/responseCode.
+    hostApi.responseBody = scriptContext.response.body ?? "";
+    hostApi.responseHeaders = scriptContext.response.headers;
+    hostApi.responseTime = scriptContext.response.durationMs;
+  }
+
+  // SECURITY: node:vm is not a sandbox by itself. Any host-realm function or
+  // object handed to the context leaks the host `Function` constructor through
+  // `.constructor` — `parseInt.constructor('return process')()` executes in the
+  // HOST realm (this was an RCE: a downloaded collection could read the user's
+  // files/process). So nothing host-side is injected directly: all host values
+  // sit under __hostApi, and SANDBOX_BRIDGE (running INSIDE the context, i.e.
+  // the sandbox realm) rewraps each one into sandbox-realm closures/proxies
+  // then deletes __hostApi. The context's own built-ins (Object, Function,
+  // JSON, Math, Date, …) live in the sandbox realm and are safe to use.
+  sandbox.__hostApi = hostApi;
+  vm.runInContext(SANDBOX_BRIDGE, sandbox);
+  delete sandbox.__hostApi;
 
   // try/finally guarantees the flush runs even if the user script returns early
   // (a bare `return` would otherwise skip the appended drain line).
@@ -408,12 +532,22 @@ export async function executeScript(
   return { tests: testResults };
 }
 
+/** Message of an error that may originate in the sandbox realm (cross-realm
+ * `instanceof Error` is false) — duck-type `.message` instead. */
+function messageOf(e: unknown): string {
+  return e && typeof e === "object" && typeof (e as { message?: unknown }).message === "string"
+    ? (e as { message: string }).message
+    : String(e);
+}
+
 function wrapError(e: unknown, scriptType: "pre" | "post", scriptSource: string): ScriptError {
-  if (e instanceof AssertionError) {
-    return new ScriptError(`Assertion failed: ${e.message}`, scriptType, scriptSource);
+  const isAssertion =
+    e instanceof AssertionError ||
+    (e !== null && typeof e === "object" && (e as { name?: unknown }).name === "AssertionError");
+  if (isAssertion) {
+    return new ScriptError(`Assertion failed: ${messageOf(e)}`, scriptType, scriptSource);
   }
-  const msg = e instanceof Error ? e.message : String(e);
-  return new ScriptError(msg, scriptType, scriptSource);
+  return new ScriptError(messageOf(e), scriptType, scriptSource);
 }
 
 function createSandboxConsole() {
@@ -1048,8 +1182,7 @@ function buildPmApi(
             await fn();
             return { name, passed: true };
           } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            return { name, passed: false, error: msg };
+            return { name, passed: false, error: messageOf(e) };
           }
         })(),
       );
