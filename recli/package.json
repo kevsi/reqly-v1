@@ -10,6 +10,27 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kevsi/apiPlayground.git"
+  },
+  "homepage": "https://github.com/kevsi/apiPlayground/tree/main/recli",
+  "keywords": [
+    "api",
+    "testing",
+    "cli",
+    "tui",
+    "postman",
+    "newman",
+    "collection",
+    "mcp",
+    "openapi",
+    "assertions",
+    "graphql"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",

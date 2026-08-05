@@ -1,0 +1,52 @@
+name: recli CI
+
+on:
+  push:
+    paths:
+      - "recli/**"
+      - "packages/shared/**"
+  pull_request:
+    paths:
+      - "recli/**"
+      - "packages/shared/**"
+
+jobs:
+  test:
+    name: typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Secret scan (recli + shared)
+        run: |
+          FILES=$(git ls-files recli packages/shared | tr '\n' ' ')
+          node scripts/check-secrets.mjs $FILES
+
+      - name: Build @reqly/shared (recli depends on its dist)
+        run: pnpm --dir packages/shared build
+
+      - name: Typecheck recli
+        run: pnpm --dir recli exec tsc --noEmit
+
+      - name: Test recli (260 unit + integration tests)
+        run: pnpm --dir recli test
+
+      - name: Build recli
+        run: pnpm --dir recli build
