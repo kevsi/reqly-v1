@@ -44,6 +44,11 @@ export interface ResolvedOpts {
   snapshot?: boolean;
   updateSnapshots?: boolean;
   dotenv?: string;
+  allowLocalHosts?: boolean;
+  bail?: boolean;
+  retries?: number;
+  retryOn?: string;
+  retryDelay?: number;
 }
 
 export function toCurl(req: {
@@ -86,6 +91,11 @@ export function resolveOpts(prog: Command): ResolvedOpts {
     // Commander camelCase: --update-snapshots becomes updateSnapshots in opts
     updateSnapshots: !!(cli.updateSnapshots as boolean) || !!cfg.updateSnapshots,
     dotenv: (cli.dotenv as string) || cfg.dotenv,
+    allowLocalHosts: !!cli.allowLocalHosts || !!cfg.allowLocalHosts,
+    bail: !!cli.bail || !!cfg.bail,
+    retries: parseInt((cli.retries as string) || String(cfg.retries || "0"), 10),
+    retryOn: (cli.retryOn as string) || cfg.retryOn,
+    retryDelay: parseInt((cli.retryDelay as string) || String(cfg.retryDelay || "300"), 10),
   };
 }
 

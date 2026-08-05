@@ -55,6 +55,8 @@ import {
   handleAnalyzeProjectRoutes,
   handleGraphQlExecute,
 } from "./handlers/import-export.js";
+import { handleGenerateTests } from "./handlers/generate-tests.js";
+import { handleOpenApiSync } from "./handlers/import-export.js";
 
 export type { Tool } from "./tool-definitions.js";
 export { listTools } from "./tool-definitions.js";
@@ -160,6 +162,10 @@ export function createToolHandler(
         return await handleAnalyzeProjectRoutes(store, args);
       case "graphql_execute":
         return await handleGraphQlExecute(args, options);
+      case "generate_tests":
+        return handleGenerateTests(store, args);
+      case "openapi_sync":
+        return await handleOpenApiSync(store, args);
 
       default:
         return {

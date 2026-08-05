@@ -79,6 +79,16 @@ async function loadAndRun(
     snapshot: opts.snapshot,
     updateSnapshots: opts.updateSnapshots,
     dotenv: opts.dotenv,
+    allowLocalHosts: opts.allowLocalHosts,
+    bail: opts.bail,
+    retries: opts.retries,
+    retryOnStatus: opts.retryOn
+      ? opts.retryOn
+          .split(",")
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => !isNaN(n))
+      : undefined,
+    retryDelayMs: opts.retryDelay,
   });
 }
 
@@ -98,5 +108,15 @@ async function loadAndRunWorkspace(files: string[], opts: ResolvedOpts): Promise
     snapshot: opts.snapshot,
     updateSnapshots: opts.updateSnapshots,
     dotenv: opts.dotenv,
+    allowLocalHosts: opts.allowLocalHosts,
+    bail: opts.bail,
+    retries: opts.retries,
+    retryOnStatus: opts.retryOn
+      ? opts.retryOn
+          .split(",")
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => !isNaN(n))
+      : undefined,
+    retryDelayMs: opts.retryDelay,
   });
 }

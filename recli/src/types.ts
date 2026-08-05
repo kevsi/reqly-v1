@@ -4,6 +4,8 @@
 
 import type {
   HttpMethod,
+  BodyType,
+  AuthType,
   EnvironmentVariable,
   Environment,
   QueryParam,
@@ -19,6 +21,8 @@ import type {
 
 export type {
   HttpMethod,
+  BodyType,
+  AuthType,
   EnvironmentVariable,
   Environment,
   QueryParam,
@@ -99,6 +103,8 @@ export interface RecliConfig {
   snapshot?: boolean;
   updateSnapshots?: boolean;
   dotenv?: string;
+  /** Allow pm.sendRequest in scripts to reach localhost/private networks. */
+  allowLocalHosts?: boolean;
   bail?: boolean;
   retries?: number;
   /** Comma-separated status codes, e.g. "429,503,504". */

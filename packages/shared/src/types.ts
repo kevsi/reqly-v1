@@ -153,6 +153,8 @@ export interface ExportBundle {
   exportedAt?: string;
   collections: Collection[];
   environments?: Environment[];
+  /** Always-on variables (Postman collection variables) — applied to every request. */
+  variables?: EnvironmentVariable[];
   variableMappings?: Array<{
     id?: string;
     name: string;

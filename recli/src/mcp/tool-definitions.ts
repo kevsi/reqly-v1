@@ -47,8 +47,14 @@ const TOOLS: Tool[] = [
       type: "object",
       properties: {
         request_id: { type: "string", description: "The ID of the request to run" },
-        timeout_ms: { type: "number", description: "Request timeout in milliseconds (default: 30000)" },
-        env_name: { type: "string", description: "Optional environment name for variable interpolation" },
+        timeout_ms: {
+          type: "number",
+          description: "Request timeout in milliseconds (default: 30000)",
+        },
+        env_name: {
+          type: "string",
+          description: "Optional environment name for variable interpolation",
+        },
       },
       required: ["request_id"],
     },
@@ -61,7 +67,11 @@ const TOOLS: Tool[] = [
       properties: {
         name: { type: "string", description: "Name of the collection" },
         description: { type: "string", description: "Optional description" },
-        color: { type: "string", description: "Optional color (slate, red, orange, amber, emerald, blue, indigo, violet, pink)" },
+        color: {
+          type: "string",
+          description:
+            "Optional color (slate, red, orange, amber, emerald, blue, indigo, violet, pink)",
+        },
         icon: { type: "string", description: "Optional icon name" },
       },
       required: ["name"],
@@ -73,16 +83,31 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        collection_id: { type: "string", description: "The ID of the collection to add the request to" },
+        collection_id: {
+          type: "string",
+          description: "The ID of the collection to add the request to",
+        },
         name: { type: "string", description: "Name of the request" },
-        method: { type: "string", description: "HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, GRAPHQL)" },
+        method: {
+          type: "string",
+          description: "HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, GRAPHQL)",
+        },
         url: { type: "string", description: "Request URL" },
         headers: { type: "object", description: "Optional headers object" },
         body: { type: "string", description: "Optional request body" },
-        body_type: { type: "string", description: "Optional body type: json, form-data, x-www-form, raw, binary" },
-        auth_type: { type: "string", description: "Optional auth type: none, bearer, basic, api-key, oauth2" },
+        body_type: {
+          type: "string",
+          description: "Optional body type: json, form-data, x-www-form, raw, binary",
+        },
+        auth_type: {
+          type: "string",
+          description: "Optional auth type: none, bearer, basic, api-key, oauth2",
+        },
         auth_token: { type: "string", description: "Optional auth token" },
-        query_params: { type: "array", description: "Optional query parameters array of {key, value}" },
+        query_params: {
+          type: "array",
+          description: "Optional query parameters array of {key, value}",
+        },
       },
       required: ["collection_id", "name", "method", "url"],
     },
@@ -138,7 +163,9 @@ const TOOLS: Tool[] = [
     description: "Delete a collection and all its requests",
     inputSchema: {
       type: "object",
-      properties: { collection_id: { type: "string", description: "The ID of the collection to delete" } },
+      properties: {
+        collection_id: { type: "string", description: "The ID of the collection to delete" },
+      },
       required: ["collection_id"],
     },
   },
@@ -147,7 +174,9 @@ const TOOLS: Tool[] = [
     description: "Duplicate a collection with all its requests and folders",
     inputSchema: {
       type: "object",
-      properties: { collection_id: { type: "string", description: "The ID of the collection to duplicate" } },
+      properties: {
+        collection_id: { type: "string", description: "The ID of the collection to duplicate" },
+      },
       required: ["collection_id"],
     },
   },
@@ -180,7 +209,9 @@ const TOOLS: Tool[] = [
     description: "Delete a request by ID",
     inputSchema: {
       type: "object",
-      properties: { request_id: { type: "string", description: "The ID of the request to delete" } },
+      properties: {
+        request_id: { type: "string", description: "The ID of the request to delete" },
+      },
       required: ["request_id"],
     },
   },
@@ -191,7 +222,10 @@ const TOOLS: Tool[] = [
       type: "object",
       properties: {
         request_id: { type: "string", description: "The ID of the request to duplicate" },
-        target_collection_id: { type: "string", description: "Optional target collection ID (defaults to same collection)" },
+        target_collection_id: {
+          type: "string",
+          description: "Optional target collection ID (defaults to same collection)",
+        },
       },
       required: ["request_id"],
     },
@@ -215,7 +249,11 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        request_ids: { type: "array", description: "Array of request IDs to run", items: { type: "string" } },
+        request_ids: {
+          type: "array",
+          description: "Array of request IDs to run",
+          items: { type: "string" },
+        },
         timeout_ms: { type: "number", description: "Per-request timeout in milliseconds" },
         env_name: { type: "string", description: "Environment name for variable interpolation" },
       },
@@ -278,7 +316,11 @@ const TOOLS: Tool[] = [
         env_id: { type: "string", description: "The environment ID" },
         name: { type: "string", description: "New name" },
         color: { type: "string", description: "New color" },
-        variables: { type: "array", description: "Array of {key, value, enabled} objects", items: { type: "object" } },
+        variables: {
+          type: "array",
+          description: "Array of {key, value, enabled} objects",
+          items: { type: "object" },
+        },
       },
       required: ["env_id"],
     },
@@ -316,7 +358,9 @@ const TOOLS: Tool[] = [
     description: "Import collections and requests from a JSON bundle",
     inputSchema: {
       type: "object",
-      properties: { bundle_json: { type: "string", description: "JSON string of the export bundle" } },
+      properties: {
+        bundle_json: { type: "string", description: "JSON string of the export bundle" },
+      },
       required: ["bundle_json"],
     },
   },
@@ -363,7 +407,10 @@ const TOOLS: Tool[] = [
       properties: {
         request_id: { type: "string", description: "The request ID to move" },
         target_collection_id: { type: "string", description: "Target collection ID" },
-        target_folder_id: { type: "string", description: "Optional target folder ID (null for root)" },
+        target_folder_id: {
+          type: "string",
+          description: "Optional target folder ID (null for root)",
+        },
       },
       required: ["request_id", "target_collection_id"],
     },
@@ -375,7 +422,10 @@ const TOOLS: Tool[] = [
       type: "object",
       properties: {
         description: { type: "string", description: "Plain-text description of the request" },
-        collection_id: { type: "string", description: "Optional collection ID to save the generated request" },
+        collection_id: {
+          type: "string",
+          description: "Optional collection ID to save the generated request",
+        },
         name: { type: "string", description: "Optional override name for the generated request" },
       },
       required: ["description"],
@@ -400,12 +450,16 @@ const TOOLS: Tool[] = [
   },
   {
     name: "analyze_project_routes",
-    description: "Analyze a local project folder and return detected HTTP routes (desktop mode only)",
+    description:
+      "Analyze a local project folder and return detected HTTP routes (desktop mode only)",
     inputSchema: {
       type: "object",
       properties: {
         folder_path: { type: "string", description: "Absolute path to the project folder" },
-        save_collection_id: { type: "string", description: "Optional collection ID to save generated requests" },
+        save_collection_id: {
+          type: "string",
+          description: "Optional collection ID to save generated requests",
+        },
       },
       required: ["folder_path"],
     },
@@ -437,19 +491,25 @@ const TOOLS: Tool[] = [
   },
   {
     name: "reorder_requests",
-    description: "Reorder requests inside a collection by providing the full ordered list of request IDs",
+    description:
+      "Reorder requests inside a collection by providing the full ordered list of request IDs",
     inputSchema: {
       type: "object",
       properties: {
         collection_id: { type: "string", description: "The collection ID" },
-        ordered_request_ids: { type: "array", description: "Array of request IDs in the desired order", items: { type: "string" } },
+        ordered_request_ids: {
+          type: "array",
+          description: "Array of request IDs in the desired order",
+          items: { type: "string" },
+        },
       },
       required: ["collection_id", "ordered_request_ids"],
     },
   },
   {
     name: "run_collection_with_assertions",
-    description: "Run all requests in a collection sequentially, evaluate assertions, and return a test report",
+    description:
+      "Run all requests in a collection sequentially, evaluate assertions, and return a test report",
     inputSchema: {
       type: "object",
       properties: {
@@ -489,6 +549,54 @@ const TOOLS: Tool[] = [
       properties: {
         collection_id: { type: "string", description: "Optional collection ID filter" },
         limit: { type: "number", description: "Maximum number of runs to return" },
+      },
+    },
+  },
+  {
+    name: "generate_tests",
+    description:
+      "Generate edge-case test requests from an OpenAPI spec (auth missing, invalid payloads, wrong types, 4xx scenarios)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        spec: { type: "string", description: "OpenAPI 3 JSON or YAML spec content" },
+        base_url: {
+          type: "string",
+          description: "Optional base URL override (defaults to spec's servers[0])",
+        },
+        save_collection_id: {
+          type: "string",
+          description: "Optional collection ID to save the generated tests into",
+        },
+      },
+      required: ["spec"],
+    },
+  },
+  {
+    name: "openapi_sync",
+    description:
+      "Fetch an OpenAPI spec from a live server URL (or use provided content), import as a collection, optionally diff against a baseline spec",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: {
+          type: "string",
+          description:
+            "URL to fetch the OpenAPI spec from (e.g. http://localhost:4000/openapi.json)",
+        },
+        spec_content: {
+          type: "string",
+          description: "Raw OpenAPI JSON/YAML content (alternative to url)",
+        },
+        save_collection_id: {
+          type: "string",
+          description: "Optional collection ID to save the imported requests",
+        },
+        diff_spec: {
+          type: "string",
+          description:
+            "Optional baseline OpenAPI spec to diff against (shows added/removed/changed endpoints)",
+        },
       },
     },
   },

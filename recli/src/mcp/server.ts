@@ -44,6 +44,11 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
 
   function persistBundle(): void {
     if (!bundlePath) return;
+    // ponytail: ensureIds() injects col-/req-/env- ids into the in-memory copy
+    // on load, so the first mutation rewrites the user's source file WITH those
+    // generated ids. Intended persistence, but a human editing demo.json
+    // afterwards will see ids appear — known ceiling until bundles ship ids by
+    // default.
     const data = store.serializeBundle();
     if (!data) return;
     try {
@@ -66,7 +71,8 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     const collections = store.getCollections();
-    const resources: Array<{ uri: string; name: string; description?: string; mimeType: string }> = [];
+    const resources: Array<{ uri: string; name: string; description?: string; mimeType: string }> =
+      [];
     for (const col of collections) {
       resources.push({
         uri: `reqly://collections/${col.id}`,
@@ -92,9 +98,31 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
       const colId = uri.replace("reqly://collections/", "");
       const col = store.getCollection(colId);
       if (!col) {
-        return { contents: [{ uri, mimeType: "text/plain", text: `Collection not found: ${colId}` }] };
+        return {
+          contents: [{ uri, mimeType: "text/plain", text: `Collection not found: ${colId}` }],
+        };
       }
-      return { contents: [{ uri, mimeType: "application/json", text: JSON.stringify({ id: col.id, name: col.name, description: col.description, color: col.color, icon: col.icon, request_count: col.requests.length, folder_count: col.folders?.length ?? 0 }, null, 2) }] };
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(
+              {
+                id: col.id,
+                name: col.name,
+                description: col.description,
+                color: col.color,
+                icon: col.icon,
+                request_count: col.requests.length,
+                folder_count: col.folders?.length ?? 0,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
     }
     if (uri.startsWith("reqly://requests/")) {
       const reqId = uri.replace("reqly://requests/", "");
@@ -102,7 +130,26 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
       if (!found) {
         return { contents: [{ uri, mimeType: "text/plain", text: `Request not found: ${reqId}` }] };
       }
-      return { contents: [{ uri, mimeType: "application/json", text: JSON.stringify({ id: found.request.id, name: found.request.name, method: found.request.method, url: found.request.url, collection_id: found.collection.id, collection_name: found.collection.name }, null, 2) }] };
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(
+              {
+                id: found.request.id,
+                name: found.request.name,
+                method: found.request.method,
+                url: found.request.url,
+                collection_id: found.collection.id,
+                collection_name: found.collection.name,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
     }
     return { contents: [{ uri, mimeType: "text/plain", text: `Unknown resource: ${uri}` }] };
   });
@@ -135,7 +182,11 @@ function startStdioTransport(server: Server): Promise<void> {
   });
 }
 
-async function startHTTPTransport(server: Server, port: number, corsOrigins: string[]): Promise<void> {
+async function startHTTPTransport(
+  server: Server,
+  port: number,
+  corsOrigins: string[],
+): Promise<void> {
   const mcpTransport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => crypto.randomUUID(),
   });
@@ -165,7 +216,9 @@ async function startHTTPTransport(server: Server, port: number, corsOrigins: str
       return;
     }
 
-    const pathname = req.url ? new URL(req.url, `http://${req.headers.host ?? "localhost"}`).pathname : "";
+    const pathname = req.url
+      ? new URL(req.url, `http://${req.headers.host ?? "localhost"}`).pathname
+      : "";
     if (pathname !== "/mcp") {
       if (!res.headersSent) {
         res.writeHead(404, { "Content-Type": "text/plain" });

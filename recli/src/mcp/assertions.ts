@@ -23,7 +23,7 @@ export function runResultToAssertionContext(result: RunResult): AssertionContext
   return {
     status: result.status,
     durationMs: result.durationMs,
-    headers: {},
+    headers: result.responseHeaders ?? {},
     body: result.body,
   };
 }

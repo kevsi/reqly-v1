@@ -6,10 +6,12 @@ import { executeGraphQL } from "../runner.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ExportBundle, RequestItem } from "../types.js";
 import type { ToolHandlerOptions } from "../tool-definitions.js";
+import { importOpenAPI } from "../../openapi.js";
+import { diffSpecs } from "../../spec-diff.js";
 
 // ── Size limits ─────────────────────────────────────────────────────────
 const MAX_BUNDLE_SIZE = 10 * 1024 * 1024; // 10 MB
-const MAX_SPEC_SIZE = 5 * 1024 * 1024;    // 5 MB
+const MAX_SPEC_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_GRAPHQL_QUERY_LENGTH = 500_000; // 500 KB
 
 // ── Sensitive-data redaction ────────────────────────────────────────────
@@ -43,9 +45,8 @@ function redactSensitiveHeaders(
   ]);
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
-    result[key] = sensitiveKeys.has(key.toLowerCase()) && value.length > 0
-      ? "***REDACTED***"
-      : value;
+    result[key] =
+      sensitiveKeys.has(key.toLowerCase()) && value.length > 0 ? "***REDACTED***" : value;
   }
   return result;
 }
@@ -63,13 +64,21 @@ export function handleImportBundle(
 ): CallToolResult {
   const bundleJson = String(args.bundle_json ?? "");
   if (!bundleJson) {
-    return { content: [{ type: "text", text: "Missing required field: bundle_json" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: bundle_json" }],
+      isError: true,
+    };
   }
 
   // Size check before parsing — prevents OOM on oversized payloads.
   if (Buffer.byteLength(bundleJson, "utf8") > MAX_BUNDLE_SIZE) {
     return {
-      content: [{ type: "text", text: `Bundle JSON exceeds maximum allowed size of ${MAX_BUNDLE_SIZE} bytes` }],
+      content: [
+        {
+          type: "text",
+          text: `Bundle JSON exceeds maximum allowed size of ${MAX_BUNDLE_SIZE} bytes`,
+        },
+      ],
       isError: true,
     };
   }
@@ -79,7 +88,15 @@ export function handleImportBundle(
     store.loadFromBundle(parsed);
     return { content: [{ type: "text", text: JSON.stringify({ imported: true }, null, 2) }] };
   } catch (e) {
-    return { content: [{ type: "text", text: `Failed to parse bundle JSON: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to parse bundle JSON: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
+      isError: true,
+    };
   }
 }
 
@@ -95,7 +112,12 @@ export function handleImportFromOpenApi(
   // Size check before parsing.
   if (Buffer.byteLength(spec, "utf8") > MAX_SPEC_SIZE) {
     return {
-      content: [{ type: "text", text: `OpenAPI spec exceeds maximum allowed size of ${MAX_SPEC_SIZE} bytes` }],
+      content: [
+        {
+          type: "text",
+          text: `OpenAPI spec exceeds maximum allowed size of ${MAX_SPEC_SIZE} bytes`,
+        },
+      ],
       isError: true,
     };
   }
@@ -103,7 +125,10 @@ export function handleImportFromOpenApi(
   try {
     const result = importFromOpenApi(spec);
     if (!result.success) {
-      return { content: [{ type: "text", text: `Failed to import OpenAPI spec: ${result.error}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `Failed to import OpenAPI spec: ${result.error}` }],
+        isError: true,
+      };
     }
     let totalRequests = 0;
     for (const col of result.collections) {
@@ -126,9 +151,28 @@ export function handleImportFromOpenApi(
         totalRequests++;
       }
     }
-    return { content: [{ type: "text", text: JSON.stringify({ imported: true, collections: result.collections.length, requests: totalRequests }, null, 2) }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            { imported: true, collections: result.collections.length, requests: totalRequests },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
   } catch (e) {
-    return { content: [{ type: "text", text: `Failed to import OpenAPI spec: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to import OpenAPI spec: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
+      isError: true,
+    };
   }
 }
 
@@ -143,11 +187,17 @@ export function handleExportCollectionToJUnit(
 ): CallToolResult {
   const colId = String(args.collection_id ?? "");
   if (!colId) {
-    return { content: [{ type: "text", text: "Missing required field: collection_id" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: collection_id" }],
+      isError: true,
+    };
   }
   const records = store.getRunHistory(colId);
   if (!records || records.length === 0) {
-    return { content: [{ type: "text", text: `No run records found for collection: ${colId}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `No run records found for collection: ${colId}` }],
+      isError: true,
+    };
   }
   const xml = collectionRunRecordToJUnitXml(records[records.length - 1]!);
   return { content: [{ type: "text", text: xml }] };
@@ -159,10 +209,16 @@ export async function handleAnalyzeProjectRoutes(
 ): Promise<CallToolResult> {
   const folderPath = String(args.folder_path ?? "");
   if (!folderPath) {
-    return { content: [{ type: "text", text: "Missing required field: folder_path" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: folder_path" }],
+      isError: true,
+    };
   }
   try {
-    const result = await analyzeProjectRoutes(folderPath, args.allowed_directories as string[] | undefined);
+    const result = await analyzeProjectRoutes(
+      folderPath,
+      args.allowed_directories as string[] | undefined,
+    );
     if (args.save_collection_id) {
       const colId = String(args.save_collection_id);
       for (const route of result.routes) {
@@ -181,7 +237,15 @@ export async function handleAnalyzeProjectRoutes(
     }
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   } catch (e) {
-    return { content: [{ type: "text", text: `Failed to analyze project: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to analyze project: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
+      isError: true,
+    };
   }
 }
 
@@ -192,13 +256,21 @@ export async function handleGraphQlExecute(
   const url = String(args.url ?? "");
   const query = String(args.query ?? "");
   if (!url || !query) {
-    return { content: [{ type: "text", text: "Missing required fields: url, query" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required fields: url, query" }],
+      isError: true,
+    };
   }
 
   // Size check on the GraphQL query to prevent OOM.
   if (Buffer.byteLength(query, "utf8") > MAX_GRAPHQL_QUERY_LENGTH) {
     return {
-      content: [{ type: "text", text: `GraphQL query exceeds maximum allowed length of ${MAX_GRAPHQL_QUERY_LENGTH} bytes` }],
+      content: [
+        {
+          type: "text",
+          text: `GraphQL query exceeds maximum allowed length of ${MAX_GRAPHQL_QUERY_LENGTH} bytes`,
+        },
+      ],
       isError: true,
     };
   }
@@ -206,7 +278,10 @@ export async function handleGraphQlExecute(
   const variables = args.variables as Record<string, unknown> | undefined;
   const operationName = args.operation_name ? String(args.operation_name) : undefined;
   const headers = args.headers as Record<string, string> | undefined;
-  const timeoutMs = typeof args.timeout_ms === "number" && args.timeout_ms > 0 ? args.timeout_ms : options.defaultTimeoutMs;
+  const timeoutMs =
+    typeof args.timeout_ms === "number" && args.timeout_ms > 0
+      ? args.timeout_ms
+      : options.defaultTimeoutMs;
   try {
     const result = await executeGraphQL(url, query, variables, operationName, headers, {
       timeoutMs,
@@ -214,6 +289,99 @@ export async function handleGraphQlExecute(
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   } catch (e) {
-    return { content: [{ type: "text", text: `GraphQL execution failed: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `GraphQL execution failed: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+// ── OpenAPI sync ──────────────────────────────────────────────────────────
+
+export async function handleOpenApiSync(
+  store: CollectionStore,
+  args: Record<string, unknown>,
+): Promise<CallToolResult> {
+  const url = args.url as string | undefined;
+  const specContent = args.spec_content as string | undefined;
+  const saveCollectionId = args.save_collection_id as string | undefined;
+
+  let spec: string;
+  let source: string;
+
+  if (specContent) {
+    spec = specContent;
+    source = "provided spec";
+  } else if (url) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      spec = await res.text();
+      source = url;
+    } catch (e) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to fetch spec from ${url}: ${e instanceof Error ? e.message : String(e)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  } else {
+    return {
+      content: [{ type: "text", text: "Provide either url or spec_content" }],
+      isError: true,
+    };
+  }
+
+  try {
+    const bundle = importOpenAPI(spec);
+
+    let report = `Imported ${bundle.collections.length} collection(s), ${bundle.collections.reduce((s, c) => s + (c.requests?.length ?? 0), 0)} request(s) from ${source}\n\n`;
+
+    if (args.diff_spec) {
+      const diff = diffSpecs(args.diff_spec as string, spec);
+      report += `Diff vs baseline:\n`;
+      report += `  ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed\n`;
+      for (const e of diff.added) report += `  + ${e.method.toUpperCase()} ${e.path}\n`;
+      for (const e of diff.removed) report += `  - ${e.method.toUpperCase()} ${e.path}\n`;
+    }
+
+    if (saveCollectionId) {
+      const target = store.getCollection(saveCollectionId);
+      if (!target) {
+        return {
+          content: [{ type: "text", text: `Collection not found: ${saveCollectionId}` }],
+          isError: true,
+        };
+      }
+      for (const col of bundle.collections) {
+        for (const req of col.requests ?? []) {
+          store.addRequest(saveCollectionId, req as any);
+        }
+      }
+      report += `\nAdded requests to "${target.name}"`;
+    } else {
+      report += `\n${JSON.stringify(bundle, null, 2).slice(0, 100_000)}`;
+    }
+
+    return { content: [{ type: "text", text: report }] };
+  } catch (e) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `OpenAPI sync failed: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
+      isError: true,
+    };
   }
 }

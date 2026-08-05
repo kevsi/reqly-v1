@@ -3,6 +3,7 @@ import {
   isUrlAllowed,
   DEFAULT_MAX_RESPONSE_SIZE,
 } from "../runner.js";
+import { interpolate } from "../chaining.js";
 import { evaluateAssertions, runResultToAssertionContext } from "./assertions.js";
 import type {
   RequestItem,
@@ -78,12 +79,19 @@ export async function executeRequest(
     );
   }
 
-  const urlCheck = await isUrlAllowed(request.url, options.allowLocalHosts);
+  const envVars = buildEnvVarMap(environments ?? [], options.envName);
+  const ctx = { vars: envVars, envVars, cookies: new Map<string, string>(), iteration: 0 };
+
+  // Resolve {{vars}} BEFORE the SSRF check: a raw URL with unresolved variables
+  // (e.g. "{{BASE_URL}}/posts") cannot be validated and would be blocked as
+  // "Invalid URL" even though the resolved URL is perfectly fine.
+  const resolvedUrl = interpolate(request.url, ctx, new Map());
+  const urlCheck = await isUrlAllowed(resolvedUrl, options.allowLocalHosts);
   if (!urlCheck.allowed) {
     return {
       name: request.name,
       method: request.method,
-      url: request.url,
+      url: resolvedUrl,
       status: 0,
       statusText: "Blocked",
       durationMs: 0,
@@ -92,9 +100,6 @@ export async function executeRequest(
       error: urlCheck.reason,
     };
   }
-
-  const envVars = buildEnvVarMap(environments ?? [], options.envName);
-  const ctx = { vars: envVars, envVars, cookies: new Map<string, string>(), iteration: 0 };
 
   const result = await cliExecuteRequest(
     {

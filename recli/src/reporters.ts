@@ -51,9 +51,10 @@ export function reportCLI(results: RunResult[]): void {
         if (a.passed) {
           console.log(`${aIcon} ${a.name ?? ""}`);
         } else {
-          console.log(
-            `${aIcon} ${a.name ?? ""}  ${chalk.red(`(expected: ${redactSensitive(a.expected)}, got: ${redactSensitive(a.actual)})`)}`,
-          );
+          const detail = a.error
+            ? redactSensitive(a.error)
+            : `(expected: ${redactSensitive(a.expected)}, got: ${redactSensitive(a.actual)})`;
+          console.log(`${aIcon} ${a.name ?? ""}  ${chalk.red(detail)}`);
         }
       }
     }
@@ -94,8 +95,9 @@ export function buildJUnit(results: RunResult[]): string {
         const failedAssertions = r.assertions.filter((a) => !a.passed);
         for (const a of failedAssertions) {
           testcases += `      <failure message="${escapeXml(a.name ?? "")}" type="AssertionError">\n`;
-          testcases += `        Expected: ${escapeXml(redactSensitive(a.expected))}\n`;
-          testcases += `        Actual:   ${escapeXml(redactSensitive(a.actual))}\n`;
+          testcases +=
+            `        ${escapeXml(redactSensitive(a.error ?? `Expected: ${a.expected}; Actual: ${a.actual}`))}` +
+            "\n";
           testcases += `      </failure>\n`;
         }
       }
@@ -128,7 +130,7 @@ export function buildHTML(results: RunResult[]): string {
       for (const a of r.assertions) {
         assertionsHtml += `<div class="assertion ${a.passed ? "a-pass" : "a-fail"}">
   <span class="a-icon">${a.passed ? "\u2713" : "\u2717"}</span>
-  <span class="a-name">${escapeHtml(a.name ?? "")}</span>${a.passed ? "" : `<span class="a-detail">expected ${escapeHtml(redactSensitive(a.expected))}, got ${escapeHtml(redactSensitive(a.actual))}</span>`}
+  <span class="a-name">${escapeHtml(a.name ?? "")}</span>${a.passed ? "" : `<span class="a-detail">${escapeHtml(redactSensitive(a.error ?? `expected ${a.expected}, got ${a.actual}`))}</span>`}
 </div>`;
       }
     }

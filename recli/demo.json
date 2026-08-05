@@ -1,0 +1,129 @@
+{
+  "version": "1.0",
+  "exportedAt": "2026-08-04T00:00:00.000Z",
+  "collections": [
+    {
+      "name": "Reqly Demo API",
+      "description": "Collection de démo pour tester `recli ui` — mélange de succès, d'échecs volontaires, de chaining et de GraphQL.",
+      "requests": [
+        {
+          "name": "List posts",
+          "method": "GET",
+          "url": "{{BASE_URL}}/posts",
+          "endpoint": "/posts",
+          "queryParams": [{ "key": "_limit", "value": "3" }],
+          "assert": [
+            { "name": "status is 200", "expr": "status == 200" },
+            { "name": "returns posts", "expr": "body.length >= 1" }
+          ],
+          "capture": [{ "name": "firstPostId", "expr": "body[0].id" }]
+        },
+        {
+          "name": "Get first post (chained)",
+          "method": "GET",
+          "url": "{{BASE_URL}}/posts/{{firstPostId}}",
+          "endpoint": "/posts/{id}",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "assert": [
+            { "name": "status is 200", "expr": "status == 200" },
+            { "name": "has a user", "expr": "body.userId >= 1" },
+            { "name": "title is not empty", "expr": "body.title != \"\"" }
+          ]
+        },
+        {
+          "name": "Create post",
+          "method": "POST",
+          "url": "{{BASE_URL}}/posts",
+          "endpoint": "/posts",
+          "bodyType": "json",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {{DEMO_TOKEN}}"
+          },
+          "body": "{\n  \"title\": \"recli demo\",\n  \"body\": \"hello from the TUI\",\n  \"userId\": 1\n}",
+          "assert": [
+            { "name": "created", "expr": "status == 201" },
+            { "name": "has an id", "expr": "body.id > 0" }
+          ],
+          "capture": [{ "name": "newPostId", "expr": "body.id" }]
+        },
+        {
+          "name": "Get created post (chained, 404 expected)",
+          "method": "GET",
+          "url": "{{BASE_URL}}/posts/{{newPostId}}",
+          "endpoint": "/posts/{id}",
+          "assert": [{ "name": "status is 200", "expr": "status == 200" }]
+        },
+        {
+          "name": "Update post",
+          "method": "PUT",
+          "url": "{{BASE_URL}}/posts/1",
+          "endpoint": "/posts/1",
+          "bodyType": "json",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": "{\n  \"title\": \"updated title\",\n  \"body\": \"updated body\"\n}",
+          "assert": [{ "name": "updated", "expr": "status == 200" }]
+        },
+        {
+          "name": "Delete post",
+          "method": "DELETE",
+          "url": "{{BASE_URL}}/posts/1",
+          "endpoint": "/posts/1",
+          "assert": [{ "name": "deleted", "expr": "status == 200" }]
+        },
+        {
+          "name": "Missing user (fails on purpose)",
+          "method": "GET",
+          "url": "{{BASE_URL}}/users/424242",
+          "endpoint": "/users/{id}",
+          "assert": [{ "name": "user found", "expr": "status == 200" }]
+        },
+        {
+          "name": "Bad assertion (fails on purpose)",
+          "method": "GET",
+          "url": "{{BASE_URL}}/posts/1",
+          "endpoint": "/posts/1",
+          "assert": [
+            { "name": "status is 200", "expr": "status == 200" },
+            { "name": "has a nonexistent field", "expr": "body.nonexistent == \"x\"" }
+          ]
+        },
+        {
+          "name": "Countries GraphQL",
+          "method": "GRAPHQL",
+          "url": "https://countries.trevorblades.com/",
+          "endpoint": "/",
+          "bodyType": "graphql",
+          "graphql": {
+            "query": "{ country(code: \"FR\") { name capital } }",
+            "operationName": null
+          }
+        }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "id": "env-prod",
+      "name": "prod",
+      "color": "emerald",
+      "variables": [
+        { "key": "BASE_URL", "value": "https://jsonplaceholder.typicode.com", "enabled": true },
+        { "key": "DEMO_TOKEN", "value": "prod-token-1234", "enabled": true }
+      ]
+    },
+    {
+      "id": "env-staging",
+      "name": "staging",
+      "color": "amber",
+      "variables": [
+        { "key": "BASE_URL", "value": "https://jsonplaceholder.typicode.com", "enabled": true },
+        { "key": "DEMO_TOKEN", "value": "staging-token-5678", "enabled": true }
+      ]
+    }
+  ]
+}
