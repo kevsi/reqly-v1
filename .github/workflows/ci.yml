@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 11.10.0
+  NODE_VERSION: "22"
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run tests
+        run: pnpm test
+
+  build-web:
+    name: Build Web (SSR)
+    needs: [typecheck, lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build web
+        run: pnpm build
+        env:
+          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
+          NEXT_PUBLIC_SYNC_URL: ${{ secrets.NEXT_PUBLIC_SYNC_URL }}
+      - name: Upload web artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: |
+            reqy-web/.next/
+            reqy-web/public/
+            reqy-web/next.config.mjs
+            reqy-web/package.json
+          retention-days: 1
+
+  build-desktop:
+    name: Build Desktop (Static Export)
+    needs: [typecheck, lint, test]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build desktop
+        run: BUILD_TARGET=desktop pnpm generate
+        env:
+          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
+          NEXT_PUBLIC_SYNC_URL: ${{ secrets.NEXT_PUBLIC_SYNC_URL }}
+          TAURI_DEV_HOST: "localhost"
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-build-${{ matrix.os }}
+          path: |
+            reqy-web/out/
+          retention-days: 1
+
+  build-docker:
+    name: Build Docker Image
+    needs: [typecheck, lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          docker build -t reqy-web:ci \
+            --build-arg AUTH_SIGNING_SECRET=${{ secrets.AUTH_SIGNING_SECRET }} \
+            --build-arg NEXT_PUBLIC_SYNC_URL=${{ secrets.NEXT_PUBLIC_SYNC_URL }} \
+            -f reqy-web/Dockerfile .
+      - name: Test Docker container starts
+        run: |
+          docker run --rm -d -p 3000:3000 --name reqy-web-test reqy-web:ci
+          sleep 10
+          curl -f http://localhost:3000 || exit 1
+          docker stop reqy-web-test
