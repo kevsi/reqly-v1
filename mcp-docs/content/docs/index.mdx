@@ -1,0 +1,43 @@
+---
+title: Overview
+description: Reqly MCP Server exposes an API playground to MCP clients like Claude and Cursor.
+icon: Sparkles
+---
+
+**Reqly MCP Server** is a Model Context Protocol (MCP) server that turns an API playground — collections, requests, environments, run histories — into something an AI agent can use directly.
+
+Forget copy-pasting curl commands into a chat. An agent using this server can:
+
+- **Browse** your collections and requests to understand your API surface
+- **Run** a request or a whole collection, and check the assertion results
+- **Export** results as JUnit XML or OpenAPI for CI and diffs
+- **Sync** collections against a live server's OpenAPI spec
+
+All through plain conversation.
+
+```json
+{
+  "name": "run_collection_with_assertions",
+  "arguments": { "collection_id": "col-1a2b3c" }
+}
+```
+
+## How it fits together
+
+| Layer | What lives there | Tools |
+| --- | --- | --- |
+| [Execution](./tools/execution) | run requests, collections, batches, history | `run_request`, `run_collection`, `run_collection_with_assertions`… |
+| [Requests](./tools/requests) | build, search, import, validate, generate | `create_request`, `import_from_curl`, `validate_request`… |
+| [Collections](./tools/collections) | organize, duplicate, delete | `create_collection`, `duplicate_collection`… |
+| [Environments](./tools/environments) | variables, interpolation, resolution | `update_environment`, `resolve_variables`… |
+| [Import / Export](./tools/import-export) | bundles, OpenAPI, JUnit | `export_collection_to_junit`, `import_bundle`… |
+
+## Quick start
+
+1. Install the server
+2. Register it with your MCP client
+3. Import a collection
+4. Run it
+5. Export the report
+
+Each step is one command — see [Getting started](./getting-started).

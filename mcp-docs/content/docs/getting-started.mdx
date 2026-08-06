@@ -1,0 +1,101 @@
+---
+title: Getting Started
+description: Install Recli, start the MCP server, and make your first tool call.
+icon: Rocket
+---
+
+## 1. Build Recli
+
+The MCP server ships inside the Recli CLI. From the repository root:
+
+```bash
+cd recli
+pnpm install
+pnpm build
+```
+
+This produces `dist/index.js`. Node.js `>= 18` is required.
+
+## 2. Prepare a bundle
+
+Point the server at a Reqly JSON export. A demo collection ships in the repo:
+
+```bash
+ls recli/demo.json
+```
+
+A bundle is a JSON document with `collections`, each holding `requests`, plus optional `environments`:
+
+```json
+{
+  "version": "1.0",
+  "collections": [
+    {
+      "name": "My API",
+      "requests": [
+        { "name": "List users", "method": "GET", "url": "{{BASE_URL}}/users" }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "prod",
+      "variables": [
+        { "key": "BASE_URL", "value": "https://api.example.com", "enabled": true }
+      ]
+    }
+  ]
+}
+```
+
+> The `{{VAR}}` placeholders are resolved from the selected environment, then `process.env` — in that order.
+
+## 3. Start the server
+
+**stdio** (default — use this with local agents):
+
+```bash
+node dist/index.js serve --file demo.json --env prod
+```
+
+**HTTP** (add `--port`):
+
+```bash
+node dist/index.js serve --file demo.json --env prod --port 4000
+# MCP server listening on http://127.0.0.1:4000/mcp
+```
+
+## 4. Connect a client
+
+The simplest way to try it is the official MCP Inspector, which launches a web UI:
+
+```bash
+cd recli
+npx @modelcontextprotocol/inspector node dist/index.js serve --file demo.json --env prod
+```
+
+Open the URL it prints (`http://localhost:6274`). Then:
+
+1. Click **Tools** and call `list_collections` — you should see your collections.
+2. Call `list_requests` with a `collection_id`.
+3. Call `run_request` with a `request_id` — the server executes the request and returns status, body, timing, and assertion results.
+
+## 5. Your first scripted run
+
+With Claude Code, register the server and ask:
+
+```bash
+claude mcp add recli -- node "C:\...\recli\dist\index.js" serve --file demo.json --env prod
+```
+
+```
+> Run the "List posts" request against prod and tell me if it passed its assertions.
+```
+
+The agent calls `list_collections` → `list_requests` → `run_request` and reports the result. Because every run is recorded, you can follow up with `get_request_history` to see past executions.
+
+## What's next
+
+- [Server configuration](./configuration) — every `serve` option.
+- [Client integrations](./integrations) — Claude Desktop, Cursor, raw HTTP.
+- [Tool reference](./tools) — the full 44-tool catalogue.

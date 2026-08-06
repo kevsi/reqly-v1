@@ -1,0 +1,79 @@
+---
+title: Architecture
+description: Comment le serveur MCP est construit — store, dispatcher, transports.
+icon: Cpu
+---
+
+Le serveur vit dans `recli/src/mcp/`. Il est basé sur le SDK officiel `@modelcontextprotocol/sdk` et le même moteur de requêtes que la CLI Recli, donc le comportement est identique entre la CLI, le TUI et le serveur MCP.
+
+```
+┌────────────────────────────────────────────────────────┐
+│  Client MCP (Claude, Cursor, Inspecteur, curl, SDK…)   │
+└───────────────▲──────────────────────────▲─────────────┘
+                │ JSON-RPC                  │ JSON-RPC
+        ┌───────┴────────┐         ┌────────┴────────┐
+        │  stdio         │         │ streamable HTTP │  (--port, gardé par CORS)
+        └───────┬────────┘         └────────┬────────┘
+                └───────────┬───────────────┘
+                    ┌───────▼────────┐
+                    │   mcp/server    │  Serveur (gestionnaires tools + resources)
+                    └───────┬────────┘
+            ┌───────────────┼─────────────────┐
+     ┌──────▼──────┐  ┌─────▼──────┐  ┌───────▼────────┐
+     │ tool-defs    │  │ tools.ts    │  │ CollectionStore │
+     │ (44 schemas) │  │ dispatcher  │  │ (état + persist)│
+     └──────────────┘  └─────┬──────┘  └───────┬────────┘
+                             │ handlers        │
+             ┌───────────────┼──────────────┐  │
+      ┌──────▼─────┐  ┌──────▼──────┐  ┌─────▼─────┐
+      │ requests   │  │ environments │ │ runner    │ ──► moteur CLI
+      │ collections│  │ import/export│ │ (execute…)│     (runner.js partagé)
+      └────────────┘  └─────────────┘ └───────────┘
+```
+
+## Composants
+
+### `mcp/server.ts` — bootstrap
+
+`startMcpServer(options)` :
+
+1. Crée un `CollectionStore` et charge le bundle (si `--file`).
+2. Enregistre les gestionnaires pour `resources/list`, `resources/read`, `tools/list` et `tools/call`.
+3. Connecte soit un `StdioServerTransport` soit un `StreamableHTTPServerTransport`.
+4. Le chemin HTTP enveloppe le transport dans un serveur `node:http` simple qui applique la liste d'autorisation Origin, les en-têtes CORS et ne route que `/mcp`.
+
+### `CollectionStore` — état & persistance
+
+État en mémoire sur le bundle : collections, requêtes, dossiers, environnements, plus **historique d'exécution**. Il génère des IDs stables (`col-…`, `req-…`, `env-…`) pour tout ce qui n'en a pas, maintient les liens parent/enfant cohérents et appelle un callback de persistance pour que les mutations réécrivent le fichier source.
+
+### `tool-definitions.ts` — le contrat
+
+Un tableau statique `TOOLS` de 44 entrées `{ name, description, inputSchema }` (JSON Schema). Servi tel quel par `tools/list`. Les gestionnaires et schémas sont la source unique de vérité pour ce qu'un agent peut faire.
+
+### `tools.ts` — le dispatcher
+
+`createToolHandler(store, bundle, options)` retourne une fonction `handleToolCall(name, args)` qui mappe les noms d'outils aux modules de gestion :
+
+- `handlers/collections.ts` — CRUD collections, arbre, duplication
+- `handlers/requests.ts` — CRUD requêtes, dossiers, recherche, import/export curl, validation, réordonnancement, déplacement
+- `handlers/environments.ts` — CRUD environnements, résolution de variables
+- `handlers/runner.ts` — outils d'exécution et historique d'exécution
+- `handlers/import-export.ts` — bundles, OpenAPI, JUnit, analyse de projet, GraphQL
+- `handlers/generate-tests.ts` — génération de tests edge-case depuis OpenAPI
+
+### Moteur partagé
+
+Les outils d'exécution délèguent à `recli/src/runner.ts` (`executeRequestWithAssertions`), le même moteur utilisé par la CLI et le TUI. Cela signifie que les assertions, timeouts, la garde SSRF et le sandbox de scripts se comportent de manière identique partout. Contrairement à la CLI/TUI, le serveur MCP **ne chaîne pas** les variables capturées entre les requêtes — chaque appel d'outil s'exécute avec un contexte frais.
+
+## Flux d'exécution de `run_request`
+
+1. `store.findRequestById(id)` résout la requête (par ID **ou** nom unique).
+2. `executeRequestWithAssertions` interpole les variables, exécute le script pre-request (sandboxé), effectue l'appel HTTP (gardé), exécute le script post-response, évalue les assertions et applique les captures.
+3. Le résultat — statut, corps, timing, taille, `passed`, résultats par assertion — est enregistré dans le store et retourné comme JSON formaté.
+4. Chaque exécution devient un `RequestRunRecord` dans un `CollectionRunRecord`, interrogeable plus tard via `get_request_history` / `get_run_history`.
+
+## Notes de conception
+
+- **Résolution ID ou nom :** les outils d'exécution acceptent soit un ID généré soit le nom unique de la requête, pour que les agents puissent utiliser des références lisibles par l'humain.
+- **Garde de batch :** `run_requests_batch` est plafonné (défaut 20) pour borner le coût.
+- **Effet de bord de persistance :** `ensureIds()` injecte les IDs dans la copie en mémoire au chargement, donc la première mutation réécrit le fichier source avec les IDs générés — intentionnel, mais visible quand un humain compare le bundle.

@@ -1,0 +1,79 @@
+---
+title: Intelligence API
+description: Générer des tests depuis OpenAPI, synchroniser les specs live, analyser des projets et exécuter du GraphQL ad-hoc.
+icon: Sparkles
+---
+
+### `generate_tests`
+
+Génère des requêtes de test de cas limites depuis un spec OpenAPI : auth manquante, payloads invalides, mauvais types et scénarios 4xx.
+
+- Entrée :
+  - `spec` *(chaîne, requis)* — contenu JSON ou YAML OpenAPI 3
+  - `base_url` *(chaîne)* — remplace le `servers[0]` du spec
+  - `save_collection_id` *(chaîne)* — sauvegarder les tests générés dans une collection
+
+### `openapi_sync`
+
+Récupère un spec OpenAPI depuis une URL de serveur live (ou utilise le contenu fourni), l'importe comme collection, et optionnellement **compare avec un spec de baseline**.
+
+- Entrée :
+  - `url` *(chaîne)* — ex. `http://localhost:4000/openapi.json`
+  - `spec_content` *(chaîne)* — contenu brut du spec (alternative à `url`)
+  - `save_collection_id` *(chaîne)* — sauvegarder les requêtes importées
+  - `diff_spec` *(chaîne)* — spec de baseline pour comparer ; la réponse liste les endpoints **ajoutés / supprimés / modifiés**
+
+### `analyze_project_routes`
+
+Analyse un dossier de projet local et retourne les routes HTTP détectées (mode desktop uniquement). Supporte Rust, Java, frameworks JavaScript, Python et projets multi-langages.
+
+- Entrée :
+  - `folder_path` *(chaîne, requis)* — chemin absolu vers le projet
+  - `save_collection_id` *(chaîne)* — sauvegarder les requêtes générées
+
+### `graphql_execute`
+
+Exécute une requête GraphQL brute contre un endpoint — **non** liée à une requête stockée.
+
+- Entrée :
+  - `url` *(chaîne, requis)* — endpoint GraphQL
+  - `query` *(chaîne, requis)*
+  - `variables` *(objet)* — optionnel variables GraphQL
+  - `operation_name` *(chaîne)* — optionnel
+  - `headers` *(objet)* — optionnel en-têtes supplémentaires
+  - `timeout_ms` *(nombre)*
+
+---
+
+## Exemple — générer et exécuter des tests
+
+```json
+// 1. générer des tests depuis le spec
+{
+  "name": "generate_tests",
+  "arguments": {
+    "spec": "openapi: 3.0.0\ninfo:\n  title: Petstore\n  version: 1.0.0\n...",
+    "save_collection_id": "col-1a2b3c"
+  }
+}
+
+// 2. exécuter la collection générée
+{
+  "name": "run_collection_with_assertions",
+  "arguments": { "collection_id": "col-1a2b3c" }
+}
+```
+
+## Exemple — sync et diff
+
+```json
+{
+  "name": "openapi_sync",
+  "arguments": {
+    "url": "http://localhost:4000/openapi.json",
+    "diff_spec": "{ ...baseline spec... }"
+  }
+}
+```
+
+La réponse rapporte quels endpoints ont été ajoutés, supprimés ou modifiés entre la baseline et le spec live.

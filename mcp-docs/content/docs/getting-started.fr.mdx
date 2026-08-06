@@ -1,0 +1,101 @@
+---
+title: Prise en main
+description: Installer Recli, démarrer le serveur MCP et effectuer votre premier appel d'outil.
+icon: Rocket
+---
+
+## 1. Construire Recli
+
+Le serveur MCP est intégré dans la CLI Recli. Depuis la racine du dépôt :
+
+```bash
+cd recli
+pnpm install
+pnpm build
+```
+
+Cela produit `dist/index.js`. Node.js `>= 18` est requis.
+
+## 2. Préparer un bundle
+
+Pointez le serveur vers un export JSON Reqly. Une collection de démo est incluse dans le dépôt :
+
+```bash
+ls recli/demo.json
+```
+
+Un bundle est un document JSON avec des `collections`, chacune contenant des `requests`, plus des `environments` optionnels :
+
+```json
+{
+  "version": "1.0",
+  "collections": [
+    {
+      "name": "Mon API",
+      "requests": [
+        { "name": "Lister les utilisateurs", "method": "GET", "url": "{{BASE_URL}}/users" }
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "name": "prod",
+      "variables": [
+        { "key": "BASE_URL", "value": "https://api.example.com", "enabled": true }
+      ]
+    }
+  ]
+}
+```
+
+> Les espaces réservés `{{VAR}}` sont résolus depuis l'environnement sélectionné, puis `process.env` — dans cet ordre.
+
+## 3. Démarrer le serveur
+
+**stdio** (par défaut — utilisez-le avec les agents locaux) :
+
+```bash
+node dist/index.js serve --file demo.json --env prod
+```
+
+**HTTP** (ajoutez `--port`) :
+
+```bash
+node dist/index.js serve --file demo.json --env prod --port 4000
+# Serveur MCP en écoute sur http://127.0.0.1:4000/mcp
+```
+
+## 4. Connecter un client
+
+La façon la plus simple d'essayer est l'Inspecteur MCP officiel, qui lance une interface web :
+
+```bash
+cd recli
+npx @modelcontextprotocol/inspector node dist/index.js serve --file demo.json --env prod
+```
+
+Ouvrez l'URL affichée (`http://localhost:6274`). Ensuite :
+
+1. Cliquez sur **Tools** et appelez `list_collections` — vous devriez voir vos collections.
+2. Appelez `list_requests` avec un `collection_id`.
+3. Appelez `run_request` avec un `request_id` — le serveur exécute la requête et retourne le statut, le corps, le timing et les résultats d'assertion.
+
+## 5. Votre première exécution scriptée
+
+Avec Claude Code, enregistrez le serveur et demandez :
+
+```bash
+claude mcp add recli -- node "C:\\...\\recli\\dist\\index.js" serve --file demo.json --env prod
+```
+
+```
+> Exécute la requête "List posts" sur prod et dis-moi si ses assertions ont réussi.
+```
+
+L'agent appelle `list_collections` → `list_requests` → `run_request` et rapporte le résultat. Comme chaque exécution est enregistrée, vous pouvez ensuite utiliser `get_request_history` pour voir les exécutions passées.
+
+## Prochaines étapes
+
+- [Configuration du serveur](./configuration) — toutes les options de `serve`.
+- [Intégrations clients](./integrations) — Claude Desktop, Cursor, HTTP brut.
+- [Référence des outils](./tools) — le catalogue complet des 44 outils.

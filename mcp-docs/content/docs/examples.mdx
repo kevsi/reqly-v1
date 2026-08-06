@@ -1,0 +1,61 @@
+---
+title: Example Workflows
+description: End-to-end agent workflows over the MCP tools.
+icon: Workflow
+---
+
+## Smoke-test a collection after a deploy
+
+A common pattern: run the whole collection, then inspect what broke.
+
+1. `list_collections` → pick `col-…`.
+2. `run_collection_with_assertions` → returns a summary (`total`, `passed`, `failed`, `errored`) plus per-request status and assertion results.
+3. If something failed, `get_run_history` (filtered by `collection_id`) to compare with the previous run.
+4. `export_collection_to_junit` → feed the XML to your CI dashboard.
+
+```json
+// run_collection_with_assertions result (abridged)
+{
+  "run_id": "run-172…",
+  "collection_name": "Demo",
+  "summary": { "total": 9, "passed": 6, "failed": 3, "errored": 0 },
+  "results": [
+    { "name": "List posts", "method": "GET", "status": 200, "passed": true, "assertion_results": [ { "name": "status is 200", "passed": true }, { "name": "returns posts", "passed": true } ] }
+  ]
+}
+```
+
+## Import a curl command, then run it
+
+1. `create_collection` → `col-…`.
+2. `import_from_curl` with `curl_command` and `collection_id`.
+3. `list_requests` → note the new `request_id`.
+4. `run_request` → executed with the curl headers/body.
+
+## Generate tests from an OpenAPI spec
+
+1. `generate_tests` with `spec` (OpenAPI 3 JSON/YAML).
+2. Optionally `save_collection_id` to persist the generated edge-case requests (missing auth, invalid payloads, wrong types, 4xx scenarios).
+3. `run_collection_with_assertions` on the generated collection — the generated tests assert the expected status codes.
+
+## Sync a live server's spec and diff against baseline
+
+`openapi_sync` fetches a spec from a live URL (`http://localhost:4000/openapi.json`) or takes `spec_content`, imports it as a collection, and — when given `diff_spec` — reports added/removed/changed endpoints.
+
+## Analyze a local project for API routes
+
+`analyze_project_routes` with `folder_path` scans a codebase (Rust, Java, JS frameworks, Python, multi-language) for detected HTTP routes and returns them — optionally saving them into a collection via `save_collection_id`. Desktop-only feature.
+
+## Round-trip a bundle
+
+- `export_bundle` → full JSON of every collection, request, folder, environment.
+- `import_bundle` → restore it into a fresh (or existing) server session.
+- `export_to_openapi` → OpenAPI 3.0 JSON; `import_from_openapi` → the reverse.
+
+## Discover what exists
+
+1. `resources/list` (or `list_collections` + `list_requests`) to inventory.
+2. `get_collection_tree` for the folder/request hierarchy.
+3. `search_requests` with a query to find a request by name, URL, or method.
+4. `get_request` for the full definition (headers, body, auth, scripts, assertions).
+5. `validate_request` to pre-flight a definition without sending it.

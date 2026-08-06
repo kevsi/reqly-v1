@@ -1,0 +1,61 @@
+---
+title: Exemples de workflows
+description: Workflows agents de bout en bout via les outils MCP.
+icon: Workflow
+---
+
+## Test de fumée d'une collection après un déploiement
+
+Un pattern courant : exécuter toute la collection, puis inspecter ce qui a échoué.
+
+1. `list_collections` → choisissez `col-…`.
+2. `run_collection_with_assertions` → retourne un résumé (`total`, `passed`, `failed`, `errored`) plus le statut par requête et les résultats d'assertion.
+3. Si quelque chose a échoué, `get_run_history` (filtré par `collection_id`) pour comparer avec l'exécution précédente.
+4. `export_collection_to_junit` → envoyez le XML à votre tableau de bord CI.
+
+```json
+// résultat de run_collection_with_assertions (abrégé)
+{
+  "run_id": "run-172…",
+  "collection_name": "Démo",
+  "summary": { "total": 9, "passed": 6, "failed": 3, "errored": 0 },
+  "results": [
+    { "name": "List posts", "method": "GET", "status": 200, "passed": true, "assertion_results": [ { "name": "status is 200", "passed": true }, { "name": "returns posts", "passed": true } ] }
+  ]
+}
+```
+
+## Importer une commande curl, puis l'exécuter
+
+1. `create_collection` → `col-…`.
+2. `import_from_curl` avec `curl_command` et `collection_id`.
+3. `list_requests` → notez le nouveau `request_id`.
+4. `run_request` → exécuté avec les en-têtes/corps du curl.
+
+## Générer des tests depuis une spécification OpenAPI
+
+1. `generate_tests` avec `spec` (JSON/YAML OpenAPI 3).
+2. Optionnellement `save_collection_id` pour persister les requêtes de cas limites générées (auth manquante, payloads invalides, mauvais types, scénarios 4xx).
+3. `run_collection_with_assertions` sur la collection générée — les tests générés assertent les codes de statut attendus.
+
+## Synchroniser le spec d'un serveur live et comparer avec la baseline
+
+`openapi_sync` récupère un spec depuis une URL live (`http://localhost:4000/openapi.json`) ou prend `spec_content`, l'importe comme collection, et — quand `diff_spec` est fourni — rapporte les endpoints ajoutés/supprimés/modifiés.
+
+## Analyser un projet local pour les routes API
+
+`analyze_project_routes` avec `folder_path` scanne une base de code (Rust, Java, frameworks JS, Python, multi-langage) pour les routes HTTP détectées et les retourne — en les sauvegardant optionnellement dans une collection via `save_collection_id`. Fonctionnalité desktop uniquement.
+
+## Allers-retours avec un bundle
+
+- `export_bundle` → JSON complet de chaque collection, requête, dossier, environnement.
+- `import_bundle` → restaurez-le dans une nouvelle session serveur (ou existante).
+- `export_to_openapi` → JSON OpenAPI 3.0 ; `import_from_openapi` → l'inverse.
+
+## Découvrir ce qui existe
+
+1. `resources/list` (ou `list_collections` + `list_requests`) pour l'inventaire.
+2. `get_collection_tree` pour la hiérarchie dossiers/requêtes.
+3. `search_requests` avec une requête pour trouver une requête par nom, URL ou méthode.
+4. `get_request` pour la définition complète (en-têtes, corps, auth, scripts, assertions).
+5. `validate_request` pour pré-valider une définition sans l'envoyer.

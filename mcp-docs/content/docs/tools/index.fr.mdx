@@ -1,0 +1,42 @@
+---
+title: Aperçu des outils
+description: Les 44 outils MCP, groupés par objectif.
+icon: Wrench
+---
+
+Tous les outils sont des invocations JSON-RPC `tools/call` avec un `inputSchema` JSON-Schema (comme servi par `tools/list`). Les résultats sont retournés comme texte JSON formaté. Les outils qui ne peuvent pas satisfaire un appel retournent `isError: true` avec un message lisible au lieu de lever une exception.
+
+Les outils sont groupés ici pour la lisibilité :
+
+## Collections
+`list_collections` · `get_collection_tree` · `create_collection` · `update_collection` · `delete_collection` · `duplicate_collection`
+
+## Requêtes
+`list_requests` · `get_request` · `create_request` · `update_request` · `delete_request` · `duplicate_request` · `move_request` · `reorder_requests` · `search_requests` · `import_from_curl` · `export_request_to_curl` · `validate_request` · `generate_request_from_description`
+
+## Dossiers
+`create_folder` · `update_folder` · `delete_folder`
+
+## Exécution
+`run_request` · `run_collection` · `run_requests_batch` · `run_collection_with_assertions` · `get_request_history` · `get_run_history`
+
+## Environnements
+`list_environments` · `create_environment` · `update_environment` · `delete_environment` · `duplicate_environment` · `get_environment_variables` · `resolve_variables`
+
+## Import / Export
+`export_bundle` · `import_bundle` · `import_from_openapi` · `export_to_openapi` · `export_collection_to_junit`
+
+## Intelligence API
+`generate_tests` · `openapi_sync` · `analyze_project_routes` · `graphql_execute`
+
+---
+
+## Conventions
+
+**IDs.** Les collections, requêtes, dossiers et environnements sont identifiés par des IDs stables (`col-…`, `req-…`, `env-…`, `fld-…`). Les outils d'exécution acceptent aussi le **nom unique** d'une requête comme `request_id`, pour que les agents puissent utiliser des références lisibles. Obtenez les IDs depuis `list_collections`, `list_requests`, `get_collection_tree` ou les ressources MCP.
+
+**`env_name` optionnel.** Les outils d'exécution acceptent un `env_name` ; quand omis, ils utilisent le défaut `--env` du serveur, puis les variables du bundle.
+
+**Erreurs.** Une recherche échouée retourne quelque chose comme `Collection not found: col-xyz` avec `isError: true`, pour que les agents puissent récupérer gracieusement.
+
+**Timeouts.** Les outils d'exécution acceptent `timeout_ms` ; le défaut du serveur est 30 s.

@@ -1,0 +1,54 @@
+---
+title: Server Configuration
+description: Every option of the `serve` command.
+icon: Settings
+---
+
+The MCP server is started with `recli serve` (or `node dist/index.js serve`). All options are optional; sensible defaults apply.
+
+```bash
+node dist/index.js serve [options]
+```
+
+## Options
+
+| Option | Default | Description |
+|---|---|---|
+| `--file <path>` | — | Path to an exported Reqly JSON bundle. If omitted, the server starts empty and collections can be created or imported through tools. |
+| `--port <number>` | stdio | When set (1–65535), starts the **streamable HTTP** transport on `127.0.0.1:<port>` at the `/mcp` endpoint. When omitted, uses **stdio** (line-delimited JSON-RPC on stdin/stdout) for local MCP clients. |
+| `--env <name>` | — | Default environment name used for `{{variable}}` interpolation when a tool call does not pass `env_name`. |
+| `--timeout <ms>` | `30000` | Default per-request timeout in milliseconds. Tools can override per call via `timeout_ms`. |
+| `--allow-local-hosts` | off | Allow requests to private/local addresses (`127.0.0.1`, `10.x`, `192.168.x`, …). **Disabled by default** — the server refuses requests to non-public hosts to prevent SSRF. |
+| `--max-response-size <bytes>` | `10485760` (10 MB) | Maximum response body size captured per request. Larger bodies are truncated. |
+| `--cors-origins <origins>` | `http://127.0.0.1,http://localhost` | Comma-separated list of allowed `Origin` headers for the HTTP transport. **Requests without an allowed Origin are rejected with 403.** |
+
+## Examples
+
+```bash
+# stdio — for Claude Desktop / Claude Code / Cursor
+node dist/index.js serve --file demo.json --env prod
+
+# HTTP with a custom CORS allowlist
+node dist/index.js serve --file demo.json --env prod --port 4000 \
+  --cors-origins http://127.0.0.1,http://localhost:3000
+
+# allow calls to a local API during development
+node dist/index.js serve --file demo.json --env staging --allow-local-hosts
+
+# tune timeouts and response size for large payloads
+node dist/index.js serve --file demo.json --timeout 60000 --max-response-size 52428800
+```
+
+## Environment resolution
+
+Tools that execute requests accept an optional `env_name`. The resolution order for `{{VAR}}` placeholders is:
+
+1. The **environment** — the tool's `env_name`, falling back to the server's `--env`.
+2. **`process.env`** (as a final fallback).
+3. If a variable is still unresolved, the request runs with the literal `{{VAR}}` placeholder.
+
+## Persistence
+
+When the server is started with `--file`, every mutation made through a tool (create/update/delete collection, request, environment, …) is **written back to that file**. The store injects generated IDs (`col-…`, `req-…`, `env-…`) into the file on the first mutation. Stop the server to inspect the updated bundle.
+
+> **Note:** because mutations persist to disk, running the server against a file under version control will rewrite it with generated IDs. This is intentional.

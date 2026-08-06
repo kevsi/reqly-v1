@@ -1,0 +1,99 @@
+---
+title: Exécution
+description: Exécuter des requêtes et collections, évaluer les assertions et inspecter l'historique d'exécution.
+icon: Play
+---
+
+Le but d'une suite de tests API est de l'exécuter et de savoir si elle a réussi. Ces outils font exactement cela : déclencher une requête unique, une collection complète ou un batch parallèle — puis ouvrir l'historique pour voir ce qui s'est passé.
+
+Chaque requête s'exécute indépendamment : les espaces réservés `{{var}}` sont résolus depuis l'environnement sélectionné (voir [Configuration du serveur](../configuration)), pas depuis les résultats d'autres requêtes. Chaque exécution est automatiquement enregistrée.
+
+## Exécuter une requête
+
+```json
+{
+  "name": "run_request",
+  "arguments": { "request_id": "List posts", "timeout_ms": 5000 }
+}
+```
+
+Vous pouvez passer l'ID généré de la requête (`req-…`) ou, comme `run_request` résout aussi les noms, son nom exact. La réponse vous donne le statut, le timing, la taille et les résultats d'assertion :
+
+```json
+{
+  "name": "List posts",
+  "method": "GET",
+  "url": "https://…/posts",
+  "status": 200,
+  "status_text": "OK",
+  "duration_ms": 348,
+  "size_bytes": 2304,
+  "passed": true,
+  "assertions_passed": 2,
+  "assertion_results": [
+    { "name": "status is 200", "passed": true },
+    { "name": "returns posts", "passed": true }
+  ],
+  "error": null,
+  "body": "{ …corps de réponse… }"
+}
+```
+
+## Les outils
+
+### `run_request`
+
+Exécute une requête par ID (ou nom unique) et retourne le statut, le corps, le timing et les résultats d'assertion.
+
+- Entrée :
+  - `request_id` *(chaîne, requis)*
+  - `timeout_ms` *(nombre)* — timeout par requête (défaut 30 000)
+  - `env_name` *(chaîne)* — environnement pour l'interpolation de variables
+
+### `run_collection`
+
+Exécute toutes les requêtes d'une collection **séquentiellement**, retournant un résumé et les résultats par requête. Utilisez-le pour un test de fumée complet.
+
+- Entrée : `collection_id` *(requis)*, `timeout_ms`, `env_name`
+
+**Réponse :** `{ collection_name, total, passed, failed, errored, results: [{ name, method, url, status, duration_ms, passed, error }] }`
+
+### `run_requests_batch`
+
+Exécute plusieurs requêtes par leurs IDs — pratique quand seules quelques requêtes importent.
+
+- Entrée :
+  - `request_ids` *(tableau de chaînes, requis)* — plafonné à 20 par défaut
+  - `timeout_ms`, `env_name`
+
+**Réponse :** `{ batch_size, results: [{ request_id, name, method, url, status, duration_ms, passed, error }] }`
+
+> Note : il n'y a pas de chaînage de variables inter-requêtes — chaque requête du batch résout les espaces réservés `{{var}}` depuis l'environnement sélectionné uniquement.
+
+### `run_collection_with_assertions`
+
+L'exécution CI-grade : exécute une collection séquentiellement avec évaluation complète des assertions et un rapport de test que vous pouvez pointer dans un chat.
+
+- Entrée : `collection_id` *(requis)*, `timeout_ms`, `env_name`
+
+**Réponse :** `{ run_id, collection_name, summary: { total, passed, failed, errored }, results: [{ name, method, url, status, duration_ms, passed, assertion_results, error }] }`
+
+### `get_request_history`
+
+Regarde en arrière comment une requête spécifique s'est comportée lors de ses dernières exécutions.
+
+- Entrée :
+  - `request_id` *(chaîne, requis)*
+  - `limit` *(nombre)* — défaut 10
+
+### `get_run_history`
+
+Exécutions de collection récentes, optionnellement filtrées par collection — utile juste après un déploiement pour comparer avec l'exécution précédente.
+
+- Entrée : `collection_id` *(optionnel)*, `limit` *(défaut 10)*
+
+**Réponse :** `[{ id, collection_id, collection_name, started_at, total, passed, failed, errored }]`
+
+## Assertions
+
+Les requêtes peuvent déclarer des assertions — soit des objets structurés `{name, expr}` (ex. `status == 200`, `body.userId >= 1`, `duration < 5000`) soit des chaînes simples (`"status == 200"`). `run_request` et `run_collection_with_assertions` les évaluent et rapportent les résultats par assertion. Une exécution "réussit" seulement quand chaque assertion réussit.

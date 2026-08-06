@@ -1,0 +1,69 @@
+---
+title: Collections
+description: Collection discovery, CRUD, duplication and the folder tree.
+icon: Folder
+---
+
+A collection is a named bucket of requests — think of it as the unit you run, export, and share. These tools find collections, create them, and keep them tidy.
+
+## Create a collection
+
+```json
+{
+  "name": "create_collection",
+  "arguments": {
+    "name": "Payments",
+    "description": "Payment flows for QA",
+    "color": "emerald"
+  }
+}
+```
+
+The response returns the new collection with its generated `col-…` id. Pair it with `create_request` to populate it.
+
+## The tools
+
+### `list_collections`
+
+List all collections with their request counts — the natural first call when an agent starts.
+
+- Input: *none*
+
+### `get_collection_tree`
+
+Get the full tree of a collection including folders and requests. Use it to understand the shape of a suite before running it.
+
+- Input:
+  - `collection_id` *(string, required)*
+
+### `create_collection`
+
+Create a new collection.
+
+- Input:
+  - `name` *(string, required)*
+  - `description` *(string)* — optional
+  - `color` *(string)* — optional: `slate`, `red`, `orange`, `amber`, `emerald`, `blue`, `indigo`, `violet`, `pink`
+  - `icon` *(string)* — optional icon name
+
+### `update_collection`
+
+Change a collection's `name`, `description`, `color`, or `icon`.
+
+- Input:
+  - `collection_id` *(string, required)*
+  - `name` · `description` · `color` · `icon` *(string, optional)* — only provided fields are changed
+
+### `delete_collection`
+
+Delete a collection and all its requests. No undo — make sure you exported first.
+
+- Input:
+  - `collection_id` *(string, required)*
+
+### `duplicate_collection`
+
+Duplicate a collection with all its requests and folders. New IDs are generated for everything, so the copy is fully independent.
+
+- Input:
+  - `collection_id` *(string, required)*

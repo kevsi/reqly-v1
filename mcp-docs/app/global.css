@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* ── Theme change animation ────────────────────────────────────────────────
+   fumadocs ThemeSwitch already calls document.startViewTransition() on toggle.
+   We only style it: the old theme fades out, revealing the new theme already
+   full-opacity underneath. Disabled for users who prefer reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: fd-theme-out 0.28s ease both;
+  }
+
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  @keyframes fd-theme-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+/* ── Icon micro-animations ───────────────────────────────────────────────── */
+@keyframes fd-spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fd-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes fd-pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes fd-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #nd-sidebar a svg {
+    transition:
+      transform 0.2s ease,
+      color 0.2s ease;
+  }
+
+  #nd-sidebar a:hover svg {
+    transform: scale(1.15);
+  }
+
+  #nd-sidebar a[data-active="true"] svg {
+    animation: fd-pulse-soft 3s ease-in-out infinite;
+  }
+}

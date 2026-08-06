@@ -1,0 +1,137 @@
+---
+title: Requests
+description: Request discovery, CRUD, ordering, search, curl conversion, validation and generation.
+icon: Send
+---
+
+Requests are the individual HTTP calls in your suite. These tools cover everything an agent needs to find one, build one, tweak it, and convert it.
+
+## Create a request
+
+```json
+{
+  "name": "create_request",
+  "arguments": {
+    "collection_id": "col-1a2b3c",
+    "name": "Create user",
+    "method": "POST",
+    "url": "{{BASE_URL}}/users",
+    "headers": { "Content-Type": "application/json" },
+    "body": "{ \"name\": \"Ada\" }",
+    "body_type": "json",
+    "auth_type": "bearer",
+    "auth_token": "{{DEMO_TOKEN}}"
+  }
+}
+```
+
+## The tools
+
+### `list_requests`
+
+List all requests in a given collection.
+
+- Input:
+  - `collection_id` *(string, required)*
+
+### `get_request`
+
+Get full details of a specific request by ID — method, URL, headers, body, auth, scripts, assertions.
+
+- Input:
+  - `request_id` *(string, required)*
+
+### `create_request`
+
+Create a new request in a collection.
+
+- Input:
+  - `collection_id` *(string, required)*
+  - `name` *(string, required)*
+  - `method` *(string, required)* — `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `GRAPHQL`
+  - `url` *(string, required)*
+  - `headers` *(object)* — optional header map
+  - `body` *(string)* — optional request body
+  - `body_type` *(string)* — optional: `json`, `form-data`, `x-www-form`, `raw`, `binary`
+  - `auth_type` *(string)* — optional: `none`, `bearer`, `basic`, `api-key`, `oauth2`
+  - `auth_token` *(string)* — optional
+  - `query_params` *(array)* — optional array of `{key, value}`
+
+### `update_request`
+
+Change any of a request's fields — the workhorse for when a deploy moved an endpoint or renamed a header. Only provided fields change.
+
+- Input:
+  - `request_id` *(string, required)*
+  - `name` · `method` · `url` · `headers` · `body` · `body_type` · `auth_type` · `auth_token` · `query_params` *(optional)*
+  - `folder_id` *(string)* — move to a folder (`null` removes from folder)
+  - `pre_request_script` · `post_response_script` *(string)* — Postman-style JavaScript
+  - `protocol` *(string)* — `rest` or `graphql`
+
+### `delete_request`
+
+Delete a request by ID.
+
+- Input: `request_id` *(string, required)*
+
+### `duplicate_request`
+
+Duplicate a request within the same or a different collection.
+
+- Input:
+  - `request_id` *(string, required)*
+  - `target_collection_id` *(string)* — defaults to the same collection
+
+### `move_request`
+
+Move a request to a different collection and/or folder.
+
+- Input:
+  - `request_id` *(string, required)*
+  - `target_collection_id` *(string, required)*
+  - `target_folder_id` *(string)* — `null` moves to the collection root
+
+### `reorder_requests`
+
+Reorder requests inside a collection by providing the full ordered list of request IDs.
+
+- Input:
+  - `collection_id` *(string, required)*
+  - `ordered_request_ids` *(array of string, required)* — every request ID in the desired order
+
+### `search_requests`
+
+Find a request by name, URL, or method when you don't know its ID.
+
+- Input:
+  - `query` *(string, required)*
+
+### `import_from_curl`
+
+Import a request from a `curl` command string into a collection. The parser understands `-X`, `-H`, `-d`/`--data`, `-u`, `--compressed`, `-b`, and URL-inclusive commands.
+
+- Input:
+  - `collection_id` *(string, required)*
+  - `curl_command` *(string, required)*
+  - `name` *(string)* — defaults to the URL path
+
+### `export_request_to_curl`
+
+Export a stored request to an equivalent `curl` command string — handy for sharing or reproducing outside Recli.
+
+- Input: `request_id` *(string, required)*
+
+### `validate_request`
+
+Pre-flight check of request fields **without sending** anything. Validate an existing request by `request_id`, or an ad-hoc definition by supplying `name`/`method`/`url`/`body`/`body_type`/`auth_type`/`auth_token`. Use it before running, to catch bad URLs or missing tokens early.
+
+- Input: `request_id` *or* ad-hoc fields (all optional, at least the URL recommended)
+
+### `generate_request_from_description`
+
+Turn a plain-text description into a request definition. Great for onboarding: describe the call and let the agent build it.
+
+- Input:
+  - `description` *(string, required)* — e.g. *"GET the latest 10 posts from the blog API"*
+  - `collection_id` *(string)* — save the generated request here
+  - `name` *(string)* — override the generated name

@@ -1,0 +1,47 @@
+---
+title: Security
+description: The security model — SSRF guard, CORS, sandboxed scripts, and limits.
+icon: ShieldCheck
+---
+
+The server is designed to be run **locally** and to stay safe against malicious collections, specs, or callers.
+
+## SSRF guard
+
+By default the server **refuses to execute requests against private or loopback hosts** — `127.0.0.1`, `10.x`, `192.168.x`, `172.16.x`, link-local, and `localhost`. This prevents a malicious collection (or a prompt-injected agent) from probing your internal network.
+
+- Disabled by default; enable with `--allow-local-hosts` for local development against `http://localhost:3000`, etc.
+- Applies to every execution path: `run_request`, `run_collection`, `run_requests_batch`, `run_collection_with_assertions`, and `graphql_execute`.
+
+## CORS allowlist (HTTP transport)
+
+The HTTP transport rejects any request whose `Origin` header is not in the allowlist (`--cors-origins`, defaulting to `http://127.0.0.1` and `http://localhost`) with **`403 Origin not allowed`**.
+
+CORS headers alone are browser-only, so this check is enforced **server-side**: even a curl call without an Origin is rejected, preventing random local processes from driving the server.
+
+## Sandboxed scripts
+
+Requests can carry `pre_request_script` / `post_response_script` (Postman-style JavaScript). Scripts execute inside a hardened `node:vm` context:
+
+- No `require`, no `process`, no `globalThis`, no host objects reachable through prototype chains.
+- A realm-safe bridge wraps every host API value (`env`, `vars`, `request`, `pm`, `postman`, `expect`, …) so `something.constructor.constructor('return process')()`-style escapes return sandbox values, never host objects.
+- Sync and async timeouts abort runaway scripts.
+- Regression tests assert the escape vectors stay closed (constructor chains, `defineProperty` getters, `__proto__` poisoning, unhandled rejections).
+
+## Limits
+
+| Limit | Default | Controls |
+|---|---|---|
+| Request timeout | 30 s | `--timeout`, or `timeout_ms` per tool call |
+| Response body size | 10 MB | `--max-response-size` |
+| Batch size | 20 | `request_ids` slice in `run_requests_batch` |
+| Run history depth | last 10 | `limit` parameter on history tools |
+
+## Secret handling
+
+- Token values are never echoed in error paths.
+- Reporters redact values matching `token`, `secret`, `password`, `auth`, `apikey`, `jwt`, `bearer`, … in errors, captured variables, and headers.
+
+## Persistence
+
+Mutations persist to the bundle file when `--file` is used. Keep the bundle outside shared/network drives if it contains credentials, and rely on the sandbox + SSRF guard for untrusted inputs.

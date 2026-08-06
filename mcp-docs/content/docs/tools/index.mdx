@@ -1,0 +1,42 @@
+---
+title: Tools Overview
+description: The 44 MCP tools, grouped by purpose.
+icon: Wrench
+---
+
+All tools are JSON-RPC `tools/call` invocations with a JSON-Schema `inputSchema` (as served by `tools/list`). Results are returned as formatted JSON text. Tools that cannot satisfy a call return `isError: true` with a human-readable message instead of throwing.
+
+Tools are grouped here for readability:
+
+## Collections
+`list_collections` · `get_collection_tree` · `create_collection` · `update_collection` · `delete_collection` · `duplicate_collection`
+
+## Requests
+`list_requests` · `get_request` · `create_request` · `update_request` · `delete_request` · `duplicate_request` · `move_request` · `reorder_requests` · `search_requests` · `import_from_curl` · `export_request_to_curl` · `validate_request` · `generate_request_from_description`
+
+## Folders
+`create_folder` · `update_folder` · `delete_folder`
+
+## Execution
+`run_request` · `run_collection` · `run_requests_batch` · `run_collection_with_assertions` · `get_request_history` · `get_run_history`
+
+## Environments
+`list_environments` · `create_environment` · `update_environment` · `delete_environment` · `duplicate_environment` · `get_environment_variables` · `resolve_variables`
+
+## Import / Export
+`export_bundle` · `import_bundle` · `import_from_openapi` · `export_to_openapi` · `export_collection_to_junit`
+
+## API Intelligence
+`generate_tests` · `openapi_sync` · `analyze_project_routes` · `graphql_execute`
+
+---
+
+## Conventions
+
+**IDs.** Collections, requests, folders and environments are identified by stable IDs (`col-…`, `req-…`, `env-…`, `fld-…`). Execution tools also accept a request's unique **name** as `request_id`, so agents can use human-readable references. Get IDs from `list_collections`, `list_requests`, `get_collection_tree`, or the MCP resources.
+
+**Optional `env_name`.** Execution tools accept an `env_name`; when omitted they use the server's `--env` default, then bundle variables.
+
+**Errors.** A failed lookup returns something like `Collection not found: col-xyz` with `isError: true`, so agents can recover gracefully.
+
+**Timeouts.** Execution tools accept `timeout_ms`; the server default is 30 s.

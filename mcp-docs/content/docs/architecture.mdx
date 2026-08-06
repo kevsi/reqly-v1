@@ -1,0 +1,79 @@
+---
+title: Architecture
+description: How the MCP server is built — store, dispatcher, transports.
+icon: Cpu
+---
+
+The server lives in `recli/src/mcp/`. It is built on the official `@modelcontextprotocol/sdk` and the same request engine as the Recli CLI, so behavior is identical between the CLI, the TUI, and the MCP server.
+
+```
+┌────────────────────────────────────────────────────────┐
+│  MCP client (Claude, Cursor, Inspector, curl, SDK…)    │
+└───────────────▲──────────────────────────▲─────────────┘
+                │ JSON-RPC                  │ JSON-RPC
+        ┌───────┴────────┐         ┌────────┴────────┐
+        │  stdio         │         │ streamable HTTP │  (--port, CORS-guarded)
+        └───────┬────────┘         └────────┬────────┘
+                └───────────┬───────────────┘
+                    ┌───────▼────────┐
+                    │   mcp/server    │  Server (tools + resources handlers)
+                    └───────┬────────┘
+            ┌───────────────┼─────────────────┐
+     ┌──────▼──────┐  ┌─────▼──────┐  ┌───────▼────────┐
+     │ tool-defs    │  │ tools.ts    │  │ CollectionStore │
+     │ (44 schemas) │  │ dispatcher  │  │ (state + persist)│
+     └──────────────┘  └─────┬──────┘  └───────┬────────┘
+                             │ handlers        │
+             ┌───────────────┼──────────────┐  │
+      ┌──────▼─────┐  ┌──────▼──────┐  ┌─────▼─────┐
+      │ requests   │  │ environments │ │ runner    │ ──► CLI engine
+      │ collections│  │ import/export│ │ (execute…)│     (shared runner.js)
+      └────────────┘  └─────────────┘ └───────────┘
+```
+
+## Components
+
+### `mcp/server.ts` — bootstrap
+
+`startMcpServer(options)`:
+
+1. Creates a `CollectionStore` and loads the bundle (if `--file`).
+2. Registers handlers for `resources/list`, `resources/read`, `tools/list` and `tools/call`.
+3. Connects either a `StdioServerTransport` or a `StreamableHTTPServerTransport`.
+4. The HTTP path wraps the transport in a plain `node:http` server that enforces the Origin allowlist, CORS headers, and routes only `/mcp`.
+
+### `CollectionStore` — state & persistence
+
+In-memory state over the bundle: collections, requests, folders, environments, plus **run history**. It generates stable IDs (`col-…`, `req-…`, `env-…`) for anything lacking one, keeps parent/child links coherent, and calls a persistence callback so mutations write back to the source file.
+
+### `tool-definitions.ts` — the contract
+
+A static `TOOLS` array of 44 `{ name, description, inputSchema }` entries (JSON Schema). Served verbatim by `tools/list`. Handlers and schemas are the single source of truth for what an agent can do.
+
+### `tools.ts` — the dispatcher
+
+`createToolHandler(store, bundle, options)` returns a `handleToolCall(name, args)` function that maps tool names to handler modules:
+
+- `handlers/collections.ts` — collection CRUD, tree, duplicate
+- `handlers/requests.ts` — request CRUD, folders, search, curl import/export, validate, reorder, move
+- `handlers/environments.ts` — environment CRUD, variable resolution
+- `handlers/runner.ts` — execution tools and run history
+- `handlers/import-export.ts` — bundles, OpenAPI, JUnit, project analysis, GraphQL
+- `handlers/generate-tests.ts` — OpenAPI → edge-case test generation
+
+### Shared engine
+
+Execution tools delegate to `recli/src/runner.ts` (`executeRequestWithAssertions`), the same engine the CLI and TUI use. That means assertions, timeouts, the SSRF guard, and the script sandbox behave identically everywhere. Unlike the CLI/TUI, the MCP server does **not** chain captured variables across requests — each tool call runs with a fresh context.
+
+## Execution flow of `run_request`
+
+1. `store.findRequestById(id)` resolves the request (by ID **or** unique name).
+2. `executeRequestWithAssertions` interpolates variables, runs the pre-request script (sandboxed), performs the HTTP call (guarded), runs the post-response script, evaluates assertions, and applies captures.
+3. The result — status, body, timing, size, `passed`, per-assertion results — is recorded in the store and returned as formatted JSON.
+4. Every run becomes a `RequestRunRecord` inside a `CollectionRunRecord`, queryable later via `get_request_history` / `get_run_history`.
+
+## Design notes
+
+- **ID-or-name resolution:** execution tools accept either a generated ID or the request's unique name, so agents can use human-friendly references.
+- **Batch guard:** `run_requests_batch` is capped (default 20) to bound cost.
+- **Persistence side-effect:** `ensureIds()` injects IDs into the in-memory copy on load, so the first mutation rewrites the source file with generated IDs — intended, but visible when a human diffs the bundle.

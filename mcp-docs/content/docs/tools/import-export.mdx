@@ -1,0 +1,59 @@
+---
+title: Import / Export
+description: Move data in and out — bundles, OpenAPI, and JUnit reports.
+icon: ArrowLeftRight
+---
+
+### `export_bundle`
+
+Export all collections, requests, folders, and environments as a single Reqly JSON bundle. This is the same format accepted by `--file`.
+
+- Input: *none*
+
+### `import_bundle`
+
+Import collections and requests from a JSON bundle string.
+
+- Input:
+  - `bundle_json` *(string, required)* — the export bundle JSON
+
+### `import_from_openapi`
+
+Import collections and requests from an OpenAPI JSON or YAML spec.
+
+- Input:
+  - `spec` *(string, required)* — the OpenAPI spec content
+
+### `export_to_openapi`
+
+Export all collections to an OpenAPI 3.0 JSON spec.
+
+- Input: *none*
+
+### `export_collection_to_junit`
+
+Export the **last run record** of a collection as JUnit XML — ready for CI dashboards.
+
+- Input:
+  - `collection_id` *(string, required)*
+
+---
+
+## Example round-trip
+
+```json
+// 1. snapshot everything
+{ "name": "export_bundle", "arguments": {} }
+
+// 2. restore it later (or on another machine)
+{
+  "name": "import_bundle",
+  "arguments": { "bundle_json": "{ \"version\": \"1.0\", \"collections\": [ … ] }" }
+}
+```
+
+## OpenAPI notes
+
+- `import_from_openapi` converts paths, operations, parameters, request bodies, and security schemes into Reqly requests.
+- `export_to_openapi` produces a spec with the server URL derived from the collection's base URL.
+- For deeper workflows (spec sync, diffing, test generation) see [API Intelligence](./intelligence).

@@ -1,0 +1,69 @@
+---
+title: Collections
+description: Découverte de collections, CRUD, duplication et arborescence des dossiers.
+icon: Folder
+---
+
+Une collection est un conteneur nommé de requêtes — considérez-la comme l'unité que vous exécutez, exportez et partagez. Ces outils trouvent les collections, les créent et les maintiennent propres.
+
+## Créer une collection
+
+```json
+{
+  "name": "create_collection",
+  "arguments": {
+    "name": "Paiements",
+    "description": "Flux de paiement pour QA",
+    "color": "emerald"
+  }
+}
+```
+
+La réponse retourne la nouvelle collection avec son ID `col-…` généré. Associez-la avec `create_request` pour la peupler.
+
+## Les outils
+
+### `list_collections`
+
+Liste toutes les collections avec leurs nombres de requêtes — le premier appel naturel quand un agent démarre.
+
+- Entrée : *aucune*
+
+### `get_collection_tree`
+
+Obtient l'arbre complet d'une collection incluant dossiers et requêtes. Utilisez-le pour comprendre la forme d'une suite avant de l'exécuter.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+
+### `create_collection`
+
+Crée une nouvelle collection.
+
+- Entrée :
+  - `name` *(chaîne, requis)*
+  - `description` *(chaîne)* — optionnel
+  - `color` *(chaîne)* — optionnel : `slate`, `red`, `orange`, `amber`, `emerald`, `blue`, `indigo`, `violet`, `pink`
+  - `icon` *(chaîne)* — optionnel nom d'icône
+
+### `update_collection`
+
+Modifie le `name`, `description`, `color` ou `icon` d'une collection.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+  - `name` · `description` · `color` · `icon` *(chaîne, optionnel)* — seuls les champs fournis sont modifiés
+
+### `delete_collection`
+
+Supprime une collection et toutes ses requêtes. Pas d'annulation — assurez-vous d'avoir exporté d'abord.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+
+### `duplicate_collection`
+
+Duplique une collection avec toutes ses requêtes et dossiers. De nouveaux IDs sont générés pour tout, donc la copie est entièrement indépendante.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*

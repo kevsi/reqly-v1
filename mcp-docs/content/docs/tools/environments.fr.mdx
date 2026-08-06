@@ -1,0 +1,76 @@
+---
+title: Environnements
+description: Gérer les environnements et l'interpolation de variables.
+icon: Globe
+---
+
+Les environnements contiennent des ensembles de variables nommées (`BASE_URL`, tokens, etc.) utilisées pour résoudre les espaces réservés `{{VAR}}` dans les requêtes.
+
+### `list_environments`
+
+Liste tous les environnements avec leurs nombres de variables.
+
+- Entrée : *aucune*
+
+### `create_environment`
+
+Crée un nouvel environnement.
+
+- Entrée :
+  - `name` *(chaîne, requis)*
+  - `color` *(chaîne)* — optionnel
+
+### `update_environment`
+
+Met à jour les variables d'environnement (ajout, modification, suppression, activation/désactivation).
+
+- Entrée :
+  - `env_id` *(chaîne, requis)*
+  - `name` *(chaîne)* — nouveau nom
+  - `color` *(chaîne)* — nouvelle couleur
+  - `variables` *(tableau)* — tableau d'objets `{key, value, enabled}`
+
+### `delete_environment`
+
+Supprime un environnement.
+
+- Entrée : `env_id` *(chaîne, requis)*
+
+### `duplicate_environment`
+
+Duplique un environnement avec toutes ses variables.
+
+- Entrée : `env_id` *(chaîne, requis)*
+
+### `get_environment_variables`
+
+Obtient les variables résolues pour un environnement donné (pour le debugging d'interpolation).
+
+- Entrée : `env_name` *(chaîne, requis)*
+
+### `resolve_variables`
+
+Résout les espaces réservés `{{variable}}` dans une chaîne arbitraire en utilisant un environnement.
+
+- Entrée :
+  - `text` *(chaîne, requis)* — le texte contenant les espaces réservés `{{variable}}`
+  - `env_name` *(chaîne, requis)*
+
+---
+
+## Exemple
+
+```json
+{
+  "name": "update_environment",
+  "arguments": {
+    "env_id": "env-7f8a9b",
+    "variables": [
+      { "key": "BASE_URL", "value": "https://staging.example.com", "enabled": true },
+      { "key": "DEBUG", "value": "false", "enabled": false }
+    ]
+  }
+}
+```
+
+`resolve_variables` est pratique pour les vérifications préalables : passez un template d'URL et confirmez que l'espace réservé se résout avant l'exécution.

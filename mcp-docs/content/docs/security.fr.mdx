@@ -1,0 +1,47 @@
+---
+title: Sécurité
+description: Le modèle de sécurité — garde SSRF, CORS, scripts sandboxés et limites.
+icon: ShieldCheck
+---
+
+Le serveur est conçu pour être exécuté **localement** et rester sûr contre les collections, specs ou appelants malveillants.
+
+## Garde SSRF
+
+Par défaut, le serveur **refuse d'exécuter des requêtes vers des hôtes privés ou de rebouclage** — `127.0.0.1`, `10.x`, `192.168.x`, `172.16.x`, link-local et `localhost`. Cela empêche une collection malveillante (ou un agent avec injection de prompt) de scanner votre réseau interne.
+
+- Désactivé par défaut ; activez avec `--allow-local-hosts` pour le développement local contre `http://localhost:3000`, etc.
+- S'applique à chaque chemin d'exécution : `run_request`, `run_collection`, `run_requests_batch`, `run_collection_with_assertions` et `graphql_execute`.
+
+## Liste d'autorisation CORS (transport HTTP)
+
+Le transport HTTP rejette toute requête dont l'en-tête `Origin` n'est pas dans la liste d'autorisation (`--cors-origins`, par défaut `http://127.0.0.1` et `http://localhost`) avec **`403 Origin not allowed`**.
+
+Les en-têtes CORS seuls sont limités aux navigateurs, donc cette vérification est appliquée **côté serveur** : même un appel curl sans Origin est rejeté, empêchant les processus locaux aléatoires de piloter le serveur.
+
+## Scripts sandboxés
+
+Les requêtes peuvent porter `pre_request_script` / `post_response_script` (JavaScript style Postman). Les scripts s'exécutent dans un contexte `node:vm` durci :
+
+- Pas de `require`, pas de `process`, pas de `globalThis`, aucun objet hôte accessible via les chaînes de prototype.
+- Un pont sécurisé wrappe chaque valeur d'API hôte (`env`, `vars`, `request`, `pm`, `postman`, `expect`, …) donc les évasions de type `something.constructor.constructor('return process')()` retournent des valeurs sandbox, jamais des objets hôtes.
+- Des timeouts sync et async arrêtent les scripts emballés.
+- Des tests de régression vérifient que les vecteurs d'évasion restent fermés (chaînes de constructeurs, getters `defineProperty`, empoisonnement `__proto__`, rejets non gérés).
+
+## Limites
+
+| Limite | Par défaut | Contrôle |
+|---|---|---|
+| Timeout de requête | 30 s | `--timeout`, ou `timeout_ms` par appel d'outil |
+| Taille du corps de réponse | 10 Mo | `--max-response-size` |
+| Taille de batch | 20 | slice `request_ids` dans `run_requests_batch` |
+| Profondeur de l'historique | 10 derniers | paramètre `limit` sur les outils d'historique |
+
+## Gestion des secrets
+
+- Les valeurs de token ne sont jamais affichées dans les chemins d'erreur.
+- Les reporters masquent les valeurs correspondant à `token`, `secret`, `password`, `auth`, `apikey`, `jwt`, `bearer`, … dans les erreurs, variables capturées et en-têtes.
+
+## Persistance
+
+Les mutations persistent dans le fichier bundle quand `--file` est utilisé. Gardez le bundle hors des lecteurs réseau/partagés s'il contient des credentials, et reposez-vous sur le sandbox + la garde SSRF pour les entrées non fiables.

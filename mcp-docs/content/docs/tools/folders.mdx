@@ -1,0 +1,48 @@
+---
+title: Folders
+description: Organize requests inside a collection with nested folders.
+icon: FolderTree
+---
+
+Folders let you organize requests within a collection, including nested hierarchies.
+
+### `create_folder`
+
+Create a folder inside a collection.
+
+- Input:
+  - `collection_id` *(string, required)*
+  - `name` *(string, required)*
+  - `parent_id` *(string)* — optional parent folder ID for nesting
+
+### `update_folder`
+
+Rename or move a folder.
+
+- Input:
+  - `folder_id` *(string, required)*
+  - `name` *(string)* — new name
+  - `parent_id` *(string)* — new parent (`null` moves to the root level)
+
+### `delete_folder`
+
+Delete a folder. **Requests inside are unlinked but not deleted** — they remain in the collection at the root level.
+
+- Input:
+  - `folder_id` *(string, required)*
+
+---
+
+## Example
+
+```json
+{
+  "name": "create_folder",
+  "arguments": {
+    "collection_id": "col-1a2b3c",
+    "name": "Auth flows"
+  }
+}
+```
+
+Then assign requests to it with `update_request` → `folder_id`, and inspect the hierarchy with `get_collection_tree`.

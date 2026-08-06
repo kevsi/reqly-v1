@@ -1,0 +1,54 @@
+---
+title: Configuration du serveur
+description: Toutes les options de la commande `serve`.
+icon: Settings
+---
+
+Le serveur MCP est démarré avec `recli serve` (ou `node dist/index.js serve`). Toutes les options sont optionnelles ; des valeurs par défaut raisonnables s'appliquent.
+
+```bash
+node dist/index.js serve [options]
+```
+
+## Options
+
+| Option | Par défaut | Description |
+|---|---|---|
+| `--file <chemin>` | — | Chemin vers un bundle JSON Reqly exporté. Si omis, le serveur démarre vide et les collections peuvent être créées ou importées via les outils. |
+| `--port <nombre>` | stdio | Quand défini (1–65535), démarre le transport **HTTP streamable** sur `127.0.0.1:<port>` au endpoint `/mcp`. Quand omis, utilise **stdio** (JSON-RPC ligne par ligne sur stdin/stdout) pour les clients MCP locaux. |
+| `--env <nom>` | — | Nom d'environnement par défaut utilisé pour l'interpolation `{{variable}}` quand un appel d'outil ne passe pas `env_name`. |
+| `--timeout <ms>` | `30000` | Timeout par requête par défaut en millisecondes. Les outils peuvent remplacer par appel via `timeout_ms`. |
+| `--allow-local-hosts` | désactivé | Autorise les requêtes vers des adresses privées/locales (`127.0.0.1`, `10.x`, `192.168.x`, …). **Désactivé par défaut** — le serveur refuse les requêtes vers des hôtes non publics pour prévenir le SSRF. |
+| `--max-response-size <octets>` | `10485760` (10 Mo) | Taille maximale du corps de réponse capturé par requête. Les corps plus grands sont tronqués. |
+| `--cors-origins <origines>` | `http://127.0.0.1,http://localhost` | Liste séparée par des virgules des en-têtes `Origin` autorisés pour le transport HTTP. **Les requêtes sans Origin autorisé sont rejetées avec 403.** |
+
+## Exemples
+
+```bash
+# stdio — pour Claude Desktop / Claude Code / Cursor
+node dist/index.js serve --file demo.json --env prod
+
+# HTTP avec une liste CORS personnalisée
+node dist/index.js serve --file demo.json --env prod --port 4000 \
+  --cors-origins http://127.0.0.1,http://localhost:3000
+
+# autoriser les appels vers une API locale pendant le développement
+node dist/index.js serve --file demo.json --env staging --allow-local-hosts
+
+# ajuster les timeouts et la taille de réponse pour les grandes charges utiles
+node dist/index.js serve --file demo.json --timeout 60000 --max-response-size 52428800
+```
+
+## Résolution d'environnement
+
+Les outils qui exécutent des requêtes acceptent un `env_name` optionnel. L'ordre de résolution pour les espaces réservés `{{VAR}}` est :
+
+1. L'**environnement** — le `env_name` de l'outil, revenant au `--env` du serveur.
+2. **`process.env`** (comme solution de repli finale).
+3. Si une variable reste non résolue, la requête s'exécute avec l'espace réservé littéral `{{VAR}}`.
+
+## Persistance
+
+Quand le serveur est démarré avec `--file`, chaque mutation effectuée via un outil (création/modification/suppression de collection, requête, environnement, …) est **réécrite dans ce fichier**. Le store injecte les IDs générés (`col-…`, `req-…`, `env-…`) dans le fichier à la première mutation. Arrêtez le serveur pour inspecter le bundle mis à jour.
+
+> **Note :** comme les mutations persistent sur disque, exécuter le serveur contre un fichier sous contrôle de version le réécrira avec les IDs générés. C'est intentionnel.

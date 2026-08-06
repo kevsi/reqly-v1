@@ -1,0 +1,108 @@
+---
+title: Intégrations clients
+description: Connecter Claude Desktop, Claude Code, Cursor, l'Inspecteur MCP ou des clients HTTP bruts.
+icon: Plug
+---
+
+## Claude Code (CLI)
+
+Enregistrez le serveur une fois par projet :
+
+```bash
+claude mcp add recli -- node "C:\\Users\\vous\\...\\recli\\dist\\index.js" serve --file demo.json --env prod
+```
+
+Listez les serveurs connectés dans un chat avec `/mcp`. Demandez ensuite naturellement :
+
+```
+Liste mes collections, exécute la requête "List posts" et résume si ses assertions ont réussi.
+```
+
+Pour mettre à jour après avoir déplacé des fichiers, supprimez et réajoutez :
+
+```bash
+claude mcp remove recli
+```
+
+## Claude Desktop
+
+Modifiez la configuration Claude Desktop (`claude_desktop_config.json`) et ajoutez une entrée `mcpServers` :
+
+```json
+{
+  "mcpServers": {
+    "recli": {
+      "command": "node",
+      "args": [
+        "C:\\\\Users\\\\vous\\\\...\\\\recli\\\\dist\\\\index.js",
+        "serve",
+        "--file",
+        "demo.json",
+        "--env",
+        "prod"
+      ]
+    }
+  }
+}
+```
+
+Redémarrez Claude Desktop, puis cherchez l'icône marteau 🔨 (outils MCP).
+
+## Cursor / autres clients stdio
+
+Tout client MCP qui lance un processus via stdio fonctionne. Dans Cursor, ajoutez un nouveau serveur MCP avec :
+
+- **Type :** command
+- **Commande :** `node`
+- **Arguments :** le chemin vers `recli/dist/index.js`, `serve`, `--file`, votre bundle, `--env`, le nom de l'env.
+
+## Inspecteur MCP (interface navigateur)
+
+L'Inspecteur officiel vous permet d'explorer les outils et ressources sans client de chat :
+
+```bash
+cd recli
+npx @modelcontextprotocol/inspector node dist/index.js serve --file demo.json --env prod
+```
+
+Ouvrez l'URL affichée, puis utilisez les onglets **Tools** / **Resources**.
+
+## HTTP brut (curl)
+
+Le transport HTTP est du JSON-RPC sur POST vers `/mcp`. Le serveur est strict sur CORS : **chaque requête doit porter un en-tête `Origin` autorisé**, sinon il répond `403 Origin not allowed`.
+
+```bash
+curl -s -X POST http://127.0.0.1:4000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Origin: http://127.0.0.1" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+```
+
+Puis listez les outils :
+
+```bash
+curl -s -X POST http://127.0.0.1:4000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Origin: http://127.0.0.1" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+
+Et appelez un outil :
+
+```bash
+curl -s -X POST http://127.0.0.1:4000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Origin: http://127.0.0.1" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run_request","arguments":{"request_id":"List posts"}}}'
+```
+
+> **Note Windows PowerShell :** PowerShell modifie les guillemets internes d'une chaîne JSON `-d`. Écrivez le corps dans un fichier et utilisez `-d "@body.json"`, ou exécutez curl depuis Git Bash.
+
+Les réponses sont encadrées en SSE (`event: message` + `data:`). Le transport HTTP émet un `sessionId` — réutilisez-le entre les appels avec l'en-tête `Mcp-Session-Id`.
+
+## Programmatique (TypeScript/JavaScript)
+
+Utilisez le `Client` du SDK officiel avec le `StreamableHTTPClientTransport` (HTTP) ou `StdioClientTransport` (stdio) pour appeler le serveur depuis votre propre code.

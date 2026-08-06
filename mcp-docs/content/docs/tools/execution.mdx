@@ -1,0 +1,99 @@
+---
+title: Execution
+description: Run requests and collections, evaluate assertions, and inspect run history.
+icon: Play
+---
+
+The whole point of an API test suite is running it and knowing whether it passed. These tools do that: fire a single request, a full collection, or a parallel batch — then open the history to see what happened.
+
+Each request runs independently: `{{var}}` placeholders resolve from the selected environment (see [Server Configuration](../configuration)), not from other requests' results. Every run is recorded automatically.
+
+## Run a request
+
+```json
+{
+  "name": "run_request",
+  "arguments": { "request_id": "List posts", "timeout_ms": 5000 }
+}
+```
+
+You can pass the request's generated ID (`req-…`) or, since `run_request` resolves names too, its exact name. The response gives you status, timing, size, and assertion results:
+
+```json
+{
+  "name": "List posts",
+  "method": "GET",
+  "url": "https://…/posts",
+  "status": 200,
+  "status_text": "OK",
+  "duration_ms": 348,
+  "size_bytes": 2304,
+  "passed": true,
+  "assertions_passed": 2,
+  "assertion_results": [
+    { "name": "status is 200", "passed": true },
+    { "name": "returns posts", "passed": true }
+  ],
+  "error": null,
+  "body": "{ …response body… }"
+}
+```
+
+## The tools
+
+### `run_request`
+
+Execute a request by ID (or unique name) and return status, body, timing, and assertion results.
+
+- Input:
+  - `request_id` *(string, required)*
+  - `timeout_ms` *(number)* — per-request timeout (default 30 000)
+  - `env_name` *(string)* — environment for variable interpolation
+
+### `run_collection`
+
+Run all requests in a collection **sequentially**, returning a summary and per-request results. Use this for a full smoke test.
+
+- Input: `collection_id` *(required)*, `timeout_ms`, `env_name`
+
+**Response:** `{ collection_name, total, passed, failed, errored, results: [{ name, method, url, status, duration_ms, passed, error }] }`
+
+### `run_requests_batch`
+
+Run several requests by their IDs — handy when only a few requests matter.
+
+- Input:
+  - `request_ids` *(array of string, required)* — capped at 20 by default
+  - `timeout_ms`, `env_name`
+
+**Response:** `{ batch_size, results: [{ request_id, name, method, url, status, duration_ms, passed, error }] }`
+
+> Note: there is no cross-request variable chaining — each request in the batch resolves `{{var}}` placeholders from the selected environment only.
+
+### `run_collection_with_assertions`
+
+The CI-grade run: executes a collection sequentially with full assertion evaluation and a test report you can point at in a chat.
+
+- Input: `collection_id` *(required)*, `timeout_ms`, `env_name`
+
+**Response:** `{ run_id, collection_name, summary: { total, passed, failed, errored }, results: [{ name, method, url, status, duration_ms, passed, assertion_results, error }] }`
+
+### `get_request_history`
+
+Look back at how a specific request behaved over its last runs.
+
+- Input:
+  - `request_id` *(string, required)*
+  - `limit` *(number)* — default 10
+
+### `get_run_history`
+
+Recent collection runs, optionally filtered by collection — useful right after a deploy to compare against the previous run.
+
+- Input: `collection_id` *(optional)*, `limit` *(default 10)*
+
+**Response:** `[{ id, collection_id, collection_name, started_at, total, passed, failed, errored }]`
+
+## Assertions
+
+Requests can declare assertions — either structured `{name, expr}` objects (e.g. `status == 200`, `body.userId >= 1`, `duration < 5000`) or plain strings (`"status == 200"`). `run_request` and `run_collection_with_assertions` evaluate them and report per-assertion results. A run "passes" only when every assertion passes.

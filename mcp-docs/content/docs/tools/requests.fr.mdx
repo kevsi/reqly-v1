@@ -1,0 +1,137 @@
+---
+title: Requêtes
+description: Découverte de requêtes, CRUD, ordonnancement, recherche, conversion curl, validation et génération.
+icon: Send
+---
+
+Les requêtes sont les appels HTTP individuels dans votre suite. Ces outils couvrent tout ce dont un agent a besoin pour en trouver une, en construire une, la modifier et la convertir.
+
+## Créer une requête
+
+```json
+{
+  "name": "create_request",
+  "arguments": {
+    "collection_id": "col-1a2b3c",
+    "name": "Créer utilisateur",
+    "method": "POST",
+    "url": "{{BASE_URL}}/users",
+    "headers": { "Content-Type": "application/json" },
+    "body": "{ \"name\": \"Ada\" }",
+    "body_type": "json",
+    "auth_type": "bearer",
+    "auth_token": "{{DEMO_TOKEN}}"
+  }
+}
+```
+
+## Les outils
+
+### `list_requests`
+
+Liste toutes les requêtes dans une collection donnée.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+
+### `get_request`
+
+Obtient les détails complets d'une requête spécifique par ID — méthode, URL, en-têtes, corps, auth, scripts, assertions.
+
+- Entrée :
+  - `request_id` *(chaîne, requis)*
+
+### `create_request`
+
+Crée une nouvelle requête dans une collection.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+  - `name` *(chaîne, requis)*
+  - `method` *(chaîne, requis)* — `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `GRAPHQL`
+  - `url` *(chaîne, requis)*
+  - `headers` *(objet)* — optionnel map d'en-têtes
+  - `body` *(chaîne)* — optionnel corps de requête
+  - `body_type` *(chaîne)* — optionnel : `json`, `form-data`, `x-www-form`, `raw`, `binary`
+  - `auth_type` *(chaîne)* — optionnel : `none`, `bearer`, `basic`, `api-key`, `oauth2`
+  - `auth_token` *(chaîne)* — optionnel
+  - `query_params` *(tableau)* — optionnel tableau de `{key, value}`
+
+### `update_request`
+
+Modifie n'importe quel champ d'une requête — l'outil principal quand un déploiement a déplacé un endpoint ou renommé un en-tête. Seuls les champs fournis changent.
+
+- Entrée :
+  - `request_id` *(chaîne, requis)*
+  - `name` · `method` · `url` · `headers` · `body` · `body_type` · `auth_type` · `auth_token` · `query_params` *(optionnel)*
+  - `folder_id` *(chaîne)* — déplacer vers un dossier (`null` retire du dossier)
+  - `pre_request_script` · `post_response_script` *(chaîne)* — JavaScript style Postman
+  - `protocol` *(chaîne)* — `rest` ou `graphql`
+
+### `delete_request`
+
+Supprime une requête par ID.
+
+- Entrée : `request_id` *(chaîne, requis)*
+
+### `duplicate_request`
+
+Duplique une requête dans la même collection ou une autre.
+
+- Entrée :
+  - `request_id` *(chaîne, requis)*
+  - `target_collection_id` *(chaîne)* — défaut la même collection
+
+### `move_request`
+
+Déplace une requête vers une collection et/ou dossier différent.
+
+- Entrée :
+  - `request_id` *(chaîne, requis)*
+  - `target_collection_id` *(chaîne, requis)*
+  - `target_folder_id` *(chaîne)* — `null` déplace à la racine de la collection
+
+### `reorder_requests`
+
+Réordonne les requêtes dans une collection en fournissant la liste ordonnée complète des IDs de requêtes.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+  - `ordered_request_ids` *(tableau de chaînes, requis)* — chaque ID de requête dans l'ordre désiré
+
+### `search_requests`
+
+Trouve une requête par nom, URL ou méthode quand vous ne connaissez pas son ID.
+
+- Entrée :
+  - `query` *(chaîne, requis)*
+
+### `import_from_curl`
+
+Importe une requête depuis une chaîne de commande `curl` dans une collection. Le parseur comprend `-X`, `-H`, `-d`/`--data`, `-u`, `--compressed`, `-b` et les commandes avec URL incluse.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+  - `curl_command` *(chaîne, requis)*
+  - `name` *(chaîne)* — défaut le chemin de l'URL
+
+### `export_request_to_curl`
+
+Exporte une requête stockée vers une chaîne de commande `curl` équivalente — pratique pour partager ou reproduire hors Recli.
+
+- Entrée : `request_id` *(chaîne, requis)*
+
+### `validate_request`
+
+Vérification préalable des champs de requête **sans rien envoyer*. Validez une requête existante par `request_id`, ou une définition ad-hoc en fournissant `name`/`method`/`url`/`body`/`body_type`/`auth_type`/`auth_token`. Utilisez-le avant d'exécuter, pour détecter les mauvaises URLs ou tokens manquants tôt.
+
+- Entrée : `request_id` *ou* champs ad-hoc (tous optionnels, au moins l'URL recommandée)
+
+### `generate_request_from_description`
+
+Transforme une description en texte brut en définition de requête. Idéal pour l'onboarding : décrivez l'appel et laissez l'agent la construire.
+
+- Entrée :
+  - `description` *(chaîne, requis)* — ex. *"GET les 10 derniers posts de l'API blog"*
+  - `collection_id` *(chaîne)* — sauvegarder la requête générée ici
+  - `name` *(chaîne)* — remplacer le nom généré

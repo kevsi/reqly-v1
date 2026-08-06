@@ -1,0 +1,76 @@
+---
+title: Environments
+description: Manage environments and variable interpolation.
+icon: Globe
+---
+
+Environments hold named variable sets (`BASE_URL`, tokens, etc.) used to resolve `{{VAR}}` placeholders in requests.
+
+### `list_environments`
+
+List all environments with their variable counts.
+
+- Input: *none*
+
+### `create_environment`
+
+Create a new environment.
+
+- Input:
+  - `name` *(string, required)*
+  - `color` *(string)* — optional
+
+### `update_environment`
+
+Update environment variables (add, modify, remove, toggle).
+
+- Input:
+  - `env_id` *(string, required)*
+  - `name` *(string)* — new name
+  - `color` *(string)* — new color
+  - `variables` *(array)* — array of `{key, value, enabled}` objects
+
+### `delete_environment`
+
+Delete an environment.
+
+- Input: `env_id` *(string, required)*
+
+### `duplicate_environment`
+
+Duplicate an environment with all its variables.
+
+- Input: `env_id` *(string, required)*
+
+### `get_environment_variables`
+
+Get the resolved variables for a given environment (for debugging interpolation).
+
+- Input: `env_name` *(string, required)*
+
+### `resolve_variables`
+
+Resolve `{{variable}}` placeholders in an arbitrary string using an environment.
+
+- Input:
+  - `text` *(string, required)* — the text containing `{{variable}}` placeholders
+  - `env_name` *(string, required)*
+
+---
+
+## Example
+
+```json
+{
+  "name": "update_environment",
+  "arguments": {
+    "env_id": "env-7f8a9b",
+    "variables": [
+      { "key": "BASE_URL", "value": "https://staging.example.com", "enabled": true },
+      { "key": "DEBUG", "value": "false", "enabled": false }
+    ]
+  }
+}
+```
+
+`resolve_variables` is handy for pre-flight checks: pass a URL template and confirm the placeholder resolves before running.

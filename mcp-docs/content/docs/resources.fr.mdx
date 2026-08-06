@@ -1,0 +1,53 @@
+---
+title: Ressources
+description: Ressources MCP exposées par le serveur (URIs reqly://).
+icon: Database
+---
+
+Le serveur implémente la capacité MCP **resources** : une vue en lecture seule, adaptée aux agents, de vos collections et requêtes. Les clients peuvent les parcourir avec `resources/list` et les lire avec `resources/read`.
+
+## URIs des ressources
+
+| URI | Contenu |
+|---|---|
+| `reqly://collections/{collectionId}` | Résumé de collection — id, nom, description, couleur, icône, nombre de requêtes, nombre de dossiers |
+| `reqly://requests/{requestId}` | Résumé de requête — id, nom, méthode, URL, et la collection à laquelle elle appartient |
+
+Les IDs sont les mêmes IDs `col-…` / `req-…` utilisés par les outils.
+
+## Exemple
+
+`resources/read` pour `reqly://collections/col-…` :
+
+```json
+{
+  "contents": [
+    {
+      "uri": "reqly://collections/col-1a2b3c",
+      "mimeType": "application/json",
+      "text": "{ \"id\": \"col-1a2b3c\", \"name\": \"Démo\", \"request_count\": 9, \"folder_count\": 0 }"
+    }
+  ]
+}
+```
+
+`resources/read` pour `reqly://requests/req-…` :
+
+```json
+{
+  "contents": [
+    {
+      "uri": "reqly://requests/req-9f8e7d",
+      "mimeType": "application/json",
+      "text": "{ \"id\": \"req-9f8e7d\", \"name\": \"List posts\", \"method\": \"GET\", \"url\": \"{{BASE_URL}}/posts\", \"collection_id\": \"col-1a2b3c\", \"collection_name\": \"Démo\" }"
+    }
+  ]
+}
+```
+
+Les URIs inconnus retournent un message "not found" en `text/plain` plutôt qu'une erreur, pour que les agents puissent sonder en toute sécurité.
+
+## Quand utiliser les ressources vs les outils
+
+- **Les ressources** sont un inventaire léger — idéales pour un agent décidant *ce qui existe*.
+- **Les outils** (`get_request`, `get_collection_tree`, `run_request`, …) donnent les définitions complètes et l'exécution — utilisez-les une fois que l'agent sait ce qu'il veut faire.

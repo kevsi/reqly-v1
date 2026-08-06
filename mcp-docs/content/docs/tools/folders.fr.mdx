@@ -1,0 +1,48 @@
+---
+title: Dossiers
+description: Organiser les requêtes dans une collection avec des dossiers imbriqués.
+icon: FolderTree
+---
+
+Les dossiers vous permettent d'organiser les requêtes au sein d'une collection, y compris les hiérarchies imbriquées.
+
+### `create_folder`
+
+Crée un dossier dans une collection.
+
+- Entrée :
+  - `collection_id` *(chaîne, requis)*
+  - `name` *(chaîne, requis)*
+  - `parent_id` *(chaîne)* — optionnel ID du dossier parent pour l'imbrication
+
+### `update_folder`
+
+Renomme ou déplace un dossier.
+
+- Entrée :
+  - `folder_id` *(chaîne, requis)*
+  - `name` *(chaîne)* — nouveau nom
+  - `parent_id` *(chaîne)* — nouveau parent (`null` déplace au niveau racine)
+
+### `delete_folder`
+
+Supprime un dossier. **Les requêtes à l'intérieur sont dissociées mais non supprimées** — elles restent dans la collection au niveau racine.
+
+- Entrée :
+  - `folder_id` *(chaîne, requis)*
+
+---
+
+## Exemple
+
+```json
+{
+  "name": "create_folder",
+  "arguments": {
+    "collection_id": "col-1a2b3c",
+    "name": "Flux d'auth"
+  }
+}
+```
+
+Ensuite assignez des requêtes avec `update_request` → `folder_id`, et inspectez la hiérarchie avec `get_collection_tree`.
