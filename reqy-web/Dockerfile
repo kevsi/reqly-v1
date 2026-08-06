@@ -49,9 +49,9 @@ RUN pnpm --dir reqy-web build
 # --- Stage 2 : production ---
 FROM node:22-slim AS runner
 
-# tree-sitter-* : mêmes outils natifs nécessaires à l'install en prod
+# Runtime only: no C++ toolchain needed (bindings pre-built in builder stage)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ ca-certificates \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@11 --activate
