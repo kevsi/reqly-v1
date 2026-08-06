@@ -234,6 +234,60 @@ describe("evaluateTextAssertion", () => {
     expect(result.passed).toBe(false);
     expect(result.error).toBeDefined();
   });
+
+  it("supports OR (||) compound expressions", () => {
+    expect(
+      evaluateTextAssertion(
+        { expr: "status == 400 || status == 422" },
+        makeContext({ status: 422 }),
+      ).passed,
+    ).toBe(true);
+    expect(
+      evaluateTextAssertion(
+        { expr: "status == 400 || status == 422" },
+        makeContext({ status: 400 }),
+      ).passed,
+    ).toBe(true);
+    expect(
+      evaluateTextAssertion(
+        { expr: "status == 400 || status == 422" },
+        makeContext({ status: 404 }),
+      ).passed,
+    ).toBe(false);
+  });
+
+  it("supports AND (&&) compound expressions", () => {
+    expect(
+      evaluateTextAssertion({ expr: "status == 200 && body.user.name == 'John'" }, makeContext())
+        .passed,
+    ).toBe(true);
+    expect(
+      evaluateTextAssertion({ expr: "status == 200 && body.user.id == 99" }, makeContext()).passed,
+    ).toBe(false);
+  });
+
+  it("binds && tighter than ||", () => {
+    expect(
+      evaluateTextAssertion(
+        { expr: "status == 200 || status == 500 && body.user.id == 99" },
+        makeContext(),
+      ).passed,
+    ).toBe(true);
+  });
+
+  it("ReDoS guard: oversized regex patterns fail instead of running", () => {
+    const big = "a".repeat(300);
+    const result = evaluateStructuredAssertion(
+      structuredAssertion({
+        type: "header",
+        target: "content-type",
+        operator: "regex",
+        value: big,
+      }),
+      ctxOk as unknown as Parameters<typeof evaluateStructuredAssertion>[1],
+    );
+    expect(result.passed).toBe(false);
+  });
 });
 
 describe("evaluateTextAssertions (batch)", () => {

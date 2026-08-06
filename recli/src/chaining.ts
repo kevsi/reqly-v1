@@ -292,7 +292,7 @@ export function interpolate(
     const envValue = ctx.envVars.get(trimmed);
     if (envValue !== undefined) return envValue;
     const procValue = process.env[trimmed];
-    if (procValue !== undefined) return procValue;
+    if (!ctx.disableProcessEnv && procValue !== undefined) return procValue;
     // Unresolved {{var}}: keep the literal (Newman semantics) but record it so
     // the run can warn — a silent 404 with {{VAR}} in the URL is pure friction.
     ctx.unresolvedVars?.add(trimmed);

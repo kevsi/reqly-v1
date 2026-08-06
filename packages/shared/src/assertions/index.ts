@@ -163,6 +163,41 @@ export interface TextEvaluateOptions {
 }
 
 /**
+ * ReDoS-safe regex test: caps pattern length and catches malformed patterns
+ * so a hostile assertion cannot crash the runner or burn the event loop.
+ */
+function testPatternSafe(pattern: string, value: string): boolean {
+  if (pattern.length > 200) return false;
+  try {
+    return new RegExp(pattern).test(value);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Evaluate a compound text expression supporting `||` and `&&` (with `&&`
+ * binding tighter than `||`), e.g. `status == 400 || status == 422`.
+ */
+function evaluateCompoundText(
+  expr: string,
+  ctx: UnifiedEvalContext,
+  options: TextEvaluateOptions,
+): boolean {
+  const orParts = expr.split(/\s+\|\|\s+/);
+  return orParts.some((orPart) => {
+    const andParts = orPart.split(/\s+&&\s+/);
+    return andParts.every((andPart) => {
+      const tokens = tokenize(andPart);
+      if (!tokens) return false;
+      const actual = resolveField(tokens.field, ctx);
+      const expected = parseExpectedValue(tokens.expected);
+      return compareValues(actual, tokens.operator, expected);
+    });
+  });
+}
+
+/**
  * Evaluate a single text-format assertion (recli style).
  *
  * @param assertion should have `expr` set, optionally `name` and `schema`.
@@ -177,6 +212,18 @@ export function evaluateTextAssertion(
   const expr = assertion.expr || "";
   const name = assertion.name || expr;
   const resolvedExpr = resolveVars(expr, options.vars);
+
+  // Compound expressions: "A || B" / "A && B".
+  if (/\s+(\|\||&&)\s+/.test(resolvedExpr)) {
+    const passed = evaluateCompoundText(resolvedExpr, ctx, options);
+    return {
+      name,
+      passed,
+      rawExpr: expr,
+      expected: resolvedExpr,
+      actual: passed ? "true" : "false",
+    };
+  }
 
   const tokens: ParsedToken | null = tokenize(resolvedExpr);
   if (!tokens) {
@@ -422,7 +469,7 @@ export function evaluateStructuredAssertion(
             passed =
               typeof actual === "string" &&
               typeof assertion.value === "string" &&
-              new RegExp(assertion.value).test(actual);
+              testPatternSafe(assertion.value, actual);
             break;
           default:
             return {
@@ -472,7 +519,7 @@ export function evaluateStructuredAssertion(
             break;
           case "regex":
             passed =
-              typeof assertion.value === "string" && new RegExp(assertion.value).test(actual);
+              typeof assertion.value === "string" && testPatternSafe(assertion.value, actual);
             break;
           default:
             return {

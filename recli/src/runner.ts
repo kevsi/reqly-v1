@@ -13,6 +13,7 @@ import type {
 import { evaluateAssertions, assertsPassed, evaluateSchemaAssertion } from "./assertions.js";
 import { applyCaptures, interpolate } from "./chaining.js";
 import { createScriptContext, executeScript } from "./scripting.js";
+import { isUrlAllowed } from "./netguard.js";
 
 const VALID_METHODS: HttpMethod[] = [
   "GET",
@@ -173,7 +174,13 @@ function buildBody(
     };
     if (request.graphql.variables) {
       const varsStr = JSON.stringify(request.graphql.variables);
-      gqlBody.variables = JSON.parse(interpolate(varsStr, ctx, dynCache));
+      try {
+        gqlBody.variables = JSON.parse(interpolate(varsStr, ctx, dynCache));
+      } catch {
+        // Interpolated variables produced invalid JSON — send the raw string
+        // rather than crashing the whole run.
+        gqlBody.variables = interpolate(varsStr, ctx, dynCache);
+      }
     }
     if (request.graphql.operationName) {
       gqlBody.operationName = request.graphql.operationName;
@@ -193,11 +200,26 @@ function buildBody(
   return body;
 }
 
-function ensureContentType(headers: Record<string, string>, body?: string, method?: string): void {
+function ensureContentType(
+  headers: Record<string, string>,
+  body?: string,
+  method?: string,
+  bodyType?: string,
+): void {
   if (!body && method !== "GRAPHQL") return;
   const hasCT = Object.keys(headers).some((k) => k.toLowerCase() === "content-type");
   if (!hasCT) {
-    headers["Content-Type"] = method === "GRAPHQL" ? "application/json" : "application/json";
+    if (method === "GRAPHQL") {
+      headers["Content-Type"] = "application/json";
+    } else if (bodyType === "urlencoded") {
+      headers["Content-Type"] = "application/x-www-form-urlencoded";
+    } else if (bodyType === "xml") {
+      headers["Content-Type"] = "application/xml";
+    } else if (bodyType === "text") {
+      headers["Content-Type"] = "text/plain";
+    } else {
+      headers["Content-Type"] = "application/json";
+    }
   }
 }
 
@@ -216,6 +238,15 @@ function getResponseHeaders(response: Response): Record<string, string> {
  * which returns individual cookie strings. Falls back to regex-based
  * parsing that correctly handles commas inside Expires/Max-Age values.
  */
+/** decodeURIComponent that tolerates malformed percent-escapes (e.g. raw `%`). */
+function decodeSafe(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 function parseCookies(responseHeaders: Record<string, string>): Record<string, string> {
   const cookies: Record<string, string> = {};
   const raw = responseHeaders["set-cookie"];
@@ -253,8 +284,8 @@ function parseCookies(responseHeaders: Record<string, string>): Record<string, s
     const cookiePair = semiIdx === -1 ? part : part.slice(0, semiIdx);
     const eqIdx = cookiePair.indexOf("=");
     if (eqIdx === -1) continue;
-    const key = decodeURIComponent(cookiePair.slice(0, eqIdx).trim());
-    const value = decodeURIComponent(cookiePair.slice(eqIdx + 1).trim());
+    const key = decodeSafe(cookiePair.slice(0, eqIdx).trim());
+    const value = decodeSafe(cookiePair.slice(eqIdx + 1).trim());
     cookies[key] = value;
   }
   return cookies;
@@ -387,8 +418,76 @@ async function httpFetch(
         headers,
         body: bodyToSend,
         signal: controller.signal,
-        redirect: "follow",
+        redirect: "manual",
       });
+
+      // Follow redirects manually, re-checking SSRF on each hop.
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        let hops = 0;
+        let currentUrl = response.headers.get("location") ?? "";
+        while (currentUrl && hops < 10) {
+          // Resolve relative redirects against the previous URL.
+          try {
+            currentUrl = new URL(currentUrl, fetchUrl).href;
+          } catch {
+            break;
+          }
+          const hopCheck = await isUrlAllowed(currentUrl, options?.allowLocalHosts);
+          if (!hopCheck.allowed) {
+            return {
+              ok: false,
+              status: 0,
+              statusText: "Blocked",
+              body: "",
+              size: 0,
+              truncated: false,
+              durationMs: Date.now() - startTime,
+              responseHeaders: {},
+              responseCookies: {},
+              error: `Redirect blocked: ${hopCheck.reason}`,
+            };
+          }
+          const hopRes = await fetch(currentUrl, {
+            method: [301, 302, 303].includes(response.status) ? "GET" : method,
+            headers:
+              [301, 302, 303].includes(response.status) && method !== "GET" && method !== "HEAD"
+                ? { ...headers }
+                : headers,
+            body: [301, 302, 303].includes(response.status) ? undefined : bodyToSend,
+            signal: controller.signal,
+            redirect: "manual",
+          });
+          if (![301, 302, 303, 307, 308].includes(hopRes.status)) {
+            // Final response — read it.
+            const dur = Date.now() - startTime;
+            const rHeaders = getResponseHeaders(hopRes);
+            const rCookies = parseCookies(rHeaders);
+            for (const [k, v] of Object.entries(rCookies)) ctx.cookies.set(k, v);
+            const {
+              body: b,
+              size: s,
+              truncated: t,
+            } = await readBodyWithCap(
+              hopRes,
+              options?.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE,
+            );
+            return {
+              ok: true,
+              status: hopRes.status,
+              statusText: hopRes.statusText,
+              body: b,
+              size: s,
+              truncated: t,
+              durationMs: dur,
+              responseHeaders: rHeaders,
+              responseCookies: rCookies,
+            };
+          }
+          currentUrl = hopRes.headers.get("location") ?? "";
+          hops++;
+        }
+        // Exhausted redirect chain — return last response as-is.
+      }
 
       const durationMs = Date.now() - startTime;
       const responseHeaders = getResponseHeaders(response);
@@ -482,12 +581,31 @@ export async function executeRequest(
   // Dynamic {{$...}} variables are cached per request so URL/headers/body agree.
   const dynCache = new Map<string, string>();
   const url = buildUrl(request, ctx, dynCache);
+
+  // SSRF re-check AFTER the pre-script: pm.request.setUrl() can rewrite the URL
+  // to an internal address. Guard every hop here so both CLI and MCP stay safe.
+  const check = await isUrlAllowed(url, options?.allowLocalHosts);
+  if (!check.allowed) {
+    return {
+      name: request.name,
+      method: request.method,
+      url,
+      status: 0,
+      statusText: "Blocked",
+      durationMs: 0,
+      size: 0,
+      passed: false,
+      error: `URL blocked: ${check.reason}`,
+      timestamp: Date.now(),
+    };
+  }
   const headers = buildHeaders(request, ctx, dynCache);
   const bodyToSend = buildBody(request, ctx, dynCache);
-  ensureContentType(headers, bodyToSend, request.method);
+  ensureContentType(headers, bodyToSend, request.method, request.bodyType);
 
-  // GraphQL endpoint override
-  const fetchUrl = request.method === "GRAPHQL" && request.graphql?.query ? request.url : url;
+  // GraphQL requests use the same interpolated URL (vars like {{BASE_URL}} must
+  // resolve; the raw request.url would otherwise be sent literally).
+  const fetchUrl = url;
 
   const requestStart = Date.now();
   const attempt = await httpFetch(fetchUrl, method, headers, bodyToSend, timeoutMs, ctx, options);

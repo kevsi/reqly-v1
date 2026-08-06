@@ -45,6 +45,9 @@ export interface RunnerContext {
   /** Names of {{var}} placeholders that resolved to nothing during this run
    * (filled by interpolate; used to warn the user instead of a silent 404). */
   unresolvedVars?: Set<string>;
+  /** When true, process.env is NOT used as a fallback for unresolved {{var}}.
+   * Set by the MCP server to prevent leaking server-side env vars to agents. */
+  disableProcessEnv?: boolean;
 }
 
 export interface RunResult {

@@ -1,13 +1,13 @@
 import type { CollectionStore } from "../store.js";
-import { importFromOpenApi, exportToOpenApi } from "../openapi.js";
 import { collectionRunRecordToJUnitXml } from "../junit-export.js";
 import { analyzeProjectRoutes } from "../project-analyzer.js";
 import { executeGraphQL } from "../runner.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ExportBundle, RequestItem } from "../types.js";
 import type { ToolHandlerOptions } from "../tool-definitions.js";
-import { importOpenAPI } from "../../openapi.js";
+import { importFromOpenApi, exportToOpenApi, importOpenAPI } from "../../openapi.js";
 import { diffSpecs } from "../../spec-diff.js";
+import { isUrlAllowed } from "../../runner.js";
 
 // ── Size limits ─────────────────────────────────────────────────────────
 const MAX_BUNDLE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -140,7 +140,7 @@ export function handleImportFromOpenApi(
           name: req.name,
           method: req.method as RequestItem["method"],
           url: req.url,
-          endpoint: req.endpoint,
+          endpoint: req.endpoint ?? req.url,
           headers: req.headers ?? {},
           body: req.body,
           bodyType: req.bodyType,
@@ -215,10 +215,9 @@ export async function handleAnalyzeProjectRoutes(
     };
   }
   try {
-    const result = await analyzeProjectRoutes(
-      folderPath,
-      args.allowed_directories as string[] | undefined,
-    );
+    // Security: the allowed-directories restriction is server-side only
+    // (configured at startup). The caller cannot self-grant directories.
+    const result = await analyzeProjectRoutes(folderPath);
     if (args.save_collection_id) {
       const colId = String(args.save_collection_id);
       for (const route of result.routes) {
@@ -306,6 +305,7 @@ export async function handleGraphQlExecute(
 export async function handleOpenApiSync(
   store: CollectionStore,
   args: Record<string, unknown>,
+  options: ToolHandlerOptions,
 ): Promise<CallToolResult> {
   const url = args.url as string | undefined;
   const specContent = args.spec_content as string | undefined;
@@ -315,11 +315,26 @@ export async function handleOpenApiSync(
   let source: string;
 
   if (specContent) {
+    if (Buffer.byteLength(specContent, "utf8") > MAX_SPEC_SIZE) {
+      return {
+        content: [
+          { type: "text", text: `spec_content exceeds maximum size of ${MAX_SPEC_SIZE} bytes` },
+        ],
+        isError: true,
+      };
+    }
     spec = specContent;
     source = "provided spec";
   } else if (url) {
+    const urlCheck = await isUrlAllowed(url, options.allowLocalHosts);
+    if (!urlCheck.allowed) {
+      return {
+        content: [{ type: "text", text: `URL blocked: ${urlCheck.reason}` }],
+        isError: true,
+      };
+    }
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: "manual" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       spec = await res.text();
       source = url;

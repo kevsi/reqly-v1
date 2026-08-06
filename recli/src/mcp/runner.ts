@@ -68,9 +68,32 @@ export async function executeRequest(
   }>,
 ): Promise<RunResult> {
   if (request.method === "GRAPHQL") {
+    const envVars = buildEnvVarMap(environments ?? [], options.envName);
+    const gqlCtx = {
+      vars: envVars,
+      envVars,
+      cookies: new Map<string, string>(),
+      iteration: 0,
+      disableProcessEnv: true,
+    };
+    const url = interpolate(request.url, gqlCtx, new Map());
+    const urlCheck = await isUrlAllowed(url, options.allowLocalHosts);
+    if (!urlCheck.allowed) {
+      return {
+        name: request.name,
+        method: request.method,
+        url,
+        status: 0,
+        statusText: "Blocked",
+        durationMs: 0,
+        size: 0,
+        passed: false,
+        error: urlCheck.reason,
+      };
+    }
     const query = request.graphql?.query ?? request.body ?? "";
     return executeGraphQL(
-      request.url,
+      url,
       query,
       normalizeVariables(request.graphql?.variables),
       request.graphql?.operationName,
@@ -80,7 +103,13 @@ export async function executeRequest(
   }
 
   const envVars = buildEnvVarMap(environments ?? [], options.envName);
-  const ctx = { vars: envVars, envVars, cookies: new Map<string, string>(), iteration: 0 };
+  const ctx = {
+    vars: envVars,
+    envVars,
+    cookies: new Map<string, string>(),
+    iteration: 0,
+    disableProcessEnv: true,
+  };
 
   // Resolve {{vars}} BEFORE the SSRF check: a raw URL with unresolved variables
   // (e.g. "{{BASE_URL}}/posts") cannot be validated and would be blocked as

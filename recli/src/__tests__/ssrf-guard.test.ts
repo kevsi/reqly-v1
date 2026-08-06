@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import dns from "node:dns";
-import { isPrivateIp, isUrlAllowed } from "../runner.js";
+import { isPrivateIp, isUrlAllowed, executeRequest } from "../runner.js";
+import type { RunnerContext } from "../types.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
+
+function ctx(): RunnerContext {
+  return { vars: new Map(), envVars: new Map(), cookies: new Map(), iteration: 0 };
+}
 
 describe("isPrivateIp", () => {
   it("blocks classic private IPv4", () => {
@@ -78,5 +84,75 @@ describe("isUrlAllowed", () => {
 
   it("short-circuits when allowLocalHosts is set", async () => {
     await expect(isUrlAllowed("http://127.0.0.1:4000", true)).resolves.toEqual({ allowed: true });
+  });
+});
+
+describe("SSRF redirect protection", () => {
+  it("blocks a redirect to a private address", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("", {
+          status: 302,
+          headers: { location: "http://169.254.169.254/latest/meta-data/" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await executeRequest(
+      { name: "r", method: "GET", url: "https://httpbin.org/redirect", endpoint: "/redirect" },
+      ctx(),
+      5000,
+      { timeoutMs: 5000 },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1); // never follows the redirect
+    expect(result.status).toBe(0);
+    expect(result.statusText).toBe("Blocked");
+    expect(result.error).toMatch(/169\.254\.169\.254/);
+  });
+
+  it("allows a redirect to another public host", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("", { status: 302, headers: { location: "https://example.com/final" } }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await executeRequest(
+      { name: "r", method: "GET", url: "https://httpbin.org/redirect", endpoint: "/redirect" },
+      ctx(),
+      5000,
+      { timeoutMs: 5000 },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe(200);
+  });
+});
+
+describe("SSRF pre-script protection", () => {
+  it("blocks a pre-script that rewrites the URL to a private address", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await executeRequest(
+      {
+        name: "r",
+        method: "GET",
+        url: "https://httpbin.org/get",
+        endpoint: "/get",
+        scripts: { pre: 'pm.request.url = "http://127.0.0.1:6379/"' },
+      },
+      ctx(),
+      5000,
+      { timeoutMs: 5000 },
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.status).toBe(0);
+    expect(result.statusText).toBe("Blocked");
   });
 });

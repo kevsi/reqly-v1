@@ -1,6 +1,5 @@
 import type { CollectionStore } from "../store.js";
 import { parseCurlCommand, generateCurlCommand } from "../curl-parser.js";
-import { generateRequestFromDescription } from "../ai-request-generator.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { RequestItem } from "../types.js";
 
@@ -11,7 +10,10 @@ export function handleListRequests(
   const collectionId = String(args.collection_id ?? "");
   const collection = store.getCollection(collectionId);
   if (!collection) {
-    return { content: [{ type: "text", text: `Collection not found: ${collectionId}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `Collection not found: ${collectionId}` }],
+      isError: true,
+    };
   }
   const requests = collection.requests.map((r) => ({
     id: r.id,
@@ -31,14 +33,22 @@ export function handleGetCollectionTree(
   const treeColId = String(args.collection_id ?? "");
   const treeCollection = store.getCollection(treeColId);
   if (!treeCollection) {
-    return { content: [{ type: "text", text: `Collection not found: ${treeColId}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `Collection not found: ${treeColId}` }],
+      isError: true,
+    };
   }
   const folders = treeCollection.folders ?? [];
   const rootRequests = treeCollection.requests.filter((r) => !r.folderId);
   const tree = {
     id: treeCollection.id,
     name: treeCollection.name,
-    root_requests: rootRequests.map((r) => ({ id: r.id, name: r.name, method: r.method, url: r.url })),
+    root_requests: rootRequests.map((r) => ({
+      id: r.id,
+      name: r.name,
+      method: r.method,
+      url: r.url,
+    })),
     folders: folders.map((f) => ({
       id: f.id,
       name: f.name,
@@ -89,7 +99,12 @@ export function handleCreateRequest(
   const method = String(args.method ?? "GET");
   const url = String(args.url ?? "");
   if (!colId || !name || !method || !url) {
-    return { content: [{ type: "text", text: "Missing required fields: collection_id, name, method, url" }], isError: true };
+    return {
+      content: [
+        { type: "text", text: "Missing required fields: collection_id, name, method, url" },
+      ],
+      isError: true,
+    };
   }
   const collection = store.getCollection(colId);
   if (!collection) {
@@ -115,7 +130,18 @@ export function handleCreateRequest(
     updatedAt: now,
   };
   store.addRequest(colId, requestItem);
-  return { content: [{ type: "text", text: JSON.stringify({ created: true, request_id: requestItem.id, name, method, url }, null, 2) }] };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          { created: true, request_id: requestItem.id, name, method, url },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
 }
 
 export function handleUpdateRequest(
@@ -136,10 +162,16 @@ export function handleUpdateRequest(
   if (args.body_type !== undefined) updates.bodyType = args.body_type as RequestItem["bodyType"];
   if (args.auth_type !== undefined) updates.authType = args.auth_type as RequestItem["authType"];
   if (args.auth_token !== undefined) updates.authToken = String(args.auth_token);
-  if (args.query_params !== undefined) updates.queryParams = args.query_params as Array<{ key: string; value: string }>;
-  if (args.folder_id !== undefined) updates.folderId = args.folder_id === null ? null : String(args.folder_id);
+  if (args.query_params !== undefined)
+    updates.queryParams = args.query_params as Array<{ key: string; value: string }>;
+  if (args.folder_id !== undefined)
+    updates.folderId = args.folder_id === null ? null : String(args.folder_id);
   store.updateRequest(reqId, updates);
-  return { content: [{ type: "text", text: JSON.stringify({ updated: true, request_id: reqId }, null, 2) }] };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify({ updated: true, request_id: reqId }, null, 2) },
+    ],
+  };
 }
 
 export function handleDeleteRequest(
@@ -152,7 +184,9 @@ export function handleDeleteRequest(
     return { content: [{ type: "text", text: `Request not found: ${reqId}` }], isError: true };
   }
   store.deleteRequest(reqId);
-  return { content: [{ type: "text", text: JSON.stringify({ deleted: true, request_id: reqId }) }] };
+  return {
+    content: [{ type: "text", text: JSON.stringify({ deleted: true, request_id: reqId }) }],
+  };
 }
 
 export function handleDuplicateRequest(
@@ -166,7 +200,14 @@ export function handleDuplicateRequest(
     return { content: [{ type: "text", text: `Request not found: ${reqId}` }], isError: true };
   }
   const newReq = store.duplicateRequest(reqId, targetColId);
-  return { content: [{ type: "text", text: JSON.stringify({ duplicated: true, new_request_id: newReq?.id }, null, 2) }] };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ duplicated: true, new_request_id: newReq?.id }, null, 2),
+      },
+    ],
+  };
 }
 
 export function handleImportFromCurl(
@@ -177,7 +218,10 @@ export function handleImportFromCurl(
   const curlCommand = String(args.curl_command ?? "");
   const reqName = args.name ? String(args.name) : undefined;
   if (!colId || !curlCommand) {
-    return { content: [{ type: "text", text: "Missing required fields: collection_id, curl_command" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required fields: collection_id, curl_command" }],
+      isError: true,
+    };
   }
   const collection = store.getCollection(colId);
   if (!collection) {
@@ -200,7 +244,18 @@ export function handleImportFromCurl(
     updatedAt: now,
   };
   store.addRequest(colId, requestItem);
-  return { content: [{ type: "text", text: JSON.stringify({ created: true, request_id: requestItem.id, method: parsed.method, url: parsed.url }, null, 2) }] };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          { created: true, request_id: requestItem.id, method: parsed.method, url: parsed.url },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
 }
 
 export function handleExportRequestToCurl(
@@ -224,11 +279,29 @@ export function handleSearchRequests(
   if (!query) {
     return { content: [{ type: "text", text: "Missing required field: query" }], isError: true };
   }
-  const results: Array<{ id: string; name: string; method: string; url: string; collection_id: string; collection_name: string }> = [];
+  const results: Array<{
+    id: string;
+    name: string;
+    method: string;
+    url: string;
+    collection_id: string;
+    collection_name: string;
+  }> = [];
   for (const col of store.getCollections()) {
     for (const req of col.requests) {
-      if (req.name.toLowerCase().includes(query) || req.url.toLowerCase().includes(query) || req.method.toLowerCase().includes(query)) {
-        results.push({ id: req.id, name: req.name, method: req.method, url: req.url, collection_id: col.id, collection_name: col.name });
+      if (
+        req.name.toLowerCase().includes(query) ||
+        req.url.toLowerCase().includes(query) ||
+        req.method.toLowerCase().includes(query)
+      ) {
+        results.push({
+          id: req.id,
+          name: req.name,
+          method: req.method,
+          url: req.url,
+          collection_id: col.id,
+          collection_name: col.name,
+        });
       }
     }
   }
@@ -241,14 +314,29 @@ export function handleMoveRequest(
 ): CallToolResult {
   const reqId = String(args.request_id ?? "");
   const targetColId = String(args.target_collection_id ?? "");
-  const targetFolderId = args.target_folder_id !== undefined
-    ? args.target_folder_id === null ? null : String(args.target_folder_id)
-    : undefined;
+  const targetFolderId =
+    args.target_folder_id !== undefined
+      ? args.target_folder_id === null
+        ? null
+        : String(args.target_folder_id)
+      : undefined;
   if (!reqId || !targetColId) {
-    return { content: [{ type: "text", text: "Missing required fields: request_id, target_collection_id" }], isError: true };
+    return {
+      content: [
+        { type: "text", text: "Missing required fields: request_id, target_collection_id" },
+      ],
+      isError: true,
+    };
   }
   store.moveRequest(reqId, targetColId, targetFolderId ?? undefined);
-  return { content: [{ type: "text", text: JSON.stringify({ moved: true, request_id: reqId, target_collection_id: targetColId }) }] };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ moved: true, request_id: reqId, target_collection_id: targetColId }),
+      },
+    ],
+  };
 }
 
 export function handleReorderRequests(
@@ -258,43 +346,17 @@ export function handleReorderRequests(
   const colId = String(args.collection_id ?? "");
   const orderedIds = args.ordered_request_ids as string[] | undefined;
   if (!colId || !Array.isArray(orderedIds)) {
-    return { content: [{ type: "text", text: "Missing required fields: collection_id, ordered_request_ids" }], isError: true };
+    return {
+      content: [
+        { type: "text", text: "Missing required fields: collection_id, ordered_request_ids" },
+      ],
+      isError: true,
+    };
   }
   store.reorderRequests(colId, orderedIds);
-  return { content: [{ type: "text", text: JSON.stringify({ reordered: true, collection_id: colId }) }] };
-}
-
-export function handleGenerateRequestFromDescription(
-  store: CollectionStore,
-  args: Record<string, unknown>,
-): CallToolResult {
-  const description = String(args.description ?? "");
-  const colId = args.collection_id ? String(args.collection_id) : undefined;
-  const nameOverride = args.name ? String(args.name) : undefined;
-  if (!description) {
-    return { content: [{ type: "text", text: "Missing required field: description" }], isError: true };
-  }
-  const result = generateRequestFromDescription(description);
-  if (!result) {
-    return { content: [{ type: "text", text: "No request could be generated from the description" }], isError: true };
-  }
-  if (colId) {
-    const now = Date.now();
-    const requestItem: RequestItem = {
-      id: `req-${now}-${Math.random().toString(36).slice(2, 8)}`,
-      name: nameOverride || result.name,
-      method: result.method as RequestItem["method"],
-      url: result.url,
-      endpoint: result.url,
-      headers: result.headers ?? {},
-      body: result.body,
-      createdAt: now,
-      updatedAt: now,
-    };
-    store.addRequest(colId, requestItem);
-    return { content: [{ type: "text", text: JSON.stringify({ created: true, request_id: requestItem.id, method: result.method, url: result.url }, null, 2) }] };
-  }
-  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  return {
+    content: [{ type: "text", text: JSON.stringify({ reordered: true, collection_id: colId }) }],
+  };
 }
 
 export function handleValidateRequest(
@@ -304,18 +366,40 @@ export function handleValidateRequest(
   const issues: string[] = [];
   if (args.request_id) {
     const requestId = String(args.request_id);
-    if (requestId) _store.findRequestById(requestId);
+    if (requestId && !_store.findRequestById(requestId)) {
+      issues.push(`Request not found: ${requestId}`);
+    }
   }
   const method = args.method ? String(args.method).toUpperCase() : undefined;
-  if (method && !["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "GRAPHQL"].includes(method)) {
+  if (
+    method &&
+    !["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "GRAPHQL"].includes(method)
+  ) {
     issues.push(`Invalid HTTP method: ${method}`);
   }
   const url = args.url ? String(args.url) : undefined;
-  if (url && !url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("ws://") && !url.startsWith("wss://")) {
+  if (
+    url &&
+    !url.startsWith("http://") &&
+    !url.startsWith("https://") &&
+    !url.startsWith("ws://") &&
+    !url.startsWith("wss://")
+  ) {
     issues.push(`URL must start with http:// or https://: ${url}`);
   }
   if (issues.length === 0) issues.push("Request is valid");
-  return { content: [{ type: "text", text: JSON.stringify({ valid: issues.length === 1 && issues[0] === "Request is valid", issues }, null, 2) }] };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          { valid: issues.length === 1 && issues[0] === "Request is valid", issues },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
 }
 
 export function handleCreateFolder(
@@ -325,7 +409,10 @@ export function handleCreateFolder(
   const colId = String(args.collection_id ?? "");
   const name = String(args.name ?? "");
   if (!colId || !name) {
-    return { content: [{ type: "text", text: "Missing required fields: collection_id, name" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required fields: collection_id, name" }],
+      isError: true,
+    };
   }
   const collection = store.getCollection(colId);
   if (!collection) {
@@ -333,7 +420,11 @@ export function handleCreateFolder(
   }
   const parentId = args.parent_id ? String(args.parent_id) : undefined;
   const folderId = store.addFolder(colId, name, parentId);
-  return { content: [{ type: "text", text: JSON.stringify({ created: true, folder_id: folderId, name }, null, 2) }] };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify({ created: true, folder_id: folderId, name }, null, 2) },
+    ],
+  };
 }
 
 export function handleUpdateFolder(
@@ -342,14 +433,24 @@ export function handleUpdateFolder(
 ): CallToolResult {
   const folderId = String(args.folder_id ?? "");
   const name = args.name ? String(args.name) : undefined;
-  const parentId = args.parent_id !== undefined
-    ? args.parent_id === null ? null : String(args.parent_id)
-    : undefined;
+  const parentId =
+    args.parent_id !== undefined
+      ? args.parent_id === null
+        ? null
+        : String(args.parent_id)
+      : undefined;
   if (!folderId) {
-    return { content: [{ type: "text", text: "Missing required field: folder_id" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: folder_id" }],
+      isError: true,
+    };
   }
   store.updateFolder(folderId, { name, parentId: parentId ?? undefined });
-  return { content: [{ type: "text", text: JSON.stringify({ updated: true, folder_id: folderId }, null, 2) }] };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify({ updated: true, folder_id: folderId }, null, 2) },
+    ],
+  };
 }
 
 export function handleDeleteFolder(
@@ -358,8 +459,13 @@ export function handleDeleteFolder(
 ): CallToolResult {
   const folderId = String(args.folder_id ?? "");
   if (!folderId) {
-    return { content: [{ type: "text", text: "Missing required field: folder_id" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: folder_id" }],
+      isError: true,
+    };
   }
   store.deleteFolder(folderId);
-  return { content: [{ type: "text", text: JSON.stringify({ deleted: true, folder_id: folderId }) }] };
+  return {
+    content: [{ type: "text", text: JSON.stringify({ deleted: true, folder_id: folderId }) }],
+  };
 }

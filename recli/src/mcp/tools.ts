@@ -23,7 +23,6 @@ import {
   handleSearchRequests,
   handleMoveRequest,
   handleReorderRequests,
-  handleGenerateRequestFromDescription,
   handleValidateRequest,
   handleCreateFolder,
   handleUpdateFolder,
@@ -66,11 +65,10 @@ export function createToolHandler(
   bundle: ExportBundle | undefined,
   options: ToolHandlerOptions,
 ) {
-  void options;
-
   return async function handleToolCall(
     name: string,
     args: Record<string, unknown>,
+    progressToken?: string | number,
   ): Promise<CallToolResult> {
     switch (name) {
       case "list_collections":
@@ -108,8 +106,6 @@ export function createToolHandler(
         return handleMoveRequest(store, args);
       case "reorder_requests":
         return handleReorderRequests(store, args);
-      case "generate_request_from_description":
-        return handleGenerateRequestFromDescription(store, args);
       case "validate_request":
         return handleValidateRequest(store, args);
 
@@ -123,11 +119,11 @@ export function createToolHandler(
       case "run_request":
         return await handleRunRequest(store, args, bundle, options);
       case "run_collection":
-        return await handleRunCollection(store, args, bundle, options);
+        return await handleRunCollection(store, args, bundle, options, progressToken);
       case "run_requests_batch":
-        return await handleRunRequestsBatch(store, args, bundle, options);
+        return await handleRunRequestsBatch(store, args, bundle, options, progressToken);
       case "run_collection_with_assertions":
-        return await handleRunCollectionWithAssertions(store, args, bundle, options);
+        return await handleRunCollectionWithAssertions(store, args, bundle, options, progressToken);
       case "get_request_history":
         return handleGetRequestHistory(store, args);
       case "get_run_history":
@@ -165,7 +161,7 @@ export function createToolHandler(
       case "generate_tests":
         return handleGenerateTests(store, args);
       case "openapi_sync":
-        return await handleOpenApiSync(store, args);
+        return await handleOpenApiSync(store, args, options);
 
       default:
         return {
