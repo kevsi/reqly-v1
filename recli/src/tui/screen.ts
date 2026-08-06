@@ -82,6 +82,32 @@ export function statusStyle(status: number): (s: string) => string {
   return chalk.yellow;
 }
 
+/** Perceived-latency coloring: fast → green, slow → yellow, very slow → red. */
+export function durationStyle(ms: number): (s: string) => string {
+  if (ms < 500) return chalk.green;
+  if (ms < 2000) return chalk.yellow;
+  return chalk.red;
+}
+
+/**
+ * JSON syntax highlighting: keys → cyan, string values → green, numbers →
+ * yellow, booleans → magentaBright, null → magenta, punctuation → dim.
+ * Non-JSON text is returned unchanged.
+ */
+export function highlightJson(text: string): string {
+  if (!text.startsWith("{") && !text.startsWith("[")) return text;
+  return text.replace(
+    /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(\btrue\b|\bfalse\b|\bnull\b)|([{}[\]])/g,
+    (_m, str: string, colon: string, num: string, kw: string, punct: string) => {
+      if (num) return chalk.yellow(num);
+      if (kw) return kw === "null" ? chalk.magenta(kw) : chalk.magentaBright(kw);
+      if (punct) return chalk.dim(punct);
+      if (colon) return chalk.cyan(str) + chalk.dim(colon);
+      return chalk.green(str);
+    },
+  );
+}
+
 export function prettyBody(body: string | undefined, maxLines = 40): string {
   if (!body) return "(no body)";
   let text = body;
@@ -142,6 +168,7 @@ export class Tui {
   private running: RequestItem | null = null;
   private runningAll = false;
   private runningCount = 0;
+  private runDone = 0;
   private spinnerTick = 0;
   private spinnerTimer: NodeJS.Timeout | null = null;
   private cleanupKeypress: (() => void) | null = null;
@@ -476,6 +503,7 @@ export class Tui {
     if (this.runningAll || this.running || runSet.length === 0) return;
     this.runningAll = true;
     this.runningCount = runSet.length;
+    this.runDone = 0;
     this.statusMessage = "";
     this.lastSummary = "";
     this.startSpinner();
@@ -495,6 +523,7 @@ export class Tui {
         });
         this.results.set(item, result);
         executed++;
+        this.runDone = executed;
         if (result.passed) passedCount++;
       }
     } finally {
@@ -561,16 +590,32 @@ export class Tui {
       this.bundle.collections.length > 1 ? ` +${this.bundle.collections.length - 1}` : "";
     const leftPlain = `recli · ${colName}${extra}`;
     const envName = this.env?.name ?? "none";
-    const rightPlain = `env ● ${envName} · ${this.requests.length} requests`;
+    const badge = this.resultsBadge();
+    const rightPlain = `env ● ${envName} · ${this.requests.length} requests${badge.plain ? ` · ${badge.plain}` : ""}`;
     const pad = Math.max(1, C - leftPlain.length - rightPlain.length - 2);
     return fitToCols(
       `${chalk.bold("recli")}${chalk.dim(" · ")}${chalk.bold(colName)}${chalk.dim(extra)}` +
         " ".repeat(pad) +
         chalk.dim("env ") +
         chalk.cyanBright(`● ${envName}`) +
-        chalk.dim(` · ${this.requests.length} requests`),
+        chalk.dim(` · ${this.requests.length} requests`) +
+        (badge.styled ? `${chalk.dim(" · ")}${badge.styled}` : ""),
       C,
     );
+  }
+
+  /** Live pass/fail badge for the header (empty until at least one run). */
+  private resultsBadge(): { plain: string; styled: string } {
+    const results = [...this.results.values()];
+    if (results.length === 0) return { plain: "", styled: "" };
+    const passed = results.filter((r) => r.passed).length;
+    const failed = results.length - passed;
+    const plain = failed > 0 ? `✓ ${passed} ✗ ${failed}` : `✓ ${passed}`;
+    const styled =
+      failed > 0
+        ? `${chalk.green(`✓ ${passed}`)} ${chalk.red(`✗ ${failed}`)}`
+        : chalk.green(`✓ ${passed}`);
+    return { plain, styled };
   }
 
   private statusOrSearchLine(C: number): string {
@@ -587,11 +632,16 @@ export class Tui {
         this.runningCount === this.requests.length
           ? "all requests"
           : `${this.runningCount} selected`;
-      return `  ${chalk.cyan(`Running ${what}…`)}`;
+      const progress = this.runDone > 0 ? chalk.dim(`  ${this.runDone}/${this.runningCount}`) : "";
+      return `  ${chalk.cyan(`Running ${what}…`)}${progress}`;
     }
     if (this.running) return `  ${chalk.cyan("Running…")}`;
     if (this.statusMessage) return `  ${chalk.dim(this.statusMessage)}`;
-    if (this.lastSummary) return `  ${chalk.dim(this.lastSummary)}`;
+    if (this.lastSummary) {
+      const clean = stripAnsi(this.lastSummary);
+      const ok = clean.includes("failed");
+      return `  ${ok ? chalk.yellow(this.lastSummary) : chalk.green(this.lastSummary)}`;
+    }
     return `  ${chalk.dim(`type ${chalk.cyan("/")} to search`)}${chalk.dim(`  ·  ${this.filtered.length}/${this.requests.length} requests`)}`;
   }
 
@@ -619,8 +669,11 @@ export class Tui {
     const urlMax = Math.max(8, C - 53);
     const q = this.mode === "search" ? this.filter : "";
     let url = highlight(truncate(item.url, urlMax), q);
-    url = chalk.dim(url);
-    const name = chalk.dim(truncate(item.name, 16));
+    // On the selected row the inverse background washes out dim text — brighten it.
+    url = selected ? chalk.white(url) : chalk.dim(url);
+    const name = selected
+      ? chalk.bold(truncate(item.name, 16))
+      : chalk.dim(truncate(item.name, 16));
 
     let right = "";
     if (this.running === item) {
@@ -636,7 +689,10 @@ export class Tui {
           const badge = ok === result.assertions.length ? chalk.green : chalk.red;
           mid += chalk.dim(" ") + badge(`${ok}/${result.assertions.length}`);
         }
-        right = `${dot} ${mid}${result.durationMs ? chalk.dim(` ${result.durationMs}ms`) : ""}`;
+        const dur = result.durationMs
+          ? durationStyle(result.durationMs)(` ${result.durationMs}ms`)
+          : "";
+        right = `${dot} ${mid}${dur}`;
       }
     }
 
@@ -668,7 +724,7 @@ export class Tui {
     lines.push("");
     lines.push(
       `  ${chalk.dim("Status:")} ${result.passed ? statusStyle(result.status)(statusText) : chalk.red(statusText)}` +
-        `  ${chalk.dim("Time:")} ${result.durationMs}ms` +
+        `  ${chalk.dim("Time:")} ${durationStyle(result.durationMs)(`${result.durationMs}ms`)}` +
         `  ${chalk.dim("Size:")} ${fmtBytes(result.size)}`,
     );
     if (result.error) lines.push(`  ${chalk.red(result.error)}`);
@@ -697,8 +753,8 @@ export class Tui {
       default: {
         lines.push(`  ${chalk.dim("Body:")}`);
         const remaining = Math.max(6, this.rows - lines.length - 2);
-        for (const line of prettyBody(result.body, remaining).split("\n")) {
-          lines.push(`  ${truncate(line, Math.max(4, C - 4))}`);
+        for (const line of highlightJson(prettyBody(result.body, remaining)).split("\n")) {
+          lines.push(fitToCols(`  ${line}`, C));
         }
       }
     }
@@ -769,8 +825,8 @@ export class Tui {
     } else if (item.body) {
       lines.push(`  ${chalk.dim(`Body (${item.bodyType ?? "raw"}):`)}`);
       const bodyMax = Math.max(4, this.rows - lines.length - 6);
-      for (const line of prettyBody(item.body, bodyMax).split("\n")) {
-        lines.push(`    ${truncate(line, Math.max(4, C - 8))}`);
+      for (const line of highlightJson(prettyBody(item.body, bodyMax)).split("\n")) {
+        lines.push(fitToCols(`    ${line}`, C));
       }
     }
     if (item.assert?.length) {

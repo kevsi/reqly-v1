@@ -3,9 +3,11 @@ import type { Environment, ExportBundle, RequestItem } from "../types.js";
 import type { KeyInfo } from "./keypress.js";
 import {
   buildEnvVars,
+  durationStyle,
   filterRequests,
   fitToCols,
   fmtBytes,
+  highlightJson,
   methodStyle,
   prettyBody,
   statusStyle,
@@ -43,6 +45,49 @@ describe("fmtBytes", () => {
     expect(fmtBytes(512)).toBe("512B");
     expect(fmtBytes(2048)).toBe("2.0KB");
     expect(fmtBytes(5 * 1024 * 1024)).toBe("5.0MB");
+  });
+});
+
+describe("durationStyle", () => {
+  it("colors by perceived latency", async () => {
+    const { default: chalk } = await import("chalk");
+    const oldLevel = chalk.level;
+    chalk.level = 1;
+    try {
+      expect(durationStyle(100)("x")).toContain("\x1b[32m");
+      expect(durationStyle(1000)("x")).toContain("\x1b[33m");
+      expect(durationStyle(3000)("x")).toContain("\x1b[31m");
+    } finally {
+      chalk.level = oldLevel;
+    }
+  });
+});
+
+describe("highlightJson", () => {
+  it("colorizes keys, strings, numbers and booleans", async () => {
+    const { default: chalk } = await import("chalk");
+    const oldLevel = chalk.level;
+    chalk.level = 1;
+    try {
+      const out = highlightJson('{"name":"John","age":30,"admin":true,"note":null}');
+      // Keys → cyan, string values → green, numbers → yellow, booleans → bright magenta
+      expect(out).toContain('\x1b[36m"name"\x1b[39m'); // cyan key
+      expect(out).toContain('\x1b[32m"John"\x1b[39m'); // green string
+      expect(out).toContain("\x1b[33m30\x1b[39m"); // yellow number
+      expect(out).toContain("\x1b[95mtrue\x1b[39m"); // magentaBright boolean
+      expect(out).toContain("\x1b[35mnull\x1b[39m"); // magenta null
+    } finally {
+      chalk.level = oldLevel;
+    }
+  });
+
+  it("leaves non-JSON text untouched", () => {
+    expect(highlightJson("plain text")).toBe("plain text");
+  });
+
+  it("preserves visible content after styling", () => {
+    const out = highlightJson('{"a":1}');
+    expect(stripAnsi(out)).toBe('{"a":1}');
   });
 });
 

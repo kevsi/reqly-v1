@@ -85,7 +85,7 @@ export function resolveOpts(prog: Command): ResolvedOpts {
     delay: parseInt((cli.delay as string) || String(cfg.delay || "0"), 10),
     iterations: parseInt((cli.iterations as string) || String(cfg.iterations || "1"), 10),
     data: (cli.data as string) || cfg.data,
-    reporter: (cli.reporter as string) || cfg.reporter || "cli",
+    reporter: (cli.reporter as string) || cfg.reporter,
     output: (cli.output as string) || cfg.output,
     snapshot: !!cli.snapshot || !!cfg.snapshot,
     // Commander camelCase: --update-snapshots becomes updateSnapshots in opts
