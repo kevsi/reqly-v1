@@ -568,7 +568,26 @@ export function useAiSidebarChat() {
 
           // Check for requireConfirmation — await user confirmation via UI buttons
           let confirmIdx = results.findIndex((r) => r.requireConfirmation);
+          const confirmedIndices = new Set<number>();
           while (confirmIdx !== -1) {
+            // Garde-fou anti-boucle (bug #2) : si un même appel d'outil redemande
+            // confirmation après avoir déjà été validé (handler ignorant `confirmed`),
+            // on arrête plutôt que de re-prompt indéfiniment.
+            if (confirmedIndices.has(confirmIdx)) {
+              results[confirmIdx] = {
+                callId: calls[confirmIdx].callId,
+                name: calls[confirmIdx].name,
+                content: "",
+                error: "Confirmation non honorée par l'outil — exécution abandonnée.",
+              };
+              steps[steps.length - calls.length + confirmIdx] = {
+                type: "error",
+                label: `${calls[confirmIdx].name} — confirmation non honorée`,
+                status: "error",
+              };
+              syncSteps();
+              break;
+            }
             const targetTc = calls[confirmIdx];
             steps[steps.length - calls.length + confirmIdx] = {
               type: "create",
@@ -597,6 +616,7 @@ export function useAiSidebarChat() {
               setSessionUsage((prev) => addUsage(prev, toolUsage));
             }
             results[confirmIdx] = result;
+            confirmedIndices.add(confirmIdx);
             steps[steps.length - calls.length + confirmIdx] = buildStepState(targetTc, result);
             syncSteps();
             confirmIdx = results.findIndex((r) => r.requireConfirmation);
