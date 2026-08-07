@@ -8,7 +8,7 @@
  */
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { rateDiagnostic, getRating, type Rating } from "@/src/ai/cloud-engine/feedback-store";
 
@@ -18,17 +18,14 @@ export interface RatingButtonsProps {
 }
 
 export function RatingButtons({ diagnosticId, className }: RatingButtonsProps) {
-  const [rating, setRating] = useState<Rating | null>(null);
-
-  useEffect(() => {
-    setRating(getRating(diagnosticId));
-  }, [diagnosticId]);
+  const [override, setOverride] = useState<{ id: string; value: Rating | null } | null>(null);
+  const rating = override?.id === diagnosticId ? override.value : getRating(diagnosticId);
 
   function handleClick(next: Rating) {
     // Toggle: clicking the same rating clears it.
     const target = rating === next ? null : next;
     rateDiagnostic(diagnosticId, target);
-    setRating(target);
+    setOverride({ id: diagnosticId, value: target });
   }
 
   return (
