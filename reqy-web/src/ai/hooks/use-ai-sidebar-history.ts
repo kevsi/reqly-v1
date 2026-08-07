@@ -23,58 +23,62 @@ export function useAiSidebarHistory(messages: ChatMessage[], model?: string | nu
   );
   const [historyOpen, setHistoryOpen] = useState(false);
   const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
-  // Save messages to current session — debounced to avoid heavy writes
-  // on every streamed token. Writes happen at most once per 800ms, plus
-  // a trailing write 800ms after the last change (covers stream end).
+  // Save messages to the current session. A leading-edge write fires as soon as
+  // a new turn appears (so a mid-stream reload never loses the whole exchange),
+  // and a trailing write consolidates streaming tokens 800ms after the last one.
+  const lastWriteLenRef = useRef(-1);
   useEffect(() => {
     if (!currentSessionId || messages.length === 0) return;
 
-    const timer = setTimeout(() => {
-      setSessions((prev) => {
-        const existing = prev.find((s) => s.id === currentSessionId);
-        const totalUsage = mergeUsages(
-          messages.filter((m) => m.role === "assistant").map((m) => m.usage ?? emptyUsage()),
+    const build = (list: ConversationSession[]): ConversationSession[] => {
+      const existing = list.find((s) => s.id === currentSessionId);
+      const totalUsage = mergeUsages(
+        messages.filter((m) => m.role === "assistant").map((m) => m.usage ?? emptyUsage()),
+      );
+      if (existing) {
+        return list.map((s) =>
+          s.id === currentSessionId
+            ? {
+                ...s,
+                messages,
+                totalUsage,
+                model: s.model ?? model ?? undefined,
+                updatedAt: new Date().toISOString(),
+              }
+            : s,
         );
-        let updated: ConversationSession[];
+      }
+      const title =
+        messages.find((m) => m.role === "user")?.content.slice(0, 50) || "Nouvelle conversation";
+      return [
+        ...list,
+        {
+          id: currentSessionId,
+          title: title.length > 40 ? title.slice(0, 37) + "..." : title,
+          messages,
+          totalUsage,
+          model: model ?? undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+    };
 
-        if (existing) {
-          updated = prev.map((s) =>
-            s.id === currentSessionId
-              ? {
-                  ...s,
-                  messages,
-                  totalUsage,
-                  model: s.model ?? model ?? undefined,
-                  updatedAt: new Date().toISOString(),
-                }
-              : s,
-          );
-        } else {
-          const title =
-            messages.find((m) => m.role === "user")?.content.slice(0, 50) ||
-            "Nouvelle conversation";
-          updated = [
-            ...prev,
-            {
-              id: currentSessionId,
-              title: title.length > 40 ? title.slice(0, 37) + "..." : title,
-              messages,
-              totalUsage,
-              model: model ?? undefined,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          ];
-        }
+    const write = () => {
+      const next = build(sessionsRef.current).slice(-MAX_HISTORY);
+      lastWriteLenRef.current = messages.length;
+      setSessions(next);
+      void persistence.setItem(HISTORY_KEY, next);
+    };
 
-        const trimmed = updated.slice(-MAX_HISTORY);
-        persistence.setItem(HISTORY_KEY, trimmed);
-        return trimmed;
-      });
-    }, 800);
-
+    if (messages.length > lastWriteLenRef.current) {
+      write(); // leading edge: persist the new turn immediately
+    }
+    const timer = setTimeout(write, 800); // trailing consolidation
     return () => clearTimeout(timer);
   }, [messages, currentSessionId, model]);
 
