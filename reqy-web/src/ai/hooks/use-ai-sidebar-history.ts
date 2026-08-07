@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { persistence } from "@/lib/persistence";
 import { emptyUsage, mergeUsages } from "@/src/ai/agent/usage";
 import type { ChatMessage, ConversationSession } from "@/src/ai/components/ai-sidebar-types";
@@ -67,8 +67,9 @@ export function useAiSidebarHistory(messages: ChatMessage[], model?: string | nu
           ];
         }
 
-        persistence.setItem(HISTORY_KEY, updated.slice(0, MAX_HISTORY));
-        return updated;
+        const trimmed = updated.slice(-MAX_HISTORY);
+        persistence.setItem(HISTORY_KEY, trimmed);
+        return trimmed;
       });
     }, 800);
 
