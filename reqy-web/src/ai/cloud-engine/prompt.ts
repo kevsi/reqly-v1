@@ -61,9 +61,10 @@ export function buildContextSummary(ctx: RequestContext): string {
     const res = ctx.response;
     lines.push(`Réponse : ${res.status} ${res.statusText} (${res.duration}ms, ${res.size} bytes)`);
     if (Object.keys(res.headers).length > 0) {
-      // FIX H9: Wrap response headers in XML delimiter
+      // FIX H9: Wrap response headers in XML delimiter, mask secrets + escape
+      // to prevent both leakage to the LLM and prompt injection.
       lines.push(
-        `Response headers :\n<response_headers>\n${JSON.stringify(res.headers, null, 2)}\n</response_headers>`,
+        `Response headers :\n<response_headers>\n${escapeXml(JSON.stringify(maskHeaders(res.headers), null, 2))}\n</response_headers>`,
       );
     }
     // FIX H9: Wrap response body in XML delimiter
