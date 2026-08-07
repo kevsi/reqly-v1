@@ -19,35 +19,47 @@ import {
   type ToolResult,
   type ToolCall,
 } from "@/lib/llm-tools";
-import {
-  buildStep,
-  type AssistantStep,
-} from "@/src/ai/components/assistant-steps-renderer";
 import type { ProcessStep } from "@/src/ai/components/assistant-steps-renderer";
 import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
 import { getPermission } from "@/src/ai/agent/permissions";
 import { loadRules, buildRulesSystemPrompt } from "@/src/ai/agent/rules";
 import { attachmentsToPrompt } from "@/src/ai/agent/context-picker";
 import { emptyUsage, addUsage } from "@/src/ai/agent/usage";
-import {
-  parseSlashCommand,
-  createDefaultCommands,
-  type SlashCommandContext,
-} from "@/src/ai/agent/commands";
+import { createDefaultCommands, type SlashCommandContext } from "@/src/ai/agent/commands";
 import { extractTextToolCalls, stripToolCallText } from "@/src/ai/agent/text-tools";
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
 
 const STALL_TIMEOUT_MS = 45_000;
+
+/** Construit l'état de l'étape d'un appel d'outil, en exposant le résultat
+ *  (sortie de requête HTTP) dans `detail` pour que la carte d'exécution puisse
+ *  l'analyser (méthode, URL, status, durée). */
+function buildStepState(
+  tc: { callId: string; name: string; arguments: string },
+  result: ToolResult,
+): ProcessStep {
+  if (tc.name === "execute_request") {
+    return {
+      type: "execute",
+      label: result.error ? "Requête — Erreur" : "Requête HTTP",
+      status: result.error ? ("error" as const) : ("done" as const),
+      detail: result.error ? result.error : result.content,
+    };
+  }
+  return {
+    type: "create",
+    label: `${tc.name} ${result.error ? "❌" : "✅"}`,
+    status: result.error ? "error" : "done",
+  };
+}
 
 export function useAiSidebarChat() {
   const pathname = usePathname();
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assistantSteps, setAssistantSteps] = useState<AssistantStep[]>([]);
 
   // Editing
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -71,13 +83,18 @@ export function useAiSidebarChat() {
   const [permissionsPanelOpen, setPermissionsPanelOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
-  const pendingPlanRef = useRef<{ toolCalls: ToolCall[]; reasoningContent?: string } | null>(
-    null,
-  );
+  const pendingPlanRef = useRef<{ toolCalls: ToolCall[]; reasoningContent?: string } | null>(null);
   const agentModeRef = useRef<AgentMode>(agentMode);
   useEffect(() => {
     agentModeRef.current = agentMode;
   }, [agentMode]);
+  // Restore mode to previous value after plan execution completes.
+  const restoreModeRef = useRef<AgentMode | null>(null);
+  // Wired by the sidebar to call history.handleNewSession on /new.
+  const newSessionRef = useRef<(() => void) | null>(null);
+  const setNewSessionHandler = useCallback((fn: () => void) => {
+    newSessionRef.current = fn;
+  }, []);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -127,7 +144,10 @@ export function useAiSidebarChat() {
           requireConfirmation: true,
         };
       }
-      return executeToolCall({ id: tc.callId, name: tc.name, arguments: tc.arguments }, { depth: 0 });
+      return executeToolCall(
+        { id: tc.callId, name: tc.name, arguments: tc.arguments },
+        { depth: 0, confirmed },
+      );
     },
     [],
   );
@@ -154,7 +174,6 @@ export function useAiSidebarChat() {
           attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
         };
         setMessages([...messages, userMsg]);
-        setInput("");
       }
       setIsLoading(true);
 
@@ -191,21 +210,6 @@ export function useAiSidebarChat() {
         }
         steps.push({ type, label, status: "in_progress" });
         syncSteps();
-      };
-
-      const doneStep = () => {
-        if (steps.length > 0) {
-          steps[steps.length - 1].status = "done";
-          syncSteps();
-        }
-      };
-
-      const failStep = (labelOverride?: string) => {
-        if (steps.length > 0) {
-          steps[steps.length - 1].status = "error";
-          if (labelOverride) steps[steps.length - 1].label = labelOverride;
-          syncSteps();
-        }
       };
 
       const finishThrough = () => {
@@ -271,7 +275,29 @@ export function useAiSidebarChat() {
           "Réponds en français. Sois concis et actionnable.",
         ].join("\n\n");
 
-        const contentWithContext = [content, attachmentsPrompt].filter(Boolean).join("\n\n");
+        // ── Conversation memory: inject prior messages for context ──
+        // Exclude the message being sent to avoid duplication.
+        let priorMessages = messages;
+        if (options?.skipUserMessage || options?.planCalls?.length) {
+          priorMessages = messages.slice(0, -1);
+        }
+        const transcript = priorMessages
+          .slice(-8)
+          .map((m) => {
+            const role = m.role === "user" ? "Utilisateur" : "Assistant";
+            const text = (m.content || "").slice(0, 1500);
+            return text ? `${role}: ${text}` : "";
+          })
+          .filter(Boolean)
+          .join("\n\n");
+
+        const contentWithContext = [
+          transcript ? `## Conversation précédente\n${transcript}` : null,
+          content,
+          attachmentsPrompt,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
 
         // ── Streaming + tool-calling loop ────────────────────
         // NOTE: the assistant message was already created by syncSteps()
@@ -309,8 +335,7 @@ export function useAiSidebarChat() {
             signal: controller.signal,
             tools: retriedWithoutTools ? undefined : REQLY_TOOLS,
             tool_choice: retriedWithoutTools ? undefined : "auto",
-            previousTurns:
-              previousTurns.length > 0 ? [...previousTurns] : undefined,
+            previousTurns: previousTurns.length > 0 ? [...previousTurns] : undefined,
           };
 
           const stream = streamLLM(opts);
@@ -365,17 +390,17 @@ export function useAiSidebarChat() {
                   return copy;
                 });
               } else if (token.type === "tool_calls") {
-                 reasoningThisTurn += token.reasoningContent ?? "";
-                 toolCallsThisTurn.push(
-                   ...token.calls.map((c: { id: string; name: string; arguments: string }) => ({
-                     callId: c.id,
-                     name: c.name,
-                     arguments: c.arguments,
-                   })),
-                 );
+                reasoningThisTurn += token.reasoningContent ?? "";
+                toolCallsThisTurn.push(
+                  ...token.calls.map((c: { id: string; name: string; arguments: string }) => ({
+                    callId: c.id,
+                    name: c.name,
+                    arguments: c.arguments,
+                  })),
+                );
               }
             }
-          } catch (e: any) {
+          } catch (e: unknown) {
             if (didTimeout) {
               steps.push({
                 type: "error",
@@ -389,7 +414,7 @@ export function useAiSidebarChat() {
               opts.tools &&
               !retriedWithoutTools &&
               /tools|functions|function calling|tool_calls|unsupported/i.test(
-                e?.message ?? "",
+                e instanceof Error ? e.message : "",
               )
             ) {
               retriedWithoutTools = true;
@@ -406,20 +431,7 @@ export function useAiSidebarChat() {
                 return copy;
               });
               fullText = "";
-        if (options?.planCalls?.length) {
-          addStep("execute", "Exécution du plan approuvé…");
-          await executeTools(
-            options.planCalls.map((c) => ({
-              callId: c.id,
-              name: c.name,
-              arguments: c.arguments,
-            })),
-            true,
-            options.reasoningContent,
-          );
-        } else {
-          await runTurn();
-        }
+              await runTurn();
               return;
             }
             throw e;
@@ -456,9 +468,9 @@ export function useAiSidebarChat() {
                 pendingPlanRef.current = { toolCalls: planCalls };
                 setPendingPlan({ planText: fullText, toolCalls: planCalls });
                 steps.push({
-                  type: "error",
+                  type: "pause",
                   label: `⏸ Mode plan — ${textCalls.length} action(s) proposée(s)`,
-                  status: "error",
+                  status: "done",
                 });
                 syncSteps();
                 return;
@@ -488,9 +500,9 @@ export function useAiSidebarChat() {
               reasoningContent: reasoningThisTurn,
             });
             steps.push({
-              type: "error",
+              type: "pause",
               label: `⏸ Mode plan — ${toolCallsThisTurn.length} action(s) proposée(s)`,
-              status: "error",
+              status: "done",
             });
             syncSteps();
             return;
@@ -537,17 +549,13 @@ export function useAiSidebarChat() {
                 setSessionUsage((prev) => addUsage(prev, toolUsage));
               }
               results.push(result);
-              steps[steps.length - calls.length + i] = {
-                type: "create",
-                label: `${tc.name} — ${result.error ? "❌" : "✅"}`,
-                status: result.error ? "error" : "done",
-              };
-            } catch (e: any) {
+              steps[steps.length - calls.length + i] = buildStepState(tc, result);
+            } catch (e: unknown) {
               results.push({
                 callId: tc.callId,
                 name: tc.name,
                 content: "",
-                error: e?.message ?? "Erreur inconnue",
+                error: e instanceof Error ? e.message : "Erreur inconnue",
               });
               steps[steps.length - calls.length + i] = {
                 type: "error",
@@ -568,7 +576,8 @@ export function useAiSidebarChat() {
               status: "awaiting_confirmation",
             };
             syncSteps();
-            setIsLoading(false);
+            // isLoading stays true: keeps input disabled so no new message
+            // can be sent while a confirmation is pending (race fix).
             const confirmed = await new Promise<boolean>((resolve) => {
               confirmResolverRef.current = resolve;
             });
@@ -588,13 +597,8 @@ export function useAiSidebarChat() {
               setSessionUsage((prev) => addUsage(prev, toolUsage));
             }
             results[confirmIdx] = result;
-            steps[steps.length - calls.length + confirmIdx] = {
-              type: "create",
-              label: `${targetTc.name} — ${result.error ? "❌" : "✅"}`,
-              status: result.error ? "error" : "done",
-            };
+            steps[steps.length - calls.length + confirmIdx] = buildStepState(targetTc, result);
             syncSteps();
-            setIsLoading(true);
             confirmIdx = results.findIndex((r) => r.requireConfirmation);
           }
 
@@ -611,9 +615,7 @@ export function useAiSidebarChat() {
           turnCount++;
 
           if (turnCount >= MAX_TOOL_TURNS) {
-            setError(
-              "L'assistant a atteint la limite de 5 tours d'outils.",
-            );
+            setError("L'assistant a atteint la limite de 5 tours d'outils.");
             return;
           }
 
@@ -621,7 +623,21 @@ export function useAiSidebarChat() {
           await runTurn();
         };
 
-        await runTurn();
+        // ── Execute approved plan or run a new LLM turn ──
+        if (options?.planCalls?.length) {
+          addStep("execute", "Exécution du plan approuvé…");
+          await executeTools(
+            options.planCalls.map((c) => ({
+              callId: c.id,
+              name: c.name,
+              arguments: c.arguments,
+            })),
+            true, // pre-approved
+            options.reasoningContent,
+          );
+        } else {
+          await runTurn();
+        }
 
         // ── Resolve the "Through…" spinner so it doesn't loop forever ──
         finishThrough();
@@ -652,7 +668,11 @@ export function useAiSidebarChat() {
             const copy = [...prev];
             const last = copy[copy.length - 1];
             if (last && last.role === "assistant" && !last.content) {
-              copy[copy.length - 1] = { ...last, content: "⏹ Génération arrêtée.", steps: [...steps] };
+              copy[copy.length - 1] = {
+                ...last,
+                content: "⏹ Génération arrêtée.",
+                steps: [...steps],
+              };
             }
             return copy;
           });
@@ -667,20 +687,27 @@ export function useAiSidebarChat() {
             }
           }
           steps.push({ type: "error", label: msg, status: "error" });
-          // Update the existing assistant bubble (created by syncSteps) instead
-          // of pushing another one, so the error shows in a single message.
+          // Show error in the steps timeline and the error banner —
+          // leave the bubble content empty so the error is not duplicated.
           setMessages((prev) => {
             const copy = [...prev];
             const last = copy[copy.length - 1];
             if (last && last.role === "assistant") {
-              copy[copy.length - 1] = { ...last, content: `❌ ${msg}`, steps: [...steps] };
+              copy[copy.length - 1] = { ...last, content: "", steps: [...steps] };
             } else {
-              copy.push({ role: "assistant", content: `❌ ${msg}`, steps: [...steps] });
+              copy.push({ role: "assistant", content: "", steps: [...steps] });
             }
             return copy;
           });
         }
       } finally {
+        // Restore agent mode if it was temporarily changed for plan execution.
+        if (restoreModeRef.current) {
+          const prevMode = restoreModeRef.current;
+          restoreModeRef.current = null;
+          setAgentMode(prevMode);
+          agentModeRef.current = prevMode;
+        }
         confirmResolverRef.current = null;
         abortRef.current = null;
         // Filet de sécurité : ne jamais laisser le spinner « Through… » bloqué,
@@ -721,6 +748,8 @@ export function useAiSidebarChat() {
     const plan = pendingPlanRef.current;
     pendingPlanRef.current = null;
     setPendingPlan(null);
+    // Temporarily switch to "act" so tools execute; restore mode in sendMessage's finally.
+    restoreModeRef.current = agentModeRef.current;
     setAgentMode("act");
     agentModeRef.current = "act";
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
@@ -741,6 +770,9 @@ export function useAiSidebarChat() {
     setError(null);
     setEditingIndex(null);
     setEditingText("");
+    setSessionUsage(emptyUsage());
+    setPendingPlan(null);
+    pendingPlanRef.current = null;
   }, []);
 
   const runSlashCommand = useCallback(
@@ -749,13 +781,15 @@ export function useAiSidebarChat() {
         clearMessages,
         newSession: () => {
           clearMessages();
+          newSessionRef.current?.();
         },
         setMode: setAgentMode,
         openRules: () => setRulesPanelOpen(true),
         openPermissions: () => setPermissionsPanelOpen(true),
         compact: () => {
           const lastUser = [...messages].reverse().find((m) => m.role === "user");
-          if (lastUser) void sendMessage(`Résume la conversation puis réponds à : ${lastUser.content}`);
+          if (lastUser)
+            void sendMessage(`Résume la conversation puis réponds à : ${lastUser.content}`);
         },
         exportSession: () => {
           const blob = new Blob([JSON.stringify(messages, null, 2)], {
@@ -778,16 +812,6 @@ export function useAiSidebarChat() {
     [clearMessages, messages, sendMessage],
   );
 
-  const handleSend = useCallback(() => {
-    const parsed = parseSlashCommand(input);
-    if (parsed) {
-      runSlashCommand(parsed.name, parsed.args);
-      setInput("");
-      return;
-    }
-    sendMessage(input);
-  }, [input, sendMessage, runSlashCommand]);
-
   const handleEditStart = useCallback((index: number, content: string) => {
     setEditingIndex(index);
     setEditingText(content);
@@ -803,9 +827,7 @@ export function useAiSidebarChat() {
     const truncated = messages.slice(0, editingIndex);
     const original = messages[editingIndex];
     const preservedAttachments =
-      original?.role === "user" && original.attachments?.length
-        ? original.attachments
-        : undefined;
+      original?.role === "user" && original.attachments?.length ? original.attachments : undefined;
     const userMsg: ChatMessage = {
       role: "user",
       content: editingText.trim(),
@@ -824,8 +846,16 @@ export function useAiSidebarChat() {
   }, [editingIndex, editingText, messages, sendMessage]);
 
   const handleRetry = useCallback(() => {
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    if (lastUser) sendMessage(lastUser.content);
+    const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+    if (lastUserIdx === -1) return;
+    const idx = messages.length - 1 - lastUserIdx;
+    const lastUser = messages[idx];
+    // Truncate everything after the last user message (failed assistant bubble).
+    setMessages(messages.slice(0, idx + 1));
+    void sendMessage(lastUser.content, {
+      skipUserMessage: true,
+      attachmentsOverride: lastUser.attachments,
+    });
   }, [messages, sendMessage]);
 
   const handleCopy = useCallback(async (content: string, index: number) => {
@@ -841,12 +871,13 @@ export function useAiSidebarChat() {
   const handleNewMessages = useCallback((newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     setError(null);
+    setEditingIndex(null);
+    setEditingText("");
   }, []);
 
   return {
     // State
     messages,
-    input,
     isLoading,
     error,
     editingIndex,
@@ -860,6 +891,7 @@ export function useAiSidebarChat() {
     pendingPlan,
     approvePlan,
     rejectPlan,
+    setPendingPlan,
     attachments,
     setAttachments,
     attachContext,
@@ -868,6 +900,7 @@ export function useAiSidebarChat() {
     abortRef,
     stopStreaming,
     confirmAction,
+    gatedExecute,
     runSlashCommand,
     rulesPanelOpen,
     setRulesPanelOpen,
@@ -876,14 +909,12 @@ export function useAiSidebarChat() {
     // Refs
     messagesEndRef,
     inputRef,
+    setNewSessionHandler,
     // Actions
-    setInput,
     setError,
-    setMessages,
     setIsLoading,
     setEditingText,
     // Handlers
-    handleSend,
     handleEditStart,
     handleEditCancel,
     handleEditConfirm,
