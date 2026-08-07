@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { persistence } from "@/lib/persistence";
 import { emptyUsage, mergeUsages } from "@/src/ai/agent/usage";
 import type { ChatMessage, ConversationSession } from "@/src/ai/components/ai-sidebar-types";
@@ -22,6 +22,8 @@ export function useAiSidebarHistory(messages: ChatMessage[], model?: string | nu
     typeof window === "undefined" ? null : messages.length === 0 ? crypto.randomUUID() : null,
   );
   const [historyOpen, setHistoryOpen] = useState(false);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   // Save messages to current session — debounced to avoid heavy writes
   // on every streamed token. Writes happen at most once per 800ms, plus
@@ -97,7 +99,9 @@ export function useAiSidebarHistory(messages: ChatMessage[], model?: string | nu
 
   const handleDeleteSession = useCallback(
     (id: string) => {
-      setSessions((prev) => prev.filter((s) => s.id !== id));
+      const next = sessionsRef.current.filter((s) => s.id !== id);
+      void persistence.setItem(HISTORY_KEY, next.slice(-MAX_HISTORY));
+      setSessions(next);
       if (currentSessionId === id) {
         setCurrentSessionId(crypto.randomUUID());
       }
