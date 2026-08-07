@@ -34,12 +34,25 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+// SECURITY FIX #1: never serialize secret headers (auth tokens, cookies) into
+// the prompt that is sent to a third-party LLM.
+const SECRET_HEADER_RE =
+  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|apikey|x-auth-token|x-csrf-token|x-amz-security-token)$/i;
+
+function maskHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key] = SECRET_HEADER_RE.test(key) ? "••••••" : value;
+  }
+  return out;
+}
+
 export function buildContextSummary(ctx: RequestContext): string {
   const r = ctx.request;
   const lines: string[] = [];
   lines.push(`Requête : ${r.method} ${r.url}`);
   if (Object.keys(r.headers).length > 0) {
-    lines.push(`Headers : ${JSON.stringify(r.headers, null, 2)}`);
+    lines.push(`Headers : ${JSON.stringify(maskHeaders(r.headers), null, 2)}`);
   }
   if (r.body != null) {
     lines.push(`Body : ${truncate(r.body)}`);
@@ -49,15 +62,21 @@ export function buildContextSummary(ctx: RequestContext): string {
     lines.push(`Réponse : ${res.status} ${res.statusText} (${res.duration}ms, ${res.size} bytes)`);
     if (Object.keys(res.headers).length > 0) {
       // FIX H9: Wrap response headers in XML delimiter
-      lines.push(`Response headers :\n<response_headers>\n${JSON.stringify(res.headers, null, 2)}\n</response_headers>`);
+      lines.push(
+        `Response headers :\n<response_headers>\n${JSON.stringify(res.headers, null, 2)}\n</response_headers>`,
+      );
     }
     // FIX H9: Wrap response body in XML delimiter
-    lines.push(`Response body :\n<response_body>\n${escapeXml(truncate(res.body))}\n</response_body>`);
+    lines.push(
+      `Response body :\n<response_body>\n${escapeXml(truncate(res.body))}\n</response_body>`,
+    );
   }
   if (ctx.error) {
     // FIX H9: Wrap error message in XML delimiter with escaping
     const escapedMsg = escapeXml(ctx.error.message);
-    lines.push(`<error_message>\nErreur réseau : ${ctx.error.code} — ${escapedMsg}\n</error_message>`);
+    lines.push(
+      `<error_message>\nErreur réseau : ${ctx.error.code} — ${escapedMsg}\n</error_message>`,
+    );
   }
   return lines.join("\n");
 }
@@ -66,7 +85,7 @@ export function buildUserPrompt(
   question: string,
   ctx: RequestContext,
   diagnostics: Diagnostic[] = [],
-  retrievedChunks: RetrievedChunk[] = []
+  retrievedChunks: RetrievedChunk[] = [],
 ): string {
   const parts: string[] = [];
   parts.push("=== Contexte de la requête ===");
@@ -77,7 +96,7 @@ export function buildUserPrompt(
     for (const d of diagnostics) {
       parts.push(
         `- [${d.severity.toUpperCase()}] ${d.title}: ${d.explanation}` +
-          (d.fix ? ` (fix: ${d.fix.description})` : "")
+          (d.fix ? ` (fix: ${d.fix.description})` : ""),
       );
     }
   }
