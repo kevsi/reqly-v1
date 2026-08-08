@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Boxes, Binary, type LucideIcon } from "lucide-react";
+import { Boxes, Binary, Server, type LucideIcon } from "lucide-react";
 import { useEnabledModuleNav } from "@/hooks/use-modules-store";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
  */
 const ICONS: Record<string, LucideIcon> = {
   Binary,
+  Server,
 };
 const FALLBACK_ICON: LucideIcon = Boxes;
 

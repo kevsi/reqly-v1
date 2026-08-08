@@ -1,11 +1,11 @@
 import type { ModuleManifest, ModuleNavItem, ModuleRouteContribution } from "./types";
 import { encodeDecodeManifest } from "@/modules/encode-decode/manifest";
+import { mockServerManifest } from "@/modules/mock-server/manifest";
 
 /**
  * Central registry of Reqly modules.
  *
- * The lifecycle is uniform for EVERY module (MTN MoMo included — no special
- * case):
+ * The lifecycle is uniform for EVERY module (no special case):
  *   1. AVAILABLE  — the module manifest is known and can be installed.
  *   2. INSTALLED  — the user installed it (added to `installState`).
  *   3. ENABLED    — installed AND toggled on; the app surfaces it (nav/routes).
@@ -18,7 +18,7 @@ import { encodeDecodeManifest } from "@/modules/encode-decode/manifest";
  * Modules are statically imported so their code can be tree-shaken; only
  * enabled modules are surfaced by the app (nav, routes, code loading).
  */
-const AVAILABLE: ModuleManifest[] = [encodeDecodeManifest];
+const AVAILABLE: ModuleManifest[] = [encodeDecodeManifest, mockServerManifest];
 
 const installState = new Map<string, boolean>();
 
