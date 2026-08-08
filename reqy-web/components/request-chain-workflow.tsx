@@ -152,10 +152,10 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
     chain.forEach((step) => {
       step.extractVariables.forEach((extraction) => {
         addVariableMapping({
-          id: `mapping-${Date.now()}-${Math.random()}`,
+          name: extraction.targetVariable,
           sourceRequestId: step.requestId,
           sourcePath: extraction.sourcePath,
-          targetVariable: extraction.targetVariable,
+          enabled: true,
         });
       });
     });
@@ -446,7 +446,7 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
                 >
                   <code className="font-mono text-muted-foreground">{mapping.sourcePath}</code>
                   <ArrowRight className="size-3 text-muted-foreground" />
-                  <code className="font-mono font-semibold">{`{{${mapping.targetVariable}}}`}</code>
+                  <code className="font-mono font-semibold">{`{{${mapping.name}}}`}</code>
                 </div>
               ))}
               {variableMappings.length > 5 && (
