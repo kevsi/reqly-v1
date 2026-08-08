@@ -35,6 +35,14 @@ describe("session-store", () => {
     expect(useSessionStore.getState().status).toBe("authenticated");
   });
 
+  it("signup without user/token (backend only returns { userId, email }) does not crash and stays unauthenticated", async () => {
+    authSignup.mockResolvedValue({ user: undefined, token: undefined });
+    const res = await useSessionStore.getState().signup("a@b.io", "supersecret", "");
+    expect(res).toEqual({ userId: "", email: "a@b.io", message: "" });
+    expect(useSessionStore.getState().token).toBeNull();
+    expect(useSessionStore.getState().status).toBe("unauthenticated");
+  });
+
   it("restore sets unauthenticated (memory-only, no token validation)", async () => {
     useSessionStore.setState({ token: "tok", status: "loading" });
     await useSessionStore.getState().restore();

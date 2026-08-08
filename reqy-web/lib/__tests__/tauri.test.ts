@@ -12,27 +12,27 @@ describe("lib/tauri", () => {
 
     it("returns false when window is undefined (SSR)", async () => {
       const origWindow = globalThis.window;
-      delete (globalThis as any).window;
+      delete (globalThis as unknown).window;
       const { isTauriAvailable } = await import("../tauri");
       expect(isTauriAvailable()).toBe(false);
       // Restore for other tests
-      (globalThis as any).window = origWindow;
+      (globalThis as unknown).window = origWindow;
     });
 
     it("returns false when window has neither Tauri global", async () => {
-      (globalThis as any).window = {};
+      (globalThis as unknown).window = {};
       const { isTauriAvailable } = await import("../tauri");
       expect(isTauriAvailable()).toBe(false);
     });
 
     it("returns true when __TAURI_INTERNALS__ is present (Tauri v2)", async () => {
-      (globalThis as any).window = { __TAURI_INTERNALS__: {} };
+      (globalThis as unknown).window = { __TAURI_INTERNALS__: {} };
       const { isTauriAvailable } = await import("../tauri");
       expect(isTauriAvailable()).toBe(true);
     });
 
     it("returns true when __TAURI__ is present (Tauri v1 compat)", async () => {
-      (globalThis as any).window = { __TAURI__: {} };
+      (globalThis as unknown).window = { __TAURI__: {} };
       const { isTauriAvailable } = await import("../tauri");
       expect(isTauriAvailable()).toBe(true);
     });
@@ -46,11 +46,11 @@ describe("lib/tauri", () => {
       vi.resetModules();
       mockInvoke = vi.fn();
       // Tauri must be available for invokeTauriFetch to proceed
-      (globalThis as any).window = { __TAURI_INTERNALS__: {} };
+      (globalThis as unknown).window = { __TAURI_INTERNALS__: {} };
     });
 
     it("throws when Tauri is not available", async () => {
-      (globalThis as any).window = {};
+      (globalThis as unknown).window = {};
       const { invokeTauriFetch } = await import("../tauri");
       await expect(invokeTauriFetch("GET", "http://example.com", {})).rejects.toThrow(
         "Tauri is not available",

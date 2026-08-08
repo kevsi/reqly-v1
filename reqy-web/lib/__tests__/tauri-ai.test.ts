@@ -82,9 +82,7 @@ describe("callAiProxyTauri (chemin Tauri)", () => {
     });
 
     expect(res.content).toBe("");
-    expect(res.toolCalls).toEqual([
-      { id: "call_1", name: "list_collections", arguments: "{}" },
-    ]);
+    expect(res.toolCalls).toEqual([{ id: "call_1", name: "list_collections", arguments: "{}" }]);
   });
 
   it("retourne le contenu seul quand aucun tool_call", async () => {
@@ -128,9 +126,7 @@ describe("callAiProxyTauri (chemin Tauri)", () => {
     });
 
     expect(res.reasoningContent).toBe("Je dois lister les collections d'abord.");
-    expect(res.toolCalls).toEqual([
-      { id: "call_1", name: "list_collections", arguments: "{}" },
-    ]);
+    expect(res.toolCalls).toEqual([{ id: "call_1", name: "list_collections", arguments: "{}" }]);
   });
 
   it("ne renvoie pas reasoning_content si absent", async () => {
@@ -280,7 +276,11 @@ describe("callAiProxyTauri (chemin Tauri)", () => {
     expect(url).toBe("http://127.0.0.1:11434/v1/chat/completions");
 
     expect(res.toolCalls).toEqual([
-      { id: "call_ollama_1", name: "execute_request", arguments: '{"url":"http://localhost:8000"}' },
+      {
+        id: "call_ollama_1",
+        name: "execute_request",
+        arguments: '{"url":"http://localhost:8000"}',
+      },
     ]);
   });
 
@@ -294,20 +294,16 @@ describe("callAiProxyTauri (chemin Tauri)", () => {
       message: "Continue",
       previousTurns: [
         {
-          assistantToolCalls: [
-            { id: "call_1", name: "list_collections", arguments: "{}" },
-          ],
-          toolResults: [
-            { callId: "call_1", name: "list_collections", content: '["A","B"]' },
-          ],
+          assistantToolCalls: [{ id: "call_1", name: "list_collections", arguments: "{}" }],
+          toolResults: [{ callId: "call_1", name: "list_collections", content: '["A","B"]' }],
         },
       ],
     });
 
     const [, , , rawBody] = mockInvoke.mock.calls[0];
     const body = JSON.parse(rawBody);
-    expect(body.messages.some((m: any) => m.role === "tool")).toBe(true);
-    expect(body.messages.some((m: any) => m.role === "assistant" && m.tool_calls)).toBe(true);
+    expect(body.messages.some((m) => m.role === "tool")).toBe(true);
+    expect(body.messages.some((m) => m.role === "assistant" && m.tool_calls)).toBe(true);
   });
 
   it("renvoie reasoning_content du tour précédent (round-trip OpenAI-compatible)", async () => {
@@ -321,19 +317,15 @@ describe("callAiProxyTauri (chemin Tauri)", () => {
       previousTurns: [
         {
           reasoningContent: "Je réfléchis à la collection.",
-          assistantToolCalls: [
-            { id: "call_1", name: "list_collections", arguments: "{}" },
-          ],
-          toolResults: [
-            { callId: "call_1", name: "list_collections", content: '["A","B"]' },
-          ],
+          assistantToolCalls: [{ id: "call_1", name: "list_collections", arguments: "{}" }],
+          toolResults: [{ callId: "call_1", name: "list_collections", content: '["A","B"]' }],
         },
       ],
     });
 
     const [, , , rawBody] = mockInvoke.mock.calls[0];
     const body = JSON.parse(rawBody);
-    const assistant = body.messages.find((m: any) => m.role === "assistant");
+    const assistant = body.messages.find((m) => m.role === "assistant");
     expect(assistant.reasoning_content).toBe("Je réfléchis à la collection.");
   });
 
@@ -348,14 +340,14 @@ describe("callAiProxyTauri (chemin Tauri)", () => {
       previousTurns: [
         {
           assistantToolCalls: [{ id: "call_1", name: "list_collections", arguments: "{}" }],
-          toolResults: [{ callId: "call_1", name: "list_collections", content: '[]' }],
+          toolResults: [{ callId: "call_1", name: "list_collections", content: "[]" }],
         },
       ],
     });
 
     const [, , , rawBody] = mockInvoke.mock.calls[0];
     const body = JSON.parse(rawBody);
-    const assistant = body.messages.find((m: any) => m.role === "assistant");
+    const assistant = body.messages.find((m) => m.role === "assistant");
     expect(assistant.reasoning_content).toBeUndefined();
   });
 

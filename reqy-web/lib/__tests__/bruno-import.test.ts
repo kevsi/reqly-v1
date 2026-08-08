@@ -166,7 +166,7 @@ describe("convertBrunoToCollections", () => {
 
 function assertSuccess(
   result: ReturnType<typeof parseBrunoCollection>,
-): asserts result is { success: true; collectionName: string; endpoints: any[] } {
+): asserts result is { success: true; collectionName: string; endpoints: unknown[] } {
   if (!result.success) {
     throw new Error(`Expected success, got error: ${result.error}`);
   }

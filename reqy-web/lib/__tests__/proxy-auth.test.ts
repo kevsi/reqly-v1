@@ -1,5 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-import { getProxyToken, proxyAuthHeaders } from "@/lib/proxy-auth";
+import { describe, it, expect } from "vitest";
 
 describe("proxy-auth", () => {
   // Test the cookie parsing logic directly - it's a pure function

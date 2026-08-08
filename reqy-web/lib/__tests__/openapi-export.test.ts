@@ -48,7 +48,7 @@ describe("generateOpenApiSpec", () => {
   it("produces a generic response schema without inference", () => {
     const spec = generateOpenApiSpec([makeCollection([makeRequest({})])]);
     const op = spec.paths["/users"]?.get;
-    const schema = (op?.responses?.["200"] as any)?.content?.["application/json"]?.schema;
+    const schema = (op?.responses?.["200"] as unknown)?.content?.["application/json"]?.schema;
     expect(schema).toBeDefined();
     // Generic fallback has no `properties`.
     expect(schema.properties).toBeUndefined();
@@ -60,7 +60,7 @@ describe("generateOpenApiSpec", () => {
       historyItems: [{ requestId: "r1", responseBody: JSON.stringify({ id: 1, name: "Ada" }) }],
     });
     const op = spec.paths["/users"]?.get;
-    const schema = (op?.responses?.["200"] as any)?.content?.["application/json"]?.schema;
+    const schema = (op?.responses?.["200"] as unknown)?.content?.["application/json"]?.schema;
     // Inference is merged as allOf: [generic, inferred]; typed fields live on the
     // inferred member, which OpenAPI Generator resolves correctly.
     expect(schema.allOf).toBeDefined();
@@ -75,7 +75,7 @@ describe("generateOpenApiSpec", () => {
       historyItems: [{ requestId: "other", responseBody: JSON.stringify({ x: 1 }) }],
     });
     const op = spec.paths["/users"]?.get;
-    const schema = (op?.responses?.["200"] as any)?.content?.["application/json"]?.schema;
+    const schema = (op?.responses?.["200"] as unknown)?.content?.["application/json"]?.schema;
     expect(schema.properties).toBeUndefined();
   });
 
@@ -91,7 +91,7 @@ describe("generateOpenApiSpec", () => {
     ]);
     const op = spec.paths["/users/{id}"]?.get;
     expect(op).toBeDefined();
-    const pathParam = op?.parameters?.find((p: any) => p.in === "path");
+    const pathParam = op?.parameters?.find((p) => p.in === "path");
     expect(pathParam?.name).toBe("id");
     expect(pathParam?.required).toBe(true);
   });
@@ -106,7 +106,7 @@ describe("generateOpenApiSpec", () => {
       ]),
     ]);
     const op = spec.paths["/users/{id}"]?.get;
-    const pathParam = op?.parameters?.find((p: any) => p.in === "path");
+    const pathParam = op?.parameters?.find((p) => p.in === "path");
     expect(pathParam?.name).toBe("id");
   });
 
@@ -123,7 +123,7 @@ describe("generateOpenApiSpec", () => {
     ]);
     const op = spec.paths["/me"]?.get;
     expect(op?.security).toEqual([{ bearerAuth: [] }]);
-    expect((spec.components as any)?.securitySchemes?.bearerAuth).toMatchObject({
+    expect((spec.components as unknown)?.securitySchemes?.bearerAuth).toMatchObject({
       type: "http",
       scheme: "bearer",
     });
@@ -135,6 +135,6 @@ describe("generateOpenApiSpec", () => {
     ]);
     const op = spec.paths["/users"]?.get;
     expect(op?.security).toBeUndefined();
-    expect((spec.components as any)?.securitySchemes).toBeUndefined();
+    expect((spec.components as unknown)?.securitySchemes).toBeUndefined();
   });
 });

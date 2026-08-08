@@ -1,14 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 
-const mockScript = vi.fn();
-const mockCreateContext = vi.fn((sandbox: any) => sandbox);
+const mockCreateContext = vi.fn((sandbox) => sandbox);
 
 vi.mock("node:vm", () => ({
   Script: class {
     constructor(code: string) {
       this.code = code;
     }
-    runInContext(ctx: any, options?: any) {
+    runInContext(ctx: unknown, _options?: unknown) {
       const fn = new Function(
         "pm",
         "console",
@@ -56,7 +55,7 @@ vi.mock("node:vm", () => ({
       );
     }
   },
-  createContext: (...args: any[]) => mockCreateContext(...args),
+  createContext: (...args: unknown[]) => mockCreateContext(...args),
 }));
 
 import { runScript } from "@/lib/test-runner/scripts";
@@ -97,6 +96,22 @@ describe("runScript", () => {
   it("denies process.exit", async () => {
     const out = await runScript("process.exit(1)", baseCtx, { phase: "pre" });
     expect(out.error).toBeDefined();
+  });
+
+  it("denies network egress globals (fetch, WebSocket)", async () => {
+    const fetchOut = await runScript("fetch('https://evildomain.test')", baseCtx, { phase: "pre" });
+    expect(fetchOut.error).toBeDefined();
+    const wsOut = await runScript("new WebSocket('wss://evildomain.test')", baseCtx, {
+      phase: "pre",
+    });
+    expect(wsOut.error).toBeDefined();
+  });
+
+  it("denies async runaway globals (setTimeout, queueMicrotask)", async () => {
+    const to = await runScript("setTimeout(() => {}, 1)", baseCtx, { phase: "pre" });
+    expect(to.error).toBeDefined();
+    const q = await runScript("queueMicrotask(() => {})", baseCtx, { phase: "pre" });
+    expect(q.error).toBeDefined();
   });
 
   it("returns error on syntax error", async () => {

@@ -508,13 +508,11 @@ describe("mergeImportedCollections", () => {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function assertSuccess(
-  result: ReturnType<typeof parseOpenApiSpec>,
-): asserts result is {
+function assertSuccess(result: ReturnType<typeof parseOpenApiSpec>): asserts result is {
   success: true;
-  spec: any;
-  endpoints: any[];
-  tagGroups: any[];
+  spec: unknown;
+  endpoints: unknown[];
+  tagGroups: unknown[];
   totalEndpoints: number;
 } {
   if (!result.success) {

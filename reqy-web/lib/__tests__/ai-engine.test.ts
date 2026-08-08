@@ -5,7 +5,7 @@ import {
   parseAIResponse,
   dispatchAIActions,
 } from "@/src/ai/cloud-engine/actions";
-import type { AIContext, AIAction, AIResponse } from "@/src/ai/cloud-engine/actions";
+import type { AIContext, AIAction } from "@/src/ai/cloud-engine/actions";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -343,5 +343,3 @@ describe("dispatchAIActions", () => {
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("FILL_REQUEST handler error"));
   });
 });
-
-

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 
 /**
  * Tests for the Bearer SERVICE_TOKEN gate in `reqy-web/proxy.ts`.
@@ -12,10 +11,12 @@ import { NextResponse } from "next/server";
  */
 
 const VALID_TOKEN = "a".repeat(48); // 48 bytes, well above the 32-byte minimum
+const VISITOR_TOKEN = "b".repeat(36); // uuid-length
 
 interface MockRequestInit {
   pathname: string;
   authorization?: string;
+  cookie?: string;
 }
 
 /**
@@ -25,9 +26,10 @@ interface MockRequestInit {
  * function is the unit under test — pulling in Next.js server runtime
  * for a proxy test would couple the test to framework internals.
  */
-function makeMockRequest({ pathname, authorization }: MockRequestInit): NextRequest {
+function makeMockRequest({ pathname, authorization, cookie }: MockRequestInit): NextRequest {
   const headers = new Headers();
   if (authorization !== undefined) headers.set("authorization", authorization);
+  if (cookie !== undefined) headers.set("cookie", cookie);
   return {
     nextUrl: { pathname } as NextRequest["nextUrl"],
     headers,
@@ -298,6 +300,59 @@ describe("proxy: public OAuth routes pass through without token", () => {
     const { proxy } = await import("../../proxy");
     const res = proxy(
       makeMockRequest({ pathname: "/api/github-auth/callback?code=abc&state=xyz" }),
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("proxy: per-visitor runtime token (no static NEXT_PUBLIC secret)", () => {
+  beforeEach(() => {
+    delete process.env.PROXY_SERVICE_TOKEN;
+  });
+
+  it("authorizes a request whose Bearer matches the visitor cookie", async () => {
+    const { proxy } = await import("../../proxy");
+    const res = proxy(
+      makeMockRequest({
+        pathname: "/api/proxy",
+        authorization: `Bearer ${VISITOR_TOKEN}`,
+        cookie: `proxy_visitor=${VISITOR_TOKEN}`,
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a cross-site request that lacks the visitor cookie", async () => {
+    const { proxy } = await import("../../proxy");
+    const res = proxy(makeMockRequest({ pathname: "/api/proxy" }));
+    expect(res.status).toBe(503); // no env token AND no cookie → fail closed
+  });
+
+  it("rejects a request with the cookie but no Bearer header", async () => {
+    const { proxy } = await import("../../proxy");
+    const res = proxy(
+      makeMockRequest({ pathname: "/api/proxy", cookie: `proxy_visitor=${VISITOR_TOKEN}` }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a wrong Bearer even when the visitor cookie is present", async () => {
+    const { proxy } = await import("../../proxy");
+    const res = proxy(
+      makeMockRequest({
+        pathname: "/api/proxy",
+        authorization: `Bearer ${VALID_TOKEN}`,
+        cookie: `proxy_visitor=${VISITOR_TOKEN}`,
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("still honors the server-side env token when present", async () => {
+    process.env.PROXY_SERVICE_TOKEN = VALID_TOKEN;
+    const { proxy } = await import("../../proxy");
+    const res = proxy(
+      makeMockRequest({ pathname: "/api/proxy", authorization: `Bearer ${VALID_TOKEN}` }),
     );
     expect(res.status).toBe(200);
   });

@@ -2,6 +2,13 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import JSZip from "jszip";
 import { POST } from "@/app/api/sdk-generate/route";
 
+vi.mock("@/lib/security/dns-cache", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/security/dns-cache")>(
+    "@/lib/security/dns-cache",
+  );
+  return { ...actual, resolveCached: vi.fn().mockResolvedValue("93.184.216.34") };
+});
+
 function fakeResponse(body: unknown, status = 200) {
   const text = typeof body === "string" ? body : JSON.stringify(body);
   return {

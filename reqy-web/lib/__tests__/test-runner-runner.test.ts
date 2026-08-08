@@ -1,14 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 
-const mockScript = vi.fn();
-const mockCreateContext = vi.fn((sandbox: any) => sandbox);
+const mockCreateContext = vi.fn((sandbox) => sandbox);
 
 vi.mock("node:vm", () => ({
   Script: class {
     constructor(code: string) {
       this.code = code;
     }
-    runInContext(ctx: any, options?: any) {
+    runInContext(ctx: unknown, _options?: unknown) {
       const fn = new Function(
         "pm",
         "console",
@@ -56,7 +55,7 @@ vi.mock("node:vm", () => ({
       );
     }
   },
-  createContext: (...args: any[]) => mockCreateContext(...args),
+  createContext: (...args: unknown[]) => mockCreateContext(...args),
 }));
 
 import { runCollection } from "@/lib/test-runner/runner";
@@ -199,7 +198,6 @@ describe("runCollection", () => {
   it("runs pre-request script before HTTP and post-response after", async () => {
     fakeFetch.mockClear();
     const preExecuted: string[] = [];
-    const postExecuted: string[] = [];
     const reqWithScripts: RequestItem = {
       ...request,
       id: "r3",
@@ -211,7 +209,7 @@ describe("runCollection", () => {
       environment: {} as Record<string, string>,
       iterationData: {},
       iterationIndex: 0,
-      log: (m: string) => {},
+      log: (_m: string) => {},
     };
     const localExecutor = vi.fn(async (r: unknown) => {
       preExecuted.push((r as { url: string }).url);
