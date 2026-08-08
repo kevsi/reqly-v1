@@ -158,12 +158,14 @@ export default function DashboardPage() {
   const [isSlowEndpointsOpen, setIsSlowEndpointsOpen] = useState(false);
   const [isRecentRequestsOpen, setIsRecentRequestsOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  // Captured once on mount (React purity rule: no impure calls during render).
+  const [now] = useState(() => Date.now());
 
   const filteredHistory = useMemo(() => {
     if (timeRange === "all") return history;
-    const cutoff = Date.now() - (timeRange === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000;
+    const cutoff = now - (timeRange === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000;
     return history.filter((item) => (item.executedAt || item.createdAt || 0) >= cutoff);
-  }, [history, timeRange]);
+  }, [history, timeRange, now]);
 
   const recentRequests = useMemo(() => buildRecentRequests(filteredHistory, 10), [filteredHistory]);
   const allRequests = useMemo(() => buildRecentRequests(filteredHistory), [filteredHistory]);
@@ -288,7 +290,7 @@ export default function DashboardPage() {
     <>
       <main className="flex-1 overflow-auto p-6 hide-scrollbar">
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between gap-4 flex-wrap animate-fade-in">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground">
@@ -403,65 +405,67 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   {/* Table header */}
-                  <div className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-2.5 border-b border-border bg-muted/40">
-                    <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="size-1 rounded-full bg-muted-foreground/30" />
-                      Method
-                    </span>
-                    <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="size-1 rounded-full bg-muted-foreground/30" />
-                      Endpoint
-                    </span>
-                    <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider text-center">
-                      Status
-                    </span>
-                    <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider text-right flex items-center justify-end gap-1.5">
-                      <Clock className="size-3" />
-                      Time
-                    </span>
-                    <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider text-right">
-                      When
-                    </span>
-                  </div>
-                  <div className="divide-y divide-border/60">
-                    {recentRequests.map((request, idx) => (
-                      <div
-                        key={request.endpoint + request.timestamp}
-                        className={cn(
-                          "grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center transition-all duration-150",
-                          idx % 2 === 0 ? "bg-background" : "bg-muted/10",
-                          "hover:bg-muted/30 hover:shadow-sm hover:-translate-y-[1px] active:translate-y-0",
-                        )}
-                      >
-                        <span
+                  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-2.5 border-b border-border bg-muted/40 min-w-[500px]">
+                      <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="size-1 rounded-full bg-muted-foreground/30" />
+                        Method
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="size-1 rounded-full bg-muted-foreground/30" />
+                        Endpoint
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider text-center">
+                        Status
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider text-right flex items-center justify-end gap-1.5">
+                        <Clock className="size-3" />
+                        Time
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider text-right">
+                        When
+                      </span>
+                    </div>
+                    <div className="divide-y divide-border/60">
+                      {recentRequests.map((request, idx) => (
+                        <div
+                          key={request.endpoint + request.timestamp}
                           className={cn(
-                            "inline-flex w-fit rounded px-2 py-0.5 text-[10px] font-bold",
-                            METHOD_BADGE[request.method] ??
-                              "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-400",
+                            "grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center transition-all duration-150 min-w-[500px]",
+                            idx % 2 === 0 ? "bg-background" : "bg-muted/10",
+                            "hover:bg-muted/30 hover:shadow-sm hover:-translate-y-[1px] active:translate-y-0",
                           )}
                         >
-                          {request.method}
-                        </span>
-                        <span className="font-mono text-xs text-foreground truncate flex items-center gap-1.5">
-                          <span className="size-1 rounded-full bg-muted-foreground/20 shrink-0" />
-                          {request.endpoint}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-xs font-semibold text-center",
-                            STATUS_COLOR(request.status),
-                          )}
-                        >
-                          {request.status || "—"}
-                        </span>
-                        <span className="text-xs text-muted-foreground text-right font-mono">
-                          {request.time}
-                        </span>
-                        <span className="text-xs text-muted-foreground text-right">
-                          {request.timestamp}
-                        </span>
-                      </div>
-                    ))}
+                          <span
+                            className={cn(
+                              "inline-flex w-fit rounded px-2 py-0.5 text-[10px] font-bold",
+                              METHOD_BADGE[request.method] ??
+                                "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-400",
+                            )}
+                          >
+                            {request.method}
+                          </span>
+                          <span className="font-mono text-xs text-foreground truncate flex items-center gap-1.5">
+                            <span className="size-1 rounded-full bg-muted-foreground/20 shrink-0" />
+                            {request.endpoint}
+                          </span>
+                          <span
+                            className={cn(
+                              "text-xs font-semibold text-center",
+                              STATUS_COLOR(request.status),
+                            )}
+                          >
+                            {request.status || "—"}
+                          </span>
+                          <span className="text-xs text-muted-foreground text-right font-mono">
+                            {request.time}
+                          </span>
+                          <span className="text-xs text-muted-foreground text-right">
+                            {request.timestamp}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -688,13 +692,21 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isRecentRequestsOpen} onOpenChange={(open) => { setIsRecentRequestsOpen(open); if (open) setReqPage(0); }}>
+      <Dialog
+        open={isRecentRequestsOpen}
+        onOpenChange={(open) => {
+          setIsRecentRequestsOpen(open);
+          if (open) setReqPage(0);
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col gap-0 p-0">
           <DialogHeader className="border-b px-6 py-4 shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <ListFilter className="size-4 text-muted-foreground" />
               Recent Requests
-              <span className="text-xs font-normal text-muted-foreground">({allRequests.length} total)</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                ({allRequests.length} total)
+              </span>
             </DialogTitle>
           </DialogHeader>
           <div className="overflow-auto">
@@ -716,37 +728,39 @@ export default function DashboardPage() {
               </span>
             </div>
             <div className="divide-y divide-border">
-              {allRequests.slice(reqPage * REQ_PAGE_SIZE, (reqPage + 1) * REQ_PAGE_SIZE).map((request, i) => (
-                <div
-                  key={`${request.endpoint}-${request.timestamp}-${i}`}
-                  className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center hover:bg-muted/20 transition-colors"
-                >
-                  <span
-                    className={cn(
-                      "inline-flex w-fit rounded px-2 py-0.5 text-[10px] font-bold",
-                      METHOD_BADGE[request.method] ??
-                        "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-400",
-                    )}
+              {allRequests
+                .slice(reqPage * REQ_PAGE_SIZE, (reqPage + 1) * REQ_PAGE_SIZE)
+                .map((request, i) => (
+                  <div
+                    key={`${request.endpoint}-${request.timestamp}-${i}`}
+                    className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center hover:bg-muted/20 transition-colors"
                   >
-                    {request.method}
-                  </span>
-                  <span className="font-mono text-xs text-foreground truncate">
-                    {request.endpoint}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-xs font-semibold text-center",
-                      STATUS_COLOR(request.status),
-                    )}
-                  >
-                    {request.status || "—"}
-                  </span>
-                  <span className="text-xs text-muted-foreground text-right">{request.time}</span>
-                  <span className="text-xs text-muted-foreground text-right">
-                    {request.timestamp}
-                  </span>
-                </div>
-              ))}
+                    <span
+                      className={cn(
+                        "inline-flex w-fit rounded px-2 py-0.5 text-[10px] font-bold",
+                        METHOD_BADGE[request.method] ??
+                          "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-400",
+                      )}
+                    >
+                      {request.method}
+                    </span>
+                    <span className="font-mono text-xs text-foreground truncate">
+                      {request.endpoint}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold text-center",
+                        STATUS_COLOR(request.status),
+                      )}
+                    >
+                      {request.status || "—"}
+                    </span>
+                    <span className="text-xs text-muted-foreground text-right">{request.time}</span>
+                    <span className="text-xs text-muted-foreground text-right">
+                      {request.timestamp}
+                    </span>
+                  </div>
+                ))}
             </div>
           </div>
           {allRequests.length > REQ_PAGE_SIZE && (

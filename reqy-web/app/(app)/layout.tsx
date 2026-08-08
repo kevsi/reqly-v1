@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ApiSidebar } from "@/components/api-sidebar";
 import { ApiHeader } from "@/components/api-header";
 import { AiSidebar } from "@/src/ai/components/ai-sidebar";
+import { KeyboardShortcutsModal } from "@/components/keyboard-shortcuts-modal";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { AiSidebarContext } from "@/contexts/ai-sidebar-context";
 import { usePathname } from "next/navigation";
@@ -26,10 +27,8 @@ const ACTIVE_PAGE_MAP: Record<string, string> = {
   "my-projects": "projects", // URL /my-projects but sidebar expects "projects"
   sdks: "sdks",
   capture: "capture",
-  websocket: "websocket",
   git: "git",
   sse: "sse",
-  grpc: "grpc",
 };
 
 function getActivePage(pathname: string): string {
@@ -44,18 +43,30 @@ function getActivePage(pathname: string): string {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { isCollapsed, toggleSidebar, isMobile, mobileOpen, openMobileSidebar, closeMobileSidebar } =
-    useSidebar();
+  const {
+    isCollapsed,
+    toggleSidebar,
+    isMobile,
+    mobileOpen,
+    openMobileSidebar,
+    closeMobileSidebar,
+  } = useSidebar();
   const pathname = usePathname();
   const activePage = getActivePage(pathname);
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
 
-  // Cmd+I / Ctrl+I toggle
+  // Cmd+I / Ctrl+I toggle AI sidebar
+  // Cmd+K / Ctrl+K toggle shortcuts modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
         e.preventDefault();
         setAiSidebarOpen((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShortcutsModalOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -64,7 +75,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AiSidebarContext.Provider value={{ aiSidebarOpen, setAiSidebarOpen }}>
-      <div className="flex h-screen bg-background bg-dot-pattern">
+      <div className="flex h-[calc(var(--vh)*100)] bg-background bg-dot-pattern">
         {/* Mobile backdrop — clic pour fermer le drawer */}
         {isMobile && mobileOpen && (
           <div
@@ -92,13 +103,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         >
           <ShortcutsRegistrar />
-          <ApiHeader
-            onOpenMobileSidebar={openMobileSidebar}
-          />
+          <ApiHeader onOpenMobileSidebar={openMobileSidebar} />
           {children}
         </div>
 
         <AiSidebar open={aiSidebarOpen} onClose={() => setAiSidebarOpen(false)} />
+        <KeyboardShortcutsModal open={shortcutsModalOpen} onOpenChange={setShortcutsModalOpen} />
       </div>
     </AiSidebarContext.Provider>
   );
