@@ -43,6 +43,16 @@ export function ModuleNavList({
   return (
     <>
       <li className="my-1 border-t border-sidebar-border" aria-hidden="true" />
+
+      {/* Modules Section Title */}
+      {!collapsed && (
+        <li className="px-3 pt-3 pb-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Modules
+          </span>
+        </li>
+      )}
+
       {nav.map((item) => {
         const key = navKey(item.href);
         const isActive = key === activePage;
