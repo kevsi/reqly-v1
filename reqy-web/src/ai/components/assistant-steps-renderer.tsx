@@ -14,6 +14,15 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  FolderPlus,
+  List,
+  FilePlus,
+  Zap,
+  FileEdit,
+  Trash2,
+  Play,
+  Pause,
+  Globe,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,25 +43,29 @@ export type StepDisplayMode = "sequential" | "timeline";
 
 export interface AssistantStepsRendererProps {
   steps: AssistantStep[];
-  /** Texte de réponse final affiché après toutes les étapes "done". */
   finalText?: string;
-  /**
-   * "sequential" — seule l'étape en cours est visible (les étapes terminées disparaissent).
-   * "timeline" — toutes les étapes sont affichées avec leur statut (défaut).
-   * @default "sequential"
-   */
   mode?: StepDisplayMode;
-  /** Callback quand l'utilisateur confirme/annule une étape en attente. */
   onConfirm?: (stepId: string, confirmed: boolean) => void;
-  /**
-   * Permet de replier automatiquement la timeline en une ligne résumée dès que
-   * toutes les étapes sont terminées (clic pour rouvrir).
-   * @default false
-   */
   collapsible?: boolean;
 }
 
-// ── Icon mapping (given a kind + status, returns the right icon) ───────────
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  list_collections: List,
+  list_requests: List,
+  list_environments: List,
+  create_collection: FolderPlus,
+  create_request: FilePlus,
+  create_environment: FolderPlus,
+  edit_request: FileEdit,
+  edit_collection: FileEdit,
+  execute_request: Zap,
+  run_request: Play,
+  delete_collection: Trash2,
+  delete_request: Trash2,
+  navigate: Globe,
+};
 
 export function iconForKind(
   kind: AssistantStep["kind"],
@@ -74,7 +87,6 @@ export function iconForKind(
   }
 }
 
-/** Génère un libellé par défaut pour chaque kind. */
 export function defaultLabelForKind(kind: AssistantStep["kind"], detail?: string): string {
   switch (kind) {
     case "thinking":
@@ -90,9 +102,59 @@ export function defaultLabelForKind(kind: AssistantStep["kind"], detail?: string
   }
 }
 
-// ── StepRow (une ligne d'étape) ────────────────────────────────────────────
+/** Parse "create_collection({name: 'foo'})" → { name, args } */
+function parseToolLabel(label: string): { name: string; args: string } | null {
+  const m = label.match(/^(\w+)\(([\s\S]*)\)$/);
+  if (!m) return null;
+  return { name: m[1], args: m[2].trim() };
+}
 
-function StepRow({
+// ── ThinkingRow — animated "Through…" step ─────────────────────────────────
+
+function ThinkingRow({ step }: { step: AssistantStep }) {
+  const isActive = step.status === "pending";
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2.5 rounded-xl border px-3 py-2.5",
+        "animate-in slide-in-from-left-2 fade-in duration-300",
+        isActive
+          ? "border-primary/20 bg-gradient-to-r from-primary/5 to-transparent"
+          : "border-border/40 bg-card/30",
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-6 shrink-0 items-center justify-center rounded-lg ring-1",
+          isActive
+            ? "bg-primary/10 text-primary ring-primary/25"
+            : "bg-muted text-muted-foreground ring-border/50",
+        )}
+      >
+        {isActive ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+      </span>
+      <span
+        className={cn(
+          "flex-1 text-sm italic",
+          isActive ? "text-foreground/70" : "text-muted-foreground/60 line-through",
+        )}
+      >
+        {step.label}
+      </span>
+      {isActive && (
+        <span className="flex shrink-0 items-center gap-0.5">
+          <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:0ms]" />
+          <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:120ms]" />
+          <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:240ms]" />
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── ToolRow — card style per tool call ─────────────────────────────────────
+
+function ToolRow({
   step,
   isLast,
   onConfirm,
@@ -101,94 +163,92 @@ function StepRow({
   isLast: boolean;
   onConfirm?: (stepId: string, confirmed: boolean) => void;
 }) {
-  const [showDetail, setShowDetail] = useState(false);
+  const parsed = parseToolLabel(step.label);
+  const ToolIcon = (parsed ? (TOOL_ICONS[parsed.name] ?? Wrench) : Wrench) as LucideIcon;
+
   const isActive = step.status === "pending";
   const isError = step.status === "error";
   const isAwaiting = step.status === "awaiting_confirmation";
-  const Icon = isActive && step.kind === "thinking" ? Loader2 : step.icon;
-
   const isDone = step.status === "done";
-  const badge = cn(
-    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md ring-1 transition-colors duration-300",
+
+  const badgeCls = cn(
+    "mt-1 flex size-6 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors duration-300",
+    isDone && "bg-success/10 text-success ring-success/25",
     isError && "bg-destructive/10 text-destructive ring-destructive/20",
     isAwaiting && "bg-warning/10 text-warning ring-warning/25",
     isActive && "bg-primary/10 text-primary ring-primary/25",
+  );
+
+  const statusLabel = isDone ? "fait" : isError ? "erreur" : isAwaiting ? "en attente" : "…";
+  const statusCls = cn(
+    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
     isDone && "bg-success/10 text-success ring-success/25",
-    !isActive &&
-      !isError &&
-      !isAwaiting &&
-      !isDone &&
-      "bg-muted text-muted-foreground ring-border/60",
+    isError && "bg-destructive/10 text-destructive ring-destructive/20",
+    isAwaiting && "bg-warning/10 text-warning ring-warning/25",
+    isActive && "bg-primary/10 text-primary ring-primary/25",
   );
 
   return (
-    <div className="flex items-stretch gap-2">
-      {/* Colonne icône + connecteur vertical */}
+    <div className="flex items-stretch gap-2 animate-in slide-in-from-left-2 fade-in duration-300">
+      {/* Timeline spine */}
       <div className="flex flex-col items-center">
-        <span className={badge}>
-          <Icon
-            className={cn(
-              "size-3",
-              isActive && step.kind === "thinking" && "animate-spin",
-              isActive && step.kind !== "thinking" && "animate-pulse",
-            )}
-          />
+        <span className={badgeCls}>
+          <ToolIcon className={cn("size-3", isActive && "animate-pulse")} />
         </span>
-        {!isLast && <span className="my-1 w-px flex-1 bg-border/50" aria-hidden />}
+        {!isLast && (
+          <span
+            className={cn(
+              "my-1 w-px flex-1 transition-colors duration-500",
+              isDone ? "bg-success/30" : "bg-border/40",
+            )}
+            aria-hidden
+          />
+        )}
       </div>
 
-      {/* Colonne label + détail + actions */}
-      <div className="min-w-0 flex-1 pb-1">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => step.detail && setShowDetail(!showDetail)}
-            className={cn(
-              "text-sm text-left w-full leading-snug transition-colors duration-200",
-              isActive ? "text-foreground font-medium" : "text-muted-foreground",
-              isError && "text-destructive font-medium",
-              step.detail && "cursor-pointer hover:text-foreground",
-              !step.detail && "cursor-default",
+      {/* Card */}
+      <div className="mb-1.5 min-w-0 flex-1">
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-xl border px-3 py-2 transition-colors duration-300",
+            isDone && "border-success/15 bg-success/[0.03]",
+            isError && "border-destructive/20 bg-destructive/[0.03]",
+            isActive && "border-primary/20 bg-primary/[0.04]",
+            isAwaiting && "border-warning/20 bg-warning/[0.04]",
+            !isActive && !isError && !isAwaiting && !isDone && "border-border/50 bg-card/40",
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            {parsed ? (
+              <>
+                <span className="font-mono text-[13px] font-semibold text-foreground">
+                  {parsed.name}
+                </span>
+                {parsed.args && parsed.args !== "{}" && (
+                  <p className="mt-0.5 truncate font-mono text-[10px] leading-relaxed text-muted-foreground/60">
+                    {parsed.args}
+                  </p>
+                )}
+              </>
+            ) : (
+              <span className="text-sm text-foreground">{step.label}</span>
             )}
-          >
-            {step.label}
-          </button>
-
-          {/* Indicateur "en cours" discret */}
-          {isActive && (
-            <span className="flex shrink-0 items-center gap-0.5">
-              <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:0ms]" />
-              <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:150ms]" />
-              <span className="size-0.5 rounded-full bg-foreground/60 animate-bounce [animation-delay:300ms]" />
-            </span>
-          )}
-
-          {/* Chip "en attente de confirmation" */}
-          {isAwaiting && (
-            <span className="shrink-0 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning ring-1 ring-warning/25">
-              En attente de confirmation
-            </span>
-          )}
+          </div>
+          <span className={statusLabel !== "…" || isActive ? statusCls : "hidden"}>
+            {isActive ? <Loader2 className="size-2.5 animate-spin" /> : statusLabel}
+          </span>
         </div>
 
-        {/* Détail replié */}
-        {showDetail && step.detail && (
-          <p className="mt-0.5 pl-2 border-l-2 border-border text-xs text-muted-foreground/70 leading-relaxed whitespace-pre-wrap">
-            {step.detail}
-          </p>
-        )}
-
-        {/* Boutons Confirmer/Annuler pour les étapes en attente de confirmation */}
+        {/* Awaiting confirmation actions */}
         {isAwaiting && onConfirm && (
-          <div className="mt-1.5 flex gap-1.5">
+          <div className="mt-1.5 flex gap-1.5 pl-1">
             <Button
               type="button"
               variant="default"
               onClick={() => onConfirm(step.id, true)}
               className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
             >
-              <Check className="size-3" />
-              Confirmer
+              <Check className="size-3" /> Confirmer
             </Button>
             <Button
               type="button"
@@ -196,8 +256,7 @@ function StepRow({
               onClick={() => onConfirm(step.id, false)}
               className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
             >
-              <X className="size-3" />
-              Annuler
+              <X className="size-3" /> Annuler
             </Button>
           </div>
         )}
@@ -206,7 +265,7 @@ function StepRow({
   );
 }
 
-// ── Parsing d'un détail d'exécution HTTP ─────────────────────────────────
+// ── Parsing HTTP execution detail ─────────────────────────────────────────
 
 interface ParsedExecution {
   method: string;
@@ -216,8 +275,6 @@ interface ParsedExecution {
   body: string;
 }
 
-/** Analyse le detail d'un step execute_request, au format:
- *  `GET https://api.example.com/users → 200 en 42ms\n{body}` */
 export function parseExecutionDetail(detail?: string): ParsedExecution | null {
   if (!detail) return null;
   const m = detail.match(/^([A-Z]+)\s+(\S+)\s+→\s+(\d{3})(?:\s+en\s+(\d+)ms)?(?:\n([\s\S]*))?$/i);
@@ -239,60 +296,53 @@ const METHOD_COLORS: Record<string, string> = {
   DELETE: "bg-red-500/15 text-red-600 dark:text-red-400 ring-red-500/25",
 };
 
-function statusTone(status: number) {
-  if (status < 300)
+function statusTone(s: number) {
+  if (s < 300)
     return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-emerald-500/25";
-  if (status < 500) return "bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-amber-500/25";
+  if (s < 500) return "bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-amber-500/25";
   return "bg-red-500/15 text-red-600 dark:text-red-400 ring-red-500/25";
 }
 
-// ── ExecutionCard (carte premium d'une exécution HTTP) ─────────────────────
+// ── ExecutionCard — rich HTTP request card ─────────────────────────────────
 
 function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean }) {
   const [open, setOpen] = useState(false);
   const exec = parseExecutionDetail(step.detail);
   const isError = step.status === "error";
   const isDone = step.status === "done";
-
-  const statusLabel = isError ? "Erreur" : isDone ? "Terminé" : "En cours…";
-  const statusColor = isError
-    ? "text-destructive bg-destructive/10 ring-destructive/20"
-    : isDone
-      ? "text-success bg-success/10 ring-success/25"
-      : "text-primary bg-primary/10 ring-primary/25";
+  const isPending = step.status === "pending";
 
   return (
-    <div className="flex items-stretch gap-2">
-      {/* Connecteur de timeline */}
+    <div className="flex items-stretch gap-2 animate-in slide-in-from-left-2 fade-in duration-300">
       <div className="flex flex-col items-center">
         <span
           className={cn(
-            "mt-1 flex size-5 shrink-0 items-center justify-center rounded-lg ring-1",
+            "mt-1 flex size-6 shrink-0 items-center justify-center rounded-lg ring-1",
             isError
               ? "bg-destructive/10 text-destructive ring-destructive/20"
-              : "bg-success/10 text-success ring-success/25",
+              : isDone
+                ? "bg-success/10 text-success ring-success/25"
+                : "bg-primary/10 text-primary ring-primary/25",
           )}
         >
           {isError ? (
             <CircleAlert className="size-3" />
-          ) : isDone ? (
-            <Check className="size-3" />
-          ) : (
+          ) : isPending ? (
             <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <Check className="size-3" />
           )}
         </span>
-        {!isLast && <span className="my-1 w-px flex-1 bg-border/50" aria-hidden />}
+        {!isLast && <span className="my-1 w-px flex-1 bg-border/40" aria-hidden />}
       </div>
 
-      {/* Carte = arbre imbriqué */}
       <div className="mb-1.5 min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-sm">
-        {/* ── Parent : requête + statut ── */}
         <button
           type="button"
           onClick={() => exec && setOpen(!open)}
           className={cn(
-            "flex w-full items-center gap-2 px-3 py-2.5 text-left",
-            exec && "cursor-pointer hover:bg-accent/30 transition-colors",
+            "flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors",
+            exec && "cursor-pointer hover:bg-accent/30",
           )}
         >
           {exec && (
@@ -314,7 +364,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
                 >
                   {exec.method}
                 </span>
-                <span className="max-w-[200px] truncate font-mono text-[12px] text-foreground">
+                <span className="max-w-[180px] truncate font-mono text-[12px] text-foreground">
                   {exec.url}
                 </span>
                 {exec.status != null && (
@@ -327,23 +377,33 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
                     {exec.status}
                   </span>
                 )}
+                {exec.durationMs != null && (
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                    <Clock className="size-2.5" />
+                    {exec.durationMs}ms
+                  </span>
+                )}
               </>
             ) : (
-              <span className="text-sm font-medium">{step.label || statusLabel}</span>
+              <span className="font-mono text-sm font-semibold">{step.label}</span>
             )}
           </span>
           <span
             className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
-              statusColor,
+              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
+              isError
+                ? "bg-destructive/10 text-destructive ring-destructive/20"
+                : isDone
+                  ? "bg-success/10 text-success ring-success/25"
+                  : "bg-primary/10 text-primary ring-primary/25",
             )}
           >
-            {!isDone && !isError && <Loader2 className="size-2.5 animate-spin" />}
-            {statusLabel}
+            {isPending && <Loader2 className="size-2.5 animate-spin" />}
+            {isDone && "✓ fait"}
+            {isError && "✗ erreur"}
           </span>
         </button>
 
-        {/* ── Enfants (détails imbriqués) ── */}
         {exec && !isError && (
           <div
             className={cn(
@@ -352,38 +412,20 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
             )}
           >
             <div className="mx-3 mb-3 flex gap-3">
-              {/* Rail gauche */}
               <div className="flex flex-col items-center">
-                <span className="w-px flex-1 bg-primary/30" />
-                <span className="my-1 size-1 rounded-full bg-primary/50" />
+                <span className="w-px flex-1 bg-primary/20" />
+                <span className="my-1 size-1 rounded-full bg-primary/40" />
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
-                {/* Métadonnées */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  {exec.durationMs != null && (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <Clock className="size-3" />
-                      {exec.durationMs} ms
-                    </span>
-                  )}
-                </div>
-                {/* Réponse / résumé */}
-                {(exec.body || step.label) && (
-                  <div>
-                    <p
-                      className={cn(
-                        "whitespace-pre-wrap break-words rounded-lg bg-muted/30 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground",
-                        !open && "line-clamp-3",
-                      )}
-                    >
-                      {exec.body || step.label}
-                    </p>
-                    <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium text-primary">
-                      <ChevronRight className="size-3" />
-                      {open ? "Réduire" : "Voir le détail"}
-                    </span>
-                  </div>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                {exec.body && (
+                  <p className="whitespace-pre-wrap break-words rounded-lg bg-muted/30 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                    {exec.body}
+                  </p>
                 )}
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary">
+                  <ChevronRight className="size-3" />
+                  {open ? "Réduire" : "Voir le détail"}
+                </span>
               </div>
             </div>
           </div>
@@ -393,7 +435,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
   );
 }
 
-// ── AssistantStepsRenderer (conteneur principal) ───────────────────────────
+// ── AssistantStepsRenderer ─────────────────────────────────────────────────
 
 export function AssistantStepsRenderer({
   steps,
@@ -404,15 +446,11 @@ export function AssistantStepsRenderer({
 }: AssistantStepsRendererProps) {
   const allDone =
     steps.length > 0 && steps.every((s) => s.status === "done" || s.status === "error");
-  // Replie automatiquement la timeline dès que tout est terminé, mais laisse
-  // l'utilisateur la rouvrir manuellement (override persistant entre les rendus).
   const [userToggled, setUserToggled] = useState<boolean | null>(null);
   const collapsed = collapsible && (userToggled ?? allDone);
 
   if (steps.length === 0 && !finalText) return null;
 
-  // En mode "sequential", on montre uniquement la première étape non terminée.
-  // Les étapes "done" disparaissent. Si tout est fini, on montre le texte final.
   const visibleSteps =
     mode === "sequential"
       ? (() => {
@@ -421,23 +459,28 @@ export function AssistantStepsRenderer({
         })()
       : steps;
 
-  // En mode sequential, si aucune étape visible et pas de finalText, on masque tout
   if (mode === "sequential" && visibleSteps.length === 0 && !finalText) return null;
-  // Si en mode sequential et tout est done, ne montrer que le finalText
-  if (mode === "sequential" && visibleSteps.length === 0 && allDone && !finalText) return null;
 
   const canCollapse = collapsible && allDone && steps.length > 0;
-  const execCount = steps.filter((s) => s.kind !== "thinking").length;
+  const toolSteps = steps.filter((s) => s.kind !== "thinking");
   const errorCount = steps.filter((s) => s.status === "error").length;
+
+  // Mini badges for collapsed summary: group by tool name
+  const toolCounts = toolSteps.reduce<Record<string, number>>((acc, s) => {
+    const parsed = parseToolLabel(s.label);
+    const key = parsed?.name ?? s.label;
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-0">
-      {/* Ligne résumée — affichée une fois tout terminé en mode repliable */}
+      {/* Collapsed summary */}
       {canCollapse && (
         <button
           type="button"
           onClick={() => setUserToggled(!collapsed)}
-          className="flex items-center gap-1.5 rounded-md px-1 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex flex-wrap items-center gap-1.5 rounded-lg px-1 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-expanded={!collapsed}
           data-testid="ai-steps-toggle"
         >
@@ -446,41 +489,44 @@ export function AssistantStepsRenderer({
           ) : (
             <CheckCircle2 className="size-3.5 text-success" />
           )}
-          <span>
-            {execCount > 0
-              ? `${execCount} exécution${execCount > 1 ? "s" : ""} terminée${execCount > 1 ? "s" : ""}`
-              : "Étapes terminées"}
-            {errorCount > 0 && ` · ${errorCount} erreur${errorCount > 1 ? "s" : ""}`}
+          <span className="font-medium">
+            {toolSteps.length > 0
+              ? `${toolSteps.length} exécution${toolSteps.length > 1 ? "s" : ""} terminée${toolSteps.length > 1 ? "s" : ""}`
+              : "Terminé"}
           </span>
+          {Object.entries(toolCounts)
+            .slice(0, 4)
+            .map(([name, count]) => (
+              <span
+                key={name}
+                className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border/50"
+              >
+                {count > 1 ? `${name} ×${count}` : name}
+              </span>
+            ))}
           <ChevronDown
-            className={cn("size-3.5 transition-transform duration-200", collapsed && "-rotate-90")}
+            className={cn(
+              "ml-0.5 size-3.5 transition-transform duration-200",
+              collapsed && "-rotate-90",
+            )}
           />
         </button>
       )}
 
-      {/* Étapes visibles — masquées quand la timeline est repliée */}
+      {/* Steps */}
       {visibleSteps.length > 0 && !collapsed && (
-        <div className="flex flex-col">
-          {visibleSteps.map((step, i) =>
-            step.detail && parseExecutionDetail(step.detail) ? (
-              <ExecutionCard
-                key={step.id}
-                step={step}
-                isLast={allDone || i === visibleSteps.length - 1}
-              />
-            ) : (
-              <StepRow
-                key={step.id}
-                step={step}
-                isLast={allDone || i === visibleSteps.length - 1}
-                onConfirm={onConfirm}
-              />
-            ),
-          )}
+        <div className="flex flex-col gap-0.5">
+          {visibleSteps.map((step, i) => {
+            const isLast = allDone || i === visibleSteps.length - 1;
+            if (step.kind === "thinking") return <ThinkingRow key={step.id} step={step} />;
+            if (step.detail && parseExecutionDetail(step.detail))
+              return <ExecutionCard key={step.id} step={step} isLast={isLast} />;
+            return <ToolRow key={step.id} step={step} isLast={isLast} onConfirm={onConfirm} />;
+          })}
         </div>
       )}
 
-      {/* Texte final — affiché seulement une fois toutes les étapes terminées */}
+      {/* Final text */}
       {allDone && finalText && (
         <div
           className={cn(
@@ -496,15 +542,12 @@ export function AssistantStepsRenderer({
   );
 }
 
-/**
- * Convertit un tableau ProcessStep (venant de l'IA engine) en AssistantStep[]
- * pour le composant AssistantStepsRenderer.
- */
+// ── ProcessStep types + adapters ───────────────────────────────────────────
+
 export interface ProcessStep {
   type: "through" | "fill" | "execute" | "create" | "edit" | "done" | "error" | "pause";
   label: string;
   status: "pending" | "in_progress" | "done" | "error" | "awaiting_confirmation";
-  /** Données brutes de résultat (ex. sortie du tool execute_request). */
   detail?: string;
 }
 
@@ -533,8 +576,6 @@ export function toAssistantSteps(steps: ProcessStep[]): AssistantStep[] {
   });
 }
 
-// ── Helper pour construire des étapes facilement ───────────────────────────
-
 let _stepCounter = 0;
 
 export function buildStep(
@@ -542,14 +583,12 @@ export function buildStep(
 ): AssistantStep {
   _stepCounter++;
   const kind = overrides.kind;
-  const defaultIcon = iconForKind(kind, overrides.status ?? "pending");
-  const defaultLabel = defaultLabelForKind(kind, overrides.detail);
   return {
     id: `step-${_stepCounter}-${Date.now()}`,
     status: overrides.status ?? "pending",
-    icon: overrides.icon ?? defaultIcon,
-    label: overrides.label ?? defaultLabel,
+    icon: overrides.icon ?? iconForKind(kind, overrides.status ?? "pending"),
+    label: overrides.label ?? defaultLabelForKind(kind, overrides.detail),
     detail: overrides.detail,
-    kind: overrides.kind,
+    kind,
   };
 }
