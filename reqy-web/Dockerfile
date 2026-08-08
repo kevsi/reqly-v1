@@ -34,10 +34,12 @@ RUN pnpm --filter @reqly/shared build
 # Source de reqy-web puis build Next.js (webpack, pas turbopack)
 COPY reqy-web reqy-web
 
-ARG AUTH_SIGNING_SECRET
 ARG NEXT_PUBLIC_SYNC_URL
-ENV AUTH_SIGNING_SECRET=$AUTH_SIGNING_SECRET \
-    NEXT_PUBLIC_SYNC_URL=$NEXT_PUBLIC_SYNC_URL \
+# AUTH_SIGNING_SECRET is a runtime secret — never pass as a build-arg.
+# Inject it at container runtime via: docker run -e AUTH_SIGNING_SECRET=...
+# (or via Fly secrets / k8s secrets). NEXT_PUBLIC_* vars ARE needed at
+# build-time because Next.js inlines them into the client bundle.
+ENV NEXT_PUBLIC_SYNC_URL=$NEXT_PUBLIC_SYNC_URL \
     NODE_ENV=production
 
 # Build Next.js (webpack, pas turbopack). On appelle directement le script

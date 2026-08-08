@@ -22,11 +22,13 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -39,11 +41,13 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -56,16 +60,22 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Secret scan
+        run: |
+          FILES=$(git ls-files reqy-web/app reqy-web/lib sync-server/src recli/src packages/shared/src | tr '\n' ' ')
+          node scripts/check-secrets.mjs $FILES
       - name: Run tests
         run: pnpm test
 
@@ -74,11 +84,13 @@ jobs:
     needs: [typecheck, lint, test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -88,14 +100,16 @@ jobs:
         run: pnpm build
         env:
           AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
-          NEXT_PUBLIC_SYNC_URL: ${{ secrets.NEXT_PUBLIC_SYNC_URL }}
+          # NEXT_PUBLIC_SYNC_URL is a public URL baked into the client bundle —
+          # store as a GitHub Actions variable (Settings > Variables), not a secret.
+          NEXT_PUBLIC_SYNC_URL: ${{ vars.NEXT_PUBLIC_SYNC_URL }}
           # Single build: the analyzer emits .next/analyze/client.html on the
           # same production build, so the size gate needs no second build.
           ANALYZE: "true"
       - name: Bundle size gate (fail if main-app shell > 500 KB gzipped)
         run: node reqy-web/scripts/bundle-gate.mjs
       - name: Upload web artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: web-build
           path: |
@@ -113,11 +127,13 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -127,10 +143,10 @@ jobs:
         run: pnpm generate
         env:
           AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
-          NEXT_PUBLIC_SYNC_URL: ${{ secrets.NEXT_PUBLIC_SYNC_URL }}
+          NEXT_PUBLIC_SYNC_URL: ${{ vars.NEXT_PUBLIC_SYNC_URL }}
           TAURI_DEV_HOST: "localhost"
       - name: Upload desktop artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-build-${{ matrix.os }}
           path: |
@@ -142,12 +158,18 @@ jobs:
     needs: [typecheck, lint, test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Build Docker image
+        # AUTH_SIGNING_SECRET is a runtime secret — never pass as a build-arg
+        # (visible via `docker history`). Inject at container start instead:
+        #   docker run -e AUTH_SIGNING_SECRET=... reqy-web:ci
+        # NEXT_PUBLIC_SYNC_URL IS needed at build-time (Next.js inlines it into
+        # the client bundle) but it is a public URL — store as a GitHub variable.
         run: |
           docker build -t reqy-web:ci \
-            --build-arg AUTH_SIGNING_SECRET=${{ secrets.AUTH_SIGNING_SECRET }} \
-            --build-arg NEXT_PUBLIC_SYNC_URL=${{ secrets.NEXT_PUBLIC_SYNC_URL }} \
+            --build-arg NEXT_PUBLIC_SYNC_URL=${{ vars.NEXT_PUBLIC_SYNC_URL }} \
             -f reqy-web/Dockerfile .
       - name: Test Docker container starts
         run: |

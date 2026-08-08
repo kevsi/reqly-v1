@@ -20,6 +20,12 @@ overrides:
   # js-yaml <4.3.1: quadratic CPU on !!omap resolution (CVE-2026-59870) - needs >=4.3.1.
   js-yaml: ^4.3.1
   "@hono/node-server": ^2.0.5
+  # brace-expansion: ReDoS via crafted glob string (GHSA-3jxr, GHSA-mh99, GHSA-rgw5 etc.)
+  # v1 path via minimatch@3 (eslint, test-exclude); v2 path via direct dependents.
+  "brace-expansion@^1": "1.1.18"
+  "brace-expansion@^2": "2.1.4"
+  # undici: multiple high/moderate advisories — force patched version.
+  undici: ">=7.29.0"
 allowBuilds:
   better-sqlite3: true
   esbuild: false

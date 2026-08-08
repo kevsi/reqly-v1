@@ -59,6 +59,10 @@ general-typescript-fetch.zip
 
 # npm lockfiles (pnpm only)
 package-lock.json
+# Nested sub-package lockfiles: the root pnpm-lock.yaml is the source of
+# truth for the whole workspace. Committing these causes resolution drift.
+reqly-landing/pnpm-lock.yaml
+sync-server/pnpm-lock.yaml
 
 # Build artifacts
 recli/dist/
