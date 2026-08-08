@@ -4,7 +4,6 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 
 const ENV_LOCAL = join(process.cwd(), ".env.local");
-const ENV_EXAMPLE = join(process.cwd(), ".env.example");
 
 // Minimum 32 chars pour AUTH_SIGNING_SECRET et PROXY_SERVICE_TOKEN
 const SECRET_MIN_LENGTH = 32;

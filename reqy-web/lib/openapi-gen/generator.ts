@@ -138,7 +138,9 @@ async function generateDirect(
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error(`SDK generation timed out after ${options.timeoutMs ?? 120000}ms.`);
+      throw new Error(`SDK generation timed out after ${options.timeoutMs ?? 120000}ms.`, {
+        cause: err,
+      });
     }
     throw err;
   } finally {

@@ -13,11 +13,25 @@ import {
 
 // ── Java parser lazy-load ──────────────────────────────────────────────────
 
-let _javaParser: any = null;
-async function getJavaParser() {
+// java-parser is an optional dependency whose chevrotain CST we only touch
+// structurally. This minimal type keeps the AST helpers type-safe without
+// requiring the package to be installed (it is stubbed in unit tests).
+interface JavaCstNode {
+  name?: string;
+  image?: string;
+  children?: Record<string, JavaCstNode[]>;
+  [key: string]: unknown;
+}
+
+interface JavaParserLike {
+  parse?: (source: string) => JavaCstNode;
+}
+
+let _javaParser: JavaParserLike | null = null;
+async function getJavaParser(): Promise<JavaParserLike | null> {
   if (!_javaParser) {
     try {
-      _javaParser = await import("java-parser");
+      _javaParser = (await import("java-parser")) as unknown as JavaParserLike;
     } catch {
       return null;
     }
@@ -25,7 +39,7 @@ async function getJavaParser() {
   return _javaParser;
 }
 
-async function parseJavaSource(source: string): Promise<any | null> {
+async function parseJavaSource(source: string): Promise<JavaCstNode | null> {
   if (!source || !source.trim()) return null;
   try {
     const parser = await getJavaParser();
@@ -37,34 +51,38 @@ async function parseJavaSource(source: string): Promise<any | null> {
 
 // ── Java AST helpers ───────────────────────────────────────────────────────
 
-function findJavaNodes(node: any, name: string): any[] {
+function findJavaNodes(node: JavaCstNode | null | undefined, name: string): JavaCstNode[] {
   if (!node || typeof node !== "object") return [];
-  const results: any[] = [];
+  const results: JavaCstNode[] = [];
   if (node.name === name) results.push(node);
   for (const key of Object.keys(node)) {
     const value = node[key];
     if (Array.isArray(value)) {
-      for (const child of value) results.push(...findJavaNodes(child, name));
-    } else if (value && typeof value === "object") results.push(...findJavaNodes(value, name));
+      for (const child of value) results.push(...findJavaNodes(child as JavaCstNode, name));
+    } else if (value && typeof value === "object") {
+      results.push(...findJavaNodes(value as JavaCstNode, name));
+    }
   }
   return results;
 }
 
-function collectJavaIdentifiers(node: any): string[] {
+function collectJavaIdentifiers(node: JavaCstNode | null | undefined): string[] {
   if (!node || typeof node !== "object") return [];
   if (node.name === "Identifier" && typeof node.image === "string") return [node.image];
   let identifiers: string[] = [];
   for (const key of Object.keys(node)) {
     const value = node[key];
     if (Array.isArray(value)) {
-      for (const child of value) identifiers = identifiers.concat(collectJavaIdentifiers(child));
-    } else if (value && typeof value === "object")
-      identifiers = identifiers.concat(collectJavaIdentifiers(value));
+      for (const child of value)
+        identifiers = identifiers.concat(collectJavaIdentifiers(child as JavaCstNode));
+    } else if (value && typeof value === "object") {
+      identifiers = identifiers.concat(collectJavaIdentifiers(value as JavaCstNode));
+    }
   }
   return identifiers;
 }
 
-function findFirstStringLiteral(node: any): string | undefined {
+function findFirstStringLiteral(node: JavaCstNode | null | undefined): string | undefined {
   if (!node || typeof node !== "object") return undefined;
   if (node.name === "StringLiteral" && typeof node.image === "string")
     return node.image.replace(/^"|"$/g, "");
@@ -72,28 +90,28 @@ function findFirstStringLiteral(node: any): string | undefined {
     const value = node[key];
     if (Array.isArray(value)) {
       for (const child of value) {
-        const found = findFirstStringLiteral(child);
+        const found = findFirstStringLiteral(child as JavaCstNode);
         if (found) return found;
       }
     } else if (value && typeof value === "object") {
-      const found = findFirstStringLiteral(value);
+      const found = findFirstStringLiteral(value as JavaCstNode);
       if (found) return found;
     }
   }
   return undefined;
 }
 
-function findLastIdentifier(node: any): string | undefined {
+function findLastIdentifier(node: JavaCstNode | null | undefined): string | undefined {
   const ids = collectJavaIdentifiers(node);
   return ids.length ? ids[ids.length - 1] : undefined;
 }
 
-function getJavaAnnotationName(annotation: any): string {
+function getJavaAnnotationName(annotation: JavaCstNode): string {
   const typeName = annotation?.children?.typeName?.[0];
   return collectJavaIdentifiers(typeName).join(".");
 }
 
-function getJavaAnnotationPairs(annotation: any): Record<string, string> {
+function getJavaAnnotationPairs(annotation: JavaCstNode): Record<string, string> {
   const result: Record<string, string> = {};
   const pairs = annotation?.children?.elementValuePairList?.[0]?.children?.elementValuePair;
   if (!Array.isArray(pairs)) return result;
@@ -106,14 +124,14 @@ function getJavaAnnotationPairs(annotation: any): Record<string, string> {
   return result;
 }
 
-function getJavaAnnotationValue(annotation: any): string | undefined {
+function getJavaAnnotationValue(annotation: JavaCstNode): string | undefined {
   const directValue = findFirstStringLiteral(annotation?.children?.elementValue?.[0]);
   if (directValue) return directValue;
   const pairs = getJavaAnnotationPairs(annotation);
   return pairs.value || pairs.path || pairs.name;
 }
 
-function getJavaAnnotationMethod(annotation: any): string | undefined {
+function getJavaAnnotationMethod(annotation: JavaCstNode): string | undefined {
   const rawName = getJavaAnnotationName(annotation);
   const name = rawName.split(".").pop()?.toUpperCase() ?? "";
   if (HTTP_METHODS_UPPER_ALL.has(name)) return name;
@@ -128,12 +146,12 @@ function getJavaAnnotationMethod(annotation: any): string | undefined {
   return undefined;
 }
 
-function getJavaAnnotationPath(annotation: any): string | undefined {
+function getJavaAnnotationPath(annotation: JavaCstNode): string | undefined {
   const value = getJavaAnnotationValue(annotation);
   return value ? normalizePath(value) : undefined;
 }
 
-function matchJavaClassPrefix(classNode: any, validNames: string[]): string {
+function matchJavaClassPrefix(classNode: JavaCstNode, validNames: string[]): string {
   const annotations = findJavaNodes(classNode, "annotation");
   for (const annotation of annotations) {
     const annotationName = getJavaAnnotationName(annotation).split(".").pop() ?? "";
@@ -221,9 +239,9 @@ async function detectQuarkusAST(content: string): Promise<DetectedRoute[]> {
     for (const methodDecl of methodDeclarations) {
       const annotations = findJavaNodes(methodDecl, "annotation");
       const pathAnnotation = annotations.find(
-        (a: any) => (getJavaAnnotationName(a).split(".").pop() ?? "") === "Path",
+        (a) => (getJavaAnnotationName(a).split(".").pop() ?? "") === "Path",
       );
-      const verbAnnotation = annotations.find((a: any) => {
+      const verbAnnotation = annotations.find((a) => {
         const name = (getJavaAnnotationName(a).split(".").pop() ?? "").toUpperCase();
         return HTTP_METHODS_UPPER.has(name);
       });
@@ -245,11 +263,16 @@ async function detectQuarkusAST(content: string): Promise<DetectedRoute[]> {
 // ── Regex fallback helpers (used when AST is unavailable) ──────────────────
 
 function extractJavaAnnotationPath(source: string): string {
-  return (
-    source.match(/(?:value|path)\s*=\s*['"]([^'"]+)['"]/)?.[1] ??
-    source.match(/\(\s*['"]([^'"]+)['"]\s*\)/)?.[1] ??
-    ""
-  );
+  const named = source.match(/(?:value|path)\s*=\s*['"]([^'"]+)['"]/)?.[1];
+  if (named) return named;
+  const parenthesized = source.match(/\(\s*['"]([^'"]+)['"]\s*\)/)?.[1];
+  if (parenthesized) return parenthesized;
+  // Bare annotation value, e.g. @RequestMapping("/users") -> the extracted
+  // args are just the quoted string. Only treat the whole arg as a path when
+  // it is entirely a quoted string, so args like `method = RequestMethod.GET`
+  // or `params = "x"` do not become garbage paths.
+  const bare = source.trim().match(/^['"]([^'"]*)['"]$/);
+  return bare ? bare[1] : "";
 }
 
 function extractJavaRequestMethod(source: string): string | undefined {
@@ -265,11 +288,12 @@ export async function detectSpring(content: string): Promise<DetectedRoute[]> {
   const classPrefix = extractJavaAnnotationPath(
     content.match(/@RequestMapping\s*\(([^)]*)\)/)?.[1] ?? "",
   );
-  const MAP_RE = /@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(([^)]*)\)/g;
+  const MAP_RE = /@(Get|Post|Put|Delete|Patch|Request)Mapping\s*(?:\(([^)]*)\))?/g;
   const seen = new Set<string>();
   for (const m of content.matchAll(MAP_RE)) {
-    const verb = m[1] === "Request" ? extractJavaRequestMethod(m[2]) || "GET" : m[1].toUpperCase();
-    const subPath = extractJavaAnnotationPath(m[2]);
+    const args = m[2] ?? "";
+    const verb = m[1] === "Request" ? extractJavaRequestMethod(args) || "GET" : m[1].toUpperCase();
+    const subPath = extractJavaAnnotationPath(args);
     const path = normalizePath(`${classPrefix}/${subPath}`);
     const r = makeRoute(verb, path, "");
     const idx = m.index ?? 0;

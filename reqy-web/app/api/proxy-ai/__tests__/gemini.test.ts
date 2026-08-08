@@ -102,21 +102,11 @@ describe("handleGemini", () => {
   });
 
   it("handles SSE streaming response with function calls", async () => {
-    const encoder = new TextEncoder();
     const events = [
       'data: {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}]}\n\n',
       'data: {"candidates":[{"functionCall":{"name":"get_weather","args":{"city":"Paris"},"id":"fc_1"}}]}\n\n',
       "data: [DONE]\n\n",
     ];
-    const stream = new ReadableStream({
-      start(controller) {
-        for (const e of events) {
-          controller.enqueue(encoder.encode(e));
-        }
-        controller.close();
-      },
-    });
-
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       status: 200,

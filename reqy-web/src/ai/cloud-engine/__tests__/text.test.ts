@@ -83,6 +83,9 @@ describe("callAITextViaStream", () => {
   });
 
   it("propagates provider errors (does not swallow them)", async () => {
+    // A throw-only async generator: intentional, the whole point is to reject
+    // immediately on first iteration, so there is nothing to yield.
+    // eslint-disable-next-line require-yield
     streamLLMMock.mockImplementation(async function* () {
       throw new Error("Bad API key");
     });

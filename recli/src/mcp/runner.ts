@@ -1,6 +1,7 @@
 import {
   executeRequest as cliExecuteRequest,
   isUrlAllowed,
+  readBodyWithCap,
   DEFAULT_MAX_RESPONSE_SIZE,
 } from "../runner.js";
 import { interpolate } from "../chaining.js";
@@ -238,19 +239,56 @@ export async function executeGraphQL(
   const maxSize = options.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE;
 
   try {
-    const response = await fetch(url, {
+    // Follow redirects manually, re-checking SSRF on every hop (same policy as
+    // the CLI httpFetch — redirect: "follow" would silently follow a 302 to a
+    // private/internal address after the initial isUrlAllowed check).
+    let response = await fetch(url, {
       method: "POST",
       headers: reqHeaders,
       body,
       signal: controller.signal,
+      redirect: "manual",
     });
+    let currentUrl = url;
+    let hops = 0;
+    while ([301, 302, 303, 307, 308].includes(response.status) && hops < 10) {
+      const location = response.headers.get("location");
+      if (!location) break;
+      try {
+        currentUrl = new URL(location, currentUrl).href;
+      } catch {
+        break;
+      }
+      const hopCheck = await isUrlAllowed(currentUrl, options.allowLocalHosts);
+      if (!hopCheck.allowed) {
+        return {
+          name: "GraphQL",
+          method: "GRAPHQL" as HttpMethod,
+          url,
+          status: 0,
+          statusText: "Blocked",
+          durationMs: Date.now() - startTime,
+          size: 0,
+          passed: false,
+          error: `Redirect blocked: ${hopCheck.reason}`,
+        };
+      }
+      const convertToGet = [301, 302, 303].includes(response.status);
+      response = await fetch(currentUrl, {
+        method: convertToGet ? "GET" : "POST",
+        headers: convertToGet ? { Accept: "application/json" } : reqHeaders,
+        body: convertToGet ? undefined : body,
+        signal: controller.signal,
+        redirect: "manual",
+      });
+      hops++;
+    }
 
     const durationMs = Date.now() - startTime;
-    const text = await response.text();
-    const size = Buffer.byteLength(text, "utf8");
+    const { body: text, size, truncated } = await readBodyWithCap(response, maxSize);
     const passed = response.status < 400;
 
-    if (size > maxSize) {
+    if (truncated) {
       return {
         name: "GraphQL",
         method: "GRAPHQL" as HttpMethod,

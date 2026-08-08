@@ -29,10 +29,9 @@ export interface SyncWsController {
 
 const INITIAL_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
-const PONG_TIMEOUT_MS = 35_000; // server pings every 30s; wait 35s for pong
 
 export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
-  const { workspaceId, syncUrl, onChange, onError, onReconnect } = opts;
+  const { workspaceId, syncUrl, onChange, onError } = opts;
 
   let ws: WebSocket | null = null;
   let connected = false;

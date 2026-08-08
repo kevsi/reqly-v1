@@ -22,6 +22,11 @@ memberships.post("/", async (c) => {
   if (invite.expires_at < Date.now()) return c.json({ error: "Token expired" }, 400);
 
   const now = Date.now();
+  // Ensure the user row exists (OAuth sessions may not have created one yet).
+  db.prepare(
+    `INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET email = excluded.email, name = excluded.name`,
+  ).run(auth.userId, auth.email, auth.name, now);
   db.prepare(
     `INSERT OR IGNORE INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)`,
   ).run(invite.workspace_id, auth.userId, invite.role, now);

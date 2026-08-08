@@ -20,7 +20,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  Command as CommandPalette,
   CommandDialog,
   CommandEmpty,
   CommandGroup,

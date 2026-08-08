@@ -18,7 +18,7 @@ describe("safeHeaders", () => {
         "X-API-Key": "abc",
         Cookie: "session=1",
         "X-Custom": "y",
-      })
+      }),
     ).toEqual({ "X-Custom": "y" });
   });
   it("returns empty for undefined", () => {
@@ -92,7 +92,7 @@ describe("isValidDocsOutput", () => {
   });
 
   it("rejects non-string input", () => {
-    expect(isValidDocsOutput(null as any)).toBe(false);
-    expect(isValidDocsOutput(42 as any)).toBe(false);
+    expect(isValidDocsOutput(null as unknown)).toBe(false);
+    expect(isValidDocsOutput(42 as unknown)).toBe(false);
   });
 });

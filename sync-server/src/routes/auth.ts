@@ -6,17 +6,29 @@ import { promisify } from "node:util";
 import db from "../db.js";
 import { requireAuth, createSessionToken, type AuthContext } from "../auth.js";
 import { safeParseJson } from "../validation.js";
-import {
-  generateVerificationCode,
-  sendVerificationCode,
-  sendWelcomeEmail,
-} from "../email.js";
+import { generateVerificationCode, sendVerificationCode, sendWelcomeEmail } from "../email.js";
 
 const scryptAsync = promisify(scrypt);
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const VERIFICATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const COOKIE_NAME = "auth_session";
+
+// Brute-force guard for the 6-digit verification code (10^6 space — guesses
+// are cheap, so a per-code attempt cap is required). In-memory is fine here:
+// this server is single-instance by design. Keyed by the code value so each
+// issuance starts with a fresh counter.
+const MAX_VERIFY_ATTEMPTS = 5;
+const RESEND_COOLDOWN_MS = 60_000;
+const codeAttempts = new Map<string, number>();
+const resendCooldowns = new Map<string, number>();
+
+function invalidateCode(userId: string, code: string | null) {
+  if (code) codeAttempts.delete(code);
+  db.prepare(
+    "UPDATE users SET verification_code = NULL, verification_code_expires_at = NULL WHERE id = ?",
+  ).run(userId);
+}
 
 // --- Password hashing (scrypt, no external dependency) -------------------
 // Stored as `<saltHex>:<hashHex>`. scrypt is memory-hard and side-channel
@@ -41,18 +53,25 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
 
 function issueSession(c: Context, user: { id: string; email: string; name: string | null }) {
   const expires = Date.now() + SESSION_TTL_MS;
+  const ver =
+    (
+      db.prepare("SELECT token_version FROM users WHERE id = ?").get(user.id) as
+        { token_version: number } | undefined
+    )?.token_version ?? 0;
   const token = createSessionToken({
     email: user.email,
     name: user.name ?? "",
     provider: "password",
     userId: user.id,
     expires,
+    ver,
   });
   setCookie(c, COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_MS / 1000,
+    secure: process.env.NODE_ENV === "production",
   });
   return token;
 }
@@ -84,12 +103,18 @@ function getUserByEmail(email: string):
 
 function setVerificationCode(userId: string, code: string) {
   const expiresAt = Date.now() + VERIFICATION_CODE_TTL_MS;
+  const prev = db.prepare("SELECT verification_code FROM users WHERE id = ?").get(userId) as
+    { verification_code: string | null } | undefined;
+  if (prev?.verification_code) codeAttempts.delete(prev.verification_code);
   db.prepare(
     "UPDATE users SET verification_code = ?, verification_code_expires_at = ? WHERE id = ?",
   ).run(code, expiresAt, userId);
 }
 
 function markVerified(userId: string) {
+  const prev = db.prepare("SELECT verification_code FROM users WHERE id = ?").get(userId) as
+    { verification_code: string | null } | undefined;
+  if (prev?.verification_code) codeAttempts.delete(prev.verification_code);
   db.prepare(
     "UPDATE users SET verified = 1, verification_code = NULL, verification_code_expires_at = NULL WHERE id = ?",
   ).run(userId);
@@ -135,10 +160,19 @@ auth.post("/signup", async (c) => {
 
   const id = crypto.randomUUID();
   const passwordHash = await hashPassword(parsed.data.password);
-  db.prepare(
-    `INSERT INTO users (id, email, name, password_hash, verified, created_at)
-     VALUES (?, ?, ?, ?, 0, ?)`,
-  ).run(id, email, parsed.data.name ?? null, passwordHash, Date.now());
+  try {
+    db.prepare(
+      `INSERT INTO users (id, email, name, password_hash, verified, created_at)
+       VALUES (?, ?, ?, ?, 0, ?)`,
+    ).run(id, email, parsed.data.name ?? null, passwordHash, Date.now());
+  } catch (err) {
+    // UNIQUE(users.email): a concurrent signup won the race between the
+    // SELECT above and this INSERT.
+    if (String(err).includes("UNIQUE")) {
+      return c.json({ error: "Un compte existe déjà avec cet email" }, 409);
+    }
+    throw err;
+  }
 
   // Generate and send verification code
   const code = generateVerificationCode();
@@ -183,12 +217,6 @@ auth.post("/verify", async (c) => {
     return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
   }
 
-  if (user.verified) {
-    // Already verified — just issue a session
-    const token = issueSession(c, user);
-    return c.json({ user: publicUser(user), token });
-  }
-
   if (!user.verification_code || !user.verification_code_expires_at) {
     return c.json({ error: "Aucun code de vérification actif. Demandez-en un nouveau." }, 400);
   }
@@ -197,10 +225,18 @@ auth.post("/verify", async (c) => {
     return c.json({ error: "Le code de vérification a expiré. Demandez-en un nouveau." }, 400);
   }
 
+  // Brute-force guard: cap attempts per code, then invalidate it.
+  const attempts = codeAttempts.get(user.verification_code) ?? 0;
+  if (attempts >= MAX_VERIFY_ATTEMPTS) {
+    invalidateCode(user.id, user.verification_code);
+    return c.json({ error: "Trop de tentatives. Demandez un nouveau code." }, 429);
+  }
+
   // Timing-safe comparison
   const codeBuf = Buffer.from(code);
   const storedBuf = Buffer.from(user.verification_code);
   if (codeBuf.length !== storedBuf.length || !timingSafeEqual(codeBuf, storedBuf)) {
+    codeAttempts.set(user.verification_code, attempts + 1);
     return c.json({ error: "Code de vérification incorrect." }, 400);
   }
 
@@ -234,9 +270,16 @@ auth.post("/resend-code", async (c) => {
     return c.json({ error: "Ce compte est déjà vérifié." }, 400);
   }
 
+  // Throttle resends per email (also covers the login-triggered resend).
+  const lastResend = resendCooldowns.get(email) ?? 0;
+  if (Date.now() - lastResend < RESEND_COOLDOWN_MS) {
+    return c.json({ error: "Attendez une minute avant de demander un nouveau code." }, 429);
+  }
+
   // Generate a new code (invalidates old one)
   const code = generateVerificationCode();
   setVerificationCode(user.id, code);
+  resendCooldowns.set(email, Date.now());
 
   try {
     await sendVerificationCode(email, code);
@@ -303,8 +346,12 @@ auth.post("/login", async (c) => {
 });
 
 // ── POST /logout ─────────────────────────────────────────────────────────
+// Revokes the session: bumps the user's token_version so every outstanding
+// stateless token dies (all devices logged out).
 
-auth.post("/logout", (c) => {
+auth.post("/logout", requireAuth, (c) => {
+  const authCtx = c.get("auth") as AuthContext;
+  db.prepare("UPDATE users SET token_version = token_version + 1 WHERE id = ?").run(authCtx.userId);
   deleteCookie(c, COOKIE_NAME, { path: "/", secure: process.env.NODE_ENV === "production" });
   // Also set an expired cookie to ensure the session cookie is cleared
   setCookie(c, COOKIE_NAME, "", {

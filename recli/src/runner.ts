@@ -312,8 +312,17 @@ async function checkSnapshot(
     return;
   }
 
-  const existing = JSON.parse(fs.readFileSync(snapPath, "utf8"));
-  if (existing.body !== result.body || existing.status !== result.status) {
+  let existing: { body?: string; status?: number } | null = null;
+  try {
+    existing = JSON.parse(fs.readFileSync(snapPath, "utf8"));
+  } catch {
+    // Corrupt/hand-edited snapshot: treat as missing, don't crash the run.
+    existing = null;
+  }
+  if (
+    existing?.body !== undefined &&
+    (existing.body !== result.body || existing.status !== result.status)
+  ) {
     result.snapshotChanged = true;
     result.passed = false;
     result.error = result.error ? `${result.error}; Snapshot changed` : "Snapshot changed";
@@ -325,7 +334,7 @@ async function checkSnapshot(
  * exhaust memory (e.g. inside the MCP server). Stops reading once the cap
  * is exceeded and reports truncation.
  */
-async function readBodyWithCap(
+export async function readBodyWithCap(
   response: Response,
   maxSize: number,
 ): Promise<{ body: string; size: number; truncated: boolean }> {
@@ -424,11 +433,13 @@ async function httpFetch(
       // Follow redirects manually, re-checking SSRF on each hop.
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         let hops = 0;
-        let currentUrl = response.headers.get("location") ?? "";
+        let prevUrl = fetchUrl; // base for resolving relative Locations
+        let prevRes = response; // last 3xx response seen
+        let currentUrl = prevRes.headers.get("location") ?? "";
         while (currentUrl && hops < 10) {
-          // Resolve relative redirects against the previous URL.
+          // Resolve relative redirects against the previous hop's URL.
           try {
-            currentUrl = new URL(currentUrl, fetchUrl).href;
+            currentUrl = new URL(currentUrl, prevUrl).href;
           } catch {
             break;
           }
@@ -447,16 +458,23 @@ async function httpFetch(
               error: `Redirect blocked: ${hopCheck.reason}`,
             };
           }
+          // Conversion is decided from the PREVIOUS hop's status, not the
+          // original response's: fetch spec converts only POST→GET on
+          // 301/302, every non-GET/HEAD method to GET on 303, and preserves
+          // method+body on 307/308.
+          const convertToGet = [301, 302, 303].includes(prevRes.status)
+            ? prevRes.status === 303 || method === "POST"
+            : false;
           const hopRes = await fetch(currentUrl, {
-            method: [301, 302, 303].includes(response.status) ? "GET" : method,
-            headers:
-              [301, 302, 303].includes(response.status) && method !== "GET" && method !== "HEAD"
-                ? { ...headers }
-                : headers,
-            body: [301, 302, 303].includes(response.status) ? undefined : bodyToSend,
+            method: convertToGet ? "GET" : method,
+            headers: convertToGet ? { ...headers } : headers,
+            body: convertToGet ? undefined : bodyToSend,
             signal: controller.signal,
             redirect: "manual",
           });
+          // Keep cookies from every hop, including intermediate 3xx.
+          const hopCookies = parseCookies(getResponseHeaders(hopRes));
+          for (const [k, v] of Object.entries(hopCookies)) ctx.cookies.set(k, v);
           if (![301, 302, 303, 307, 308].includes(hopRes.status)) {
             // Final response — read it.
             const dur = Date.now() - startTime;
@@ -483,10 +501,33 @@ async function httpFetch(
               responseCookies: rCookies,
             };
           }
+          prevUrl = currentUrl;
+          prevRes = hopRes;
           currentUrl = hopRes.headers.get("location") ?? "";
           hops++;
         }
-        // Exhausted redirect chain — return last response as-is.
+        // Exhausted redirect chain (>=10 hops or a 3xx without Location) —
+        // return the LAST 3xx response as-is, not the original first hop.
+        const dur = Date.now() - startTime;
+        const rHeaders = getResponseHeaders(prevRes);
+        const rCookies = parseCookies(rHeaders);
+        for (const [k, v] of Object.entries(rCookies)) ctx.cookies.set(k, v);
+        const {
+          body: b,
+          size: s,
+          truncated: t,
+        } = await readBodyWithCap(prevRes, options?.maxResponseSize ?? DEFAULT_MAX_RESPONSE_SIZE);
+        return {
+          ok: true,
+          status: prevRes.status,
+          statusText: prevRes.statusText,
+          body: b,
+          size: s,
+          truncated: t,
+          durationMs: dur,
+          responseHeaders: rHeaders,
+          responseCookies: rCookies,
+        };
       }
 
       const durationMs = Date.now() - startTime;

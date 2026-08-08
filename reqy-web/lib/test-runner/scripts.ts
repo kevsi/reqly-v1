@@ -24,6 +24,19 @@ const FORBIDDEN_GLOBALS = [
   "Buffer",
   "setImmediate",
   "setInterval",
+  // Network/egress + async runaway primitives: keep the sandbox from
+  // exfiltrating data or spawning unbounded timers/microtasks even if the
+  // vm boundary were breached. Combined with codeGeneration:{strings:false}
+  // and the per-script timeout this bounds what untrusted scripts can do.
+  "fetch",
+  "XMLHttpRequest",
+  "WebSocket",
+  "EventSource",
+  "setTimeout",
+  "clearTimeout",
+  "queueMicrotask",
+  "Atomics",
+  "SharedArrayBuffer",
 ];
 
 function createPmApi(ctx: RunnerContext, response?: RequestResponse) {
@@ -79,8 +92,15 @@ function stringify(v: unknown): string {
   }
 }
 
-let _vm: any;
-async function getVm(): Promise<any> {
+interface NodeVmLike {
+  Script: new (code: string) => {
+    runInContext(context: unknown, options?: { timeout?: number }): unknown;
+  };
+  createContext(sandbox: Record<string, unknown>, options?: Record<string, unknown>): unknown;
+}
+
+let _vm: NodeVmLike | null | undefined;
+async function getVm(): Promise<NodeVmLike | null> {
   if (_vm !== undefined) return _vm;
   try {
     const m = "node" + String.fromCharCode(58) + "vm";
@@ -88,7 +108,7 @@ async function getVm(): Promise<any> {
   } catch {
     _vm = null;
   }
-  return _vm;
+  return _vm ?? null;
 }
 
 export async function runScript(
@@ -146,7 +166,7 @@ export async function runScript(
       codeGeneration: { strings: false, wasm: false },
       microtaskMode: "afterEvaluate",
     });
-    const result = script.runInContext(vmContext, { timeout: options.timeoutMs ?? 5000 });
+    const result = script.runInContext(vmContext, { timeout: options.timeoutMs ?? 3000 });
     return { result, consoleLines };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err), consoleLines };

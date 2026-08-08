@@ -1,12 +1,12 @@
-import { invokeTauriFetch } from "@/lib/tauri"
-import type { AIProvider } from "@/lib/types"
-import type { ModelOption } from "./provider-models"
+import { invokeTauriFetch } from "@/lib/tauri";
+import type { AIProvider } from "@/lib/types";
+import type { ModelOption } from "./provider-models";
 import {
   buildOpenAIToolHistory,
   buildAnthropicToolHistory,
   buildGeminiToolHistory,
   type PreviousTurn,
-} from "@/app/api/proxy-ai/lib/tool-history"
+} from "@/app/api/proxy-ai/lib/tool-history";
 
 export const PROVIDER_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",
@@ -17,67 +17,97 @@ export const PROVIDER_URLS: Record<string, string> = {
   deepseek: "https://api.deepseek.com/v1",
   grok: "https://api.x.ai/v1",
   "opencode-zen": "https://opencode.ai/zen/v1",
+};
+
+/** Shape minimale d'une entrée de la réponse /models d'un provider. */
+interface ModelRecord {
+  id?: unknown;
+  name?: unknown;
+  display_name?: unknown;
+  displayName?: unknown;
+  type?: unknown;
+  supportedGenerationMethods?: unknown;
+}
+
+function isRecord(m: unknown): m is Record<string, unknown> {
+  return typeof m === "object" && m !== null;
+}
+
+function isModelRecord(m: unknown): m is ModelRecord {
+  return isRecord(m);
+}
+
+function str(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 function normalizeModelsOpenAI(data: unknown[]): ModelOption[] {
-  return data
-    .filter((m) => typeof m === "object" && m !== null)
-    .map((m: any) => ({ id: m.id, label: m.name ?? m.id }))
+  return data.filter(isModelRecord).map((m) => {
+    const id = str(m.id);
+    return { id, label: str(m.name) || id };
+  });
 }
 
 function normalizeModelsAnthropic(data: unknown[]): ModelOption[] {
   return data
-    .filter((m) => typeof m === "object" && m !== null && (m as any).type === "model")
-    .map((m: any) => ({ id: m.id, label: m.display_name ?? m.id }))
+    .filter((m): m is ModelRecord => isModelRecord(m) && m.type === "model")
+    .map((m) => {
+      const id = str(m.id);
+      return { id, label: str(m.display_name) || id };
+    });
 }
 
 function normalizeModelsGemini(data: unknown[]): ModelOption[] {
   return data
     .filter(
-      (m) =>
-        typeof m === "object" &&
-        m !== null &&
-        Array.isArray((m as any).supportedGenerationMethods) &&
-        (m as any).supportedGenerationMethods.includes("generateContent"),
+      (m): m is ModelRecord =>
+        isModelRecord(m) &&
+        Array.isArray(m.supportedGenerationMethods) &&
+        (m.supportedGenerationMethods as unknown[]).includes("generateContent"),
     )
-    .map((m: any) => {
-      const id = (m.name ?? "").replace(/^models\//, "")
-      return { id, label: m.displayName ?? id }
-    })
+    .map((m) => {
+      const id = str(m.name).replace(/^models\//, "");
+      return { id, label: str(m.displayName) || id };
+    });
 }
 
 function normalizeModelsOllama(data: unknown[]): ModelOption[] {
   return data
-    .filter((m) => typeof m === "object" && m !== null && typeof (m as any).name === "string")
-    .map((m: any) => ({ id: m.name, label: m.name }))
+    .filter((m): m is ModelRecord => isModelRecord(m) && typeof m.name === "string")
+    .map((m) => {
+      const id = str(m.name);
+      return { id, label: id };
+    });
 }
 
 function normalizeModelsOpenRouter(data: unknown[]): ModelOption[] {
-  return data
-    .filter((m) => typeof m === "object" && m !== null)
-    .map((m: any) => ({ id: m.id, label: m.name ?? m.id }))
+  return data.filter(isModelRecord).map((m) => {
+    const id = str(m.id);
+    return { id, label: str(m.name) || id };
+  });
 }
 
 export function normalizeModelsResponse(provider: AIProvider, raw: unknown): ModelOption[] {
-  const data = (raw as any)?.data ?? (raw as any)?.models ?? []
-  const arr = Array.isArray(data) ? data : []
+  const obj = isRecord(raw) ? raw : {};
+  const data = obj.data ?? obj.models ?? [];
+  const arr = Array.isArray(data) ? data : [];
 
   switch (provider) {
     case "anthropic":
-      return normalizeModelsAnthropic(arr)
+      return normalizeModelsAnthropic(arr);
     case "gemini":
-      return normalizeModelsGemini(arr)
+      return normalizeModelsGemini(arr);
     case "ollama":
-      return normalizeModelsOllama(arr)
+      return normalizeModelsOllama(arr);
     case "openrouter":
-      return normalizeModelsOpenRouter(arr)
+      return normalizeModelsOpenRouter(arr);
     case "openai":
     case "deepseek":
     case "grok":
     case "opencode-zen":
     case "custom":
     default:
-      return normalizeModelsOpenAI(arr)
+      return normalizeModelsOpenAI(arr);
   }
 }
 
@@ -86,36 +116,36 @@ export async function fetchModelsTauri(
   apiKey: string,
   baseUrl: string,
 ): Promise<ModelOption[]> {
-  const url = PROVIDER_URLS[provider] ?? (baseUrl || "https://api.openai.com/v1")
-  const fullUrl = `${url.replace(/\/+$/, "")}/models`
+  const url = PROVIDER_URLS[provider] ?? (baseUrl || "https://api.openai.com/v1");
+  const fullUrl = `${url.replace(/\/+$/, "")}/models`;
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (provider === "anthropic") {
-    headers["x-api-key"] = apiKey
-    headers["anthropic-version"] = "2023-06-01"
+    headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
   } else if (provider === "gemini") {
     // API key goes in query string
   } else if (provider !== "ollama") {
-    headers["Authorization"] = `Bearer ${apiKey}`
+    headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  let requestUrl = fullUrl
+  let requestUrl = fullUrl;
   if (provider === "gemini") {
-    requestUrl = `${fullUrl}?key=${encodeURIComponent(apiKey)}`
+    requestUrl = `${fullUrl}?key=${encodeURIComponent(apiKey)}`;
   }
 
-  const res = await invokeTauriFetch("GET", requestUrl, headers)
+  const res = await invokeTauriFetch("GET", requestUrl, headers);
 
   if (res.status < 200 || res.status >= 300) {
-    throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`)
+    throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`);
   }
 
-  const raw = JSON.parse(res.body)
-  const models = normalizeModelsResponse(provider, raw)
+  const raw = JSON.parse(res.body);
+  const models = normalizeModelsResponse(provider, raw);
 
-  if (models.length === 0) throw new Error("Empty list")
-  return models
+  if (models.length === 0) throw new Error("Empty list");
+  return models;
 }
 
 export interface TauriAIResult {
@@ -129,6 +159,59 @@ function randomCallId(): string {
   return `call_${Math.random().toString(36).slice(2)}`;
 }
 
+/** Tool au format OpenAI (passé par le frontend). */
+interface OpenAIStyleTool {
+  type?: unknown;
+  function?: Record<string, unknown>;
+  name?: unknown;
+  description?: unknown;
+  parameters?: unknown;
+  input_schema?: unknown;
+}
+
+function toOpenAITool(t: Record<string, unknown>): OpenAIStyleTool {
+  return t as OpenAIStyleTool;
+}
+
+/** Bloc `content[]` de la réponse Anthropic. */
+interface AnthropicContentBlock {
+  type?: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+}
+
+/** `parts[]` + functionCall d'une candidate Gemini. */
+interface GeminiFunctionCall {
+  id?: string;
+  name?: string;
+  args?: unknown;
+}
+
+interface GeminiPart {
+  text?: string;
+  functionCall?: GeminiFunctionCall;
+}
+
+interface GeminiCandidate {
+  content?: { parts?: GeminiPart[]; text?: string };
+  text?: string;
+  functionCall?: GeminiFunctionCall;
+}
+
+/** Message assistant des API OpenAI-compatibles (openai, ollama, deepseek…). */
+interface OpenAIChatMessage {
+  content?: string;
+  tool_calls?: unknown;
+  reasoning_content?: unknown;
+}
+
+interface OpenAIToolCall {
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
 /**
  * Appelle un provider IA via le backend Tauri (fetch natif).
  *
@@ -136,9 +219,7 @@ function randomCallId(): string {
  * convertir les tools vers le format du provider ET parser les tool_calls de
  * la réponse nous-mêmes (le proxy web le fait côté serveur).
  */
-export async function callAiProxyTauri(
-  payload: Record<string, unknown>,
-): Promise<TauriAIResult> {
+export async function callAiProxyTauri(payload: Record<string, unknown>): Promise<TauriAIResult> {
   const provider = payload.provider as string;
   const apiKey = (payload.apiKey as string) ?? "";
   const model = (payload.model as string) ?? "";
@@ -159,7 +240,8 @@ export async function callAiProxyTauri(
     case "anthropic": {
       url = "https://api.anthropic.com/v1/messages";
       const anthropicTools = tools?.map((t) => {
-        const fn = ((t as any).function as Record<string, unknown> | undefined) ?? t;
+        const tool = toOpenAITool(t);
+        const fn = isRecord(tool.function) ? tool.function : t;
         return {
           name: fn.name,
           description: fn.description,
@@ -170,10 +252,7 @@ export async function callAiProxyTauri(
         model,
         max_tokens: 4096,
         system,
-        messages: [
-          { role: "user", content: message },
-          ...buildAnthropicToolHistory(previousTurns),
-        ],
+        messages: [{ role: "user", content: message }, ...buildAnthropicToolHistory(previousTurns)],
         stream: false,
         ...(anthropicTools?.length ? { tools: anthropicTools } : {}),
       };
@@ -185,7 +264,8 @@ export async function callAiProxyTauri(
         ? [
             {
               functionDeclarations: tools.map((t) => {
-                const fn = ((t as any).function as Record<string, unknown> | undefined) ?? t;
+                const tool = toOpenAITool(t);
+                const fn = isRecord(tool.function) ? tool.function : t;
                 return {
                   name: fn.name,
                   description: fn.description,
@@ -226,9 +306,7 @@ export async function callAiProxyTauri(
     default: {
       // OpenAI-compatible providers (openai, deepseek, openrouter, grok, custom...)
       const baseUrl =
-        (payload.openaiUrl as string) ||
-        PROVIDER_URLS[provider] ||
-        "https://api.openai.com/v1";
+        (payload.openaiUrl as string) || PROVIDER_URLS[provider] || "https://api.openai.com/v1";
       url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
       body = {
         model,
@@ -266,14 +344,16 @@ export async function callAiProxyTauri(
 
   // Anthropic : blocs content[] de type text + tool_use
   if (provider === "anthropic") {
-    const contentData = Array.isArray(json?.content) ? json.content : [];
+    const contentData = Array.isArray(json?.content)
+      ? (json.content as AnthropicContentBlock[])
+      : [];
     const textContent = contentData
-      .filter((item: any) => item?.type === "text")
-      .map((item: any) => item.text ?? "")
+      .filter((item) => item.type === "text")
+      .map((item) => item.text ?? "")
       .join("");
     const toolUses = contentData
-      .filter((item: any) => item?.type === "tool_use")
-      .map((item: any) => ({
+      .filter((item) => item.type === "tool_use")
+      .map((item) => ({
         id: item.id ?? randomCallId(),
         name: item.name ?? "",
         arguments: JSON.stringify(item.input ?? {}),
@@ -286,19 +366,20 @@ export async function callAiProxyTauri(
 
   // Gemini : candidates[0].functionCall (ou parts[].functionCall)
   if (provider === "gemini") {
-    const candidates = Array.isArray(json?.candidates) ? json.candidates : [];
-    const firstCandidate = candidates[0] as any;
-    const parts = Array.isArray(firstCandidate?.content?.parts)
-      ? firstCandidate.content.parts
+    const candidates = Array.isArray(json?.candidates)
+      ? (json.candidates as GeminiCandidate[])
       : [];
+    const firstCandidate = candidates[0];
+    const parts = Array.isArray(firstCandidate?.content?.parts) ? firstCandidate.content.parts : [];
     const textContent =
       parts
-        .map((p: any) => p?.text ?? "")
+        .map((p) => p?.text ?? "")
         .join("")
-        .trim() || firstCandidate?.content?.text || firstCandidate?.text || "";
-    const fc =
-      firstCandidate?.functionCall ??
-      parts.find((p: any) => p?.functionCall)?.functionCall;
+        .trim() ||
+      firstCandidate?.content?.text ||
+      firstCandidate?.text ||
+      "";
+    const fc = firstCandidate?.functionCall ?? parts.find((p) => p?.functionCall)?.functionCall;
     if (fc?.name) {
       return {
         content: textContent,
@@ -315,14 +396,13 @@ export async function callAiProxyTauri(
   }
 
   // Ollama + OpenAI-compatible : message.tool_calls
-  const msg = json?.choices?.[0]?.message;
-  const rawToolCalls: any[] = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
+  const msg = json?.choices?.[0]?.message as OpenAIChatMessage | undefined;
+  const rawToolCalls = Array.isArray(msg?.tool_calls) ? (msg.tool_calls as OpenAIToolCall[]) : [];
   const toolCalls = rawToolCalls
-    .map((tc: any) => ({
+    .map((tc) => ({
       id: typeof tc?.id === "string" ? tc.id : randomCallId(),
       name: typeof tc?.function?.name === "string" ? tc.function.name : "",
-      arguments:
-        typeof tc?.function?.arguments === "string" ? tc.function.arguments : "{}",
+      arguments: typeof tc?.function?.arguments === "string" ? tc.function.arguments : "{}",
     }))
     .filter((tc) => tc.name);
   const reasoningContent =

@@ -23,10 +23,6 @@ import { invoke } from "@tauri-apps/api/core";
 const STORAGE_PREFIX = "reqly-secure-";
 const SALT_KEY = `${STORAGE_PREFIX}salt`;
 
-function isSensitiveStorageKey(key: string): boolean {
-  return key.startsWith(STORAGE_PREFIX);
-}
-
 // ---- Storage helpers (IndexedDB via persistence layer) -----------------
 
 import { persistence } from "@/lib/persistence";

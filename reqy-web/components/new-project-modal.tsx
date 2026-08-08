@@ -5,7 +5,7 @@ import { Loader2, FolderOpen, Sparkles, Code2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
+
 import { isTauriAvailable } from "@/lib/tauri";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { AnalysisMode, SavedProject } from "@/lib/config";
@@ -74,13 +74,13 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       toast({
         title: `Langage détecté : ${result.language ?? "Inconnu"}`,
         meta: { event: "projectAdd" },
-      } as any);
+      });
     } catch (err) {
       toast({
         title: `Erreur : ${String(err)}`,
         variant: "destructive",
         meta: { event: "projectAdd" },
-      } as any);
+      });
     } finally {
       setLoading(false);
       setStep("");
@@ -93,7 +93,7 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       toast({
         title: `${analysisResult.routes.length} routes détectées`,
         meta: { event: "projectAdd" },
-      } as any);
+      });
       onClose();
       setFolderPath("");
       setAnalysisResult(null);

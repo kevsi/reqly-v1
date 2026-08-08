@@ -16,7 +16,11 @@ export function SectionHeader({ eyebrow, title, sub }: SectionHeaderProps) {
       <h2 className="mt-4 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
         {title}
       </h2>
-      {sub && <p className="mt-4 text-pretty text-zinc-400">{sub}</p>}
+      {sub && (
+        <p className="mt-4 text-pretty text-zinc-400 animate-reveal-blur [animation-delay:120ms]">
+          {sub}
+        </p>
+      )}
     </Reveal>
   );
 }

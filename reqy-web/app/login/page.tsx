@@ -25,9 +25,12 @@ export default function LoginPage() {
       await login(email.trim(), password);
       router.push("/");
     } catch (err) {
-      if (err instanceof Error && (err as any).needsVerification) {
+      if (
+        err instanceof Error &&
+        (err as Error & { needsVerification?: boolean }).needsVerification
+      ) {
         // Redirect to verification page — a code was already sent on signup
-        const verifyEmail = (err as any).email || email.trim();
+        const verifyEmail = (err as Error & { email?: string }).email || email.trim();
         router.push(`/signup?verify=${encodeURIComponent(verifyEmail)}`);
         return;
       }

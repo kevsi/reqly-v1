@@ -24,7 +24,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+
 import { Card } from "@/components/ui/card";
 import { isTauriAvailable } from "@/lib/tauri";
 import type { RemoteInfo } from "@/hooks/use-git";

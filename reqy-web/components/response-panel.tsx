@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResponseStatusBar } from "@/components/response-status-bar";
 import { ResponseTimeline } from "@/components/response-timeline";
-import { ResponseAiSummary } from "@/components/response-ai-summary";
+
 import { ResponseHeadersTab } from "@/components/response-headers-tab";
 import { ResponseCookiesTab } from "@/components/response-cookies-tab";
 import { CodeSnippet } from "@/components/response-code-snippet";
@@ -45,16 +45,10 @@ import {
   isBinary,
   extractVideoUrls,
   extractImageUrls,
-  getContentType,
 } from "@/components/response-utils";
 import type { HistoryItem, TestResult } from "@/lib/types";
 import { formatDataSize } from "@/lib/network/format";
-import {
-  getStatusBorderAccentClass,
-  getStatusGaugeClass,
-  getStatusBadgeClass,
-  getStatusTextClass,
-} from "@/lib/http-status-colors";
+import { getStatusBorderAccentClass, getStatusGaugeClass } from "@/lib/http-status-colors";
 
 interface ResponsePanelProps {
   responseBody?: string;
@@ -107,11 +101,7 @@ export function ResponsePanel({
   onRun,
   onRunAndSave,
   onRunAndDownload,
-  onAnalyze,
-  onGenerateTests,
   onPatchRequest,
-  aiSummary,
-  aiError,
   aiIsLoading = false,
   method = "GET",
   url = "",
@@ -324,7 +314,7 @@ export function ResponsePanel({
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 border-b border-border px-4">
-          <TabsList className="h-auto gap-0 bg-transparent p-0 -mb-px flex w-full overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] justify-start [&>button]:shrink-0">
+          <TabsList className="h-auto gap-0 bg-transparent p-0 -mb-px flex w-full overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] justify-start [&>button]:shrink-0 [&>button]:scroll-snap-align-start">
             <TabsTrigger
               value="response"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"

@@ -1,23 +1,22 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Copy, RotateCcw, Pencil } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { toast } from "@/hooks/use-toast"
+import { useState } from "react";
+import { Copy, RotateCcw, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 interface MessageActionsProps {
-  messageId: string
-  content: string
-  role: "user" | "assistant"
-  onEdit?: () => void
-  onRetry?: () => void
-  onCopy?: () => void
-  isEditing?: boolean
-  className?: string
+  messageId: string;
+  content: string;
+  role: "user" | "assistant";
+  onEdit?: () => void;
+  onRetry?: () => void;
+  onCopy?: () => void;
+  isEditing?: boolean;
+  className?: string;
 }
 
 export function MessageActions({
-  messageId,
   content,
   role,
   onEdit,
@@ -26,38 +25,45 @@ export function MessageActions({
   isEditing,
   className,
 }: MessageActionsProps) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      toast({ title: "Message copié", description: "Le contenu a été copié dans le presse-papiers." })
-      setTimeout(() => setCopied(false), 2000)
-      onCopy?.()
-    } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de copier le message.", variant: "destructive" })
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      toast({
+        title: "Message copié",
+        description: "Le contenu a été copié dans le presse-papiers.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+      onCopy?.();
+    } catch (_error) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de copier le message.",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
   const handleEdit = () => {
     if (role === "user") {
-      onEdit?.()
+      onEdit?.();
     }
-  }
+  };
 
   const handleRetry = () => {
     if (role === "assistant") {
-      onRetry?.()
+      onRetry?.();
     }
-  }
+  };
 
   return (
     <div
       className={cn(
         "flex items-center gap-1 opacity-0 transition-all duration-200 group-hover/message:opacity-100",
         "absolute -top-8 right-0 z-10",
-        className
+        className,
       )}
     >
       {/* Copy button - always show for assistant messages */}
@@ -70,7 +76,7 @@ export function MessageActions({
             "flex size-7 items-center justify-center rounded-md transition-all",
             "text-muted-foreground hover:text-foreground hover:bg-muted",
             "disabled:opacity-50 disabled:cursor-not-allowed",
-            copied && "text-green-600 bg-green-100/30 dark:text-green-400 dark:bg-green-500/15"
+            copied && "text-green-600 bg-green-100/30 dark:text-green-400 dark:bg-green-500/15",
           )}
         >
           <Copy className="size-4" />
@@ -87,7 +93,7 @@ export function MessageActions({
             "flex size-7 items-center justify-center rounded-md transition-all",
             "text-muted-foreground hover:text-foreground hover:bg-muted",
             "disabled:opacity-50 disabled:cursor-not-allowed",
-            isEditing && "bg-muted text-foreground"
+            isEditing && "bg-muted text-foreground",
           )}
         >
           <Pencil className="size-4" />
@@ -103,12 +109,12 @@ export function MessageActions({
           className={cn(
             "flex size-7 items-center justify-center rounded-md transition-all",
             "text-muted-foreground hover:text-foreground hover:bg-muted",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
+            "disabled:opacity-50 disabled:cursor-not-allowed",
           )}
         >
           <RotateCcw className="size-4" />
         </button>
       )}
     </div>
-  )
+  );
 }

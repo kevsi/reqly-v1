@@ -1,5 +1,5 @@
 import type { RequestStore, VariableMapping } from "@/hooks/request-types";
-import { CommitFn, WORKSPACE_PERSONAL_ID } from "./types";
+import { CommitFn } from "./types";
 
 export function createVariableMappingsMutations(commit: CommitFn) {
   const addVariableMapping = (data: Omit<VariableMapping, "id" | "createdAt" | "updatedAt">) => {

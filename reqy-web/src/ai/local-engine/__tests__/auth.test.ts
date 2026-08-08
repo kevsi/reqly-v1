@@ -4,12 +4,12 @@ import type { RequestContext } from "@/src/ai/types";
 import errorDataset from "@/src/ai/__tests__/fixtures/error-dataset.json";
 
 function ctxFromFixture(id: string): RequestContext {
-  const fixture = (errorDataset as any[]).find((f) => f.id === id);
+  const fixture = (errorDataset as unknown[]).find((f) => f.id === id);
   if (!fixture) throw new Error(`Fixture ${id} not found`);
   return { ...fixture.context, timestamp: Date.now() } as RequestContext;
 }
 
-function matchRule(id: string, ctx: RequestContext) {
+function matchRule(id: string, _ctx: RequestContext) {
   return authRules.find((r) => r.id === id);
 }
 
@@ -34,7 +34,7 @@ describe("auth.401.bearer.expired", () => {
 
 describe("all auth rules covered by dataset", () => {
   it("every rule in authRules has at least one matching dataset entry", () => {
-    const authFixtures = (errorDataset as any[]).filter((f) => f.category === "auth");
+    const authFixtures = (errorDataset as unknown[]).filter((f) => f.category === "auth");
     expect(authFixtures.length).toBeGreaterThanOrEqual(40);
     for (const rule of authRules) {
       const matched = authFixtures.some((f) => {

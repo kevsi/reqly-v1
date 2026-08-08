@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { requireAuth, type AuthContext } from "../auth.js";
-import { getChangesSince, isMember, pushChanges, type LocalChange } from "../sync-engine.js";
+import {
+  getChangesSince,
+  isMember,
+  canWrite,
+  pushChanges,
+  type LocalChange,
+} from "../sync-engine.js";
 import { broadcastToWorkspace } from "../ws-hub.js";
 import { safeParseJson } from "../validation.js";
 
@@ -46,6 +52,9 @@ sync.post("/push", async (c) => {
   const body = parsed.data;
   if (!isMember(body.workspaceId, auth.userId)) {
     return c.json({ error: "Not a member" }, 403);
+  }
+  if (!canWrite(body.workspaceId, auth.userId)) {
+    return c.json({ error: "Viewers cannot push changes" }, 403);
   }
   const result = pushChanges(body.workspaceId, auth.userId, body.changes as LocalChange[]);
   // Broadcast to all connected clients in this workspace so they can fetch

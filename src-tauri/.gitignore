@@ -2,3 +2,10 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# recli (dist + prod node_modules) deployed by reqy-web/scripts/build-desktop.mjs
+# for the packaged MCP server — regenerated on every desktop build.
+# The .gitkeep is kept so the folder exists for dev builds (tauri-build fails
+# on a missing bundle.resources path).
+/resources/recli/*
+!/resources/recli/.gitkeep

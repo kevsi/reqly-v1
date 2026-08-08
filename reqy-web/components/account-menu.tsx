@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { User, LogOut, Loader2 } from "lucide-react";
+import { LogOut, Loader2 } from "lucide-react";
 import { useSessionStore } from "@/lib/session-store";
 import {
   DropdownMenu,

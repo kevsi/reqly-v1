@@ -127,13 +127,6 @@ function ComboBadge({ combo, isCustom }: { combo: KeyCombo; isCustom: boolean })
 }
 
 // ─── Key recorder ───────────────────────────────────────────────────
-const MODIFIER_LABELS: Record<string, string> = {
-  Control: "Ctrl",
-  Meta: "⌘",
-  Shift: "⇧",
-  Alt: "Alt",
-};
-
 function keyLabel(e: KeyboardEvent): string | null {
   if (e.key === "Control" || e.key === "Meta" || e.key === "Shift" || e.key === "Alt") return null;
   if (e.key === " ") return "Space";

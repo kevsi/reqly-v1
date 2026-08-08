@@ -4,12 +4,37 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ExportBundle, RequestRunRecord, CollectionRunRecord } from "../types.js";
 import type { ToolHandlerOptions } from "../tool-definitions.js";
 
+/**
+ * Run `fn` over `items` with at most `concurrency` promises in flight,
+ * preserving input order in the results.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(concurrency, items.length)) },
+    async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]!, i);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 function resolveRunOptions(
   args: Record<string, unknown>,
   defaultTimeoutMs: number,
   defaultEnvName?: string,
 ): { timeoutMs: number; envName?: string } {
-  const timeoutMs = typeof args.timeout_ms === "number" && args.timeout_ms > 0 ? args.timeout_ms : defaultTimeoutMs;
+  const timeoutMs =
+    typeof args.timeout_ms === "number" && args.timeout_ms > 0 ? args.timeout_ms : defaultTimeoutMs;
   const envName = args.env_name ? String(args.env_name) : defaultEnvName;
   return { timeoutMs, envName };
 }
@@ -21,14 +46,26 @@ export async function handleRunRequest(
   options: ToolHandlerOptions,
 ): Promise<CallToolResult> {
   const runRequestId = String(args.request_id ?? "");
-  const { timeoutMs, envName } = resolveRunOptions(args, options.defaultTimeoutMs, options.defaultEnvName);
+  const { timeoutMs, envName } = resolveRunOptions(
+    args,
+    options.defaultTimeoutMs,
+    options.defaultEnvName,
+  );
   const foundRun = store.findRequestById(runRequestId);
   if (!foundRun) {
-    return { content: [{ type: "text", text: `Request not found: ${runRequestId}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `Request not found: ${runRequestId}` }],
+      isError: true,
+    };
   }
   const result = await executeRequestWithAssertions(
     foundRun.request,
-    { timeoutMs, envName, allowLocalHosts: options.allowLocalHosts, maxResponseSize: options.maxResponseSize },
+    {
+      timeoutMs,
+      envName,
+      allowLocalHosts: options.allowLocalHosts,
+      maxResponseSize: options.maxResponseSize,
+    },
     bundle?.environments,
   );
   const singleRunId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -58,7 +95,12 @@ export async function handleRunRequest(
     completedAt: Date.now(),
     totalDurationMs: result.durationMs,
     results: [singleRunRecord],
-    summary: { total: 1, passed: result.passed ? 1 : 0, failed: !result.passed && !result.error ? 1 : 0, errored: result.error ? 1 : 0 },
+    summary: {
+      total: 1,
+      passed: result.passed ? 1 : 0,
+      failed: !result.passed && !result.error ? 1 : 0,
+      errored: result.error ? 1 : 0,
+    },
   });
   const output = {
     name: result.name,
@@ -82,18 +124,35 @@ export async function handleRunCollection(
   args: Record<string, unknown>,
   bundle: ExportBundle | undefined,
   options: ToolHandlerOptions,
+  progressToken?: string | number,
 ): Promise<CallToolResult> {
   const colId = String(args.collection_id ?? "");
-  const { timeoutMs, envName } = resolveRunOptions(args, options.defaultTimeoutMs, options.defaultEnvName);
+  const { timeoutMs, envName } = resolveRunOptions(
+    args,
+    options.defaultTimeoutMs,
+    options.defaultEnvName,
+  );
   const collection = store.getCollection(colId);
   if (!collection) {
     return { content: [{ type: "text", text: `Collection not found: ${colId}` }], isError: true };
   }
   const results = [];
-  for (const req of collection.requests) {
+  const total = collection.requests.length;
+  for (let i = 0; i < total; i++) {
+    const req = collection.requests[i]!;
+    options.onProgress?.(progressToken, {
+      progress: i + 1,
+      total,
+      message: `Running ${req.name}`,
+    });
     const result = await executeRequestWithAssertions(
       req,
-      { timeoutMs, envName, allowLocalHosts: options.allowLocalHosts, maxResponseSize: options.maxResponseSize },
+      {
+        timeoutMs,
+        envName,
+        allowLocalHosts: options.allowLocalHosts,
+        maxResponseSize: options.maxResponseSize,
+      },
       bundle?.environments,
     );
     results.push(result);
@@ -117,7 +176,12 @@ export async function handleRunCollection(
     body: r.body,
     executedAt: Date.now(),
   }));
-  const summary = { total: results.length, passed: results.filter((r) => r.passed).length, failed: results.filter((r) => !r.passed && !r.error).length, errored: results.filter((r) => r.error).length };
+  const summary = {
+    total: results.length,
+    passed: results.filter((r) => r.passed).length,
+    failed: results.filter((r) => !r.passed && !r.error).length,
+    errored: results.filter((r) => r.error).length,
+  };
   store.addRunRecord({
     id: runId,
     collectionId: colId,
@@ -128,7 +192,30 @@ export async function handleRunCollection(
     results: runRecords,
     summary,
   });
-  return { content: [{ type: "text", text: JSON.stringify({ collection_name: collection.name, ...summary, results: results.map((r) => ({ name: r.name, method: r.method, url: r.url, status: r.status, duration_ms: r.durationMs, passed: r.passed, error: r.error ?? null })) }, null, 2) }] };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            collection_name: collection.name,
+            ...summary,
+            results: results.map((r) => ({
+              name: r.name,
+              method: r.method,
+              url: r.url,
+              status: r.status,
+              duration_ms: r.durationMs,
+              passed: r.passed,
+              error: r.error ?? null,
+            })),
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
 }
 
 export async function handleRunRequestsBatch(
@@ -136,28 +223,61 @@ export async function handleRunRequestsBatch(
   args: Record<string, unknown>,
   bundle: ExportBundle | undefined,
   options: ToolHandlerOptions,
+  progressToken?: string | number,
 ): Promise<CallToolResult> {
   const requestIds = args.request_ids as string[] | undefined;
-  const { timeoutMs, envName } = resolveRunOptions(args, options.defaultTimeoutMs, options.defaultEnvName);
+  const { timeoutMs, envName } = resolveRunOptions(
+    args,
+    options.defaultTimeoutMs,
+    options.defaultEnvName,
+  );
   if (!Array.isArray(requestIds) || requestIds.length === 0) {
-    return { content: [{ type: "text", text: "Missing required field: request_ids" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: request_ids" }],
+      isError: true,
+    };
   }
   const batch = requestIds.slice(0, options.maxBatchSize ?? 20);
-  const results = [];
-  for (const reqId of batch) {
-    const found = store.findRequestById(reqId);
-    if (!found) {
-      results.push({ request_id: reqId, error: "Request not found" });
-      continue;
-    }
-    const result = await executeRequestWithAssertions(
-      found.request,
-      { timeoutMs, envName, allowLocalHosts: options.allowLocalHosts, maxResponseSize: options.maxResponseSize },
-      bundle?.environments,
-    );
-    results.push({ request_id: reqId, name: result.name, method: result.method, url: result.url, status: result.status, duration_ms: result.durationMs, passed: result.passed, error: result.error ?? null });
-  }
-  return { content: [{ type: "text", text: JSON.stringify({ batch_size: batch.length, results }, null, 2) }] };
+  const results = await mapWithConcurrency(
+    batch,
+    options.maxConcurrency ?? 5,
+    async (reqId, index) => {
+      const found = store.findRequestById(reqId);
+      if (!found) {
+        return { request_id: reqId, error: "Request not found" };
+      }
+      options.onProgress?.(progressToken, {
+        progress: index + 1,
+        total: batch.length,
+        message: `Running ${found.request.name}`,
+      });
+      const result = await executeRequestWithAssertions(
+        found.request,
+        {
+          timeoutMs,
+          envName,
+          allowLocalHosts: options.allowLocalHosts,
+          maxResponseSize: options.maxResponseSize,
+        },
+        bundle?.environments,
+      );
+      return {
+        request_id: reqId,
+        name: result.name,
+        method: result.method,
+        url: result.url,
+        status: result.status,
+        duration_ms: result.durationMs,
+        passed: result.passed,
+        error: result.error ?? null,
+      };
+    },
+  );
+  return {
+    content: [
+      { type: "text", text: JSON.stringify({ batch_size: batch.length, results }, null, 2) },
+    ],
+  };
 }
 
 export async function handleRunCollectionWithAssertions(
@@ -165,25 +285,72 @@ export async function handleRunCollectionWithAssertions(
   args: Record<string, unknown>,
   bundle: ExportBundle | undefined,
   options: ToolHandlerOptions,
+  progressToken?: string | number,
 ): Promise<CallToolResult> {
   const colId = String(args.collection_id ?? "");
-  const { timeoutMs, envName } = resolveRunOptions(args, options.defaultTimeoutMs, options.defaultEnvName);
+  const { timeoutMs, envName } = resolveRunOptions(
+    args,
+    options.defaultTimeoutMs,
+    options.defaultEnvName,
+  );
   const collection = store.getCollection(colId);
   if (!collection) {
     return { content: [{ type: "text", text: `Collection not found: ${colId}` }], isError: true };
   }
   const runResults = [];
-  for (const req of collection.requests) {
+  const total = collection.requests.length;
+  for (let i = 0; i < total; i++) {
+    const req = collection.requests[i]!;
+    options.onProgress?.(progressToken, {
+      progress: i + 1,
+      total,
+      message: `Running ${req.name}`,
+    });
     const result = await executeRequestWithAssertions(
       req,
-      { timeoutMs, envName, allowLocalHosts: options.allowLocalHosts, maxResponseSize: options.maxResponseSize },
+      {
+        timeoutMs,
+        envName,
+        allowLocalHosts: options.allowLocalHosts,
+        maxResponseSize: options.maxResponseSize,
+      },
       bundle?.environments,
     );
     runResults.push(result);
   }
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const summary = { total: runResults.length, passed: runResults.filter((r) => r.passed).length, failed: runResults.filter((r) => !r.passed && !r.error).length, errored: runResults.filter((r) => r.error).length };
-  return { content: [{ type: "text", text: JSON.stringify({ run_id: runId, collection_name: collection.name, summary, results: runResults.map((r) => ({ name: r.name, method: r.method, url: r.url, status: r.status, duration_ms: r.durationMs, passed: r.passed, assertion_results: r.assertionResults ?? [], error: r.error ?? null })) }, null, 2) }] };
+  const summary = {
+    total: runResults.length,
+    passed: runResults.filter((r) => r.passed).length,
+    failed: runResults.filter((r) => !r.passed && !r.error).length,
+    errored: runResults.filter((r) => r.error).length,
+  };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            run_id: runId,
+            collection_name: collection.name,
+            summary,
+            results: runResults.map((r) => ({
+              name: r.name,
+              method: r.method,
+              url: r.url,
+              status: r.status,
+              duration_ms: r.durationMs,
+              passed: r.passed,
+              assertion_results: r.assertionResults ?? [],
+              error: r.error ?? null,
+            })),
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
 }
 
 export function handleGetRequestHistory(
@@ -193,7 +360,10 @@ export function handleGetRequestHistory(
   const reqId = String(args.request_id ?? "");
   const limit = typeof args.limit === "number" ? args.limit : 10;
   if (!reqId) {
-    return { content: [{ type: "text", text: "Missing required field: request_id" }], isError: true };
+    return {
+      content: [{ type: "text", text: "Missing required field: request_id" }],
+      isError: true,
+    };
   }
   const records = store.getRequestHistory(reqId)?.slice(0, limit) ?? [];
   return { content: [{ type: "text", text: JSON.stringify(records, null, 2) }] };

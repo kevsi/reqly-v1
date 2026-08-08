@@ -29,7 +29,7 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
     framework: string;
     language?: string;
     port?: number;
-    routes: any[];
+    routes: SavedProject["routes"];
   } | null>(null);
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("static");
   const [githubRepos, setGithubRepos] = useState<Array<{
@@ -84,12 +84,6 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
     }
   }, []);
 
-  const handleSelectRepo = (fullName: string) => {
-    setRepoUrl(`https://github.com/${fullName}`);
-    setProjectPreview(null);
-    setImportStatus(null);
-  };
-
   useEffect(() => {
     let cleanupTimeout: number | undefined;
 
@@ -128,7 +122,7 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
       toast({
         title: `Projet "${project.name}" importé avec ${project.routes.length} routes`,
         meta: { event: "importExport" },
-      } as any);
+      });
       onClose();
       setRepoUrl("");
       setProjectPreview(null);
@@ -177,7 +171,7 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
         title: err instanceof Error ? err.message : "Erreur lors de l'import",
         variant: "destructive",
         meta: { event: "importExport" },
-      } as any);
+      });
       setProjectPreview(null);
     } finally {
       setIsImporting(false);

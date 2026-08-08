@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useRef, useMemo, useEffect } from "react";
-import { FlaskConical, Code } from "lucide-react";
+import { FlaskConical, Code, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { HttpMethod } from "@/lib/types";
 import type { AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import {
@@ -63,6 +64,63 @@ interface RequestPanelProps {
   formDataKeySuggestions?: AutocompleteGroup[];
 }
 
+/** Common HTTP header names for autocomplete suggestions (static, module-scoped). */
+const COMMON_HEADER_NAMES: string[] = [
+  "Accept",
+  "Accept-Encoding",
+  "Accept-Language",
+  "Authorization",
+  "Cache-Control",
+  "Content-Disposition",
+  "Content-Encoding",
+  "Content-Language",
+  "Content-Length",
+  "Content-Type",
+  "Cookie",
+  "DNT",
+  "ETag",
+  "Expect",
+  "Forwarded",
+  "From",
+  "Host",
+  "If-Match",
+  "If-Modified-Since",
+  "If-None-Match",
+  "If-Range",
+  "If-Unmodified-Since",
+  "Last-Modified",
+  "Link",
+  "Location",
+  "Max-Forwards",
+  "Origin",
+  "Pragma",
+  "Proxy-Authorization",
+  "Range",
+  "Referer",
+  "Retry-After",
+  "Server",
+  "Set-Cookie",
+  "TE",
+  "Trailer",
+  "Transfer-Encoding",
+  "Upgrade",
+  "User-Agent",
+  "Vary",
+  "Via",
+  "WWW-Authenticate",
+  "X-API-Key",
+  "X-Content-Type-Options",
+  "X-Forwarded-For",
+  "X-Forwarded-Host",
+  "X-Forwarded-Proto",
+  "X-Frame-Options",
+  "X-RateLimit-Limit",
+  "X-RateLimit-Remaining",
+  "X-RateLimit-Reset",
+  "X-Request-ID",
+  "X-XSS-Protection",
+];
+
 export function RequestPanel({
   method,
   url,
@@ -97,7 +155,8 @@ export function RequestPanel({
   environmentVariableNames,
   queryParamKeySuggestions,
   formDataKeySuggestions,
-}: RequestPanelProps) {
+  onExport,
+}: RequestPanelProps & { onExport?: () => Promise<void> }) {
   // Sync path params when URL changes — auto-add/remove :param patterns
   // Uses a ref to track the last synced URL so we don't loop.
   const lastSyncedUrlRef = useRef(url);
@@ -214,62 +273,6 @@ export function RequestPanel({
   }, [environmentVariableNames, variableNames, historyUrlsProp]);
 
   // ── Autocomplete suggestions for KeyValueEditor ──────────────────────────
-  const COMMON_HEADER_NAMES = [
-    "Accept",
-    "Accept-Encoding",
-    "Accept-Language",
-    "Access-Control-Allow-Origin",
-    "Authorization",
-    "Cache-Control",
-    "Connection",
-    "Content-Disposition",
-    "Content-Encoding",
-    "Content-Length",
-    "Content-Type",
-    "Cookie",
-    "Cross-Origin-Resource-Policy",
-    "Date",
-    "ETag",
-    "Expect",
-    "Expires",
-    "Host",
-    "If-Match",
-    "If-Modified-Since",
-    "If-None-Match",
-    "If-Range",
-    "If-Unmodified-Since",
-    "Last-Modified",
-    "Link",
-    "Location",
-    "Origin",
-    "Pragma",
-    "Range",
-    "Referer",
-    "Retry-After",
-    "Sec-Fetch-Dest",
-    "Sec-Fetch-Mode",
-    "Sec-Fetch-Site",
-    "Sec-Fetch-User",
-    "Sec-WebSocket-Accept",
-    "Sec-WebSocket-Key",
-    "Sec-WebSocket-Version",
-    "Server",
-    "Set-Cookie",
-    "Strict-Transport-Security",
-    "Transfer-Encoding",
-    "Upgrade",
-    "User-Agent",
-    "Vary",
-    "Via",
-    "WWW-Authenticate",
-    "X-API-Key",
-    "X-CSRF-Token",
-    "X-Forwarded-For",
-    "X-Forwarded-Proto",
-    "X-Request-ID",
-    "X-Requested-With",
-  ];
-
   const headerKeySuggestions = useMemo((): AutocompleteGroup[] => {
     return [
       {
@@ -325,6 +328,21 @@ export function RequestPanel({
           urlAutocompleteGroups={urlAutocompleteGroups}
           hasUrl={hasUrl}
         />
+        {onExport && (
+          <div className="mt-1 flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onExport}
+              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              title="Export active request"
+            >
+              <Download className="size-3" />
+              Export
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Accordion — collapsed sections, expand to configure */}

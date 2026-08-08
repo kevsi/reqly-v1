@@ -71,7 +71,10 @@ export function evaluateAssertions(
     if (a.type === "schema") {
       result = evaluateSchemaAssertion(a.schema, ctx.body);
     } else {
-      result = evaluateStructuredAssertion(normalize(a) as any, ctx);
+      result = evaluateStructuredAssertion(
+        normalize(a) as unknown as Parameters<typeof evaluateStructuredAssertion>[0],
+        ctx,
+      );
     }
 
     // Preserve the original assertion so callers (e.g. toTestResults)

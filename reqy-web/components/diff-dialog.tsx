@@ -1,19 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import {
-  GitCompare,
-  Copy,
-  Check,
-  ArrowLeftRight,
-  LayoutPanelLeft,
-  Minus,
-  Plus,
-  Search,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { GitCompare, ArrowLeftRight, LayoutPanelLeft, Search } from "lucide-react";
 import { getStatusBadgeClass } from "@/lib/http-status-colors";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,

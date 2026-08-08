@@ -11,12 +11,12 @@ import { GitLabImportModal } from "@/components/gitlab-import-modal";
 import { OpenApiExportModal } from "@/components/openapi-export-modal";
 import { Button } from "@/components/ui/button";
 import { useRequestStore, type Collection, type RequestItem } from "@/hooks/use-request-store";
-import { cn } from "@/lib/utils";
+
 import { useRouter } from "next/navigation";
 import { setPendingCollectionRequest, type PendingCollectionRequest } from "@/lib/request-bridge";
 import { resolveUniqueCollectionName } from "@/lib/import-schemas";
 import { generateOpenApiSpec } from "@/lib/openapi-export";
-import { postmanImportResponseSchema } from "@/lib/import-schemas";
+
 import { toast } from "@/hooks/use-toast";
 import type { HttpMethod } from "@/lib/types";
 import { useState, useEffect } from "react";
@@ -89,7 +89,7 @@ export default function CollectionsPage() {
   const handleImportPostmanCollection = (collection: {
     name: string;
     description?: string;
-    routes?: any[];
+    routes?: unknown[];
     requests?: Partial<RequestItem>[];
   }) => {
     const uniqueName = resolveUniqueCollectionName(

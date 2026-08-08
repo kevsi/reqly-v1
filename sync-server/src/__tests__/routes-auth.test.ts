@@ -23,9 +23,8 @@ async function signupAndVerify(
   name?: string,
 ) {
   await app.request("/api/auth/signup", SIGNUP(email, password, name));
-  const row = db
-    .prepare("SELECT id, verification_code FROM users WHERE email = ?")
-    .get(email) as { id: string; verification_code: string } | undefined;
+  const row = db.prepare("SELECT id, verification_code FROM users WHERE email = ?").get(email) as
+    { id: string; verification_code: string } | undefined;
   if (!row?.verification_code) throw new Error("No verification code for " + email);
   return await app.request("/api/auth/verify", {
     method: "POST",
@@ -62,9 +61,8 @@ describe("routes/auth — signup", () => {
     expect(body.message).toContain("vérification");
     const setCookie = res.headers.get("set-cookie") ?? "";
     expect(setCookie).not.toContain("auth_session=");
-    const row = db
-      .prepare("SELECT password_hash FROM users WHERE id = ?")
-      .get(body.userId) as { password_hash: string } | undefined;
+    const row = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(body.userId) as
+      { password_hash: string } | undefined;
     expect(row?.password_hash).toBeTruthy();
     expect(row?.password_hash).not.toContain("supersecret");
     expect(row?.password_hash).toContain(":");
@@ -100,6 +98,39 @@ describe("routes/auth — signup", () => {
     expect(row.password_hash).toBeTruthy();
     expect(row.password_hash).not.toContain("supersecret");
     expect(row.password_hash).toContain(":");
+  });
+});
+
+describe("routes/auth — verify (no bypass)", () => {
+  it("rejects a wrong code even for an already-verified account (no session minted)", async () => {
+    const app = buildApp();
+    await signupAndVerify(app, "mallory@example.com", "supersecret");
+    const res = await app.request("/api/auth/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "mallory@example.com", code: "000000" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/code|vérification/i);
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).not.toContain("auth_session=");
+  });
+
+  it("still issues a session when the code is correct", async () => {
+    const app = buildApp();
+    await app.request("/api/auth/signup", SIGNUP("nina@example.com", "supersecret"));
+    const row = db
+      .prepare("SELECT verification_code FROM users WHERE email = ?")
+      .get("nina@example.com") as { verification_code: string };
+    const res = await app.request("/api/auth/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "nina@example.com", code: row.verification_code }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string };
+    expect(body.token).toContain(".");
   });
 });
 

@@ -4,9 +4,15 @@ import { createRateLimiter } from "@/lib/rate-limiter";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
+const TRUSTED_PROXY = (): boolean => process.env.TRUSTED_PROXY === "true";
+
 function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  if (TRUSTED_PROXY()) {
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+    return ip;
+  }
+  return "unknown";
 }
 
 const GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize";
@@ -23,8 +29,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message: "GITHUB_OAUTH_CLIENT_ID manquant" }, { status: 500 });
   }
 
-  const origin = new URL(request.url).origin;
-  const redirectUri = `${origin}/api/github-auth/callback`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    return NextResponse.json({ message: "NEXT_PUBLIC_APP_URL is not configured" }, { status: 500 });
+  }
+  const redirectUri = `${appUrl.replace(/\/$/, "")}/api/github-auth/callback`;
   const state = crypto.randomUUID();
 
   const githubUrl = new URL(GITHUB_AUTH_URL);

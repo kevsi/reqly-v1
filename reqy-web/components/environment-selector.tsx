@@ -46,15 +46,14 @@ export function EnvironmentSelector() {
   const environments = useRequestStore((s) => s.environments);
   const activeEnvironmentId = useRequestStore((s) => s.activeEnvironmentId);
   // Action refs are stable; group under useShallow.
-  const { setActiveEnvironment, addEnvironment, updateEnvironment, deleteEnvironment } =
-    useRequestStore(
-      useShallow((s) => ({
-        setActiveEnvironment: s.setActiveEnvironment,
-        addEnvironment: s.addEnvironment,
-        updateEnvironment: s.updateEnvironment,
-        deleteEnvironment: s.deleteEnvironment,
-      })),
-    );
+  const { setActiveEnvironment, addEnvironment } = useRequestStore(
+    useShallow((s) => ({
+      setActiveEnvironment: s.setActiveEnvironment,
+      addEnvironment: s.addEnvironment,
+      updateEnvironment: s.updateEnvironment,
+      deleteEnvironment: s.deleteEnvironment,
+    })),
+  );
 
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [editingEnvId, setEditingEnvId] = useState<string | null>(null);
@@ -191,7 +190,6 @@ function ManageEnvironmentsDialog({
     const vars = selectedEnv.variables
       .filter((v) => v.enabled && v.key.trim())
       .map((v) => v.key.trim());
-    const otherVars = vars.length > 0 ? [{ key: "self", vars }] : [];
     // Also include env vars from themselves for {{VAR}} pattern
     const items = vars.map((key) => ({
       id: `eval-${key}`,

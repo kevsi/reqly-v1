@@ -18,6 +18,10 @@ import type { HistoryItem } from "@/hooks/use-request-store";
 
 export function useRequestAiEngine(
   state: RequestTabsState,
+  // Pont volontairement non typé : le callback est construit par
+  // useRequestExecutionCore avec des types stricts incompatibles avec les
+  // shapes lâches passées ici (voir use-request-collection-runner).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   buildTabFromRequest: (request: any) => Partial<RequestTab>,
 ) {
   const { activeTab, activeTabId, setTabs, updateTab, setGeneratingFollowUpId, setHistoryOpen } =

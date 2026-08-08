@@ -7,7 +7,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // Provide a stub `window` so embedding-cache.ts's browser guard passes in Node
 Object.defineProperty(globalThis, "window", { value: globalThis, writable: true });
 
-const store = new Map<string, { key: string; embedding: number[]; model: string; createdAt: number }>();
+const store = new Map<
+  string,
+  { key: string; embedding: number[]; model: string; createdAt: number }
+>();
 
 vi.mock("idb", () => {
   function fakeTx() {
@@ -15,7 +18,7 @@ vi.mock("idb", () => {
     return {
       objectStore: () => ({
         get: (key: string) => Promise.resolve(store.get(key)),
-        put: (value: any) => {
+        put: (value) => {
           store.set(value.key, value);
           return Promise.resolve();
         },
@@ -26,16 +29,16 @@ vi.mock("idb", () => {
   function fakeDb() {
     return {
       get: (s: string, key: string) => Promise.resolve(store.get(key)),
-      put: (s: string, value: any) => {
+      put: (s: string, value: unknown) => {
         store.set(value.key, value);
         return Promise.resolve();
       },
-      count: (s: string) => Promise.resolve(store.size),
-      clear: (s: string) => {
+      count: (_s: string) => Promise.resolve(store.size),
+      clear: (_s: string) => {
         store.clear();
         return Promise.resolve();
       },
-      transaction: (s: string, _mode: string) => fakeTx(),
+      transaction: (_s: string, _mode: string) => fakeTx(),
     };
   }
   return {
@@ -104,9 +107,9 @@ describe("embedding-cache", () => {
   });
 
   it("batch set throws on length mismatch", async () => {
-    await expect(
-      setCachedEmbeddings(["a", "b"], [[0.1]], MODEL)
-    ).rejects.toThrow("length mismatch");
+    await expect(setCachedEmbeddings(["a", "b"], [[0.1]], MODEL)).rejects.toThrow(
+      "length mismatch",
+    );
   });
 
   it("clearCache empties the store", async () => {

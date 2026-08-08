@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useMemo } from "react";
 import { Send, Square, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+
 import { Button } from "@/components/ui/button";
 import { AutocompleteInput, type AutocompleteGroup } from "@/components/ui/autocomplete-input";
 

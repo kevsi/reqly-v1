@@ -15,16 +15,6 @@ describe("useGit hook", () => {
     vi.resetAllMocks();
   });
 
-  it("should call git_branch_list on mount", async () => {
-    // Le hook appelle checkInitialized → git_branch_list
-    // On mocke une erreur pour simuler "pas de repo"
-    vi.mocked(invoke).mockRejectedValueOnce(new Error("No repo"));
-
-    // On ne peut pas render le hook facilement sans React Testing Library
-    // Ce test est un placeholder qui sera complété
-    expect(true).toBe(true);
-  });
-
   it("git_branch_list returns expected shape", async () => {
     vi.mocked(invoke).mockResolvedValueOnce([
       { name: "main", isCurrent: true, oid: "abc123", upstream: null, ahead: 0, behind: 0 },

@@ -4,12 +4,7 @@
  */
 
 import type { DetectedRoute } from "@/lib/detect-shared-types";
-import {
-  makeRoute,
-  normalizePath,
-  stripLanguageCommentsAndStrings,
-} from "@/lib/detect-shared-types";
-import { detectAuthByStatusSignal } from "@/lib/detect-shared-handler";
+import { makeRoute, normalizePath } from "@/lib/detect-shared-types";
 
 // ── Local addRoute helper ──────────────────────────────────────────────────
 

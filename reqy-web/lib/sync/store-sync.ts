@@ -45,7 +45,11 @@ export function computePushChanges(
     entityType: "collection" | "environment" | "folder",
     prevList: Array<{ id: string; updatedAt: number; updatedBy?: string }>,
     nextList: Array<{ id: string; updatedAt: number; updatedBy?: string }>,
-    getData: (e: any) => Collection | Environment | CollectionFolder,
+    getData: (e: {
+      id: string;
+      updatedAt: number;
+      updatedBy?: string;
+    }) => Collection | Environment | CollectionFolder,
   ) => {
     const prevMap = new Map(prevList.map((e) => [e.id, e]));
     const nextIds = new Set(nextList.map((e) => e.id));
@@ -162,19 +166,26 @@ export function mergeChangesIntoStore(store: RequestStore, changes: SyncChange[]
  * decoupled from the Zustand store (the store provides `mergeRemote`,
  * which calls back into `mergeChangesIntoStore` and persists locally).
  *
- * @returns the number of changes that were applied.
+ * @returns the number of changes applied and the server's clock at poll time.
  */
 export async function pullAndMerge(
   workspaceId: string,
   since: number,
   opts: { token?: string; apply?: (changes: SyncChange[]) => void } = {},
-): Promise<{ applied: number }> {
+): Promise<{ applied: number; serverTime?: number }> {
   const changes: SyncChange[] = [];
-  for await (const c of pollAllSyncChanges({ workspaceId, since }, { token: opts.token })) {
+  let serverTime: number | undefined;
+  for await (const c of pollAllSyncChanges(
+    { workspaceId, since },
+    { token: opts.token },
+    (page) => {
+      serverTime = page.serverTime;
+    },
+  )) {
     changes.push(c as SyncChange);
   }
   if (changes.length > 0 && opts.apply) {
     opts.apply(changes);
   }
-  return { applied: changes.length };
+  return { applied: changes.length, serverTime };
 }

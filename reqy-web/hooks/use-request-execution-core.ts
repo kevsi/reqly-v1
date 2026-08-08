@@ -1,27 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { interpolate, replaceLocalhostPort, hasUnresolvedPlaceholders } from "@/lib/utils";
 import { runScript } from "@/lib/test-runner/scripts";
 import type { RunnerContext } from "@/lib/test-runner/types";
 import { toast } from "@/hooks/use-toast";
 import { headersArrayToRecord, recordToHeaderArray } from "@/lib/request-tab-utils";
-import {
-  useRequestStore,
-  type Collection,
-  type HistoryItem,
-  type RequestItem,
-} from "@/hooks/use-request-store";
+import { useRequestStore, type HistoryItem, type RequestItem } from "@/hooks/use-request-store";
 import { type HttpMethod, type RequestTab, executeRequest } from "@/lib/request-executor";
 import { computeDynamicVars, getUnresolvedWarnings } from "@/lib/variable-mapping";
 import type { RequestTabsState } from "@/hooks/use-request-tabs-state";
 import type { PendingCollectionRequest } from "@/lib/request-bridge";
 
 export function useRequestExecutionCore(state: RequestTabsState) {
-  const { tabs, setTabs, activeTabId, nativeMode, setLoadingCount, updateTab } = state;
+  const { nativeMode, setLoadingCount, updateTab } = state;
 
   const {
-    collections,
     environments,
     activeEnvironmentId,
     projects,
@@ -218,7 +212,15 @@ export function useRequestExecutionCore(state: RequestTabsState) {
         if (showLoading) setLoadingCount((count) => Math.max(0, count - 1));
       }
     },
-    [allVars, activeProjectPort, activeProject, nativeMode, activeWorkspaceId, setLoadingCount],
+    [
+      allVars,
+      activeProjectPort,
+      activeProject,
+      nativeMode,
+      activeWorkspaceId,
+      setLoadingCount,
+      notifyUnresolvedVariables,
+    ],
   );
 
   const sendSpecificRequest = useCallback(
@@ -290,16 +292,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
         return null;
       }
     },
-    [
-      allVars,
-      notifyUnresolvedVariables,
-      executeRequestWrapper,
-      updateTab,
-      setCurrentRequest,
-      setLastResponse,
-      addHistoryAndNotify,
-      toast,
-    ],
+    [executeRequestWrapper, updateTab, setCurrentRequest, setLastResponse, addHistoryAndNotify],
   );
 
   return {

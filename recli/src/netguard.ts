@@ -140,7 +140,8 @@ function isPrivateIpv6(hostname: string): boolean {
 }
 
 export function isPrivateIp(hostname: string): boolean {
-  const h = hostname.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
+  // Strip IPv6 brackets and trailing dots ("127.0.0.1." == 127.0.0.1).
+  const h = hostname.replace(/^\[/, "").replace(/\]$/, "").replace(/\.$/, "").toLowerCase();
   if (net.isIP(h) === 6 || h.includes(":")) return isPrivateIpv6(h);
   return isPrivateIpv4(h);
 }
@@ -177,7 +178,14 @@ export async function isUrlAllowed(
   // threat model demands it.
   if (net.isIP(hostname) === 0) {
     try {
-      const addrs = await dns.promises.lookup(hostname, { all: true });
+      // Wrap in a timeout: dns.promises.lookup has no AbortSignal and a
+      // slow/unresponsive resolver must not hang the SSRF check forever.
+      const addrs = await Promise.race([
+        dns.promises.lookup(hostname, { all: true }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DNS lookup timed out")), 5000),
+        ),
+      ]);
       for (const a of addrs) {
         if (isPrivateIp(a.address)) {
           return {

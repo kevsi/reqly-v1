@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { connectSyncWs, type SyncWsOptions } from "@/lib/sync/sync-ws";
+import { connectSyncWs } from "@/lib/sync/sync-ws";
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket
 // ---------------------------------------------------------------------------
-type WsListener = ((event: any) => void) | null;
+type WsListener = ((event) => void) | null;
 
 interface FakeWebSocket {
   onopen: WsListener;

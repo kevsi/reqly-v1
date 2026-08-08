@@ -46,7 +46,6 @@ export function RequestPanelUrlBar({
   queryParams,
   headers,
   body,
-  bodyType,
   authType,
   authToken,
   onMethodChange,
@@ -200,7 +199,7 @@ ${bodyPart}})
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0 text-muted-foreground/50 hover:text-foreground"
+            className="h-8 w-8 sm:h-7 sm:w-7 p-0 text-muted-foreground/50 hover:text-foreground"
             onClick={() => {
               setCurlImportOpen(!curlImportOpen);
               setCurlInput("");
@@ -210,7 +209,7 @@ ${bodyPart}})
             <Terminal className="size-3.5" />
           </Button>
           {curlImportOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 w-[420px] rounded-lg border border-border bg-popover shadow-xl animate-in fade-in-0 zoom-in-95">
+            <div className="absolute right-0 top-full mt-1 z-50 w-[calc(100vw-2rem)] max-w-[420px] rounded-lg border border-border bg-popover shadow-xl animate-in fade-in-0 zoom-in-95">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/40">
                 <span className="text-xs font-semibold text-muted-foreground">
                   Coller une commande cURL
@@ -302,7 +301,7 @@ ${bodyPart}})
           <div className="relative">
             <select
               aria-label="Insert variable"
-              className="h-7 rounded-md border border-input/50 bg-muted/30 px-1.5 text-[10px] font-mono text-muted-foreground cursor-pointer outline-none hover:border-muted-foreground/30 appearance-none"
+              className="h-8 sm:h-7 rounded-md border border-input/50 bg-muted/30 px-1.5 text-[10px] font-mono text-muted-foreground cursor-pointer outline-none hover:border-muted-foreground/30 appearance-none"
               value=""
               onChange={(e) => {
                 const name = e.target.value;

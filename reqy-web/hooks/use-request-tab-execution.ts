@@ -1,26 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import type { PendingCollectionRequest } from "@/lib/request-bridge";
 import {
   getAndClearPendingCollectionRequest,
   peekPendingCollectionRequest,
   clearPendingCollectionRequest,
 } from "@/lib/request-bridge";
-import { resolveMappingValue } from "@/lib/variable-mapping";
+
 import { toast } from "@/hooks/use-toast";
-import { fireSystemNotification, pushInAppNotification } from "@/lib/system-notifications";
-import { isSourcePathSyntaxValid } from "@/lib/variable-path";
+import { pushInAppNotification } from "@/lib/system-notifications";
+
 import { invokeTauriFetch, isTauriAvailable } from "@/lib/tauri";
 import { replayPending, type QueuedRequest } from "@/lib/offline/queue";
-import { persistence } from "@/lib/persistence";
-import {
-  useRequestStore,
-  type Collection,
-  type HistoryItem,
-  type RequestItem,
-} from "@/hooks/use-request-store";
-import { type HttpMethod, type RequestTab } from "@/lib/request-executor";
+
+import { useRequestStore, type HistoryItem, type RequestItem } from "@/hooks/use-request-store";
+import { type RequestTab } from "@/lib/request-executor";
 import {
   createEmptyTab,
   generateRequestTabId,
@@ -39,7 +34,6 @@ export function useRequestTabExecution(state: RequestTabsState) {
     setActiveTabId,
     activeTab,
     isTabsLoaded,
-    setLoadingCount,
     flashSavedIndicator,
     saveModalOpen,
     setSaveModalOpen,
@@ -47,48 +41,21 @@ export function useRequestTabExecution(state: RequestTabsState) {
     setSaveModalName,
     saveModalCollectionId,
     setSaveModalCollectionId,
-    setHistoryOpen,
-    setGeneratingFollowUpId,
     collectionRequestStatus,
     setCollectionRequestStatus,
     collectionRunLogs,
-    setCollectionRunLogs,
     batchRunCollection,
     setBatchRunCollection,
-    updateTab,
   } = state;
 
-  const {
-    collections,
-    environments,
-    activeEnvironmentId,
-    projects,
-    selectedProjectId,
-    history,
-    addHistoryAndNotify,
-    addRequestToCollection,
-    updateRequestById,
-    variableMappings,
-    setCurrentRequest,
-    setLastResponse,
-    activeWorkspaceId,
-  } = useRequestStore();
+  const { collections, history, addRequestToCollection, updateRequestById, variableMappings } =
+    useRequestStore();
 
-  const {
-    allVars,
-    buildTabFromRequest,
-    executeRequestWrapper,
-    sendSpecificRequest,
-    notifyUnresolvedVariables,
-  } = useRequestExecutionCore(state);
+  const { buildTabFromRequest, executeRequestWrapper, sendSpecificRequest } =
+    useRequestExecutionCore(state);
 
-  const {
-    syncActiveTabToAiStore,
-    aiEngine,
-    handleAnalyzeRequest,
-    handleGenerateTests,
-    handleGenerateFollowUp,
-  } = useRequestAiEngine(state, buildTabFromRequest);
+  const { aiEngine, handleAnalyzeRequest, handleGenerateTests, handleGenerateFollowUp } =
+    useRequestAiEngine(state, buildTabFromRequest);
 
   const { runCollectionBackground, runCollection, handleBatchRunRequest } =
     useRequestCollectionRunner(
@@ -171,8 +138,12 @@ export function useRequestTabExecution(state: RequestTabsState) {
     let targetCollectionId = saveModalCollectionId;
 
     if (saveModalCollectionId === "none") {
-      const brouillonsCollection = collections.find((c) => c.name === "Brouillons");
-      if (brouillonsCollection) targetCollectionId = brouillonsCollection.id;
+      // Fallback to "Drafts" collection (English canonical name used by the store).
+      // Legacy: also accept "Brouillons" in case data was persisted before the rename.
+      const draftsCollection = collections.find(
+        (c) => c.name === "Drafts" || c.name === "Brouillons",
+      );
+      if (draftsCollection) targetCollectionId = draftsCollection.id;
     }
 
     if (targetCollectionId !== "none") {
@@ -273,7 +244,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
         variant: "destructive",
       });
     }
-  }, [tabs, activeTabId, sendSpecificRequest, toast]);
+  }, [tabs, activeTabId, sendSpecificRequest]);
 
   const sendAndSave = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -289,7 +260,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
         variant: "destructive",
       });
     }
-  }, [tabs, activeTabId, saveActiveTab, sendSpecificRequest, toast]);
+  }, [tabs, activeTabId, saveActiveTab, sendSpecificRequest]);
 
   const sendAndDownload = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -314,7 +285,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
         variant: "destructive",
       });
     }
-  }, [tabs, activeTabId, sendSpecificRequest, toast]);
+  }, [tabs, activeTabId, sendSpecificRequest]);
 
   const loadRequestIntoActiveTab = useCallback(
     (request: RequestItem | HistoryItem) => {
@@ -339,7 +310,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
         });
       }
     },
-    [tabs, activeTabId, buildTabFromRequest, sendSpecificRequest, setTabs, toast],
+    [tabs, activeTabId, buildTabFromRequest, sendSpecificRequest, setTabs],
   );
 
   useEffect(() => {
@@ -478,7 +449,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
 
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [toast]);
+  }, []);
 
   return {
     aiEngine,

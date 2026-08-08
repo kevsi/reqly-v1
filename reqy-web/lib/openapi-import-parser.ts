@@ -12,7 +12,6 @@ import type {
   OpenApiRequestBody,
 } from "@/lib/openapi-import-types";
 import {
-  derefSchema,
   extractOperationParams,
   extractRequestBody,
   extractSecurity,
@@ -232,7 +231,7 @@ function parseSwagger2(doc: Record<string, unknown>): OpenApiParseSuccess {
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
-function parseToJson(contents: string, fileName?: string): unknown {
+function parseToJson(contents: string, _fileName?: string): unknown {
   // Try JSON first
   try {
     return JSON.parse(contents);

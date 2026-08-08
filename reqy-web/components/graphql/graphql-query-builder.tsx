@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { Plus, RefreshCw, ChevronRight, ChevronDown, Info, X } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Plus, ChevronRight, ChevronDown, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { buildQueryFromSelections, type SelectionNode } from "@/lib/graphql/query-builder";

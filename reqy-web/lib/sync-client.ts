@@ -77,10 +77,12 @@ export async function pollSyncChanges(
 export async function* pollAllSyncChanges(
   options: Omit<SyncPollOptions, "cursor">,
   config: SyncClientConfig = {},
+  onPage?: (page: SyncPollPage) => void,
 ): AsyncGenerator<SyncPollPage["changes"][number], void, unknown> {
   let cursor: string | null | undefined = undefined;
   do {
     const page = await pollSyncChanges({ ...options, cursor }, config);
+    onPage?.(page);
     for (const change of page.changes) {
       yield change;
     }

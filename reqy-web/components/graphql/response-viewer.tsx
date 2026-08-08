@@ -67,7 +67,6 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
   const isGraphQLError =
     status !== undefined && status >= 200 && status < 300 && graphqlErrors.length > 0;
   const isHttpError = status !== undefined && status >= 400;
-  const hasErrors = isGraphQLError || isHttpError || !!error;
   const isEmpty =
     data === undefined &&
     errors === undefined &&

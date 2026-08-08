@@ -25,8 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { methodSubtle, methodBadge, methodBg } from "@/lib/http-method-colors";
-import { getStatusBadgeClass, getStatusTextClass, getStatusLabel } from "@/lib/http-status-colors";
+import { methodSubtle } from "@/lib/http-method-colors";
+import { getStatusTextClass } from "@/lib/http-status-colors";
 import type { HistoryItem, HttpMethod } from "@/hooks/use-request-store";
 
 interface HistoryPanelProps {

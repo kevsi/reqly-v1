@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Bot,
-  UserRound,
-  Copy,
-  Check,
-  RotateCcw,
-  SquarePen,
-  Gauge,
-} from "lucide-react";
+import { Bot, UserRound, Copy, Check, RotateCcw, SquarePen, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -51,6 +43,9 @@ export function AiChatMessage({
 }: AiChatMessageProps) {
   const isAssistant = message.role === "assistant";
   const usageLabel = isAssistant && message.usage ? formatTokens(message.usage) : "";
+  const isLive =
+    isAssistant &&
+    (message.steps ?? []).some((s) => s.status === "in_progress" || s.status === "pending");
 
   return (
     <div className="group relative">
@@ -95,21 +90,34 @@ export function AiChatMessage({
           className={cn(
             "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ring-1",
             isAssistant
-              ? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary ring-primary/20"
+              ? isLive
+                ? "bg-primary text-primary-foreground ring-primary/40 shadow-[0_0_12px] shadow-primary/40"
+                : "bg-gradient-to-br from-primary/20 to-primary/10 text-primary ring-primary/20"
               : "bg-muted text-muted-foreground ring-border/70",
           )}
           aria-hidden
         >
-          {isAssistant ? <Bot className="size-3.5" /> : <UserRound className="size-3.5" />}
+          {/* Pendant qu'un step est en cours, on affiche 3 points animés sur le robot */}
+          {isLive ? (
+            <span className="flex items-center gap-0.5">
+              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+            </span>
+          ) : isAssistant ? (
+            <Bot className="size-3.5" />
+          ) : (
+            <UserRound className="size-3.5" />
+          )}
         </div>
 
         {/* Bulle de message */}
         <div
           className={cn(
-            "rounded-xl px-3 py-2 text-sm leading-relaxed",
+            "max-w-[85%] text-sm leading-relaxed",
             message.role === "user"
-              ? "whitespace-pre-wrap bg-primary/10 text-foreground ring-1 ring-primary/10"
-              : "bg-muted/30 text-foreground border border-border/50",
+              ? "rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-primary-foreground shadow-[0_2px_8px_-2px] shadow-primary/40"
+              : "rounded-2xl rounded-tl-md border border-border/60 bg-card/80 px-3.5 py-2 text-foreground",
             isAssistant && !message.content && message.steps && message.steps.length > 0
               ? "min-h-[2px] py-0.5 border-dashed border-primary/30"
               : "",

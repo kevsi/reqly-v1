@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { cn, downloadJson } from "@/lib/utils";
-import { methodBadge } from "@/lib/http-method-colors";
+import { cn } from "@/lib/utils";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Collection, CollectionFolder, RequestItem } from "@/hooks/request-types";
 import { collectionColors, collectionIcons, safeColor } from "@/lib/collection-utils";
-import type { PendingDelete } from "@/components/collections-delete-dialog";
+
 import { DraggableRequestRow } from "@/components/drag-and-drop/draggable-request-row";
 import { collectionDropId, requestId, folderDropId } from "@/hooks/use-request-dnd";
 
@@ -63,6 +63,11 @@ interface CollectionRowProps {
     requestId: string,
     folderId: string | null,
   ) => void;
+  // Folder CRUD operations
+  onAddFolder?: (collectionId: string, name: string, parentId: string | null) => string;
+  onRenameFolder?: (collectionId: string, folderId: string, name: string) => void;
+  onDeleteFolder?: (collectionId: string, folderId: string) => void;
+  onMoveFolder?: (collectionId: string, folderId: string, newParentId: string | null) => void;
 }
 
 function FolderDropZone({
@@ -103,7 +108,6 @@ export function CollectionRow({
   selectedRequestIds,
   onToggleExpand,
   onToggleSelect,
-  onToggleSelectRequest,
   onSelectRequest,
   onSelectAndSendRequest,
   onRenameStart,
@@ -117,7 +121,11 @@ export function CollectionRow({
   onConfirmDelete,
   onDeleteCollection,
   onRemoveRequest,
-  onMoveRequestToFolder,
+  onMoveRequestToFolder: _onMoveRequestToFolder,
+  onAddFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onMoveFolder: _onMoveFolder,
 }: CollectionRowProps) {
   // ── Droppable for cross-collection moves ──
   const { setNodeRef: dropRef, isOver } = useDroppable({
@@ -165,6 +173,41 @@ export function CollectionRow({
             <span className="text-[10px] font-mono text-muted-foreground/40">
               ({folderReqs.length})
             </span>
+            {/* Folder actions */}
+            <div className="ml-auto flex items-center gap-0.5">
+              {onRenameFolder && (
+                <button
+                  type="button"
+                  title="Rename folder"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newName = window.prompt("New folder name:", folder.name);
+                    if (newName && newName.trim()) {
+                      onRenameFolder(collection.id, folder.id, newName.trim());
+                    }
+                  }}
+                  className="size-5 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent"
+                >
+                  <Edit2 className="size-3" />
+                </button>
+              )}
+              {onDeleteFolder && (
+                <button
+                  type="button"
+                  title="Delete folder"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onConfirmDelete(
+                      `Delete folder "${folder.name}"? Requests will move to the collection root.`,
+                      () => onDeleteFolder(collection.id, folder.id),
+                    );
+                  }}
+                  className="size-5 flex items-center justify-center rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              )}
+            </div>
           </div>
           {folderReqs.map((req) => (
             <DraggableRequestRow
@@ -182,7 +225,16 @@ export function CollectionRow({
     }
 
     return result;
-  }, [collection, selectedRequestIds, onSelectRequest, onSelectAndSendRequest, onRemoveRequest]);
+  }, [
+    collection,
+    selectedRequestIds,
+    onSelectRequest,
+    onSelectAndSendRequest,
+    onRemoveRequest,
+    onConfirmDelete,
+    onDeleteFolder,
+    onRenameFolder,
+  ]);
 
   return (
     <div
@@ -273,6 +325,18 @@ export function CollectionRow({
               <DropdownMenuItem onClick={() => onAddRequest(collection.id)}>
                 <Plus className="mr-2 size-3.5" /> Add request
               </DropdownMenuItem>
+              {onAddFolder && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    const name = window.prompt("Folder name:");
+                    if (name && name.trim()) {
+                      onAddFolder(collection.id, name.trim(), null);
+                    }
+                  }}
+                >
+                  <Folder className="mr-2 size-3.5" /> Add folder
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => onRenameStart(collection.id, collection.name)}>
                 <Edit2 className="mr-2 size-3.5" /> Rename
               </DropdownMenuItem>

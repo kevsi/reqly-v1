@@ -4,15 +4,25 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
 import { WebSocketServer } from "ws";
 import workspaces from "./routes/workspaces.js";
 import memberships from "./routes/memberships.js";
 import auth from "./routes/auth.js";
 import sync from "./routes/sync.js";
+import hooklet from "./routes/hooklet.js";
+import hookletHooks from "./routes/hooklet-hooks.js";
 import { handleWsUpgradeFactory } from "./routes/ws.js";
 import { closeAll } from "./ws-hub.js";
 import { parseOrigins } from "./cors.js";
-import { apiLimiter, syncLimiter, wsLimiter, rateLimitMiddleware } from "./rate-limiter.js";
+import {
+  apiLimiter,
+  authLimiter,
+  syncLimiter,
+  wsLimiter,
+  hookLimiter,
+  rateLimitMiddleware,
+} from "./rate-limiter.js";
 
 if (process.env.AUTH_BYPASS === "true" && process.env.NODE_ENV === "production") {
   console.error("[reqly-sync] FATAL: AUTH_BYPASS is enabled in production. Refusing to start.");
@@ -44,31 +54,38 @@ app.use(
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// Body size limit: reject bodies larger than 5 MB to prevent resource exhaustion
+// Body size limit: rejects bodies larger than 5 MB. bodyLimit wraps the
+// request stream with a byte counter, so Transfer-Encoding: chunked bodies
+// (no content-length) are capped too — a header-only check is bypassable.
 const MAX_BODY_BYTES = 5_242_880; // 5 MB
-app.use("/api/*", async (c, next) => {
-  const contentLength = c.req.header("content-length");
-  if (contentLength) {
-    const len = Number(contentLength);
-    if (!Number.isNaN(len) && len > MAX_BODY_BYTES) {
-      return c.json({ error: "Request body too large (max 5 MB)" }, 413);
-    }
-  }
-  return next();
-});
+app.use(
+  "/api/*",
+  bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => c.json({ error: "Request body too large (max 5 MB)" }, 413),
+  }),
+);
 
 // Apply API-wide rate limiting (non-sync endpoints)
 app.use("/api/workspaces/*", rateLimitMiddleware(apiLimiter));
 app.use("/api/memberships/*", rateLimitMiddleware(apiLimiter));
-app.use("/api/auth/*", rateLimitMiddleware(apiLimiter));
+
+// Auth endpoints get a dedicated, stricter limiter (login/register brute-force)
+app.use("/api/auth/*", rateLimitMiddleware(authLimiter));
 
 // Sync endpoints have a lower rate limit (bursty polling)
 app.use("/api/sync/*", rateLimitMiddleware(syncLimiter));
+
+// Public webhook ingest is unauthenticated — must be bounded to prevent
+// DB/push exhaustion by anyone who learns a slug.
+app.use("/api/hooks/*", rateLimitMiddleware(hookLimiter));
 
 app.route("/api/workspaces", workspaces);
 app.route("/api/memberships", memberships);
 app.route("/api/auth", auth);
 app.route("/api/sync", sync);
+app.route("/api/hooklet", hooklet);
+app.route("/api/hooks", hookletHooks);
 
 // Global error handler — prevent stack traces leaking to clients
 app.onError((err, c) => {
@@ -91,15 +108,19 @@ const node = serve(
   },
 );
 
-const wss = new WebSocketServer({ noServer: true });
+// maxPayload: the server never reads inbound messages, so a tiny cap prevents
+// any single connection from pinning ~100 MiB (ws default) of receive buffer.
+const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
 
 node.on("upgrade", (req, socket, head) => {
   if (req.url?.startsWith("/api/sync/ws")) {
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-      req.headers["x-real-ip"] ||
-      req.socket?.remoteAddress ||
-      "unknown";
+    const forwardXff = process.env.TRUSTED_PROXY === "true";
+    const ip = forwardXff
+      ? req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        req.headers["x-real-ip"] ||
+        req.socket?.remoteAddress ||
+        "unknown"
+      : (req.socket?.remoteAddress ?? "unknown");
     const result = wsLimiter.check(`ws:${ip}`);
     if (!result.allowed) {
       socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
@@ -116,8 +137,10 @@ function shutdown() {
   console.log("[reqly-sync] shutting down");
   closeAll();
   apiLimiter.dispose();
+  authLimiter.dispose();
   syncLimiter.dispose();
   wsLimiter.dispose();
+  hookLimiter.dispose();
   node.close(() => process.exit(0));
   // Force exit after 5s if close hangs
   setTimeout(() => process.exit(0), 5000).unref();

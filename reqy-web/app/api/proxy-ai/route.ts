@@ -32,6 +32,7 @@ const PROVIDERS_WITH_API_KEY = new Set([
 ]);
 
 const MAX_PREVIOUS_TURNS = 5;
+const MAX_PREVIOUS_TURNS_BYTES = 200 * 1024;
 
 export async function POST(req: NextRequest) {
   const rateKey = getRateLimitKey(req);
@@ -66,6 +67,17 @@ export async function POST(req: NextRequest) {
       400,
     );
   }
+  const totalTurnsBytes = previousTurns.reduce(
+    (sum, turn) => sum + (typeof turn.content === "string" ? turn.content.length : 0),
+    0,
+  );
+  if (totalTurnsBytes > MAX_PREVIOUS_TURNS_BYTES) {
+    return structuredError(
+      `Previous turns exceed maximum size of ${MAX_PREVIOUS_TURNS_BYTES} bytes`,
+      "PREVIOUS_TURNS_TOO_LARGE",
+      413,
+    );
+  }
 
   if (!SUPPORTED_PROVIDERS.has(provider)) {
     return structuredError("Unknown provider", "UNKNOWN_PROVIDER", 400);
@@ -93,26 +105,33 @@ export async function POST(req: NextRequest) {
 
     switch (provider) {
       case "anthropic":
-        response = await handleAnthropic(body as any, extra);
+        response = await handleAnthropic(body as Parameters<typeof handleAnthropic>[0], extra);
         break;
       case "gemini":
-        response = await handleGemini(body as any, extra);
+        response = await handleGemini(body as Parameters<typeof handleGemini>[0], extra);
         break;
       case "deepseek":
-        response = await handleDeepSeek(body as any, extra);
+        response = await handleDeepSeek(body as Parameters<typeof handleDeepSeek>[0], extra);
         break;
       case "ollama":
-        response = await handleOllama(body as any, extra);
+        response = await handleOllama(body as Parameters<typeof handleOllama>[0], extra);
         break;
       // openai, openrouter, opencode-zen, custom, grok
       default:
-        response = await handleOpenAICompat(body as any, extra);
+        response = await handleOpenAICompat(
+          body as Parameters<typeof handleOpenAICompat>[0],
+          extra,
+        );
         break;
     }
 
     clearTimeout(timeout);
     return response;
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    // Never echo the raw error: upstream errors can embed internal hostnames,
+    // paths and connection details. Return a generic message, keep the cause
+    // in the server logs.
+    console.error("[proxy-ai] upstream error:", err);
+    return NextResponse.json({ error: "AI provider request failed" }, { status: 500 });
   }
 }

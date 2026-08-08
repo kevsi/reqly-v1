@@ -5,7 +5,7 @@ import errorDataset from "@/src/ai/__tests__/fixtures/error-dataset.json";
 
 describe("dataset validation", () => {
   it("every fixture produces at least one diagnostic", () => {
-    const fixtures = errorDataset as any[];
+    const fixtures = errorDataset as unknown[];
     let matched = 0;
     const unmatched: string[] = [];
     for (const f of fixtures) {
@@ -22,7 +22,7 @@ describe("dataset validation", () => {
   });
 
   it("precision: when a fixture has an expected ruleId, analyzer must produce it", () => {
-    const fixtures = errorDataset as any[];
+    const fixtures = errorDataset as unknown[];
     const withExpected = fixtures.filter((f) => f.expected?.ruleId);
     let correct = 0;
     const wrong: Array<{ id: string; expected: string; got: string[] }> = [];

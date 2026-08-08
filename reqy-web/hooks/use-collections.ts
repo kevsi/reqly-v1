@@ -9,7 +9,7 @@
  */
 
 import { useRequestStore, requestStore } from "@/hooks/use-request-store";
-import type { Collection, CollectionFolder, RequestItem } from "@/hooks/request-types";
+import type { Collection, RequestItem } from "@/hooks/request-types";
 import { WORKSPACE_PERSONAL_ID } from "@/hooks/store/types";
 
 export interface UseCollectionsOptions {

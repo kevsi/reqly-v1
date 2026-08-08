@@ -15,14 +15,11 @@ import {
   Trash2,
   Database,
   Search,
-  Filter,
   X,
   Network,
   ChevronRight,
   Clock,
-  ArrowUpDown,
   Globe,
-  LayoutGrid,
 } from "lucide-react";
 import { useRequestStore } from "@/hooks/use-request-store";
 import {
@@ -49,7 +46,10 @@ const METHOD_COLORS: Record<string, string> = {
 };
 
 function methodColor(method: string): string {
-  return METHOD_COLORS[method.toUpperCase()] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400";
+  return (
+    METHOD_COLORS[method.toUpperCase()] ??
+    "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
+  );
 }
 
 function statusColor(status: number | null | undefined): string {
@@ -71,10 +71,14 @@ function describeAssertion(a: Assertion): string {
         return `status != ${a.expected.not}`;
       return "status assertion";
     }
-    case "jsonPath": return `body.${a.path} ${a.operator}`;
-    case "schema": return "response matches inferred JSON schema";
-    case "responseTime": return `response time ${a.operator} ${a.valueMs}ms`;
-    default: return "assertion";
+    case "jsonPath":
+      return `body.${a.path} ${a.operator}`;
+    case "schema":
+      return "response matches inferred JSON schema";
+    case "responseTime":
+      return `response time ${a.operator} ${a.valueMs}ms`;
+    default:
+      return "assertion";
   }
 }
 
@@ -83,13 +87,19 @@ function toSummary(c: CapturedRequest): CapturedSummary {
 }
 
 function formatTime(ts: number): string {
-  try { return new Date(ts).toLocaleTimeString(); }
-  catch { return ""; }
+  try {
+    return new Date(ts).toLocaleTimeString();
+  } catch {
+    return "";
+  }
 }
 
 function extractHost(url: string): string {
-  try { return new URL(url).host; }
-  catch { return url; }
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 function KeyValueList({ pairs, empty }: { pairs: Array<[string, string]>; empty: string }) {
@@ -141,7 +151,9 @@ export default function CapturePage() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     if (!isTauriAvailable()) return;
@@ -157,49 +169,82 @@ export default function CapturePage() {
         const c = e.payload;
         setStatusById((s) => ({ ...s, [c.id]: c.status ?? null }));
         setSessions((prev) =>
-          prev.map((x) => (x.id === c.id ? { ...x, timestamp: c.timestamp } : x))
+          prev.map((x) => (x.id === c.id ? { ...x, timestamp: c.timestamp } : x)),
         );
         setSelected((sel) => (sel && sel.id === c.id ? c : sel));
       }),
     ])
-      .then((unsubFns) => { if (!cancelled) unsubs = unsubFns as Array<() => void>; })
+      .then((unsubFns) => {
+        if (!cancelled) unsubs = unsubFns as Array<() => void>;
+      })
       .catch(() => {});
-    return () => { cancelled = true; unsubs.forEach((u) => u()); };
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, []);
 
   const startProxy = async () => {
-    setError(null); setBusy(true);
+    setError(null);
+    setBusy(true);
     try {
       await startCaptureProxy(port);
-      setRunning(true); setSessions([]); setStatusById({}); setBundle(null); setSelected(null);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+      setRunning(true);
+      setSessions([]);
+      setStatusById({});
+      setBundle(null);
+      setSelected(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const stopProxy = async () => {
-    setError(null); setBusy(true);
+    setError(null);
+    setBusy(true);
     try {
-      await stopCaptureProxy(); setRunning(false); await refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+      await stopCaptureProxy();
+      setRunning(false);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const clearAll = async () => {
-    setError(null); setBusy(true);
+    setError(null);
+    setBusy(true);
     try {
-      await clearCapturedSessions(); setSessions([]); setStatusById({}); setSelected(null); setBundle(null);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+      await clearCapturedSessions();
+      setSessions([]);
+      setStatusById({});
+      setSelected(null);
+      setBundle(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openDetail = async (id: string) => {
     setError(null);
-    try { const full = await getCapturedSession(id); if (full) setSelected(full); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try {
+      const full = await getCapturedSession(id);
+      if (full) setSelected(full);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const generate = async () => {
-    setError(null); setSavedName(null); setBusy(true);
+    setError(null);
+    setSavedName(null);
+    setBusy(true);
     try {
       const list = await listCapturedSessions();
       setSessions(list);
@@ -215,8 +260,11 @@ export default function CapturePage() {
       const generated = generateCollectionFromCapture(detailed);
       setBundle(generated);
       setCollectionName(generated.collections[0].name);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = () => {
@@ -224,7 +272,9 @@ export default function CapturePage() {
     const col = bundle.collections[0];
     const newId = addCollection({
       name: collectionName.trim() || col.name,
-      color: col.color, icon: col.icon, description: col.description,
+      color: col.color,
+      icon: col.icon,
+      description: col.description,
     });
     for (const req of col.requests) addRequestToCollection(newId, req);
     setSavedName(collectionName.trim() || col.name);
@@ -271,7 +321,8 @@ export default function CapturePage() {
 
         {!isTauriAvailable() && (
           <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-            Capture requires the Reqly desktop app (Tauri). Collection generation and saving are still available.
+            Capture requires the Reqly desktop app (Tauri). Collection generation and saving are
+            still available.
           </div>
         )}
 
@@ -284,7 +335,8 @@ export default function CapturePage() {
                   Proxy Session
                 </CardTitle>
                 <CardDescription>
-                  Listens on <code className="text-xs">127.0.0.1:{port}</code> and relays to the target host.
+                  Listens on <code className="text-xs">127.0.0.1:{port}</code> and relays to the
+                  target host.
                 </CardDescription>
               </div>
               {running && (
@@ -298,12 +350,15 @@ export default function CapturePage() {
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1.5">
-                <label className="text-sm font-medium" htmlFor="capture-port">Port</label>
+                <label className="text-sm font-medium" htmlFor="capture-port">
+                  Port
+                </label>
                 <input
                   id="capture-port"
                   type="number"
                   value={port}
-                  min={1024} max={65535}
+                  min={1024}
+                  max={65535}
                   disabled={running}
                   onChange={(e) => setPort(Number(e.target.value))}
                   className="w-24 rounded-md border border-input bg-background px-2 py-1.5 text-sm tabular-nums"
@@ -330,20 +385,46 @@ export default function CapturePage() {
               <div className="flex items-center gap-1 ml-auto">
                 {!running ? (
                   <Button size="sm" onClick={startProxy} disabled={busy} className="gap-1.5">
-                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                    {busy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Play className="size-3.5" />
+                    )}
                     Start
                   </Button>
                 ) : (
-                  <Button size="sm" variant="destructive" onClick={stopProxy} disabled={busy} className="gap-1.5">
-                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={stopProxy}
+                    disabled={busy}
+                    className="gap-1.5"
+                  >
+                    {busy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Square className="size-3.5" />
+                    )}
                     Stop
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={refresh} disabled={busy} className="gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={refresh}
+                  disabled={busy}
+                  className="gap-1.5"
+                >
                   <RefreshCw className="size-3.5" />
                   Refresh
                 </Button>
-                <Button size="sm" variant="ghost" onClick={clearAll} disabled={busy || sessions.length === 0} className="gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearAll}
+                  disabled={busy || sessions.length === 0}
+                  className="gap-1.5"
+                >
                   <Trash2 className="size-3.5" />
                   Clear
                 </Button>
@@ -351,7 +432,9 @@ export default function CapturePage() {
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Database className="size-3" />
-              <span>{sessions.length} request{sessions.length !== 1 ? "s" : ""} captured</span>
+              <span>
+                {sessions.length} request{sessions.length !== 1 ? "s" : ""} captured
+              </span>
               {sessions.length > 0 && <span className="text-muted-foreground/50">·</span>}
               {sessions.length > 0 && (
                 <span className="text-success">Saved to disk (persist across restarts)</span>
@@ -383,7 +466,9 @@ export default function CapturePage() {
                   >
                     <option value="">All methods</option>
                     {uniqueMethods.map((m) => (
-                      <option key={m} value={m}>{m}</option>
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
                     ))}
                   </select>
                   <Button
@@ -460,7 +545,9 @@ export default function CapturePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium shrink-0" htmlFor="collection-name">Name</label>
+                <label className="text-sm font-medium shrink-0" htmlFor="collection-name">
+                  Name
+                </label>
                 <input
                   id="collection-name"
                   value={collectionName}
@@ -472,15 +559,25 @@ export default function CapturePage() {
                 {bundle.collections[0].requests.map((req, i) => (
                   <div key={i} className="rounded-lg border p-3 text-sm">
                     <div className="flex items-center gap-2 font-medium">
-                      <span className={cn("rounded px-1.5 py-0.5 text-xs font-semibold", methodColor(req.method))}>
+                      <span
+                        className={cn(
+                          "rounded px-1.5 py-0.5 text-xs font-semibold",
+                          methodColor(req.method),
+                        )}
+                      >
                         {req.method}
                       </span>
-                      <span className="font-mono text-xs text-muted-foreground truncate">{req.url}</span>
+                      <span className="font-mono text-xs text-muted-foreground truncate">
+                        {req.url}
+                      </span>
                     </div>
                     {req.runnerAssertions.length > 0 && (
                       <ul className="mt-2 space-y-0.5">
                         {req.runnerAssertions.map((a, j) => (
-                          <li key={j} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <li
+                            key={j}
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                          >
                             <ChevronRight className="size-3 shrink-0" />
                             {describeAssertion(a)}
                           </li>
@@ -495,7 +592,9 @@ export default function CapturePage() {
                   {savedName ? <CheckCircle2 className="size-4" /> : "Save Collection"}
                 </Button>
                 {savedName && (
-                  <span className="text-sm text-success">Collection &quot;{savedName}&quot; saved.</span>
+                  <span className="text-sm text-success">
+                    Collection &quot;{savedName}&quot; saved.
+                  </span>
                 )}
               </div>
             </CardContent>
@@ -515,18 +614,33 @@ export default function CapturePage() {
             <div className="flex h-full flex-col">
               <div className="flex items-center justify-between gap-2 border-b px-5 py-4">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={cn("rounded px-1.5 py-0.5 text-xs font-semibold shrink-0", methodColor(selected.method))}>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-xs font-semibold shrink-0",
+                      methodColor(selected.method),
+                    )}
+                  >
                     {selected.method}
                   </span>
                   <span className="truncate font-mono text-sm">{selected.url}</span>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setSelected(null)} className="shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected(null)}
+                  className="shrink-0"
+                >
                   <X className="size-4" />
                 </Button>
               </div>
 
               <div className="flex items-center gap-3 border-b px-5 py-3 text-sm">
-                <span className={cn("rounded px-2 py-0.5 text-xs font-semibold", statusColor(selected.status))}>
+                <span
+                  className={cn(
+                    "rounded px-2 py-0.5 text-xs font-semibold",
+                    statusColor(selected.status),
+                  )}
+                >
                   {selected.status != null ? `HTTP ${selected.status}` : "Status —"}
                 </span>
                 {selected.durationMs != null && (
@@ -542,23 +656,33 @@ export default function CapturePage() {
 
               <div className="flex-1 overflow-auto p-5 space-y-6 text-sm">
                 <section>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Request Headers</h3>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Request Headers
+                  </h3>
                   <KeyValueList pairs={selected.headers} empty="No headers" />
                 </section>
                 <section>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Request Body</h3>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Request Body
+                  </h3>
                   <pre className="max-h-48 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-xs">
                     {selected.body ?? <span className="text-muted-foreground italic">No body</span>}
                   </pre>
                 </section>
                 <section>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Response Headers</h3>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Response Headers
+                  </h3>
                   <KeyValueList pairs={selected.responseHeaders ?? []} empty="No headers" />
                 </section>
                 <section>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Response Body</h3>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Response Body
+                  </h3>
                   <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-xs">
-                    {selected.responseBody ?? <span className="text-muted-foreground italic">No body</span>}
+                    {selected.responseBody ?? (
+                      <span className="text-muted-foreground italic">No body</span>
+                    )}
                   </pre>
                 </section>
               </div>
@@ -584,18 +708,32 @@ function RequestRow({
   return (
     <li
       className="animate-in fade-in slide-in-from-bottom-1"
-      style={{ animationDuration: "300ms", animationDelay: `${Math.min(index * 20, 500)}ms`, animationFillMode: "both" }}
+      style={{
+        animationDuration: "300ms",
+        animationDelay: `${Math.min(index * 20, 500)}ms`,
+        animationFillMode: "both",
+      }}
     >
       <button
         type="button"
         onClick={onClick}
         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted/60 transition-colors"
       >
-        <span className={cn("rounded px-1.5 py-0.5 text-xs font-semibold shrink-0", methodColor(s.method))}>
+        <span
+          className={cn(
+            "rounded px-1.5 py-0.5 text-xs font-semibold shrink-0",
+            methodColor(s.method),
+          )}
+        >
           {s.method}
         </span>
         <span className="flex-1 truncate font-mono text-xs text-foreground/80">{s.url}</span>
-        <span className={cn("rounded px-1.5 py-0.5 text-xs font-semibold shrink-0", statusColor(status))}>
+        <span
+          className={cn(
+            "rounded px-1.5 py-0.5 text-xs font-semibold shrink-0",
+            statusColor(status),
+          )}
+        >
           {status != null ? status : "..."}
         </span>
         <span className="w-16 shrink-0 text-right text-xs text-muted-foreground tabular-nums">

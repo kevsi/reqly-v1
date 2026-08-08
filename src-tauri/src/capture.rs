@@ -12,11 +12,11 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
-use tiny_http::{Header, Response, Server};
+use tiny_http::{Header, Request, Response, Server};
 #[cfg(feature = "ts-export")]
 use ts_rs::TS;
 use uuid::Uuid;
@@ -31,6 +31,9 @@ const MAX_RESPONSE_SIZE: usize = 50 * 1024 * 1024;
 pub struct CaptureProxyState {
   pub shutdown_flag: Option<Arc<AtomicBool>>,
   pub server_thread: Option<std::thread::JoinHandle<()>>,
+  /// Store the server's bound address so we can poke it on shutdown to unblock
+  /// `incoming_requests()` (which blocks indefinitely waiting for a connection).
+  pub server_addr: Option<SocketAddr>,
   /// Retained captured requests for the current (or last) capture session.
   /// Populated by the proxy thread after each forwarded request so the
   /// frontend can list/get them via Tauri commands. Persisted to disk (see
@@ -254,9 +257,11 @@ fn start_proxy_server(
   let shutdown_flag = Arc::new(AtomicBool::new(false));
   let flag_for_server = shutdown_flag.clone();
 
+  // Store server address so stop_capture_proxy can poke it.
   {
     let mut guard = state.lock()?;
     guard.shutdown_flag = Some(shutdown_flag);
+    guard.server_addr = Some(addr);
   }
 
   // Spawn the blocking proxy loop in a std thread with a dedicated runtime
@@ -296,16 +301,10 @@ fn start_proxy_server(
         format!("{}://{}{}", scheme, host_header, url)
       };
 
-      let req_headers: Vec<(String, String)> = request
-        .headers()
-        .iter()
-        .map(|h| (h.field.to_string(), h.value.as_str().to_string()))
-        .collect();
-
       let mut body_bytes: Option<Vec<u8>> = None;
       if method != "GET" && method != "HEAD" {
         let max_body: u64 = 10_485_760; // 10 MB cap
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(30);
         let mut buf: Vec<u8> = Vec::new();
         let reader = request.as_reader();
         let mut chunk = [0u8; 8192];
@@ -314,7 +313,7 @@ fn start_proxy_server(
             eprintln!("[capture-proxy] request body exceeds 10 MB, truncating");
             break;
           }
-          if std::time::Instant::now() > deadline {
+          if Instant::now() > deadline {
             eprintln!("[capture-proxy] request body read timed out after 30s");
             break;
           }
@@ -333,6 +332,26 @@ fn start_proxy_server(
       }
 
       let body_str = body_bytes.as_ref().map(|b| String::from_utf8_lossy(b).to_string());
+
+      // Build headers with validation — tiny_http::Header::from_bytes panics on
+      // invalid header values. We validate and sanitize before building the
+      // reqwest request to avoid thread death.
+      let req_headers: Vec<(String, String)> = request
+        .headers()
+        .iter()
+        .filter_map(|h| {
+          let name = h.field.to_string();
+          let value = h.value.as_str().to_string();
+          // tiny_http's Header::from_bytes requires valid header names/values.
+          // Filter out any that would panic (control chars, non-ASCII, etc.)
+          if Header::from_bytes(name.as_bytes(), value.as_bytes()).is_ok() {
+            Some((name, value))
+          } else {
+            eprintln!("[capture-proxy] dropped invalid header: {}: {}", name, value);
+            None
+          }
+        })
+        .collect();
 
       // Emit "captured" event (before forwarding)
       let mut captured =
@@ -487,36 +506,39 @@ pub fn start_capture_proxy(
 
 #[tauri::command]
 pub fn stop_capture_proxy(state: tauri::State<'_, ManagedCaptureProxyState>) -> Result<(), AppError> {
-  let mut guard = state.lock()?;
-  if let Some(flag) = guard.shutdown_flag.take() {
+  let (flag, handle, server_addr) = {
+    let mut guard = state.lock()?;
+    let flag = guard.shutdown_flag.take();
+    let handle = guard.server_thread.take();
+    let server_addr = guard.server_addr.take();
+    (flag, handle, server_addr)
+  };
+
+  if let Some(flag) = flag {
     flag.store(true, Ordering::SeqCst);
-    if let Some(handle) = guard.server_thread.take() {
-      // Release the mutex before joining so the thread can acquire it if needed.
-      drop(guard);
-      // Poll the thread handle with a 2-second timeout.
-      // The proxy thread checks `shutdown_flag` on each iteration so it should
-      // terminate quickly, but we don't want to block the UI indefinitely if
-      // the thread is stuck (e.g. blocked on a slow upstream read).
+    // Wake up server.incoming_requests() which blocks waiting for a connection.
+    if let Some(addr) = server_addr {
+      let _ = std::net::TcpStream::connect(addr);
+    }
+    if let Some(handle) = handle {
       let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
       loop {
         if handle.is_finished() {
           match handle.join() {
-            Ok(_) => break Ok(()),
+            Ok(_) => return Ok(()),
             Err(_) => {
               eprintln!("[capture-proxy] proxy thread panicked");
-              break Ok(());
+              return Ok(());
             }
           }
         }
         if std::time::Instant::now() >= deadline {
-          // Detach — the thread will exit on its next flag check.
-          break Ok(());
+          return Ok(());
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
       }
-    } else {
-      Ok(())
     }
+    Ok(())
   } else {
     Err(AppError::NotRunning("Capture proxy is not running".into()))
   }

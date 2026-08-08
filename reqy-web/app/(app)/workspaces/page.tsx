@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -248,7 +248,10 @@ export default function WorkspacesPage() {
                         <CardTitle className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
                           {ws.name}
                           {isLocalWorkspace(ws) && (
-                            <span className="text-muted-foreground/60" title="Local workspace — cannot be shared">
+                            <span
+                              className="text-muted-foreground/60"
+                              title="Local workspace — cannot be shared"
+                            >
                               🔒
                             </span>
                           )}
@@ -282,7 +285,7 @@ export default function WorkspacesPage() {
                     <span>Created {formatDate(ws.createdAt)}</span>
                     <span>Updated {timeAgo(ws.updatedAt)}</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {!isLocalWorkspace(ws) && (
                       <>
                         <Button

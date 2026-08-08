@@ -114,8 +114,7 @@ export async function POST(request: NextRequest) {
     console.error("Postman import error:", error);
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Erreur lors de l'import de la collection",
+        message: "Erreur lors de l'import de la collection",
       },
       { status: 500 },
     );

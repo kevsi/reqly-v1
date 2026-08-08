@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Collection } from "@/hooks/use-request-store";
 
 // ── Re-export des types pour les consommateurs (rétrocompatibilité) ─────
@@ -19,14 +19,7 @@ export type {
 
 import { GitService } from "@/lib/git/git-service";
 import { TauriGitBackend } from "@/lib/git/git-backend";
-import type {
-  GitCommit,
-  FileStatus,
-  BranchInfo,
-  RemoteInfo,
-  DiffFile,
-  GitState,
-} from "@/lib/git/types";
+import type { DiffFile, GitState } from "@/lib/git/types";
 
 export function useGit(collections: Collection[]) {
   // Instance stable du service (créée une fois)

@@ -1,12 +1,16 @@
 import {
   Boxes,
+  Crosshair,
   Database,
   FileCode2,
   FlaskConical,
   FolderTree,
+  GitBranch,
   Globe,
   History,
-  Server,
+  Layers,
+  Package,
+  Radio,
   ShieldCheck,
   Variable,
 } from "lucide-react";
@@ -36,9 +40,9 @@ const features = [
     desc: "Scripts de test, assertions JSON Schema et exécution de collections entières avec rapport JUnit — parfait pour le CI.",
   },
   {
-    icon: Server,
-    title: "Mock server local",
-    desc: "Transformez vos routes en serveur mock local en un clic, servies en temps réel sur votre machine.",
+    icon: Layers,
+    title: "Snapshots & diff de réponses",
+    desc: "Capturez des snapshots de vos réponses et comparez visuellement les changements au fil du temps.",
   },
   {
     icon: History,
@@ -54,6 +58,26 @@ const features = [
     icon: ShieldCheck,
     title: "Sécurité d'abord",
     desc: "Proxy durci (anti-SSRF), stockage chiffré AES-256-GCM et zero-exfiltration : vos données restent chez vous.",
+  },
+  {
+    icon: Radio,
+    title: "SSE temps réel",
+    desc: "Onglet dédié aux Server-Sent Events : flux en direct, log d'événements et variables intégrées.",
+  },
+  {
+    icon: Crosshair,
+    title: "Capture & tests auto",
+    desc: "Enregistrez le trafic de votre application et générez automatiquement une suite d'assertions à partir des réponses.",
+  },
+  {
+    icon: Package,
+    title: "SDK clients générés",
+    desc: "Téléchargez un SDK natif typé (TypeScript, Go, Java…) directement depuis votre collection ou spec OpenAPI.",
+  },
+  {
+    icon: GitBranch,
+    title: "Git & sync",
+    desc: "Poussez vos collections vers GitHub/GitLab ou synchronisez vos workspaces via votre propre serveur.",
   },
 ];
 
@@ -73,14 +97,10 @@ export function Features() {
             <Reveal key={f.title} delay={(i % 4) * 70}>
               <SpotlightCard className="card-hover group h-full rounded-xl border border-ink-700 bg-ink-850/70 p-5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-mint-500/12 ring-1 ring-mint-500/25 transition group-hover:bg-mint-500/20 group-hover:ring-mint-500/40">
-                  <f.icon className="h-5 w-5 text-mint-400" strokeWidth={1.8} />
+                  <f.icon className="icon-pop-on-hover h-5 w-5 text-mint-400" strokeWidth={1.8} />
                 </div>
-                <h3 className="mt-4 text-sm font-semibold text-white">
-                  {f.title}
-                </h3>
-                <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">
-                  {f.desc}
-                </p>
+                <h3 className="mt-4 text-sm font-semibold text-white">{f.title}</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">{f.desc}</p>
               </SpotlightCard>
             </Reveal>
           ))}
@@ -96,8 +116,7 @@ export function Features() {
                   Importez votre collection existante
                 </p>
                 <p className="text-[13px] text-zinc-400">
-                  Postman, OpenAPI, Bruno — ou collez simplement une commande
-                  cURL.
+                  Postman, OpenAPI, Bruno — ou collez simplement une commande cURL.
                 </p>
               </div>
             </div>

@@ -15,7 +15,7 @@ describe("ModulesSection", () => {
     render(<ModulesSection />);
     expect(screen.getByRole("heading", { name: "Modules" })).toBeTruthy();
     expect(screen.getByText("Encodeur / Décodeur")).toBeTruthy();
-    expect(screen.getByText(/Outils instantanés pour vos requêtes/)).toBeTruthy();
+    expect(screen.getByText(/Transformations instantanées et locales/)).toBeTruthy();
   });
 
   it("installs a module and reveals the enable switch", () => {

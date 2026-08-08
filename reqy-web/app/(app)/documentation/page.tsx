@@ -13,7 +13,6 @@ import {
   Sparkles,
   BarChart3,
   Settings,
-  Keyboard,
   ChevronRight,
   Terminal,
   Link2,
@@ -82,14 +81,6 @@ function Badge({
     >
       {children}
     </span>
-  );
-}
-
-function Kbd({ children }: { children: string }) {
-  return (
-    <kbd className="inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground shadow-sm">
-      {children}
-    </kbd>
   );
 }
 

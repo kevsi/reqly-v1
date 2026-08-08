@@ -9,7 +9,6 @@ export function useAiAgentInput(
   onRunCommand: (name: string, args: string) => void,
 ) {
   const [value, setValue] = useState("");
-  const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
   const [commandQuery, setCommandQuery] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
@@ -47,14 +46,11 @@ export function useAiAgentInput(
     [onRunCommand],
   );
 
-  const acceptMention = useCallback((att: ContextAttachment) => {
-    setAttachments((prev) => (prev.some((a) => a.id === att.id) ? prev : [...prev, att]));
+  const acceptMention = useCallback((_att: ContextAttachment) => {
+    // Attachments are managed by the chat hook's `chat.attachContext`.
+    // Here we just strip the @mention text from the input.
     setValue((prev) => prev.replace(/@\S*$/, " "));
     setMentionQuery(null);
-  }, []);
-
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   const clear = useCallback(() => {
@@ -68,8 +64,6 @@ export function useAiAgentInput(
     setValue,
     handleChange,
     clear,
-    attachments,
-    removeAttachment,
     commandResults,
     mentionResults,
     acceptCommand,

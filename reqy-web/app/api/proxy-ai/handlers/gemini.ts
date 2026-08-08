@@ -63,7 +63,8 @@ export async function handleGemini(
     ? [
         {
           functionDeclarations: tools.map((t) => {
-            const fn = (t as any).function ?? t;
+            const fn: Record<string, unknown> =
+              (t as { function?: Record<string, unknown> }).function ?? t;
             return {
               name: fn.name,
               description: fn.description,

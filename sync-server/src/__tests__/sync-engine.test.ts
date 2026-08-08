@@ -151,6 +151,53 @@ describe("sync engine", () => {
     expect(deleted?.deleted).toBe(true);
   });
 
+  it("folders round-trip: push then poll returns the folder (H1 regression)", () => {
+    // Parent collection must exist in the workspace first.
+    pushChanges(WS, USER_A, [
+      {
+        entityType: "collection",
+        id: "col-parent",
+        data: { id: "col-parent", name: "Parent" },
+        updatedAt: Date.now(),
+        updatedBy: USER_A,
+      },
+    ]);
+    const ts = Date.now();
+    const result = pushChanges(WS, USER_B, [
+      {
+        entityType: "folder",
+        id: "folder-1",
+        data: { id: "folder-1", name: "Auth", collectionId: "col-parent" },
+        updatedAt: ts,
+        updatedBy: USER_B,
+      },
+    ]);
+    expect(result.accepted).toEqual(["folder-1"]);
+    expect(result.conflicts).toEqual([]);
+
+    const changes = getChangesSince(WS, 0);
+    const folder = changes.find((c) => c.id === "folder-1");
+    expect(folder).toBeDefined();
+    expect(folder?.entityType).toBe("folder");
+    expect(folder?.data).toMatchObject({ name: "Auth", collectionId: "col-parent" });
+  });
+
+  it("rejects a folder whose parent collection is not in the workspace", () => {
+    const ts = Date.now();
+    const result = pushChanges(WS, USER_A, [
+      {
+        entityType: "folder",
+        id: "folder-evil",
+        data: { id: "folder-evil", name: "Orphan", collectionId: "other-ws-collection" },
+        updatedAt: ts,
+        updatedBy: USER_A,
+      },
+    ]);
+    expect(result.accepted).toEqual([]);
+    expect(result.conflicts).toHaveLength(1);
+    expect(getChangesSince(WS, 0).find((c) => c.id === "folder-evil")).toBeUndefined();
+  });
+
   it("getChangesSince filters by timestamp", () => {
     pushChanges(WS, USER_A, [
       {

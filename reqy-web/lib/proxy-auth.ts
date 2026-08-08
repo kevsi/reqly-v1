@@ -1,18 +1,27 @@
+// Client-side token for the sidecar proxy gate. The token is issued per
+// visitor by `reqy-web/proxy.ts` as the `proxy_visitor` cookie and read here
+// at runtime — it is never a static NEXT_PUBLIC_* var, so it is not inlined
+// in the client bundle and cannot be extracted by cross-site pages.
+const VISITOR_COOKIE = "proxy_visitor";
+
+function readCookie(name: string): string {
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
 export function getProxyToken(): string {
   if (typeof window !== "undefined") {
-    // Browser: Next.js inlines NEXT_PUBLIC_* env vars at build time.
-    // Must match PROXY_SERVICE_TOKEN (server-side) or proxy.ts answers 401.
-    return (process.env as Record<string, string | undefined>).NEXT_PUBLIC_PROXY_SERVICE_TOKEN || ""
+    return readCookie(VISITOR_COOKIE);
   }
   try {
-    return (process.env as Record<string, string | undefined>).PROXY_SERVICE_TOKEN || ""
+    return (process.env as Record<string, string | undefined>).PROXY_SERVICE_TOKEN || "";
   } catch {
-    return ""
+    return "";
   }
 }
 
 export function proxyAuthHeaders(): Record<string, string> {
-  const token = getProxyToken()
-  if (!token) return {}
-  return { Authorization: `Bearer ${token}` }
+  const token = getProxyToken();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
 }

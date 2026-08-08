@@ -61,7 +61,7 @@ export function createHistoryMutations(commit: CommitFn) {
       headers: req.headers || {},
       params,
       body: req.body,
-      auth: (request as any).auth,
+      auth: "auth" in request ? request.auth : undefined,
     };
     commit((prev) => ({ ...prev, currentRequest }));
   };
@@ -81,7 +81,7 @@ export function createHistoryMutations(commit: CommitFn) {
     }));
   };
 
-  const addAiAuditEntry = (entry: { actionType: string; detail?: any; result?: any }) => {
+  const addAiAuditEntry = (entry: { actionType: string; detail?: unknown; result?: unknown }) => {
     const newEntry = {
       ...entry,
       id: `ai-audit-${crypto.randomUUID()}`,
@@ -121,7 +121,7 @@ export function createHistoryMutations(commit: CommitFn) {
       "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
     const tab: RequestTab = {
       id: "store-execution",
-      name: (req as any).name || method,
+      name: req.name || method,
       method,
       url: req.url || "",
       endpoint: req.endpoint || req.url || "",
@@ -166,7 +166,7 @@ export function createHistoryMutations(commit: CommitFn) {
         headers: req.headers || {},
         params,
         body: req.body,
-        auth: (request as any).auth,
+        auth: "auth" in request ? (request as { auth?: unknown }).auth : undefined,
       });
 
       setLastResponse({
@@ -178,7 +178,7 @@ export function createHistoryMutations(commit: CommitFn) {
       });
 
       _addHistoryAndNotify({
-        name: (req as any).name || method,
+        name: req.name || method,
         method,
         url: req.url || "",
         endpoint: req.endpoint || req.url || "",
@@ -196,7 +196,7 @@ export function createHistoryMutations(commit: CommitFn) {
       setCurrentRequest(request);
       setLastResponse({ status: 0, headers: {}, body: `Error: ${errMsg}` });
       _addHistoryAndNotify({
-        name: (req as any).name || method,
+        name: req.name || method,
         method,
         url: req.url || "",
         endpoint: req.endpoint || req.url || "",

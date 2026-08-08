@@ -3,8 +3,6 @@
 import {
   AreaChart,
   Area,
-  LineChart,
-  Line,
   BarChart,
   Bar,
   PieChart,
@@ -113,7 +111,7 @@ export default function ChartsContent({
               Request Volume — 7 days
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[220px] pt-0">
+          <CardContent className="h-[180px] sm:h-[220px] pt-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={CHART_MARGIN}>
                 <defs>
@@ -148,7 +146,7 @@ export default function ChartsContent({
               Error Rate — 7 days
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[220px] pt-0">
+          <CardContent className="h-[180px] sm:h-[220px] pt-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={CHART_MARGIN}>
                 <defs>
@@ -211,7 +209,7 @@ export default function ChartsContent({
               HTTP Methods
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[200px] pt-0 flex items-center">
+          <CardContent className="h-[160px] sm:h-[200px] pt-0 flex items-center">
             {methodData.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center w-full">No data yet</p>
             ) : (
@@ -250,7 +248,7 @@ export default function ChartsContent({
               Status Codes
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[200px] pt-0 flex items-center">
+          <CardContent className="h-[160px] sm:h-[200px] pt-0 flex items-center">
             {statusData.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center w-full">No data yet</p>
             ) : (

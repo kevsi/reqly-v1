@@ -3,25 +3,22 @@
 import { memo, useState, useEffect } from "react";
 import {
   CheckCircle,
-  Clock,
   FileText,
   Download,
   Play,
   Loader2,
-  Sparkles,
   XCircle,
   AlertTriangle,
   ChevronDown,
   GitCompare,
 } from "lucide-react";
-import { getStatusBadgeClass, getStatusTextClass, getStatusLabel } from "@/lib/http-status-colors";
+import { getStatusBadgeClass, getStatusTextClass } from "@/lib/http-status-colors";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -47,20 +44,11 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
   responseSize,
   isLoading = false,
   hasResponse,
-  aiIsLoading = false,
-  onRun,
   onRunAndSave,
   onRunAndDownload,
-  onAnalyze,
-  onGenerateTests,
   onExport,
   onDiff,
 }: ResponseStatusBarProps) {
-  const handleRun = async () => {
-    if (!onRun) return;
-    await onRun();
-  };
-
   // ── Animated gauge fill ────────────────────────────────────────
   const targetGaugeWidth = Math.min((responseTime ?? 0) / 10, 100);
   const [gaugeFillWidth, setGaugeFillWidth] = useState(0);

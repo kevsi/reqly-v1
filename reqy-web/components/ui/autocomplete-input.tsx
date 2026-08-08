@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo, useId, forwardRef } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
@@ -110,7 +110,6 @@ export const AutocompleteInput = forwardRef<HTMLInputElement, AutocompleteInputP
     const [isOpen, setIsOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
     const [focused, setFocused] = useState(false);
-    const id = useId();
 
     // Flatten + filter
     const flatList = useMemo(
@@ -163,6 +162,25 @@ export const AutocompleteInput = forwardRef<HTMLInputElement, AutocompleteInputP
       };
     }, [show]);
 
+    // ── Select an item ────────────────────────────────────────────────────────
+    const selectItem = useCallback(
+      (item: AutocompleteItem) => {
+        // If the user is inside a {{...}} block, insert only at that position
+        // instead of replacing the entire input value.
+        const lastOpen = value.lastIndexOf("{{");
+        if (lastOpen >= 0) {
+          const before = value.slice(0, lastOpen);
+          onChange(before + item.value);
+        } else {
+          onChange(item.value);
+        }
+        setIsOpen(false);
+        setActiveIndex(-1);
+        inputRef.current?.focus();
+      },
+      [onChange, value, inputRef],
+    );
+
     // ── Keyboard navigation ───────────────────────────────────────────────────
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -198,26 +216,7 @@ export const AutocompleteInput = forwardRef<HTMLInputElement, AutocompleteInputP
             break;
         }
       },
-      [show, totalItems, activeIndex, flatList, onKeyDown],
-    );
-
-    // ── Select an item ────────────────────────────────────────────────────────
-    const selectItem = useCallback(
-      (item: AutocompleteItem) => {
-        // If the user is inside a {{...}} block, insert only at that position
-        // instead of replacing the entire input value.
-        const lastOpen = value.lastIndexOf("{{");
-        if (lastOpen >= 0) {
-          const before = value.slice(0, lastOpen);
-          onChange(before + item.value);
-        } else {
-          onChange(item.value);
-        }
-        setIsOpen(false);
-        setActiveIndex(-1);
-        inputRef.current?.focus();
-      },
-      [onChange, value],
+      [show, totalItems, activeIndex, flatList, onKeyDown, selectItem],
     );
 
     // ── Handlers ──────────────────────────────────────────────────────────────

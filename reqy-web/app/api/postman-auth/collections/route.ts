@@ -90,8 +90,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ collections });
   } catch (error) {
     const status = error instanceof PostmanApiError ? error.status : 500;
-    const message =
-      error instanceof Error ? error.message : "Erreur lors de la récupération des collections";
-    return NextResponse.json({ message }, { status });
+    return NextResponse.json(
+      { message: "Erreur lors de la récupération des collections" },
+      { status },
+    );
   }
 }

@@ -5,7 +5,7 @@ import { join } from "path";
 // this file to pay that cost, even if they never parse anything (e.g. the
 // main `request-panel` page). Keep type-only imports up here and load the
 // real bindings on first use inside `initTreeSitter()`.
-import type { Parser, Language, Query, Tree } from "web-tree-sitter";
+import type { Parser, Language, Tree } from "web-tree-sitter";
 
 export interface ParsedRoute {
   method: string;
@@ -561,12 +561,12 @@ export async function detectRoutesWithTreeSitter(
       const classMatches = classQuery.matches(tree.rootNode);
       let classPrefix = "";
       for (const m of classMatches) {
-        const annot = (m.captures.find((c: any) => c.name === "annot")?.node?.text ?? "").replace(
+        const annot = (m.captures.find((c) => c.name === "annot")?.node?.text ?? "").replace(
           /Mapping$/i,
           "",
         );
         if (annot.toUpperCase() === "REQUEST" || annot.toUpperCase() === "PATH") {
-          classPrefix = m.captures.find((c: any) => c.name === "path")?.node?.text ?? "";
+          classPrefix = m.captures.find((c) => c.name === "path")?.node?.text ?? "";
           if (classPrefix) {
             classPrefix = classPrefix.replace(/^['"]|['"]$/g, "");
             break;

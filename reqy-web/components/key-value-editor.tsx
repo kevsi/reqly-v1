@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AutocompleteInput, type AutocompleteGroup } from "@/components/ui/autocomplete-input";

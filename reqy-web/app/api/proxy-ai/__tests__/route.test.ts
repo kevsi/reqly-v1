@@ -64,7 +64,7 @@ describe("POST /api/proxy-ai dispatcher", () => {
   });
 
   it("returns 400 when previousTurns exceeds the maximum", async () => {
-    const previousTurns = Array.from({ length: 6 }, (_, index) => ({
+    const previousTurns = Array.from({ length: 6 }, (_, _index) => ({
       assistantToolCalls: [],
       toolResults: [],
     }));
@@ -249,7 +249,7 @@ describe("POST /api/proxy-ai dispatcher", () => {
     expect(body.content).toBe("Hi from Ollama");
   });
 
-  it("returns 500 on unhandled error", async () => {
+  it("returns 500 with a sanitized message on unhandled error (does not leak upstream details)", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network failure"));
 
     const res = await POST(
@@ -261,6 +261,7 @@ describe("POST /api/proxy-ai dispatcher", () => {
     );
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toContain("Network failure");
+    expect(body.error).toContain("AI provider request failed");
+    expect(body.error).not.toContain("Network failure");
   });
 });

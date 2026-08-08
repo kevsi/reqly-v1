@@ -75,8 +75,12 @@ export async function handleOpenAICompat(
   let url: string;
   try {
     url = await getEndpoint(body.provider, body);
-  } catch (err: any) {
-    return structuredError(err?.message ?? "Invalid provider URL", "INVALID_PROVIDER_URL", 400);
+  } catch (err) {
+    return structuredError(
+      err instanceof Error ? err.message : typeof err === "string" ? err : "Invalid provider URL",
+      "INVALID_PROVIDER_URL",
+      400,
+    );
   }
 
   const res = await fetch(url, {
@@ -86,6 +90,12 @@ export async function handleOpenAICompat(
       Authorization: `Bearer ${apiKey}`,
     },
     signal: extra.signal,
+    // Do not follow redirects: for the "custom" provider the URL is user-
+    // supplied, so a 3xx to an internal IP (e.g. cloud metadata 169.254.169.254)
+    // would bypass the SSRF check performed in getCustomUrl(). Manual keeps the
+    // redirect response visible instead of silently hopping hosts. (Ollama
+    // already sets redirect:"manual" for the same reason.)
+    redirect: "manual",
     body: JSON.stringify({
       model,
       stream: Boolean(body.stream),
@@ -170,7 +180,7 @@ export async function handleOpenAICompat(
   // Extract tool_calls for non-streamed mode
   const rawToolCalls = msg?.tool_calls;
   const toolCalls = Array.isArray(rawToolCalls)
-    ? rawToolCalls.map((tc: any) => ({
+    ? rawToolCalls.map((tc) => ({
         id: typeof tc?.id === "string" ? tc.id : `call_${Math.random().toString(36).slice(2)}`,
         name: typeof tc?.function?.name === "string" ? tc.function.name : "",
         arguments: typeof tc?.function?.arguments === "string" ? tc.function.arguments : "{}",

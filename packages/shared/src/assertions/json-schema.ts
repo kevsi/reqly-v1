@@ -2,7 +2,8 @@
  * JSON Schema validation (subset, sufficient for assertion use cases).
  *
  * Supports: type, properties, items, required, enum, minimum/maximum,
- * minLength/maxLength, pattern, format, nullable, oneOf/anyOf/allOf.
+ * minLength/maxLength, pattern, nullable, oneOf/anyOf/allOf.
+ * `$ref` is rejected (cannot be resolved without a root document).
  */
 
 export interface JSONSchema {
@@ -59,6 +60,15 @@ export function validateSchema(
 ): string[] {
   const errors: string[] = [];
   const s = raw as JSONSchema;
+
+  // $ref cannot be resolved without a root document — fail closed rather
+  // than silently accepting every value (a false "pass" for an assertion).
+  if (s.$ref) {
+    errors.push(
+      `${path}: unsupported keyword "$ref" (${s.$ref}) — resolve the reference before asserting`,
+    );
+    return errors;
+  }
 
   if (s.nullable && (data === null || data === undefined)) return errors;
   if (data === null || data === undefined) {
@@ -127,6 +137,19 @@ export function validateSchema(
     const matches = s.oneOf.filter((sub) => validateSchema(sub, data, path).length === 0);
     if (matches.length !== 1) {
       errors.push(`${path}: expected exactly one schema match, got ${matches.length}`);
+    }
+  }
+
+  if (Array.isArray(s.anyOf)) {
+    const matches = s.anyOf.filter((sub) => validateSchema(sub, data, path).length === 0);
+    if (matches.length === 0) {
+      errors.push(`${path}: expected to match at least one of ${s.anyOf.length} schemas`);
+    }
+  }
+
+  if (Array.isArray(s.allOf)) {
+    for (const sub of s.allOf) {
+      errors.push(...validateSchema(sub, data, path));
     }
   }
 

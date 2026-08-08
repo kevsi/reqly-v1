@@ -11,12 +11,25 @@ export function registerServe(program: Command): void {
     .option("--port <number>", "Port for HTTP transport (default: stdio)")
     .option("--env <name>", "Default environment name for variable interpolation")
     .option("--timeout <ms>", "Default request timeout in milliseconds", "30000")
-    .option("--allow-local-hosts", "Allow requests to private/local addresses (disabled by default)")
+    .option(
+      "--allow-local-hosts",
+      "Allow requests to private/local addresses (disabled by default)",
+    )
+    .option(
+      "--token <token>",
+      "Require Authorization: Bearer <token> on every HTTP request (remote clients)",
+    )
     .option("--max-response-size <bytes>", "Maximum response body size in bytes", "10485760")
     .option(
       "--cors-origins <origins>",
       "Comma-separated allowed CORS origins for HTTP transport",
       "http://127.0.0.1,http://localhost",
+    )
+    .option("--tls-cert <path>", "Path to server TLS certificate (enables HTTPS)")
+    .option("--tls-key <path>", "Path to server TLS private key (required with --tls-cert)")
+    .option(
+      "--tls-ca <path>",
+      "Path to CA certificate to verify client certs (enables mTLS when used with --tls-cert/--tls-key)",
     )
     .action(async (opts) => {
       const timeout = parseInt(opts.timeout, 10) || 30000;
@@ -43,6 +56,19 @@ export function registerServe(program: Command): void {
       }
 
       try {
+        const tlsCert = opts.tlsCert ? path.resolve(opts.tlsCert) : undefined;
+        const tlsKey = opts.tlsKey ? path.resolve(opts.tlsKey) : undefined;
+        const tlsCa = opts.tlsCa ? path.resolve(opts.tlsCa) : undefined;
+
+        if (tlsCert && !tlsKey) {
+          process.stderr.write("--tls-key is required when --tls-cert is provided\n");
+          process.exit(1);
+        }
+        if (tlsKey && !tlsCert) {
+          process.stderr.write("--tls-cert is required when --tls-key is provided\n");
+          process.exit(1);
+        }
+
         await startMcpServer({
           bundle,
           bundlePath,
@@ -52,9 +78,15 @@ export function registerServe(program: Command): void {
           allowLocalHosts,
           maxResponseSize,
           corsOrigins,
+          authToken: opts.token,
+          tlsCert,
+          tlsKey,
+          tlsCa,
         });
       } catch (err: unknown) {
-        process.stderr.write(`MCP server error: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `MCP server error: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
         process.exit(1);
       }
     });

@@ -21,14 +21,15 @@ export const metadata: Metadata = {
     template: "%s · Reqly",
   },
   description:
-    "Reqly est un playground API complet : REST & GraphQL, collections, assistant IA, mock server, CLI et MCP. Open source, local d'abord et auto-hébergeable.",
+    "Reqly est un playground API complet : REST & GraphQL, SSE, collections, assistant IA agentique, SDK generator, CLI et MCP. Open source, local d'abord et auto-hébergeable.",
   keywords: [
     "client API",
     "REST",
     "GraphQL",
+    "SSE",
     "Postman alternatif",
-    "mock server",
     "assistant IA",
+    "SDK generator",
     "open source",
   ],
   alternates: { canonical: "/" },
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
     url: "/",
     title: "Reqly — Client API moderne, open source",
     description:
-      "REST, GraphQL, collections, assistant IA et automatisation dans un playground unique. Local d'abord, open source.",
+      "REST, GraphQL, SSE, collections, assistant IA agentique et automatisation dans un playground unique. Local d'abord, open source.",
     type: "website",
     locale: "fr_FR",
     siteName: "Reqly",
@@ -45,7 +46,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Reqly — Client API moderne, open source",
     description:
-      "REST, GraphQL, collections, assistant IA et automatisation dans un playground unique.",
+      "REST, GraphQL, SSE, collections, assistant IA et automatisation dans un playground unique.",
   },
 };
 
@@ -54,14 +55,9 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="fr"
-      className={`scroll-smooth ${inter.variable} ${jetbrainsMono.variable}`}
-    >
+    <html lang="fr" className={`scroll-smooth ${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
         {/* Sans JS, le fade-up ne se déclenche jamais : on force le contenu visible. */}
         <noscript>

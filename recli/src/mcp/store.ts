@@ -12,6 +12,7 @@ export class CollectionStore {
   private environments: Environment[] = [];
   private history: CollectionRunRecord[] = [];
   private persistCallback: (() => void) | null = null;
+  private historyPersistCallback: (() => void) | null = null;
 
   setPersistCallback(cb: () => void): void {
     this.persistCallback = cb;
@@ -19,6 +20,19 @@ export class CollectionStore {
 
   private notifyPersist(): void {
     this.persistCallback?.();
+  }
+
+  setHistoryPersistCallback(cb: () => void): void {
+    this.historyPersistCallback = cb;
+  }
+
+  private notifyHistoryPersist(): void {
+    this.historyPersistCallback?.();
+  }
+
+  /** Restore run history persisted across server restarts. */
+  loadHistory(records: CollectionRunRecord[]): void {
+    this.history = Array.isArray(records) ? records.slice(0, 100) : [];
   }
 
   loadFromBundle(bundle: ExportBundle): void {
@@ -243,9 +257,7 @@ export class CollectionStore {
     return clone;
   }
 
-  searchRequests(
-    query: string,
-  ): Array<{
+  searchRequests(query: string): Array<{
     request: Collection["requests"][number];
     collectionId: string;
     collectionName: string;
@@ -420,6 +432,7 @@ export class CollectionStore {
     if (this.history.length > 100) {
       this.history = this.history.slice(0, 100);
     }
+    this.notifyHistoryPersist();
   }
 
   getRunHistory(collectionId?: string, requestId?: string): CollectionRunRecord[] {

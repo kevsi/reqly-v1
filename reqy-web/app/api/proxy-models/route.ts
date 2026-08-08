@@ -1,12 +1,19 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
+import { assertSafeBaseUrl } from "../proxy-ai/lib/url-utils";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 60 });
 
 function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  // Mirror /api/proxy: only trust x-forwarded-for / x-real-ip when behind a
+  // trusted reverse proxy, otherwise use a shared key so header rotation
+  // cannot bypass the limiter.
+  if (process.env.TRUSTED_PROXY === "true") {
+    const forwarded = request.headers.get("x-forwarded-for");
+    return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  }
+  return "unknown";
 }
 
 interface ModelEntry {
@@ -112,7 +119,9 @@ async function fetchAnthropicModels(apiKey: string): Promise<{ data: ModelEntry[
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as { data?: Array<{ type: string; id: string; display_name?: string }> };
+    const json = (await res.json()) as {
+      data?: Array<{ type: string; id: string; display_name?: string }>;
+    };
     const data: ModelEntry[] = (json.data ?? [])
       .filter((m) => m.type === "model")
       .map((m) => ({ id: m.id, name: m.display_name ?? m.id }));
@@ -179,10 +188,12 @@ export async function POST(req: NextRequest) {
     let result: { data: ModelEntry[] };
 
     switch (provider) {
-      case "custom":
+      case "custom": {
         if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 400 });
-        result = await fetchOpenAICompatible(baseUrl || "https://api.openai.com/v1", apiKey);
+        const safeBase = await assertSafeBaseUrl(baseUrl || "https://api.openai.com/v1");
+        result = await fetchOpenAICompatible(safeBase, apiKey);
         break;
+      }
 
       case "openrouter":
         if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 400 });
@@ -196,7 +207,8 @@ export async function POST(req: NextRequest) {
 
       case "openai": {
         if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 400 });
-        result = await fetchOpenAICompatible(baseUrl || "https://api.openai.com/v1", apiKey);
+        const safeBase = await assertSafeBaseUrl(baseUrl || "https://api.openai.com/v1");
+        result = await fetchOpenAICompatible(safeBase, apiKey);
         break;
       }
 

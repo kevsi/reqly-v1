@@ -1,0 +1,61 @@
+---
+title: Collections
+description: Group related requests together for organization, scripted assertions, and batch execution.
+icon: FolderKanban
+---
+
+Collections let you group related requests together for organization and batch execution. Access them via the **Collections** page in the sidebar, the modal in the header, or the drawer for quick access.
+
+## Create & manage
+
+- Create collections, rename them, add requests with a name, URL, and method
+- Organize into **list** or **card** view
+- Organize requests into **folders** within a collection
+- **Duplicate** any collection — requests, folders, and all — from the dropdown menu
+- **Drag reorder** collections by the grip handle on the left in the list view
+
+## Scripted tests
+
+Collections support JavaScript assertions that run around each request:
+
+<Callout type="info" title="Two hooks">
+  - **Pre-request scripts** run before the request is sent — useful to compute headers, timestamps, or auth tokens.
+  - **Post-response scripts** run after — useful to assert status codes, response fields, and timing.
+</Callout>
+
+Example post-response assertion:
+
+```js title="post-response script"
+if (response.status !== 200) {
+  throw new Error(`Expected 200, got ${response.status}`);
+}
+
+const data = JSON.parse(response.body);
+if (!data.id) {
+  throw new Error("Missing id in response body");
+}
+```
+
+## Batch run
+
+Run all requests in a collection at once:
+
+1. Open the collection.
+2. Click **Run** (or use the batch runner).
+3. Track progress with the modal — success/failure per request.
+
+Results highlight each request with its status, assertion results, and response time.
+
+## Export & import
+
+Collections are fully portable:
+
+- **OpenAPI** — export your collections as OpenAPI 3.0 specs, or import existing definitions to create collections
+- **Postman** — connect your Postman account to import/export collections seamlessly
+- **Bruno** — import Bruno collections
+
+See [Import & export](/docs/import-export) for details.
+
+## Save as project
+
+Use the **Save as Project** feature to export your entire workspace — requests, collections, and environments — into a JSON file. Reopen it later via **My Projects** to restore your setup. See [Workspaces](/docs/workspaces).

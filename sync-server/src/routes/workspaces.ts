@@ -138,6 +138,17 @@ workspaces.delete("/:id", (c) => {
   }
 
   const tx = db.transaction(() => {
+    // Cascade-delete child data before the workspace. The foreign keys on
+    // collections/environments/folders use the SQLite default (NO ACTION) with
+    // `foreign_keys = ON` (see db.ts), so deleting the workspace first would
+    // raise a constraint error whenever it still holds collections — and would
+    // otherwise leave orphaned rows. Order: folders → environments →
+    // collections → memberships → invitations → workspace.
+    db.prepare(
+      `DELETE FROM folders WHERE collection_id IN (SELECT id FROM collections WHERE workspace_id = ?)`,
+    ).run(id);
+    db.prepare(`DELETE FROM environments WHERE workspace_id = ?`).run(id);
+    db.prepare(`DELETE FROM collections WHERE workspace_id = ?`).run(id);
     db.prepare(`DELETE FROM memberships WHERE workspace_id = ?`).run(id);
     db.prepare(`DELETE FROM invitations WHERE workspace_id = ?`).run(id);
     db.prepare(`DELETE FROM workspaces WHERE id = ?`).run(id);

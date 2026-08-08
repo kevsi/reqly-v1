@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import db from "./db.js";
 
 /**
  * Escape all regex-special characters in a string so it can be safely
@@ -15,6 +16,8 @@ interface SessionPayload {
   provider: string;
   userId?: string;
   expires: number;
+  /** Session token version — bumped on logout to revoke outstanding tokens. */
+  ver?: number;
 }
 
 const COOKIE_NAME = "auth_session";
@@ -88,6 +91,18 @@ export interface AuthContext {
   name: string;
 }
 
+/**
+ * Session revocation check. Tokens embed `ver` (the user's token_version at
+ * issuance); it is bumped on logout, so older tokens fail this check. Legacy
+ * tokens without `ver` are grandfathered (they are replaced on next login).
+ */
+export function isSessionRevoked(userId: string, ver?: number): boolean {
+  if (ver === undefined) return false;
+  const row = db.prepare("SELECT token_version FROM users WHERE id = ?").get(userId) as
+    { token_version: number } | undefined;
+  return !row || ver !== row.token_version;
+}
+
 export async function requireAuth(c: Context, next: Next) {
   const cookieHeader = c.req.header("cookie") ?? "";
   const match = cookieHeader.match(new RegExp(`${escapeRegex(COOKIE_NAME)}=([^;]+)`));
@@ -107,6 +122,11 @@ export async function requireAuth(c: Context, next: Next) {
   }
 
   if (session?.userId) {
+    // Session revocation: tokens embed a version that must match the user's
+    // current token_version (bumped on logout). Stale tokens are rejected.
+    if (isSessionRevoked(session.userId, session.ver)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
     c.set("auth", {
       userId: session.userId,
       email: session.email,

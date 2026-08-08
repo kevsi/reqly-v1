@@ -138,6 +138,12 @@ describe("sync-server DB", () => {
       ).run("ws-1", "W", "u-1", 1, 1);
 
       for (const role of ["owner", "editor", "viewer"]) {
+        db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+          `u-${role}`,
+          `${role}@x`,
+          role,
+          1,
+        );
         expect(() =>
           db
             .prepare(

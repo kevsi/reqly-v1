@@ -38,7 +38,7 @@ export async function handleAnthropic(
 
   // Convert OpenAI-style tools to Anthropic format
   const anthropicTools = tools?.map((t) => {
-    const fn = (t as any).function ?? t;
+    const fn: Record<string, unknown> = (t as { function?: Record<string, unknown> }).function ?? t;
     return {
       name: fn.name,
       description: fn.description,
@@ -110,12 +110,15 @@ export async function handleAnthropic(
         id?: string;
         name?: string;
         input?: Record<string, unknown>;
-      } => typeof item === "object" && item !== null && (item as any).type === "tool_use",
+      } =>
+        typeof item === "object" &&
+        item !== null &&
+        (item as { type?: string }).type === "tool_use",
     )
     .map((item) => ({
-      id: (item as any).id,
-      name: (item as any).name,
-      arguments: JSON.stringify((item as any).input ?? {}),
+      id: item.id,
+      name: item.name,
+      arguments: JSON.stringify(item.input ?? {}),
     }));
 
   if (toolUses.length > 0) {

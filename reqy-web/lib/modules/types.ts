@@ -2,8 +2,8 @@
  * Module contract — shared types for Reqly modules.
  *
  * A module is a self-contained feature that is NOT part of the generic
- * international app core. Every module — MTN MoMo, SDK generator, Templates,
- * CSP monitor, Capture, … — is described by the SAME {@link ModuleManifest}
+ * international app core. Every module — Encodeur/Décodeur, SDK generator,
+ * Templates, … — is described by the SAME {@link ModuleManifest}
  * and managed uniformly through the registry (available → installed → enabled).
  * There is no special case for any module.
  *
@@ -15,16 +15,16 @@
 export type ModuleKind = "feature" | "content" | "integration";
 
 export interface ModuleNavItem {
-  /** Sidebar label, e.g. "Mobile Money". */
+  /** Sidebar label, e.g. "Encodeur". */
   label: string;
-  /** Route path the module is mounted at, e.g. "/mobile-money/". */
+  /** Route path the module is mounted at, e.g. "/encode-decode/". */
   href: string;
   /** Icon key (resolved by the sidebar when wiring happens). */
   icon?: string;
 }
 
 export interface ModuleRouteContribution {
-  /** Route path the module owns, e.g. "/mobile-money/" or "/api/sdk-generate". */
+  /** Route path the module owns, e.g. "/encode-decode/" or "/api/sdk-generate". */
   path: string;
   /** "page" = a UI route (app page); "api" = an API route handler. */
   type: "page" | "api";

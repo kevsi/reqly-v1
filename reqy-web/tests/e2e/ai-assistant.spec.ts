@@ -1,56 +1,46 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("AI Assistant", () => {
-  test("page loads with chat interface", async ({ page }) => {
-    await page.goto("/ai-insights");
-    // Page should load
-    await expect(page.locator("body")).toBeVisible({ timeout: 10000 });
-  });
-
-  test("provider selector is present", async ({ page }) => {
-    await page.goto("/ai-insights");
-    // Look for a provider/AI selection dropdown
-    const providerBtn = page.getByRole("button", { name: /openai|anthropic|provider|ai/i }).first();
-    if (await providerBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await expect(providerBtn).toBeVisible();
-    }
-  });
-
-  test("chat input area exists", async ({ page }) => {
-    await page.goto("/ai-insights");
-    // Look for a textarea or input for chat messages
-    const inputArea = page
-      .locator('textarea, input[placeholder*="message"i], input[placeholder*="ask"i]')
-      .first();
-    if (await inputArea.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await expect(inputArea).toBeVisible();
-    }
-  });
-
-  test("show AI chat button works from request page", async ({ page }) => {
+test.describe("AI Assistant sidebar", () => {
+  test("can open and close sidebar via header toggle + Cmd+I", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("body")).toBeVisible({ timeout: 10000 });
 
-    // The show-ai-chat-button might be in the sidebar
-    const aiChatBtn = page.getByTestId("show-ai-chat-button").first();
-    if (await aiChatBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await aiChatBtn.click();
-      // AI sidebar should appear
-      const aiSidebar = page.locator(
-        '[data-testid="ai-sidebar"], [data-testid="show-ai-chat-button"]',
-      );
-      await expect(aiSidebar.first()).toBeVisible();
-    }
+    // Open via header toggle button (Sparkles icon)
+    const toggle = page.getByTitle(/Ouvrir l'assistant IA/i);
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+
+    // Sidebar appears with data-testid="ai-sidebar"
+    const sidebar = page.getByTestId("ai-sidebar");
+    await expect(sidebar).toBeVisible();
+
+    // Close via Escape
+    await page.keyboard.press("Escape");
+    await expect(sidebar).not.toBeVisible();
   });
 
-  test("suggestion prompts are shown", async ({ page }) => {
-    await page.goto("/ai-insights");
-    // Look for suggestion buttons/prompts
-    const suggestion = page
-      .locator("button, div", { hasText: /recommandation|recommend|résume|summarize/i })
-      .first();
-    if (await suggestion.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await expect(suggestion).toBeVisible();
-    }
+  test("suggestion prompts are shown in empty state", async ({ page }) => {
+    await page.goto("/");
+    const toggle = page.getByTitle(/Ouvrir l'assistant IA/i);
+    await toggle.click();
+
+    const sidebar = page.getByTestId("ai-sidebar");
+    await expect(sidebar).toBeVisible();
+
+    // Check that the empty state suggestions exist
+    const suggestion = sidebar.getByRole("button", { name: /Exécute GET/i });
+    await expect(suggestion).toBeVisible();
+  });
+
+  test("chat input area exists and accepts text", async ({ page }) => {
+    await page.goto("/");
+    const toggle = page.getByTitle(/Ouvrir l'assistant IA/i);
+    await toggle.click();
+
+    const input = page.locator('input[placeholder*="assistant"]');
+    await expect(input).toBeVisible();
+
+    await input.fill("Hello AI");
+    await expect(input).toHaveValue("Hello AI");
   });
 });

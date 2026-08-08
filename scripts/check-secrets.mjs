@@ -24,21 +24,26 @@ const SECRET_PATTERNS = [
   /(?:SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY).*[A-Za-z0-9-_]{20,}/g,
 ];
 
-// Files that are allowed to contain secrets (e.g. .env.example with placeholders)
-const ALLOWED_PATHS = [
-  ".env.example",
-  "env.example",
-  "README.md",
-  "**/*.md",
-  "scripts/check-secrets.mjs",
-];
+// Files that are allowed to contain secret-like placeholders (env examples,
+// docs, and this scanner itself). Matching is done on the normalized path so a
+// file named e.g. `m` or `md` no longer bypasses the scan — the previous logic
+// tested whether the allowlist *pattern* contained the file basename, which
+// matched far too broadly (e.g. "**/*.md".includes("m") === true).
+function isAllowedPath(file) {
+  const norm = String(file).replace(/\\/g, "/");
+  const basename = norm.split("/").pop() || norm;
+  if (norm.endsWith(".md")) return true;
+  if (basename === ".env.example" || basename === "env.example") return true;
+  if (norm.endsWith("scripts/check-secrets.mjs")) return true;
+  return false;
+}
 
 const files = process.argv.slice(2);
 let hasViolation = false;
 
 for (const file of files) {
-  // Skip allowed paths
-  if (ALLOWED_PATHS.some((p) => p.includes(file.split("/").pop() || file))) {
+  // Skip allowlisted paths (placeholders / docs / this scanner).
+  if (isAllowedPath(file)) {
     continue;
   }
 

@@ -1,8 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { validateProxyPayload } from "@/lib/schemas/proxy";
-import { WORKSPACE_NORMALIZER } from "@/lib/workspace-utils";
-import { isBoolean, isHttpMethod } from "@/lib/type-guards";
+
 import {
   InMemoryRateLimiter,
   UpstashRateLimiter,
@@ -93,10 +92,24 @@ const rateLimiter: DistributedRateLimiter = (() => {
   };
 })();
 
+// Trust X-Forwarded-For / X-Real-IP only when sitting behind a trusted reverse
+// proxy (Vercel/Fly overwrite these headers authoritatively). When an attacker
+// can set them, bucketing by XFF lets them bypass the limiter by rotating the
+// value — so we fall back to a single shared key instead. Mirrors the clientIp()
+// logic in sync-server/src/rate-limiter.ts.
+const TRUSTED_PROXY = (): boolean => process.env.TRUSTED_PROXY === "true";
+
 function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
-  return ip;
+  if (TRUSTED_PROXY()) {
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+    return ip;
+  }
+  // No trusted proxy: ignore client-supplied IP headers entirely. This weakens
+  // per-client limiting to a global bucket, but it cannot be bypassed by header
+  // rotation. The proxy route is additionally gated by the visitor/service token
+  // (see proxy.ts), so the impact of a shared rate-limit key is bounded.
+  return "unknown";
 }
 
 function validateUrl(rawUrl: string): { valid: boolean; parsed?: URL; error?: string } {
@@ -136,6 +149,14 @@ function isFetchNetworkError(error: unknown): boolean {
   return /failed to fetch|networkerror|enotfound|econnrefused|econntreset|etimedout|socket hang up|connect.*refused/.test(
     message,
   );
+}
+
+function sanitizeUrlForDebug(url: URL): string {
+  let sanitized = `${url.protocol}//${url.hostname}`;
+  if (url.port) sanitized += `:${url.port}`;
+  if (url.pathname && url.pathname !== "/") sanitized += url.pathname;
+  if (url.search) sanitized += url.search;
+  return sanitized;
 }
 
 export async function POST(request: NextRequest) {
@@ -343,6 +364,34 @@ export async function POST(request: NextRequest) {
           { status: 502 },
         );
       }
+      // Resolve the redirect target and block private/internal hosts, mirroring
+      // the SSRF checks applied to the primary URL (IP literals + DNS rebinding).
+      const redirectAllowLocal =
+        process.env.NODE_ENV === "development" || getServerEnv().ALLOW_LOCAL_HOSTS === "true";
+      if (!redirectAllowLocal) {
+        const redirectHost = locValidation.parsed!.hostname;
+        if (isIP(redirectHost) && isBlockedIp(redirectHost)) {
+          return NextResponse.json(
+            {
+              error: "blocked_redirect",
+              message: "Redirect to blocked destination: private/internal IP",
+              status: 502,
+            },
+            { status: 502 },
+          );
+        }
+        const resolvedRedirect = await resolveCached(redirectHost);
+        if (!resolvedRedirect || isBlockedIp(resolvedRedirect)) {
+          return NextResponse.json(
+            {
+              error: "blocked_redirect",
+              message: "Redirect to blocked destination: private/internal IP",
+              status: 502,
+            },
+            { status: 502 },
+          );
+        }
+      }
     }
 
     // Real TCP connect time (probe ran concurrently with the fetch above).
@@ -419,7 +468,7 @@ export async function POST(request: NextRequest) {
 
     if (debugMode) {
       successPayload._debug = {
-        requestedUrl: targetUrl,
+        requestedUrl: sanitizeUrlForDebug(parsedUrl),
         hostname: parsedUrl.hostname,
         isPrivateHost: isPrivateHost(parsedUrl.hostname),
       };
@@ -431,15 +480,17 @@ export async function POST(request: NextRequest) {
       return structuredError("Request timed out", "TIMEOUT", 504);
     }
 
-    const message = error instanceof Error ? error.message : String(error);
     if (isFetchNetworkError(error)) {
-      const resp = structuredError(message, "BAD_GATEWAY", 502);
+      const resp = structuredError("Upstream request failed", "BAD_GATEWAY", 502);
       if (debugMode) {
-        // attach debug info when requested
         return NextResponse.json(
           {
             ...(await resp.json()),
-            _debug: { requestedUrl: targetUrl, hostname: parsedUrl?.hostname ?? null },
+            _debug: {
+              requestedUrl: parsedUrl ? sanitizeUrlForDebug(parsedUrl) : null,
+              hostname: parsedUrl?.hostname ?? null,
+              error: error instanceof Error ? error.message : String(error),
+            },
           },
           { status: 502 },
         );
@@ -447,12 +498,16 @@ export async function POST(request: NextRequest) {
       return resp;
     }
 
-    const resp = structuredError(message, "INTERNAL_ERROR", 500);
+    const resp = structuredError("Upstream request failed", "INTERNAL_ERROR", 500);
     if (debugMode) {
       return NextResponse.json(
         {
           ...(await resp.json()),
-          _debug: { requestedUrl: targetUrl, hostname: parsedUrl?.hostname ?? null },
+          _debug: {
+            requestedUrl: targetUrl,
+            hostname: parsedUrl?.hostname ?? null,
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
         { status: 500 },
       );

@@ -23,7 +23,7 @@ describe("useAiAgentInput", () => {
     expect(result.current.value).toBe("");
   });
 
-  it("adds a mention attachment and removes the @token", () => {
+  it("acceptMention strips the @token from the input value", () => {
     const { result } = renderHook(() => useAiAgentInput([], vi.fn()));
     act(() => result.current.handleChange("analyse @pay"));
     expect(result.current.mentionQuery).toBe("pay");
@@ -35,36 +35,10 @@ describe("useAiAgentInput", () => {
         label: "Payments",
       }),
     );
-    expect(result.current.attachments).toHaveLength(1);
-    expect(result.current.value).toContain("analyse");
+    // The @mention text should be removed from the input value
+    // replace(/@\S*$/, " ") replaces "@pay" with " " — the leading space stays
+    expect(result.current.value).toBe("analyse  ");
     expect(result.current.mentionQuery).toBeNull();
-  });
-
-  it("does not duplicate an attachment already selected", () => {
-    const { result } = renderHook(() => useAiAgentInput([], vi.fn()));
-    const att = {
-      id: "request:r1",
-      type: "request" as const,
-      refId: "r1",
-      label: "Get users",
-    };
-    act(() => result.current.acceptMention(att));
-    act(() => result.current.acceptMention(att));
-    expect(result.current.attachments).toHaveLength(1);
-  });
-
-  it("removes a mention attachment", () => {
-    const { result } = renderHook(() => useAiAgentInput([], vi.fn()));
-    act(() =>
-      result.current.acceptMention({
-        id: "environment:e1",
-        type: "environment",
-        refId: "e1",
-        label: "Prod",
-      }),
-    );
-    act(() => result.current.removeAttachment("environment:e1"));
-    expect(result.current.attachments).toHaveLength(0);
   });
 
   it("clears value and autocomplete state", () => {

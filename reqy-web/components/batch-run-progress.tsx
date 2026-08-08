@@ -6,7 +6,8 @@ import { methodBadge } from "@/lib/http-method-colors";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { Collection, RequestItem, HttpMethod } from "@/hooks/use-request-store";
+import type { Collection, RequestItem } from "@/hooks/use-request-store";
+import type { AssertionResult } from "@/lib/test-runner/types";
 
 interface BatchRunProgressProps {
   collection: Collection;
@@ -15,7 +16,13 @@ interface BatchRunProgressProps {
   onRunRequest: (
     request: RequestItem,
     index: number,
-  ) => Promise<{ success: boolean; status?: number; time?: number; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    status?: number;
+    time?: number;
+    error?: string;
+    assertionResults?: AssertionResult[];
+  }>;
 }
 
 type RequestStatus = "pending" | "running" | "success" | "error";
@@ -26,6 +33,7 @@ interface RequestRunState {
   statusCode?: number;
   timeMs?: number;
   error?: string;
+  assertionResults?: AssertionResult[];
 }
 
 export function BatchRunProgress({
@@ -71,6 +79,7 @@ export function BatchRunProgress({
                   statusCode: result.status,
                   timeMs: result.time,
                   error: result.error,
+                  assertionResults: result.assertionResults,
                 }
               : s,
           ),
@@ -252,26 +261,52 @@ export function BatchRunProgress({
                 {state.request.name}
               </span>
 
-              {/* Time / status */}
-              {state.status === "running" && (
-                <span className="text-xs text-primary animate-pulse">Sending...</span>
-              )}
-              {state.status === "success" && state.timeMs !== undefined && (
-                <span className="text-xs text-success tabular-nums">
-                  {state.statusCode} · {formatTime(state.timeMs)}
-                </span>
-              )}
-              {state.status === "error" && (
-                <span
-                  className="text-xs text-destructive truncate max-w-[150px]"
-                  title={state.error}
-                >
-                  {state.error || "Error"}
-                </span>
-              )}
-              {state.status === "pending" && (
-                <span className="text-xs text-muted-foreground">—</span>
-              )}
+              {/* Time / status / assertions */}
+              <div className="flex flex-col items-end gap-1 min-w-0 shrink-0">
+                {state.status === "running" && (
+                  <span className="text-xs text-primary animate-pulse">Sending...</span>
+                )}
+                {state.status === "success" && state.timeMs !== undefined && (
+                  <span className="text-xs text-success tabular-nums">
+                    {state.statusCode} · {formatTime(state.timeMs)}
+                  </span>
+                )}
+                {state.status === "error" && (
+                  <span
+                    className="text-xs text-destructive truncate max-w-[150px]"
+                    title={state.error}
+                  >
+                    {state.error || "Error"}
+                  </span>
+                )}
+                {state.status === "pending" && (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+                {/* Assertion results */}
+                {state.assertionResults && state.assertionResults.length > 0 && (
+                  <div className="flex flex-wrap gap-0.5 justify-end max-w-[200px]">
+                    {state.assertionResults.map((ar, i) => (
+                      <span
+                        key={i}
+                        title={
+                          ar.error ??
+                          (ar.passed
+                            ? "Passed"
+                            : `Expected ${JSON.stringify((ar.assertion as { expected?: unknown }).expected ?? (ar.assertion as { value?: unknown }).value)} got ${JSON.stringify(ar.actualValue)}`)
+                        }
+                        className={cn(
+                          "inline-flex items-center rounded px-1 py-0.5 text-[9px] font-mono font-medium leading-none",
+                          ar.passed
+                            ? "bg-success/10 text-success"
+                            : "bg-destructive/10 text-destructive",
+                        )}
+                      >
+                        {ar.passed ? "✓" : "✗"} {ar.assertion.type}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>

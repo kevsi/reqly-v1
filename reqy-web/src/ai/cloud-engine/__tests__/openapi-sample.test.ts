@@ -28,7 +28,9 @@ describe("generateFromSchema — primitives", () => {
   });
 
   it("generates string with format date-time", () => {
-    expect(generateFromSchema({ type: "string", format: "date-time" })).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(generateFromSchema({ type: "string", format: "date-time" })).toMatch(
+      /^\d{4}-\d{2}-\d{2}T/,
+    );
   });
 
   it("generates integer default", () => {
@@ -50,7 +52,10 @@ describe("generateFromSchema — objects", () => {
         name: { type: "string", default: "Alice" },
       },
     };
-    const out = generateFromSchema(schema, 0, { includeOptionals: false }) as Record<string, unknown>;
+    const out = generateFromSchema(schema, 0, { includeOptionals: false }) as Record<
+      string,
+      unknown
+    >;
     expect(out.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(out.name).toBeUndefined();
   });
@@ -81,7 +86,7 @@ describe("generateFromSchema — objects", () => {
           },
         },
       },
-    }) as any;
+    }) as unknown;
     expect(out.user.email).toBe("user@example.com");
   });
 });
@@ -110,11 +115,9 @@ describe("generateFromSchema — $ref", () => {
       required: ["id"],
       properties: { id: { type: "string" }, name: { type: "string" } },
     };
-    const out = generateFromSchema(
-      { $ref: "#/components/schemas/User" },
-      0,
-      { rootSchemas: { User } }
-    ) as Record<string, unknown>;
+    const out = generateFromSchema({ $ref: "#/components/schemas/User" }, 0, {
+      rootSchemas: { User },
+    }) as Record<string, unknown>;
     expect(typeof out.id).toBe("string");
     expect(typeof out.name).toBe("string");
   });
@@ -138,10 +141,7 @@ describe("generateFromSchema — composition", () => {
 
   it("picks first valid branch for oneOf", () => {
     const out = generateFromSchema({
-      oneOf: [
-        { type: "string" },
-        { type: "object", properties: { x: { type: "string" } } },
-      ],
+      oneOf: [{ type: "string" }, { type: "object", properties: { x: { type: "string" } } }],
     });
     // Either branch is acceptable; just check shape
     expect(out !== null && out !== undefined).toBe(true);
@@ -169,7 +169,7 @@ describe("generateBodyFromOpenApiRequest", () => {
     };
     const out = generateBodyFromOpenApiRequest(
       { $ref: "#/components/schemas/Pet" },
-      spec
+      spec,
     ) as Record<string, unknown>;
     expect(typeof out.id).toBe("string");
     expect(typeof out.name).toBe("string");

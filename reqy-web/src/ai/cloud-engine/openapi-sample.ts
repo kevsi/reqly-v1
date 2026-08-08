@@ -121,19 +121,13 @@ function resolveRef(ref: string, root: Record<string, OpenAPISchema> = {}): Open
   return root[name] ?? null;
 }
 
-function isNullable(schema: OpenAPISchema): boolean {
-  if (schema.nullable) return true;
-  if (Array.isArray(schema.type) && schema.type.includes("null")) return true;
-  return false;
-}
-
 /**
  * Recursively generate a value matching the given schema.
  */
 export function generateFromSchema(
   schema: OpenAPISchema,
   depth = 0,
-  options: GenerateOptions = {}
+  options: GenerateOptions = {},
 ): unknown {
   const maxDepth = options.maxDepth ?? 10;
   if (depth > maxDepth) return null;
@@ -173,7 +167,9 @@ export function generateFromSchema(
   }
 
   // 5. by type
-  const type = Array.isArray(schema.type) ? schema.type.filter((t) => t !== "null")[0] : schema.type;
+  const type = Array.isArray(schema.type)
+    ? schema.type.filter((t) => t !== "null")[0]
+    : schema.type;
   switch (type) {
     case "object": {
       const props = schema.properties ?? {};
@@ -209,7 +205,7 @@ export function generateFromSchema(
  */
 export function generateBodyFromOpenApiRequest(
   requestBodySchema: OpenAPISchema,
-  openApiSpec: { components?: { schemas?: Record<string, OpenAPISchema> } }
+  openApiSpec: { components?: { schemas?: Record<string, OpenAPISchema> } },
 ): unknown {
   return generateFromSchema(requestBodySchema, 0, {
     rootSchemas: openApiSpec.components?.schemas ?? {},

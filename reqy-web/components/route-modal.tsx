@@ -8,17 +8,13 @@ import {
   Copy,
   Shield,
   ShieldOff,
-  ChevronDown,
   ChevronRight,
   FileText,
   Search,
   X,
-  Package,
-  Server,
   Route,
   Lock,
   Unlock,
-  List,
   Code2,
   Info,
 } from "lucide-react";
@@ -48,7 +44,7 @@ interface RouteModalProps {
   onClose: () => void;
 }
 
-export function RouteModal({ project, open, onClose }: RouteModalProps) {
+export function RouteModal({ project, onClose }: RouteModalProps) {
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState<string>("all");
   const [authOnly, setAuthOnly] = useState(false);
@@ -80,7 +76,7 @@ export function RouteModal({ project, open, onClose }: RouteModalProps) {
       for (const route of project.routes) {
         addRequestToCollection(colId, {
           name: `${route.method} ${route.path}`,
-          method: route.method as any,
+          method: route.method,
           url: `${baseUrl}${route.path}`,
           endpoint: route.path,
           headers: Object.fromEntries((route.headers ?? []).map((h) => [h.key, h.value])),
@@ -102,7 +98,7 @@ export function RouteModal({ project, open, onClose }: RouteModalProps) {
       toast({
         title: `${added.length} requête(s) ajoutée(s) à la collection « ${colName} » (port ${project.port ?? 3000})`,
         meta: { event: "collectionComplete" },
-      } as any);
+      });
     } catch (err) {
       toast({ title: `Erreur : ${String(err)}`, variant: "destructive" });
       setCreatedId(null);
@@ -114,7 +110,7 @@ export function RouteModal({ project, open, onClose }: RouteModalProps) {
   const handleCopy = useCallback(async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast({ title: `${label} copié`, description: text, meta: { event: "copy" } } as any);
+      toast({ title: `${label} copié`, description: text, meta: { event: "copy" } });
     } catch {
       toast({ title: `Impossible de copier ${label}`, variant: "destructive" });
     }

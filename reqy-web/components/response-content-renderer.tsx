@@ -25,15 +25,12 @@ import {
 import DOMPurify from "dompurify";
 import {
   type ResponseFormat,
-  getContentType,
   isJson,
-  isXml,
   isHtml,
   isImage,
   isPdf,
   isAudio,
   isVideo,
-  isBinary,
   highlightJson,
   extractVideoUrls,
   extractImageUrls,

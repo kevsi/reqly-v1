@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Cookie, Copy, Check, FileText } from "lucide-react";
+import { Cookie, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { TauriCookie } from "@/lib/tauri";

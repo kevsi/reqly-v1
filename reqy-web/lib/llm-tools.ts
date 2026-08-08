@@ -155,7 +155,18 @@ export function toGeminiFunctionDeclaration(tool: ToolDefinition): Record<string
 
 // ─── Masquage des valeurs sensibles ────────────────────────────────────────
 
-const SECRET_KEYWORDS = ["secret", "key", "token", "password", "apikey", "api_key"];
+const SECRET_KEYWORDS = [
+  "secret",
+  "key",
+  "token",
+  "password",
+  "apikey",
+  "api_key",
+  "auth",
+  "bearer",
+  "authorization",
+  "cookie",
+];
 
 export function maskSensitiveValue(key: string, value: string): string {
   if (typeof value !== "string") return value;
@@ -183,10 +194,16 @@ export function maskSensitiveObject(obj: Record<string, unknown>): Record<string
 // ─── Accès au store Reqly ───────────────────────────────────────────────────
 
 import { requestStore } from "@/hooks/use-request-store";
-import type { Collection, Environment, RequestItem } from "@/hooks/request-types";
+import type { Collection, RequestItem } from "@/hooks/request-types";
 import type { HttpMethod } from "@/lib/types";
 import { runSubAgent, assertDelegationAllowed } from "@/src/ai/agent/subagent";
-import { loadAIProvider, loadApiKey, loadAiBaseUrl, loadAiModel, loadOllamaConfig } from "@/lib/config";
+import {
+  loadAIProvider,
+  loadApiKey,
+  loadAiBaseUrl,
+  loadAiModel,
+  loadOllamaConfig,
+} from "@/lib/config";
 
 function findCollectionIdByName(name: string): string | undefined {
   const store = requestStore.getState();
@@ -203,13 +220,6 @@ function activeWorkspaceCollections(): Collection[] {
   const wsId = store.activeWorkspaceId;
   if (!wsId) return store.collections;
   return store.collections.filter((c) => c.workspaceId === wsId);
-}
-
-function activeWorkspaceEnvironments(): Environment[] {
-  const store = requestStore.getState();
-  const wsId = store.activeWorkspaceId;
-  if (!wsId) return store.environments;
-  return store.environments.filter((e) => e.workspaceId === wsId);
 }
 
 // ─── Outils Reqly ──────────────────────────────────────────────────────────
@@ -282,13 +292,23 @@ async function handleDelegate(
   }
   try {
     assertDelegationAllowed(options?.depth ?? 0);
-  } catch (e: any) {
-    return { callId: "", name: "delegate", content: "", error: e?.message ?? "Délégation refusée." };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "delegate",
+      content: "",
+      error: e instanceof Error ? e.message : typeof e === "string" ? e : "Délégation refusée.",
+    };
   }
   const provider = loadAIProvider();
   const apiKey = loadApiKey(provider);
   if (!apiKey) {
-    return { callId: "", name: "delegate", content: "", error: "Configure ton provider IA dans Settings." };
+    return {
+      callId: "",
+      name: "delegate",
+      content: "",
+      error: "Configure ton provider IA dans Settings.",
+    };
   }
   const ollama = loadOllamaConfig();
   try {
@@ -310,8 +330,13 @@ async function handleDelegate(
       content: `[Sous-agent]\n${res.text.slice(0, 4000)}`,
       usage: res.usage,
     };
-  } catch (e: any) {
-    return { callId: "", name: "delegate", content: "", error: e?.message ?? "Le sous-agent a échoué." };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "delegate",
+      content: "",
+      error: e instanceof Error ? e.message : typeof e === "string" ? e : "Le sous-agent a échoué.",
+    };
   }
 }
 
@@ -462,12 +487,17 @@ async function handleExecuteRequest(args: Record<string, unknown>): Promise<Tool
       name: "execute_request",
       content: `${method} ${url} → ${status} en ${duration}ms\n${responseBody}`,
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       callId: "",
       name: "execute_request",
       content: "",
-      error: e?.message ?? "Erreur lors de l'exécution de la requête.",
+      error:
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : "Erreur lors de l'exécution de la requête.",
     };
   }
 }
@@ -672,12 +702,17 @@ export async function executeToolCall(
   try {
     const result = await tool.handler(args, opts);
     return { ...result, callId: call.id };
-  } catch (e: any) {
+  } catch (e) {
     return {
       callId: call.id,
       name: call.name,
       content: "",
-      error: e?.message ?? "Erreur lors de l'exécution de l'outil.",
+      error:
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : "Erreur lors de l'exécution de l'outil.",
     };
   }
 }
@@ -775,9 +810,19 @@ export const REQLY_TOOLS: ReqlyTool[] = [
     description:
       "Délègue une sous-tâche ciblée à un sous-agent avec un rôle dédié, puis retourne son résultat. Utilise pour découper une demande complexe en sous-tâches parallélisables.",
     parameters: {
-      role: { type: "string", description: "Persona du sous-agent (ex: analyste API, testeur, expert auth)." },
-      instruction: { type: "string", description: "La sous-tâche précise à accomplir.", required: true },
-      context: { type: "string", description: "Contexte pertinent pour la sous-tâche (limité à 6000 caractères)." },
+      role: {
+        type: "string",
+        description: "Persona du sous-agent (ex: analyste API, testeur, expert auth).",
+      },
+      instruction: {
+        type: "string",
+        description: "La sous-tâche précise à accomplir.",
+        required: true,
+      },
+      context: {
+        type: "string",
+        description: "Contexte pertinent pour la sous-tâche (limité à 6000 caractères).",
+      },
     },
     handler: handleDelegate,
   },

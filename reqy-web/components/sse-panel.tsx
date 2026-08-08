@@ -87,12 +87,6 @@ function EventItem({ event }: { event: SSEEvent }) {
   );
 }
 
-const authTypeLabels: Record<SSEAuthType, string> = {
-  none: "No Auth",
-  bearer: "Bearer Token",
-  basic: "Basic Auth",
-};
-
 export function SSEPanel() {
   const { status, events, connect, disconnect, clearEvents } = useSSE();
   const [url, setUrl] = useState("https://localhost:3000/sse");

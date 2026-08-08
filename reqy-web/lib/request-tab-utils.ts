@@ -4,8 +4,6 @@ import type { Header, QueryParam, PathParam, RequestTab } from "@/lib/request-ex
 import type { HttpMethod } from "@/lib/types";
 import {
   methodBadge,
-  methodDot,
-  methodPanelAccent,
   getMethodBadgeClass,
   getMethodDotClass,
   getMethodPanelClass,
@@ -42,10 +40,23 @@ export function recordToHeaderArray(headers?: Record<string, string>): Header[] 
 }
 
 export function sanitizeTabForStorage(tab: RequestTab) {
-  const { responseData: _responseData, testResults: _testResults, ...rest } = tab;
+  const {
+    responseData: _responseData,
+    testResults: _testResults,
+    authToken: _authToken,
+    headers,
+    ...rest
+  } = tab;
   void _responseData;
   void _testResults;
-  return rest;
+  void _authToken;
+  return {
+    ...rest,
+    // Strip credentials before persisting (matches sanitizeStore in hooks/store/persistence.ts)
+    headers: (headers ?? []).filter(
+      (h) => !/^authorization$/i.test(h.key) && !/^x-api-key$/i.test(h.key),
+    ),
+  };
 }
 
 export function createEmptyTab(overrides: Partial<RequestTab> = {}): RequestTab {

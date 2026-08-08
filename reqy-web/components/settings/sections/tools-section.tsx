@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -134,10 +134,7 @@ function ToolRow({
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/60">
           {tool.logo ? (
-            <tool.logo
-              className="max-h-5 max-w-5 h-auto w-auto"
-              aria-hidden="true"
-            />
+            <tool.logo className="max-h-5 max-w-5 h-auto w-auto" aria-hidden="true" />
           ) : (
             <span className="text-lg leading-none" aria-hidden="true">
               {tool.logoEmoji}

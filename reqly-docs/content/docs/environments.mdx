@@ -1,0 +1,39 @@
+---
+title: Environment variables
+description: Store reusable values and reference them in requests with the {{VARIABLE_NAME}} syntax.
+icon: Braces
+---
+
+Environment variables let you store reusable values (base URLs, API keys, tokens) and reference them in your requests using the `{{VARIABLE_NAME}}` syntax.
+
+## Creating variables
+
+Open the **Variables panel** from the header, next to the environment selector. Add variables as key-value pairs and toggle them on/off.
+
+## Using variables
+
+Variables are referenced with `{{...}}` and resolved at request time from the currently active environment.
+
+Variables are resolved in:
+
+- **URL** — all `{{var}}` placeholders are replaced
+- **Headers** — variable values can be used in header values
+- **Body** — variables can be referenced in raw / JSON body content
+
+<Callout>
+  **Inline detection:** when you type `{{...}}` in the URL input, Reqly automatically detects the placeholder and lists matching variables below the input bar.
+</Callout>
+
+## URL preview
+
+The Variables panel includes a **URL preview** tool: type a URL with `{{VAR}}` placeholders and see the resolved result with syntax highlighting — a great way to debug variable substitution before sending.
+
+## Multiple environments
+
+Create separate environments — for example `Development`, `Staging`, and `Production` — and switch between them instantly with the environment selector in the header. Each environment holds its own set of variable values.
+
+| Environment | Example base URL |
+| --- | --- |
+| Development | `http://localhost:3000` |
+| Staging | `https://staging.example.com` |
+| Production | `https://api.example.com` |

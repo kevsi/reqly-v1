@@ -1,6 +1,6 @@
 "use client";
 
-import { Save, Play, Square, Copy, Sparkles, Code2, GitBranch } from "lucide-react";
+import { Save, Play, Square, Copy, Sparkles, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GraphqlTab } from "@/lib/types";

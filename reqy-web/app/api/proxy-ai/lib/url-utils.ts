@@ -69,3 +69,30 @@ export async function isOllamaHostAllowed(host: string): Promise<boolean> {
   if (!resolved) return false;
   return !isBlockedIp(resolved);
 }
+
+/**
+ * Validate a user-supplied provider base URL (custom/OpenAI-compatible) against
+ * the SSRF guard. Throws if it points at localhost, a private/reserved IP, or a
+ * hostname that resolves to one (DNS-rebinding prevention). Shared by routes
+ * that take a client-controlled `baseUrl` and fetch it server-side.
+ */
+export async function assertSafeBaseUrl(raw: string): Promise<string> {
+  const trimmed = (raw ?? "").trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid custom provider URL");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("URL must use http or https");
+  }
+  if (isHostnameBlocked(parsed.hostname)) {
+    throw new Error("Custom provider URL cannot point to localhost or private IP");
+  }
+  const resolved = await resolveHostIfNeeded(parsed.hostname);
+  if (!resolved || isBlockedIp(resolved)) {
+    throw new Error("Custom provider URL cannot point to localhost or private IP");
+  }
+  return trimmed;
+}

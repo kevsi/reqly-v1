@@ -10,10 +10,9 @@ import {
   MoreHorizontal,
   Trash2,
   Edit2,
-  Play,
   GripVertical,
 } from "lucide-react";
-import { methodBadge } from "@/lib/http-method-colors";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,13 +29,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type {
-  Collection,
-  CollectionFolder,
-  RequestItem,
-  HttpMethod,
-} from "@/hooks/use-request-store";
-import { getTotalCount, flattenFolderTree } from "@/lib/tree-utils";
+import type { Collection, CollectionFolder, RequestItem } from "@/hooks/use-request-store";
+import { getTotalCount } from "@/lib/tree-utils";
 import { usePersistedSet } from "@/hooks/use-persisted-set";
 import { RequestTreeItem } from "@/components/collections-request-tree-item";
 
@@ -117,7 +111,6 @@ export function CollectionsFolderTree({
   const [dragRequestId, setDragRequestId] = useState<string | null>(null);
   const [dragFolderId, setDragFolderId] = useState<string | null>(null);
   const [dragHoverFolderId, setDragHoverFolderId] = useState<string | null>(null);
-  const dragOverRequestIdRef = useRef<string | null>(null);
   const dragOverFolderIdRef = useRef<string | null>(null);
 
   // Clear folder hover indicator when request drag ends
@@ -125,14 +118,17 @@ export function CollectionsFolderTree({
     if (!dragRequestId) setDragHoverFolderId(null);
   }, [dragRequestId]);
 
-  const toggleFolder = useCallback((folderId: string) => {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      return next;
-    });
-  }, []);
+  const toggleFolder = useCallback(
+    (folderId: string) => {
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderId)) next.delete(folderId);
+        else next.add(folderId);
+        return next;
+      });
+    },
+    [setExpandedFolders],
+  );
 
   const handleCreateFolder = useCallback((parentId: string | null = null) => {
     setCreateParentId(parentId);

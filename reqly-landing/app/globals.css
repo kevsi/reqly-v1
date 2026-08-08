@@ -14,10 +14,12 @@
   --color-mint-500: #10b981;
   --color-mint-600: #059669;
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono",
-    "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo,
+    Consolas, monospace;
 }
 
 @layer base {
@@ -61,11 +63,8 @@
 /* ── Utilitaires maison ─────────────────────────────── */
 
 @utility grid-pattern {
-  background-image: linear-gradient(
-      to right,
-      rgb(52 211 153 / 0.05) 1px,
-      transparent 1px
-    ),
+  background-image:
+    linear-gradient(to right, rgb(52 211 153 / 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgb(52 211 153 / 0.05) 1px, transparent 1px);
   background-size: 48px 48px;
 }
@@ -151,6 +150,18 @@
   }
 }
 
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-18px) scale(1.05);
+    opacity: 1;
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -173,6 +184,126 @@
   }
 }
 
+/* Balayage de lumière gauche → droite */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Ligne de scan CRT de haut en bas */
+@keyframes scan-line {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+/* Pulsation glow autour d'un élément */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(52 211 153 / 0);
+  }
+  50% {
+    box-shadow: 0 0 18px 4px rgb(52 211 153 / 0.35);
+  }
+}
+
+/* Clignotement curseur typewriter */
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Rotation douce pour l'icône sparkle */
+@keyframes sparkle-spin {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 0.7;
+  }
+}
+
+/* Compteur : apparition chiffre par chiffre */
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fond « aurora » : dégradés qui dérivent lentement */
+@keyframes aurora {
+  0% {
+    transform: translate3d(-6%, -4%, 0) rotate(0deg) scale(1.05);
+  }
+  50% {
+    transform: translate3d(6%, 4%, 0) rotate(8deg) scale(1.15);
+  }
+  100% {
+    transform: translate3d(-6%, -4%, 0) rotate(0deg) scale(1.05);
+  }
+}
+
+/* Reveal « blur-up » : flou + léger zoom qui se résorbe */
+@keyframes reveal-blur {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(22px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Icône qui « pop » au survol : scale + léger pivot */
+@keyframes icon-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  60% {
+    transform: scale(1.18) rotate(-6deg);
+  }
+  100% {
+    transform: scale(1.12) rotate(0deg);
+  }
+}
+
+/* Barre de progression */
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
 .animate-marquee {
   animation: marquee 36s linear infinite;
 }
@@ -182,11 +313,50 @@
 .animate-float {
   animation: float 7s ease-in-out infinite;
 }
+.animate-float-slow {
+  animation: float-slow 9s ease-in-out infinite;
+}
 .animate-pulse-dot {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 .animate-bounce-soft {
   animation: bounce-soft 2.2s ease-in-out infinite;
+}
+.animate-shimmer {
+  background: linear-gradient(110deg, transparent 30%, rgb(52 211 153 / 0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+.animate-glow-pulse {
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+.animate-cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+.animate-sparkle-spin {
+  animation: sparkle-spin 2.8s ease-in-out infinite;
+}
+.animate-scan-line {
+  animation: scan-line 4s linear infinite;
+}
+.animate-progress {
+  animation: progress-fill 1.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+.animate-count-up {
+  animation: count-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.animate-aurora {
+  animation: aurora 18s ease-in-out infinite;
+}
+.animate-aurora-slow {
+  animation: aurora 26s ease-in-out infinite reverse;
+}
+.animate-reveal-blur {
+  animation: reveal-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.group:hover .icon-pop-on-hover,
+.icon-pop-trigger:hover .icon-pop-on-hover {
+  animation: icon-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Accessibilité : respect des préférences de mouvement */
@@ -196,9 +366,24 @@
   }
   .animate-marquee,
   .animate-float,
+  .animate-float-slow,
   .animate-pulse-dot,
-  .animate-bounce-soft {
+  .animate-bounce-soft,
+  .animate-shimmer,
+  .animate-glow-pulse,
+  .animate-cursor-blink,
+  .animate-sparkle-spin,
+  .animate-scan-line,
+  .animate-progress,
+  .animate-count-up,
+  .animate-aurora,
+  .animate-aurora-slow,
+  .animate-reveal-blur,
+  .icon-pop-on-hover {
     animation: none;
+  }
+  .animate-reveal-blur {
+    filter: none;
   }
   *,
   *::before,

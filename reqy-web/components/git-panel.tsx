@@ -25,19 +25,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+
 import { isTauriAvailable } from "@/lib/tauri";
-import {
-  useGit,
-  type GitCommit as GitCommitType,
-  type FileStatus,
-  type DiffFile,
-} from "@/hooks/use-git";
+import { useGit, type GitCommit as GitCommitType, type DiffFile } from "@/hooks/use-git";
 import { GitStatusRow } from "@/components/git/git-status-row";
 import { GitBranchBar } from "@/components/git/git-branch-bar";
 import { GitRemoteBar } from "@/components/git/git-remote-bar";
 import { GitDiffViewer } from "@/components/git/git-diff-viewer";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import type { Collection } from "@/hooks/use-request-store";
 
 interface GitPanelProps {
@@ -51,7 +46,7 @@ export function GitPanel({ collections }: GitPanelProps) {
   const [commitLoading, setCommitLoading] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
   const [openLoading, setOpenLoading] = useState(false);
-  const [diffOids, setDiffOids] = useState<[string, string] | null>(null);
+  const [_diffOids, setDiffOids] = useState<[string, string] | null>(null);
   const [diffResult, setDiffResult] = useState<DiffFile[] | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("history");

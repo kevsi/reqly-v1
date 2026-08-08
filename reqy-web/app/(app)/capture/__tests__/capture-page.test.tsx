@@ -74,25 +74,21 @@ describe("Page Capture (persistance + UI)", () => {
 
   it("affiche les captures avec un badge de méthode", async () => {
     render(<CapturePage />);
-    const badge = await screen.findByText("GET");
-    const methodEl = badge.closest("[data-method]");
-    expect(methodEl).not.toBeNull();
-    expect(methodEl?.getAttribute("data-method")).toBe("GET");
+    const row = await screen.findByText("https://api.test/ping");
+    expect(row.closest("button")?.textContent).toContain("GET");
   });
 
-  it("efface les captures quand on clique sur « Effacer »", async () => {
+  it("efface les captures quand on clique sur « Clear »", async () => {
     render(<CapturePage />);
     await waitFor(() => expect(hoisted.listCapturedSessions).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /effacer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
     await waitFor(() => expect(hoisted.clearCapturedSessions).toHaveBeenCalled());
   });
 
   it("ouvre le détail au clic sur une ligne", async () => {
     render(<CapturePage />);
-    await screen.findByText("GET");
-    fireEvent.click(screen.getByText("https://api.test/ping"));
+    fireEvent.click(await screen.findByText("https://api.test/ping"));
     await waitFor(() => expect(hoisted.getCapturedSession).toHaveBeenCalledWith("c1"));
-    const detail = await screen.findByTestId("capture-detail");
-    expect(detail.textContent).toContain("200");
+    expect(await screen.findByText("HTTP 200")).toBeTruthy();
   });
 });

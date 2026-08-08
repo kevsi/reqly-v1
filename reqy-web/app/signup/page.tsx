@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSessionStore } from "@/lib/session-store";
@@ -29,12 +29,25 @@ export default function SignupPage() {
   const [verifySuccess, setVerifySuccess] = useState(false);
   const codeInputs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const startCountdown = useCallback(() => {
+    setCountdown(60);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
   // If we started on verify step (from ?verify=email), start countdown
   useEffect(() => {
     if (step === "verify" && email) {
       startCountdown();
     }
-  }, []);
+  }, [step, email, startCountdown]);
 
   // Focus first code input when entering verify step
   useEffect(() => {
@@ -67,19 +80,6 @@ export default function SignupPage() {
   }
 
   // ── Step 2: Verification code ─────────────────────────────────────────
-
-  function startCountdown() {
-    setCountdown(60);
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }
 
   function handleCodeChange(index: number, value: string) {
     if (value.length > 1) {

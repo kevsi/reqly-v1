@@ -52,9 +52,14 @@ interface AIRequestStore {
     body?: string;
     type?: "info" | "success" | "warning" | "error";
     event?: string;
-  }) => any;
+  }) => void;
   aiAutoApply?: boolean;
+  // Pont volontairement non typé : le store expose `RequestItem` alors que les
+  // actions IA manipulent `CurrentRequest` (shapes incompatibles). Unifier les
+  // deux modèles de requête permettrait de supprimer ce `any`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executeRequest?: (request: any) => Promise<any>;
+  addAiAuditEntry?: (entry: { actionType: string; detail?: unknown; result?: unknown }) => unknown;
 }
 
 export interface UseAIEngineResult {
@@ -105,7 +110,7 @@ function parseAiConfig(override?: Partial<AIConfig>): AIConfig {
         ? `http://${ollamaConfig.host || "127.0.0.1"}:${ollamaConfig.port ?? 11434}`
         : undefined,
     host: provider === "ollama" ? ollamaConfig.host || "127.0.0.1" : undefined,
-    port: provider === "ollama" ? ollamaConfig.port ?? 11434 : undefined,
+    port: provider === "ollama" ? (ollamaConfig.port ?? 11434) : undefined,
   };
 }
 
@@ -124,7 +129,7 @@ function getHandlers(store: AIRequestStore) {
     executeRequest: (request: Partial<CurrentRequest> | CurrentRequest) =>
       store.executeRequest ? store.executeRequest(request) : undefined,
     runBatch: async (requests: Array<Partial<CurrentRequest>>) => {
-      const results: any[] = [];
+      const results: unknown[] = [];
       for (const req of requests) {
         if (store.executeRequest) {
           const res = await store.executeRequest(req);
@@ -133,8 +138,10 @@ function getHandlers(store: AIRequestStore) {
       }
       return results;
     },
-    audit: (entry: { actionType: string; detail?: any; result?: any }) =>
-      (store as any).addAiAuditEntry ? (store as any).addAiAuditEntry(entry) : undefined,
+    audit: (entry: { actionType: string; detail?: unknown; result?: unknown }) => {
+      if (!store.addAiAuditEntry) return;
+      store.addAiAuditEntry(entry);
+    },
   };
 }
 
@@ -219,43 +226,40 @@ export function useAIEngine(handlerOverrides?: AIEngineHandlers): UseAIEngineRes
     [store, handlerOverrides],
   );
 
-   const analyzeAfterRequest = useCallback(
-     async (ctx: AIContext): Promise<void> => {
-       setError(null);
-       setIsLoading(true);
-       try {
-          const query = buildSearchText(
-            ctx.currentRequest.method,
-            ctx.currentRequest.url ?? "",
-            (ctx.currentRequest.body as string | undefined) ?? "",
-          );
-         const results = await searchIndex(query, 5);
-         const retrievedChunks = results.map((r) => ({
-           source: `${r.item.collectionName} · ${r.item.method} ${r.item.url}`,
-           content: r.item.text,
-           score: r.score,
-           origin: "historical-requests",
-         }));
-         const analyzeRes = await runAiCall(
-           PROMPTS.analyzeResponse(ctx, retrievedChunks),
-           ctx,
-         );
-         setLastSummary(analyzeRes.summary);
+  const analyzeAfterRequest = useCallback(
+    async (ctx: AIContext): Promise<void> => {
+      setError(null);
+      setIsLoading(true);
+      try {
+        const query = buildSearchText(
+          ctx.currentRequest.method,
+          ctx.currentRequest.url ?? "",
+          (ctx.currentRequest.body as string | undefined) ?? "",
+        );
+        const results = await searchIndex(query, 5);
+        const retrievedChunks = results.map((r) => ({
+          source: `${r.item.collectionName} · ${r.item.method} ${r.item.url}`,
+          content: r.item.text,
+          score: r.score,
+          origin: "historical-requests",
+        }));
+        const analyzeRes = await runAiCall(PROMPTS.analyzeResponse(ctx, retrievedChunks), ctx);
+        setLastSummary(analyzeRes.summary);
 
-         if (ctx.lastResponse && ctx.lastResponse.status >= 400) {
-           const debugRes = await runAiCall(PROMPTS.debugError(ctx), ctx);
-           setLastSummary(debugRes.summary);
-         }
-       } catch (err) {
-         const message = err instanceof Error ? err.message : String(err);
-         setError(message);
-         store.addNotification?.({ title: "Erreur IA", body: String(message), type: "error" });
-       } finally {
-         setIsLoading(false);
-       }
-     },
-     [runAiCall, store],
-   );
+        if (ctx.lastResponse && ctx.lastResponse.status >= 400) {
+          const debugRes = await runAiCall(PROMPTS.debugError(ctx), ctx);
+          setLastSummary(debugRes.summary);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        store.addNotification?.({ title: "Erreur IA", body: String(message), type: "error" });
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [runAiCall, store],
+  );
 
   const generateTests = useCallback(
     async (ctx: AIContext): Promise<void> => {

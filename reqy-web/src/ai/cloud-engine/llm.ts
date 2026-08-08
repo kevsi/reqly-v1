@@ -12,13 +12,7 @@
  */
 import type { AIProvider, Diagnostic, RequestContext, RetrievedChunk } from "@/src/ai/types";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/src/ai/cloud-engine/prompt";
-import {
-  type ToolDefinition,
-  type ToolCall,
-  type ToolResult,
-  toOpenAITool,
-  executeToolCall,
-} from "@/lib/llm-tools";
+import { type ToolDefinition, type ToolCall, type ToolResult, toOpenAITool } from "@/lib/llm-tools";
 import { proxyAuthHeaders } from "@/lib/proxy-auth";
 import { isTauriAvailable } from "@/lib/tauri";
 import { callAiProxyTauri } from "@/lib/tauri-ai";
@@ -90,30 +84,34 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
       port: opts.port,
       openaiUrl: opts.openaiUrl,
       system: opts.system ?? SYSTEM_PROMPT,
-      message: opts.rawMessage ?? buildUserPrompt(opts.question, opts.ctx, opts.diagnostics ?? [], opts.retrievedChunks ?? []),
+      message:
+        opts.rawMessage ??
+        buildUserPrompt(
+          opts.question,
+          opts.ctx,
+          opts.diagnostics ?? [],
+          opts.retrievedChunks ?? [],
+        ),
       tools: openAITools,
       tool_choice: opts.tool_choice,
       previousTurns: opts.previousTurns,
-    })
+    });
     if (result.content) {
-      yield { type: "text", value: result.content }
+      yield { type: "text", value: result.content };
     }
     if (result.toolCalls?.length) {
       yield {
         type: "tool_calls",
         calls: result.toolCalls,
         ...(result.reasoningContent ? { reasoningContent: result.reasoningContent } : {}),
-      }
+      };
     }
-    return
+    return;
   }
 
-  const userPrompt = opts.rawMessage ?? buildUserPrompt(
-    opts.question,
-    opts.ctx,
-    opts.diagnostics ?? [],
-    opts.retrievedChunks ?? [],
-  );
+  const userPrompt =
+    opts.rawMessage ??
+    buildUserPrompt(opts.question, opts.ctx, opts.diagnostics ?? [], opts.retrievedChunks ?? []);
 
   const body: Record<string, unknown> = {
     provider: opts.provider,
@@ -184,7 +182,7 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
           const payload = line.slice(5).trim();
           if (!payload || payload === "[DONE]") continue;
           try {
-            const json: any = JSON.parse(payload);
+            const json = JSON.parse(payload);
             const token: unknown = json?.choices?.[0]?.delta?.content;
             if (typeof token === "string" && token.length > 0) {
               yield { type: "text", value: token };
@@ -237,7 +235,7 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
           const payload = line.slice(5).trim();
           if (!payload || payload === "[DONE]") continue;
           try {
-            const json: any = JSON.parse(payload);
+            const json = JSON.parse(payload);
             const choice = json?.choices?.[0];
             const delta = choice?.delta;
 
@@ -322,7 +320,7 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
   }
 
   // JSON fallback (anthropic / gemini / ollama sans tools).
-  const data: any = await res.json();
+  const data = await res.json();
   if (typeof data?.error === "string") {
     throw new Error(data.error);
   }
@@ -332,7 +330,7 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
   if (Array.isArray(returnedToolCalls) && returnedToolCalls.length > 0) {
     yield {
       type: "tool_calls",
-      calls: returnedToolCalls.map((tc: any) => ({
+      calls: returnedToolCalls.map((tc) => ({
         id: typeof tc.id === "string" ? tc.id : `call_${Math.random().toString(36).slice(2)}`,
         name: typeof tc.name === "string" ? tc.name : "",
         arguments:
@@ -352,10 +350,18 @@ export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken
       type: "usage",
       usage: {
         inputTokens: Number(
-          usageRaw?.input_tokens ?? usageRaw?.promptTokens ?? usageRaw?.promptTokenCount ?? usageRaw?.prompt_eval_count ?? 0,
+          usageRaw?.input_tokens ??
+            usageRaw?.promptTokens ??
+            usageRaw?.promptTokenCount ??
+            usageRaw?.prompt_eval_count ??
+            0,
         ),
         outputTokens: Number(
-          usageRaw?.output_tokens ?? usageRaw?.completionTokens ?? usageRaw?.candidatesTokenCount ?? usageRaw?.eval_count ?? 0,
+          usageRaw?.output_tokens ??
+            usageRaw?.completionTokens ??
+            usageRaw?.candidatesTokenCount ??
+            usageRaw?.eval_count ??
+            0,
         ),
       },
     };

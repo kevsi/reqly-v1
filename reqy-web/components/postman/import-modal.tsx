@@ -164,7 +164,7 @@ export function PostmanImportModal({
           folders.length > 0 ? ` (${folders.length} dossier${folders.length > 1 ? "s" : ""})` : ""
         }.`,
         meta: { event: "importExport" },
-      } as any);
+      });
       onImported?.(newCollectionId);
       onOpenChange(false);
     } catch (e) {
@@ -173,7 +173,7 @@ export function PostmanImportModal({
         description: e instanceof Error ? e.message : "Import échoué",
         variant: "destructive",
         meta: { event: "importExport" },
-      } as any);
+      });
     } finally {
       setSaving(false);
     }

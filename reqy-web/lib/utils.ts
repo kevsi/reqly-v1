@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { EnvironmentVariable } from "@/lib/types";
+import type { TauriCookie } from "@/lib/tauri";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -29,10 +30,23 @@ export function hasUnresolvedPlaceholders(text: string): boolean {
   return /\{\{\s*[^}]+\s*\}\}/.test(text);
 }
 
-export async function parseJsonSafe(response: Response): Promise<any> {
+/** Forme typée de la réponse JSON renvoyée par le proxy. */
+export interface ProxySafeResult {
+  body?: unknown;
+  status?: number;
+  statusText?: string;
+  headers?: Record<string, string>;
+  cookies?: TauriCookie[];
+  timings?: { dnsMs?: number; connectMs?: number; ttfbMs?: number };
+  durationMs?: number;
+  encoding?: string;
+  error?: string;
+}
+
+export async function parseJsonSafe(response: Response): Promise<ProxySafeResult> {
   const text = await response.text().catch(() => "");
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as ProxySafeResult;
   } catch {
     return {
       error: text || `Invalid JSON response from ${response.url || "proxy"}`,
@@ -47,7 +61,7 @@ export function replaceLocalhostPort(url: string, port: number): string {
   return url.replace(/\/\/localhost:\d+/, `//localhost:${port}`);
 }
 
-export async function downloadJson(data: any, filename: string) {
+export async function downloadJson(data: unknown, filename: string) {
   const content = JSON.stringify(data, null, 2);
   const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
 

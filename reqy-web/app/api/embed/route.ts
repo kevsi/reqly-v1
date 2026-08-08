@@ -6,7 +6,10 @@ import { getApiKeyFromRequest } from "../jina-auth/cookies";
 const limiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
 export async function POST(req: NextRequest) {
-  const rateKey = `embed:${req.headers.get("x-forwarded-for") ?? "anonymous"}`;
+  const rateKey =
+    process.env.TRUSTED_PROXY === "true"
+      ? `embed:${req.headers.get("x-forwarded-for") ?? "anonymous"}`
+      : "embed:unknown";
   const rateResult = await limiter.check(rateKey);
   if (!rateResult.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
@@ -25,7 +28,11 @@ export async function POST(req: NextRequest) {
   }
 
   const { input, model: inputModel } = body;
-  if (!input || (Array.isArray(input) && input.length === 0) || (typeof input === "string" && !input.trim())) {
+  if (
+    !input ||
+    (Array.isArray(input) && input.length === 0) ||
+    (typeof input === "string" && !input.trim())
+  ) {
     return NextResponse.json({ error: "input is required" }, { status: 400 });
   }
 
@@ -66,7 +73,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ model, embeddings, usage: data.usage });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Embedding request failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: "Embedding request failed" }, { status: 502 });
   }
 }

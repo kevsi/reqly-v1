@@ -1,0 +1,19 @@
+{
+  "title": "Home",
+  "pages": [
+    "index",
+    "getting-started",
+    "---Essentials---",
+    "requests",
+    "history",
+    "collections",
+    "environments",
+    "graphql",
+    "ai",
+    "---Productivity---",
+    "import-export",
+    "workspaces",
+    "dashboard",
+    "settings"
+  ]
+}

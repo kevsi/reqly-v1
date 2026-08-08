@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use tauri::State;
-use git2::{AnnotatedCommit, Repository, DiffOptions, StatusOptions, Signature};
+use git2::{Repository, DiffOptions, StatusOptions, Signature};
 
 use crate::error::AppError;
 use crate::git::types::*;
@@ -51,12 +51,22 @@ impl GitRepoState {
 /// Validate that a URL uses an allowed scheme (http or https only).
 fn validate_url_scheme(url: &str) -> Result<(), AppError> {
     let trimmed = url.trim();
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        Ok(())
-    } else {
-        Err(AppError::InvalidInput(format!(
-            "URL scheme not allowed: {}. Only http:// and https:// are permitted.", url
-        )))
+    match reqwest::Url::parse(trimmed) {
+        Ok(parsed) => {
+            let scheme = parsed.scheme();
+            if scheme == "http" || scheme == "https" {
+                Ok(())
+            } else {
+                Err(AppError::InvalidInput(format!(
+                    "URL scheme not allowed: {}. Only http:// and https:// are permitted.",
+                    scheme
+                )))
+            }
+        }
+        Err(_) => Err(AppError::InvalidInput(format!(
+            "Invalid URL: {}",
+            trimmed
+        ))),
     }
 }
 
@@ -66,7 +76,12 @@ fn is_system_directory(path: &Path) -> bool {
         Ok(p) => p,
         Err(_) => return false,
     };
-    let s = canonical.to_string_lossy().to_lowercase();
+    let mut s = canonical.to_string_lossy().to_lowercase();
+    // Windows `canonicalize` returns `\\?\C:\...` — strip the prefix so the
+    // drive-letter checks below actually match.
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        s = stripped.to_string();
+    }
     // Windows
     s.starts_with(r"c:\windows")
         || s.starts_with(r"c:\program files")
@@ -137,6 +152,21 @@ pub async fn git_open(
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo_path = PathBuf::from(&path);
+
+    if is_system_directory(&repo_path) {
+        return Err(AppError::InvalidInput(format!(
+            "Path '{}' is in a system directory and cannot be used for a git repository.", path
+        )));
+    }
+
+    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+        if !is_within_base(&repo_path, workspace) {
+            return Err(AppError::InvalidInput(format!(
+                "Path '{}' must be within the workspace directory '{}'.", path, workspace.display()
+            )));
+        }
+    }
+
     // Validate by trying to open
     Repository::open(&repo_path)
         .map_err(|e| AppError::InvalidInput(format!("Cannot open repo at {path}: {e}")))?;
@@ -562,6 +592,7 @@ pub async fn git_ls_remote(
     url: String,
     state: State<'_, GitRepoState>,
 ) -> Result<Vec<String>, AppError> {
+    validate_url_scheme(&url)?;
     let repo = state.open_repo()?;
     let mut remote = repo.remote_anonymous(&url)
         .map_err(|e| AppError::InvalidInput(format!("Invalid remote URL: {e}")))?;
@@ -758,12 +789,37 @@ pub async fn git_write_collection_file(
     id: String,
     content: String,
     repo_dir: String,
+    state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
-    let collections_dir = PathBuf::from(&repo_dir).join("collections");
+    let repo_path = PathBuf::from(&repo_dir);
+
+    if is_system_directory(&repo_path) {
+        return Err(AppError::InvalidInput(format!(
+            "Path '{}' is in a system directory and cannot be used for a git repository.", repo_dir
+        )));
+    }
+
+    if !is_valid_git_repo(&repo_path) {
+        return Err(AppError::InvalidInput(format!(
+            "Path '{}' is not a valid git repository.", repo_dir
+        )));
+    }
+
+    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+        if !is_within_base(&repo_path, workspace) {
+            return Err(AppError::InvalidInput(format!(
+                "Repository path '{}' must be within the workspace directory '{}'.",
+                repo_dir, workspace.display()
+            )));
+        }
+    }
+
+    let collections_dir = repo_path.join("collections");
     std::fs::create_dir_all(&collections_dir)
         .map_err(|e| AppError::Internal(format!("Failed to create dir: {e}")))?;
     let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
-    let filepath = collections_dir.join(format!("{}_{}.json", safe_name, id));
+    let safe_id = id.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
+    let filepath = collections_dir.join(format!("{}_{}.json", safe_name, safe_id));
     std::fs::write(&filepath, content)
         .map_err(|e| AppError::Internal(format!("Failed to write {filepath:?}: {e}")))?;
     Ok(())
@@ -814,7 +870,8 @@ pub async fn git_sync_collections(
         let name = col["name"].as_str().unwrap_or("unnamed");
         let id = col["id"].as_str().unwrap_or("unknown");
         let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
-        let filepath = collections_dir.join(format!("{}_{}.json", safe_name, id));
+        let safe_id = id.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
+        let filepath = collections_dir.join(format!("{}_{}.json", safe_name, safe_id));
         let content = serde_json::to_string_pretty(col)
             .map_err(|e| AppError::Internal(e.to_string()))?;
         std::fs::write(&filepath, content)
@@ -822,4 +879,47 @@ pub async fn git_sync_collections(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod path_validation_tests {
+    use std::path::Path;
+    use super::{is_system_directory, is_within_base};
+
+    #[test]
+    fn system_directories_are_rejected() {
+        #[cfg(unix)]
+        {
+            assert!(is_system_directory(Path::new("/etc")));
+            assert!(is_system_directory(Path::new("/usr/share")));
+        }
+        #[cfg(windows)]
+        {
+            assert!(is_system_directory(Path::new(r"C:\Windows\System32")));
+        }
+    }
+
+    #[test]
+    fn normal_user_paths_are_allowed() {
+        #[cfg(unix)]
+        {
+            assert!(!is_system_directory(Path::new("/home/user/project")));
+        }
+        #[cfg(windows)]
+        {
+            assert!(!is_system_directory(Path::new(r"C:\Users\alex\Documents\project")));
+        }
+    }
+
+    #[test]
+    fn within_base_requires_containment() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = tmp.path();
+        let inside = base.join("repo");
+        std::fs::create_dir_all(&inside).unwrap();
+        let outside = base.parent().unwrap().join("outside-anywhere");
+        assert!(is_within_base(&inside, base));
+        assert!(!is_within_base(&outside, base));
+        assert!(!is_within_base(base, &outside));
+    }
 }

@@ -79,7 +79,7 @@ export async function invokeTauriFetch(
   }
 
   const { invoke } = await import("@tauri-apps/api/core");
-  const invokeArgs: Record<string, any> = {
+  const invokeArgs: Record<string, unknown> = {
     method,
     url,
     headers: Object.entries(headers),

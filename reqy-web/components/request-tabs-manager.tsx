@@ -29,7 +29,6 @@ import { toast } from "@/hooks/use-toast";
 import { RestSnapshotModal } from "@/components/rest-snapshot-modal";
 import { Camera, AlertTriangle } from "lucide-react";
 import {
-  proposeAssertionCorrection,
   suggestionToAssertion,
   type CorrectionSuggestion,
 } from "@/src/ai/cloud-engine/actions/propose-correction";
@@ -64,7 +63,6 @@ export function RequestTabsManager() {
     setActiveTabId,
     activeTab,
     isLoading,
-    savedIndicator,
     contextMenu,
     setContextMenu,
     collectionsDrawerOpen,
@@ -102,7 +100,6 @@ export function RequestTabsManager() {
     collections,
     history,
     variableMappings,
-    collectionRequestStatus,
     collectionRunLogs,
     batchRunCollection,
     setBatchRunCollection,
@@ -504,6 +501,7 @@ export function RequestTabsManager() {
                     environmentVariableNames={envVariableNames}
                     queryParamKeySuggestions={queryParamKeySuggestions}
                     formDataKeySuggestions={formDataKeySuggestions}
+                    onExport={exportActiveRequest}
                   />
                 </ErrorBoundary>
                 {/* Payload size — real byte count of the request body */}

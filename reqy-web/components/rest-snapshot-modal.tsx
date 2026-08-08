@@ -35,7 +35,6 @@ import {
   compareRestSnapshot,
   listRestSnapshots,
   getSnapshotEntry,
-  getRestSnapshot,
   deleteRestSnapshot,
   renameRestSnapshot,
   hasRestSnapshot,
@@ -53,18 +52,6 @@ function parseResponseBody(body: string | undefined): unknown | undefined {
     return JSON.parse(trimmed);
   } catch {
     return undefined;
-  }
-}
-
-function describeChange(c: FieldChange): string {
-  switch (c.kind) {
-    case "added":
-      return `Champ '${c.path}' ajouté (${c.to})`;
-    case "removed":
-      return `Champ '${c.path}' retiré (${c.from})`;
-    case "type-changed":
-    case "type-changed:null":
-      return `Champ '${c.path}' type changé : ${c.from} → ${c.to}`;
   }
 }
 
@@ -237,11 +224,6 @@ export function RestSnapshotModal({
       changes: compareRestSnapshot(name, parsed),
     });
     setShowDetail(false);
-  };
-
-  const handleCompareSelected = () => {
-    if (!selectedName || parsed === undefined) return;
-    handleCompareWith(selectedName);
   };
 
   const handleCloseDiff = () => setDiff(null);

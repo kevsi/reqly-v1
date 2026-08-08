@@ -1,14 +1,15 @@
 /**
  * Python framework detectors (FastAPI, Flask, Django, Tornado, Sanic, Starlette, Litestar, Aiohttp, Falcon)
  * plus Python AST subprocess-based route detection.
+ *
+ * Route regexes run against the RAW content (not a comment/string-stripped
+ * copy): route paths live in string literals, so stripping strings would
+ * destroy them. Trade-off: a commented-out decorator like `# @app.get("/x")`
+ * can be picked up as a route — same behavior as the JS/Java detectors.
  */
 
 import type { DetectedRoute } from "@/lib/detect-shared-types";
-import {
-  makeRoute,
-  normalizePath,
-  stripLanguageCommentsAndStrings,
-} from "@/lib/detect-shared-types";
+import { makeRoute, normalizePath } from "@/lib/detect-shared-types";
 import { detectAuthByStatusSignal, parseMethodList } from "@/lib/detect-shared-handler";
 
 // ── FastAPI ─────────────────────────────────────────────────────────────────
@@ -17,18 +18,17 @@ export function detectFastAPI(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "fastapi");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const routerPrefixMap = new Map<string, string>();
 
   const APIRouter_PREFIX_RE =
     /([A-Za-z_][\w]*)\s*=\s*APIRouter\s*\(\s*(?:[^)]*\s+)?prefix\s*[:=]\s*['\"]([^'\"]+)['\"][\s\S]*?\)/g;
-  for (const m of sanitized.matchAll(APIRouter_PREFIX_RE)) {
+  for (const m of content.matchAll(APIRouter_PREFIX_RE)) {
     routerPrefixMap.set(m[1], m[2]);
   }
 
   const INCLUDE_ROUTER_RE =
     /\.include_router\s*\(\s*([A-Za-z_][\w]*)\s*(?:,\s*prefix\s*=\s*['\"]([^'\"]+)['\"])?/g;
-  for (const m of sanitized.matchAll(INCLUDE_ROUTER_RE)) {
+  for (const m of content.matchAll(INCLUDE_ROUTER_RE)) {
     const routerName = m[1];
     const includePrefix = m[2];
     const existing = routerPrefixMap.get(routerName);
@@ -42,7 +42,7 @@ export function detectFastAPI(content: string): DetectedRoute[] {
 
   const FASTAPI_RE =
     /@([A-Za-z_][\w]*)\s*\.\s*(?:get|post|put|delete|patch|options|head)\s*\(\s*(['"`])((?:[^'"`\\]|\\.|[\s\S])*?)\3\s*,?([\s\S]*?)(?=\n\s*@|\n\s*(?:async\s+)?def\s|$)/gi;
-  for (const m of sanitized.matchAll(FASTAPI_RE)) {
+  for (const m of content.matchAll(FASTAPI_RE)) {
     const target = m[1];
     const method =
       m[0].match(/\.(get|post|put|delete|patch|options|head)/i)?.[1]?.toUpperCase() || "GET";
@@ -68,7 +68,7 @@ export function detectFastAPI(content: string): DetectedRoute[] {
     if (/response_model\s*=/.test(decoratorArgs)) r.reasonings?.push("response_model specified");
     if (/status_code\s*=/.test(decoratorArgs)) r.reasonings?.push("status_code specified");
 
-    const after = sanitized.slice((m.index ?? 0) + m[0].length);
+    const after = content.slice((m.index ?? 0) + m[0].length);
     const fnMatch = after.match(/\n\s*(?:async\s+)?def\s+[A-Za-z_]\w*\s*\(([^)]*)\)/m);
     const params = fnMatch?.[1] ?? "";
 
@@ -114,7 +114,7 @@ export function detectFastAPI(content: string): DetectedRoute[] {
   const SIMPLE_RE =
     /@(?:router|app)\s*\.\s*(?:get|post|put|delete|patch|options|head)\s*\(\s*['"]([^'"]+)['"]/gi;
   const seenKeys = new Set(routes.map((r) => `${r.method}|${r.path}`));
-  for (const m of sanitized.matchAll(SIMPLE_RE)) {
+  for (const m of content.matchAll(SIMPLE_RE)) {
     const method =
       m[0].match(/\.(get|post|put|delete|patch|options|head)/i)?.[1]?.toUpperCase() || "GET";
     const path = normalizePath(m[1]);
@@ -136,22 +136,21 @@ export function detectFlask(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "flask");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const blueprintPrefix = new Map<string, string>();
   const methodViewMethods = new Map<string, string[]>();
   const REGISTER_BP_RE =
     /app\.register_blueprint\s*\(\s*([A-Za-z_][\w]*)\s*,\s*url_prefix\s*=\s*['\"]([^'\"]+)['\"]\s*\)/g;
-  for (const m of sanitized.matchAll(REGISTER_BP_RE)) {
+  for (const m of content.matchAll(REGISTER_BP_RE)) {
     blueprintPrefix.set(m[1], m[2]);
   }
   const BLUEPRINT_DEF_RE =
     /([A-Za-z_][\w]*)\s*=\s*Blueprint\s*\(\s*['\"][^'\"\s]+['\"]\s*,[\s\S]*?url_prefix\s*=\s*['\"]([^'\"]+)['\"]/g;
-  for (const m of sanitized.matchAll(BLUEPRINT_DEF_RE)) {
+  for (const m of content.matchAll(BLUEPRINT_DEF_RE)) {
     blueprintPrefix.set(m[1], m[2]);
   }
   const METHOD_VIEW_CLASS_RE =
     /class\s+([A-Za-z_][\w]*)\s*\(\s*MethodView\s*\)[\s\S]*?(?=\nclass\s|\n\n|$)/g;
-  for (const m of sanitized.matchAll(METHOD_VIEW_CLASS_RE)) {
+  for (const m of content.matchAll(METHOD_VIEW_CLASS_RE)) {
     const className = m[1];
     const body = m[0];
     const methods = Array.from(body.matchAll(/def\s+(get|post|put|delete|patch)\s*\(/g)).map((x) =>
@@ -289,11 +288,10 @@ export function detectTornado(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "tornado");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const handlerMethods = new Map<string, string[]>();
   const HANDLER_RE =
     /class\s+([A-Za-z_][\w]*)\s*\([^\n]*RequestHandler[^\)]*\):([\s\S]*?)(?=\nclass\s|\n\n|$)/g;
-  for (const m of sanitized.matchAll(HANDLER_RE)) {
+  for (const m of content.matchAll(HANDLER_RE)) {
     const className = m[1];
     const body = m[2];
     const methods = Array.from(body.matchAll(/def\s+(get|post|put|delete|patch)\s*\(/g)).map((x) =>
@@ -302,11 +300,14 @@ export function detectTornado(content: string): DetectedRoute[] {
     if (methods.length) handlerMethods.set(className, methods);
   }
   const ROUTE_LIST_RE = /Application\s*\(\s*\[([\s\S]*?)\]/g;
-  for (const m of sanitized.matchAll(ROUTE_LIST_RE)) {
+  for (const m of content.matchAll(ROUTE_LIST_RE)) {
     const listBody = m[1];
-    for (const entry of listBody.matchAll(/\(\s*['"]([^'"]+)['"]\s*,\s*([A-Za-z_][\w.]*)/g)) {
-      const pathValue = entry[1];
-      const handler = entry[2].split(".").pop() || entry[2];
+    // Raw strings (r"/path", b"/path") are idiomatic in Tornado route lists.
+    for (const entry of listBody.matchAll(
+      /\(\s*[br]{0,2}?(['"])([^'"]+)\1\s*,\s*([A-Za-z_][\w.]*)/g,
+    )) {
+      const pathValue = entry[2];
+      const handler = entry[3].split(".").pop() || entry[3];
       const methods = handlerMethods.get(handler) ?? ["GET"];
       for (const method of methods) {
         const r = makeRoute(method, normalizePath(pathValue), "");
@@ -324,16 +325,15 @@ export function detectSanic(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "sanic");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const blueprintPrefix = new Map<string, string>();
   const BLUEPRINT_DEF_RE =
     /([A-Za-z_][\w]*)\s*=\s*Blueprint\s*\(\s*['"][^'\"\s]+['\"]\s*,[\s\S]*?url_prefix\s*=\s*['"]([^'\"]+)['"]/g;
-  for (const m of sanitized.matchAll(BLUEPRINT_DEF_RE)) {
+  for (const m of content.matchAll(BLUEPRINT_DEF_RE)) {
     blueprintPrefix.set(m[1], m[2]);
   }
   const ROUTE_RE =
     /@([A-Za-z_][\w.]*)\.(get|post|put|delete|patch|options|head|route)\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
-  for (const m of sanitized.matchAll(ROUTE_RE)) {
+  for (const m of content.matchAll(ROUTE_RE)) {
     const target = m[1];
     const methodName = m[2];
     let routePath = m[3];
@@ -356,7 +356,7 @@ export function detectSanic(content: string): DetectedRoute[] {
   }
   const ADD_ROUTE_RE =
     /([A-Za-z_][\w.]*)\.add_route\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
-  for (const m of sanitized.matchAll(ADD_ROUTE_RE)) {
+  for (const m of content.matchAll(ADD_ROUTE_RE)) {
     let method = m[2].toUpperCase();
     const routePath = m[3];
     const args = m[4] || "";
@@ -377,9 +377,8 @@ export function detectStarlette(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "starlette");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const ROUTE_RE = /Route\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
-  for (const m of sanitized.matchAll(ROUTE_RE)) {
+  for (const m of content.matchAll(ROUTE_RE)) {
     const routePath = m[1];
     const args = m[2] || "";
     const methods = (() => {
@@ -401,10 +400,9 @@ export function detectLitestar(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "litestar");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const ROUTE_RE =
     /@(?:get|post|put|delete|patch|options|head|route)\s*\(\s*['\"]([^'"]+)['\"]([\s\S]*?)\)/g;
-  for (const m of sanitized.matchAll(ROUTE_RE)) {
+  for (const m of content.matchAll(ROUTE_RE)) {
     const routePath = m[1];
     const argText = m[2] || "";
     const methods = (() => {
@@ -426,10 +424,9 @@ export function detectAiohttp(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "aiohttp");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const DECORATOR_RE =
     /@([A-Za-z_][\w.]*)\.(get|post|put|delete|patch)\s*\(\s*['\"]([^'"]+)['\"]([\s\S]*?)\)/g;
-  for (const m of sanitized.matchAll(DECORATOR_RE)) {
+  for (const m of content.matchAll(DECORATOR_RE)) {
     const method = m[2].toUpperCase();
     const routePath = m[3];
     const r = makeRoute(method, normalizePath(routePath), "");
@@ -438,7 +435,7 @@ export function detectAiohttp(content: string): DetectedRoute[] {
   }
   const ADD_ROUTE_RE =
     /([A-Za-z_][\w.]*)\.router\.add_(get|post|put|delete|patch|route)\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
-  for (const m of sanitized.matchAll(ADD_ROUTE_RE)) {
+  for (const m of content.matchAll(ADD_ROUTE_RE)) {
     let method = m[2].toUpperCase();
     const routePath = m[3];
     const args = m[4] || "";
@@ -459,10 +456,9 @@ export function detectFalcon(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "falcon");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const sanitized = stripLanguageCommentsAndStrings(content);
   const resourceMethods = new Map<string, string[]>();
   const RESOURCE_RE = /class\s+([A-Za-z_][\w]*)\s*\([^\n]*\):([\s\S]*?)(?=\nclass\s|\n\n|$)/g;
-  for (const m of sanitized.matchAll(RESOURCE_RE)) {
+  for (const m of content.matchAll(RESOURCE_RE)) {
     const className = m[1];
     const body = m[2];
     const methods = Array.from(body.matchAll(/def\s+on_(get|post|put|delete|patch)\s*\(/g)).map(
@@ -472,7 +468,7 @@ export function detectFalcon(content: string): DetectedRoute[] {
   }
   const ADD_ROUTE_RE =
     /([A-Za-z_][\w.]*)\.add_route\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]\s*,\s*([A-Za-z_][\w.]*)/g;
-  for (const m of sanitized.matchAll(ADD_ROUTE_RE)) {
+  for (const m of content.matchAll(ADD_ROUTE_RE)) {
     const routePath = m[2];
     const resourceName = m[3].split(".").pop() || m[3];
     const methods = resourceMethods.get(resourceName) ?? ["GET"];
@@ -494,8 +490,10 @@ function escapeRegExpStr(s: string): string {
 export function detectPythonRoutesAST(content: string, targetFramework?: string): DetectedRoute[] {
   try {
     if (typeof window !== "undefined") return [];
-    const cpRequire = Function('return require("child_process")')();
-    const spawnSync = cpRequire.spawnSync as (typeof import("child_process"))["spawnSync"];
+    if (typeof process.getBuiltinModule !== "function") return [];
+    const cp = process.getBuiltinModule("child_process") as typeof import("child_process");
+    if (!cp) return [];
+    const spawnSync = cp.spawnSync;
     const py = spawnSync(
       "python",
       [
@@ -780,11 +778,19 @@ print(json.dumps(routes))
       return [];
     }
     if (py.stdout) {
-      const parsed = JSON.parse(py.stdout.toString());
-      if (!targetFramework) return parsed.map((r: any) => makeRoute(r.method, r.path, r.name));
+      interface PythonAstRoute {
+        method: string;
+        path: string;
+        name?: string;
+        framework?: string;
+        controller?: string;
+        auth?: boolean;
+      }
+      const parsed = JSON.parse(py.stdout.toString()) as PythonAstRoute[];
+      if (!targetFramework) return parsed.map((r) => makeRoute(r.method, r.path, r.name || ""));
       return parsed
-        .filter((r: any) => r.framework === targetFramework)
-        .map((r: any) => {
+        .filter((r) => r.framework === targetFramework)
+        .map((r) => {
           const route = makeRoute(r.method, r.path, r.name || "");
           if (r.controller) route.controller = r.controller;
           if (r.auth) {

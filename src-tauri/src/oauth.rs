@@ -113,19 +113,19 @@ static ENV_LOADED: OnceLock<()> = OnceLock::new();
 
 fn load_env_fallback() {
     let _ = ENV_LOADED.get_or_init(|| {
-        // Tests set this to avoid pulling real credentials from .env.local
-        // into the test process.
         if std::env::var("REQLY_SKIP_ENV_FALLBACK").is_ok() {
             return;
         }
-        // Covers running `pnpm tauri:dev` from the repo root or from
-        // `src-tauri/` (the CWD the Tauri CLI uses for the spawned app).
         let candidates = [
             std::path::Path::new("reqy-web/.env.local").to_path_buf(),
             std::path::Path::new("../reqy-web/.env.local").to_path_buf(),
         ];
         for path in candidates {
             if path.exists() {
+                log::warn!(
+                    "[oauth] loading fallback env from {} — ensure this file does not contain production secrets",
+                    path.display()
+                );
                 if dotenvy::from_path(&path).is_err() {
                     log::warn!("[oauth] failed to parse {}", path.display());
                 }

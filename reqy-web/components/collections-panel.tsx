@@ -13,62 +13,17 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import {
-  ChevronDown,
-  ChevronRight,
-  MoreHorizontal,
-  Plus,
-  Lock,
-  Users,
-  Package,
-  Trash2,
-  Edit2,
-  Search,
-  Download,
-  CheckSquare,
-  Square,
-  X,
-  Layers,
-  Import,
-  Play,
-  Copy,
-  Loader2,
-  SlidersHorizontal,
-  ArrowUpDown,
-  Brain,
-  Sparkles,
-  RefreshCw,
-} from "lucide-react";
-import { methodSubtle, methodBadge, methodBg } from "@/lib/http-method-colors";
+import { Plus, Layers, Import, Loader2 } from "lucide-react";
+import { methodBadge } from "@/lib/http-method-colors";
 import { cn, downloadJson } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { toast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import type {
-  Collection,
-  CollectionFolder,
-  RequestItem,
-  HttpMethod,
-} from "@/hooks/use-request-store";
+
+import type { Collection, RequestItem, HttpMethod } from "@/hooks/use-request-store";
 import { requestItemSchema } from "@/lib/import-schemas";
-import { collectionColors, collectionIcons, safeColor } from "@/lib/collection-utils";
+
 import { DeleteConfirmDialog, type PendingDelete } from "@/components/collections-delete-dialog";
 import { CollectionsEmptyState } from "@/components/collections-empty-state";
 import { SearchFilterBar } from "@/components/collections-search-bar";
@@ -133,19 +88,17 @@ export function CollectionsPanel({
   onAddCollection,
   onDeleteCollection,
   onDuplicateCollection,
-  onReorderCollections,
   onRenameCollection,
   onAddRequestToCollection,
   onRemoveRequestFromCollection,
+  onMoveRequestToFolder,
+  onReorderRequestsInCollection,
+  onMoveBetweenCollections,
+  onRunCollection,
   onAddFolder,
   onRenameFolder,
   onDeleteFolder,
-  onMoveRequestToFolder,
   onMoveFolder,
-  onReorderRequestsInCollection,
-  onReorderFolders,
-  onMoveBetweenCollections,
-  onRunCollection,
 }: CollectionsPanelProps) {
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set<string>();
@@ -169,10 +122,8 @@ export function CollectionsPanel({
   const [sortBy, setSortBy] = useState<"name" | "updated" | "requests">("name");
   const [showFilters, setShowFilters] = useState(false);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
-  const [indexing, setIndexing] = useState(false);
-  const [semanticResults, setSemanticResults] = useState<Set<string> | null>(
-    null,
-  );
+  const [_indexing, setIndexing] = useState(false);
+  const [semanticResults, setSemanticResults] = useState<Set<string> | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -216,13 +167,10 @@ export function CollectionsPanel({
     };
   }, [collections, semanticSearchEnabled]);
 
-  const handleToggleSemanticSearch = useCallback(
-    (enabled: boolean) => {
-      setSemanticSearchEnabled(enabled);
-      if (!enabled) setSemanticResults(null);
-    },
-    [],
-  );
+  const handleToggleSemanticSearch = useCallback((enabled: boolean) => {
+    setSemanticSearchEnabled(enabled);
+    if (!enabled) setSemanticResults(null);
+  }, []);
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -679,13 +627,8 @@ export function CollectionsPanel({
         }))
         .filter((collection) => {
           if (methodFilter.size > 0) {
-            const originalCollection = collections.find(
-              (c) => c.id === collection.id,
-            );
-            if (
-              originalCollection?.requests.some((r) => methodFilter.has(r.method))
-            )
-              return true;
+            const originalCollection = collections.find((c) => c.id === collection.id);
+            if (originalCollection?.requests.some((r) => methodFilter.has(r.method))) return true;
           }
           return collection.requests.length > 0;
         });
@@ -707,8 +650,7 @@ export function CollectionsPanel({
       }))
       .filter((collection) => {
         if (!searchQuery && methodFilter.size === 0) return true;
-        if (searchQuery && collection.name.toLowerCase().includes(searchLower))
-          return true;
+        if (searchQuery && collection.name.toLowerCase().includes(searchLower)) return true;
         if (collection.requests.length > 0) return true;
         if (
           searchQuery &&
@@ -717,12 +659,11 @@ export function CollectionsPanel({
           return true;
         if (methodFilter.size > 0) {
           const originalCollection = collections.find((c) => c.id === collection.id);
-          if (originalCollection?.requests.some((r) => methodFilter.has(r.method)))
-            return true;
+          if (originalCollection?.requests.some((r) => methodFilter.has(r.method))) return true;
         }
         return false;
       });
-  }, [sortedCollections, searchQuery, searchLower, methodFilter, semanticResults, collections, semanticSearchEnabled]);
+  }, [sortedCollections, searchQuery, searchLower, methodFilter, semanticResults, collections]);
 
   return (
     <div className="flex h-full flex-col">
@@ -757,7 +698,7 @@ export function CollectionsPanel({
             size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="h-7 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="h-8 sm:h-7 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
             title="Importer JSON"
           >
             {importing ? (
@@ -850,6 +791,10 @@ export function CollectionsPanel({
                 onDeleteCollection={onDeleteCollection}
                 onRemoveRequest={onRemoveRequestFromCollection}
                 onMoveRequestToFolder={onMoveRequestToFolder}
+                onAddFolder={onAddFolder}
+                onRenameFolder={onRenameFolder}
+                onDeleteFolder={onDeleteFolder}
+                onMoveFolder={onMoveFolder}
               />
             ))}
           </div>

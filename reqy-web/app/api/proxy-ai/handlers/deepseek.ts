@@ -129,7 +129,7 @@ export async function handleDeepSeek(
   // Extract tool_calls for non-streamed mode
   const rawToolCalls = msg?.tool_calls;
   const toolCalls = Array.isArray(rawToolCalls)
-    ? rawToolCalls.map((tc: any) => ({
+    ? rawToolCalls.map((tc) => ({
         id: typeof tc?.id === "string" ? tc.id : `call_${Math.random().toString(36).slice(2)}`,
         name: typeof tc?.function?.name === "string" ? tc.function.name : "",
         arguments: typeof tc?.function?.arguments === "string" ? tc.function.arguments : "{}",

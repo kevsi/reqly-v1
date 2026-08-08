@@ -79,9 +79,10 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     if (!syncUrl) return { applied: 0 };
     const since = syncCursors.load()[workspaceId] ?? 0;
     const res = await pullAndMerge(workspaceId, since, { apply: mergeRemote });
-    // Always bump the cursor so subsequent loads use the latest timestamp,
-    // even when no changes were returned.
-    syncCursors.save(workspaceId, Date.now());
+    // Advance the cursor using the server clock so changes that landed
+    // between server-now and client-now are not skipped forever (a client
+    // clock running ahead of the server would otherwise cause silent loss).
+    syncCursors.save(workspaceId, res.serverTime ?? Date.now());
     return res;
   };
 

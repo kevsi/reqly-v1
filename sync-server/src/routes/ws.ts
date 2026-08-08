@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, WebSocket } from "ws";
-import { parseSessionCookie, escapeRegex } from "../auth.js";
+import { parseSessionCookie, isSessionRevoked, escapeRegex } from "../auth.js";
 import { isMember } from "../sync-engine.js";
 import { addClient, removeClient, type Client } from "../ws-hub.js";
 
@@ -9,9 +9,9 @@ const COOKIE_NAME = "auth_session";
 const PING_INTERVAL_MS = 30_000;
 
 function isOriginAllowed(origin: string | undefined, allowedOrigins: string[] | "*"): boolean {
-  if (!origin) return false
-  if (allowedOrigins === "*") return true
-  return allowedOrigins.some((o) => o.toLowerCase() === origin.toLowerCase())
+  if (!origin) return false;
+  if (allowedOrigins === "*") return true;
+  return allowedOrigins.some((o) => o.toLowerCase() === origin.toLowerCase());
 }
 
 export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
@@ -30,9 +30,30 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
     }
 
     const cookieHeader = req.headers.cookie ?? "";
-    const rawToken = cookieHeader.match(new RegExp(`${escapeRegex(COOKIE_NAME)}=([^;]+)`))?.[1];
-    const session = parseSessionCookie(rawToken);
+    const rawToken =
+      cookieHeader.match(new RegExp(`${escapeRegex(COOKIE_NAME)}=([^;]+)`))?.[1] ??
+      // Accept the Bearer token too, so desktop/Tauri clients (which hold a
+      // token but no cookie) can open the WebSocket.
+      (req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.slice(7).trim()
+        : undefined);
+    let session: ReturnType<typeof parseSessionCookie>;
+    try {
+      session = parseSessionCookie(rawToken);
+    } catch {
+      // AUTH_SIGNING_SECRET missing in a misconfigured deploy — don't crash
+      // the upgrade event, just reject the connection.
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
     if (!session || !session.userId) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    // Reject revoked sessions (token_version bumped on logout).
+    if (isSessionRevoked(session.userId, session.ver)) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
       return;
@@ -86,7 +107,7 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
           return;
         }
         const reSession = parseSessionCookie(rawToken);
-        if (!reSession || !reSession.userId) {
+        if (!reSession || !reSession.userId || isSessionRevoked(reSession.userId, reSession.ver)) {
           clearInterval(sessionRecheck);
           wsConn.send(JSON.stringify({ type: "error", payload: "Session expired" }));
           wsConn.close(4001, "Session expired");
@@ -109,5 +130,5 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
       wsConn.on("close", cleanupWithTimers);
       wsConn.on("error", cleanupWithTimers);
     });
-  }
+  };
 }

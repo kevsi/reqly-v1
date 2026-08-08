@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Bell, Sparkles, Loader2 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { proxyAuthHeaders } from "@/lib/proxy-auth";
-import { cn } from "@/lib/utils";
+
 import { useRequestStore } from "@/hooks/use-request-store";
 import { persistence } from "@/lib/persistence";
 import {
@@ -112,26 +112,24 @@ export default function SettingsPage() {
     }
   };
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [githubStatus, setGithubStatus] = useState<
+  const [_githubStatus, setGithubStatus] = useState<
     "loading" | "connected" | "disconnected" | "error"
   >("loading");
-  const [githubUser, setGithubUser] = useState<{
+  const [_githubUser, setGithubUser] = useState<{
     login: string;
     name?: string;
     avatar_url?: string;
   } | null>(null);
-  const [postmanStatus, setPostmanStatus] = useState<
+  const [_postmanStatus, setPostmanStatus] = useState<
     "loading" | "connected" | "disconnected" | "error"
   >("loading");
-  const [postmanUser, setPostmanUser] = useState<{
+  const [_postmanUser, setPostmanUser] = useState<{
     id: string;
     name?: string;
     email?: string;
   } | null>(null);
-  const [postmanApiKey, setPostmanApiKey] = useState<string>("");
-  const [githubConnecting, setGithubConnecting] = useState(false);
+  const [_githubConnecting, setGithubConnecting] = useState(false);
   const [githubConnectDialogOpen, setGithubConnectDialogOpen] = useState(false);
-  const [postmanConnecting, setPostmanConnecting] = useState(false);
 
   // Lire les erreurs d'auth GitHub OAuth depuis l'URL (après redirection callback)
   useEffect(() => {
@@ -258,25 +256,6 @@ export default function SettingsPage() {
   }, [provider, apiKey, aiBaseUrl, aiModel, ollamaHost, ollamaPort, ollamaModel]);
 
   // GitHub handlers
-  const connectGithub = useCallback(() => {
-    setGithubConnecting(true);
-    setGithubStatus("loading");
-    setGithubConnectDialogOpen(true);
-    const githubWindow = window.open("/api/github-auth/start", "_blank", "noopener,noreferrer");
-    if (!githubWindow) window.location.href = "/api/github-auth/start";
-  }, []);
-
-  const disconnectGithub = useCallback(async () => {
-    try {
-      await fetch("/api/github-auth/logout", { method: "POST" });
-      setGithubStatus("disconnected");
-      setGithubUser(null);
-      setSaveStatus("Déconnexion GitHub enregistrée");
-    } catch {
-      setSaveStatus("Impossible de déconnecter GitHub");
-    }
-  }, []);
-
   const fetchGithubStatus = useCallback(async () => {
     try {
       const response = await fetch("/api/github-auth/status");
@@ -335,68 +314,6 @@ export default function SettingsPage() {
   }, [fetchGithubStatus, fetchPostmanStatus]);
 
   // Postman handlers
-  const connectPostman = useCallback(async () => {
-    if (!postmanApiKey.trim()) {
-      toast({
-        title: "Clé API requise",
-        description: "Veuillez saisir votre clé API Postman.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setPostmanStatus("loading");
-    setPostmanConnecting(true);
-    try {
-      const response = await fetch("/api/postman-auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: postmanApiKey.trim() }),
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        setPostmanStatus("error");
-        toast({
-          title: "Erreur",
-          description: err.message || "Clé API Postman invalide",
-          variant: "destructive",
-        });
-        return;
-      }
-      const data = await response.json();
-      setPostmanStatus("connected");
-      setPostmanUser(data.user);
-      toast({
-        title: "Postman connecté",
-        description: `Bienvenue ${data.user?.name || "utilisateur"}!`,
-      });
-    } catch {
-      setPostmanStatus("error");
-      toast({
-        title: "Erreur",
-        description: "Impossible de se connecter à Postman",
-        variant: "destructive",
-      });
-    } finally {
-      setPostmanConnecting(false);
-    }
-  }, [postmanApiKey]);
-
-  const disconnectPostman = useCallback(async () => {
-    try {
-      await fetch("/api/postman-auth/logout", { method: "POST" });
-      setPostmanStatus("disconnected");
-      setPostmanUser(null);
-      setPostmanApiKey("");
-      toast({ title: "Postman déconnecté", description: "Votre connexion a été supprimée" });
-    } catch {
-      toast({
-        title: "Erreur",
-        description: "Impossible de déconnecter Postman",
-        variant: "destructive",
-      });
-    }
-  }, []);
-
   // Notification handlers
   const togglePushEnabled = useCallback(async () => {
     const next = !pushEnabled;

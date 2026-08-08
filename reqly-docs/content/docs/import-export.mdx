@@ -1,0 +1,40 @@
+---
+title: Import & export
+description: Move between OpenAPI, Swagger, Postman, and Bruno formats seamlessly.
+icon: FileText
+---
+
+Reqly speaks the ecosystem's main API formats. You can import existing definitions to create collections, and export your collections for use elsewhere.
+
+## OpenAPI (3.0)
+
+- **Import** — upload an OpenAPI 3.0 spec (or Swagger 2.0) to create a collection of requests
+- **Export** — turn a collection into an OpenAPI 3.0 spec
+
+The import parser generates request methods, URLs, parameters, and headers from each operation.
+
+## Postman
+
+- **Import** — connect your Postman account (or upload a Postman collection) to bring in collections
+- **Export** — send a collection to Postman or download it in Postman's format
+
+Requires a Postman OAuth connection for account-based transfers.
+
+## Bruno
+
+Import Bruno collections directly, mapping their request definitions into Reqly collections.
+
+## What gets imported
+
+Depending on the source format, Reqly preserves:
+
+- Folders / groupings
+- Request names, methods, and URLs
+- Query parameters and headers
+- Request bodies (JSON, form, raw)
+- Environment variables where supported
+
+## See also
+
+- [Collections](/docs/collections) — organizing imported requests
+- [Workspaces](/docs/workspaces) — saving your whole workspace as a project file

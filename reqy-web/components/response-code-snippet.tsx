@@ -28,7 +28,6 @@ interface CodeSnippetProps {
 export function CodeSnippet({
   method = "GET",
   url = "",
-  queryParams = [],
   requestHeaders = [],
   body = "",
   bodyType = "none",
@@ -140,7 +139,9 @@ export function CodeSnippet({
             <span className="text-blue-600 dark:text-blue-400">const</span>
             <span className="text-code-text"> url = </span>
             <span className="text-emerald-600 dark:text-emerald-400">`{baseUrl}</span>
-            {queryStr && <span className="text-emerald-600 dark:text-emerald-400">?{queryStr}</span>}
+            {queryStr && (
+              <span className="text-emerald-600 dark:text-emerald-400">?{queryStr}</span>
+            )}
             <span className="text-emerald-600 dark:text-emerald-400">`</span>
             <span className="text-code-text">;</span>
             {"\n"}

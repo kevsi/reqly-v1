@@ -7,7 +7,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  X,
   ChevronRight,
   Settings2,
 } from "lucide-react";
@@ -28,9 +27,7 @@ import {
 import {
   parseOpenApiSpec,
   convertToCollections,
-  type OpenApiParseResult,
   type OpenApiParseSuccess,
-  type TagGroup,
   type CollectionImportData,
 } from "@/lib/openapi-import";
 
@@ -54,8 +51,8 @@ export function ImportOpenApiModal({
   const [dragging, setDragging] = useState(false);
   const [parseResult, setParseResult] = useState<OpenApiParseSuccess | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [rawContents, setRawContents] = useState<string>("");
+  const [_fileName, setFileName] = useState<string>("");
+  const [_rawContents, setRawContents] = useState<string>("");
 
   // Options
   const [baseUrlOverride, setBaseUrlOverride] = useState("");

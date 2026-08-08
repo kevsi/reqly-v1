@@ -10,6 +10,7 @@ export default defineConfig({
     env: {
       NODE_ENV: "production",
       AUTH_SIGNING_SECRET: "test-secret-do-not-use-in-prod",
+      EMAIL_PROVIDER: "log",
     },
   },
 });

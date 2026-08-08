@@ -73,7 +73,7 @@ describe("useRequestStore - Zustand isolation", () => {
   it("should batch multiple setState calls", () => {
     const unsub = store.subscribe((state) => {
       // Track render count
-      (state as any).__renderCount = ((state as any).__renderCount || 0) + 1;
+      (state as unknown).__renderCount = ((state as unknown).__renderCount || 0) + 1;
     });
 
     store.setState((prev) => ({ ...prev, aiAutoApply: true }));

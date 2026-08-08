@@ -14,6 +14,9 @@ env:
   PNPM_VERSION: 11.10.0
   NODE_VERSION: "22"
 
+permissions:
+  contents: read
+
 jobs:
   typecheck:
     name: Typecheck
@@ -81,45 +84,16 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build web
+      - name: Build web (with bundle analyzer)
         run: pnpm build
         env:
           AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
           NEXT_PUBLIC_SYNC_URL: ${{ secrets.NEXT_PUBLIC_SYNC_URL }}
-      - name: Analyze bundle size
-        if: always()
-        run: |
-          ANALYZE=true pnpm build 2>&1 | tail -20
-          # Extract gzipped size from client.html
-          GZIP_SIZE=$(node -e "
-            const fs = require('fs');
-            const html = fs.readFileSync('reqy-web/.next/analyze/client.html', 'utf8');
-            // Find all gzipSize entries and sum them
-            const matches = html.match(/'gzipSize':(\d+)/g);
-            if (matches) {
-              const total = matches.reduce((sum, m) => sum + parseInt(m.match(/\d+/)[0]), 0);
-              console.log('TOTAL_GZIP_SIZE=' + total);
-              // Fail if > 500KB (512000 bytes)
-              if (total > 512000) {
-                console.error('Bundle size ' + (total/1024).toFixed(1) + ' KB exceeds 500 KB limit');
-                process.exit(1);
-              }
-            } else {
-              console.log('Could not parse bundle size');
-            }
-          ")
-          echo "$GZIP_SIZE" >> $GITHUB_ENV
-      - name: Bundle size check
-        run: |
-          if [ -n "$TOTAL_GZIP_SIZE" ]; then
-            echo "Client bundle: $((TOTAL_GZIP_SIZE / 1024)) KB gzipped"
-            if [ $TOTAL_GZIP_SIZE -gt 512000 ]; then
-              echo "::error::Bundle size exceeds 500 KB limit"
-              exit 1
-            fi
-          else
-            echo "Warning: Could not determine bundle size"
-          fi
+          # Single build: the analyzer emits .next/analyze/client.html on the
+          # same production build, so the size gate needs no second build.
+          ANALYZE: "true"
+      - name: Bundle size gate (fail if main-app shell > 500 KB gzipped)
+        run: node reqy-web/scripts/bundle-gate.mjs
       - name: Upload web artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -150,7 +124,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build desktop
-        run: BUILD_TARGET=desktop pnpm generate
+        run: pnpm generate
         env:
           AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
           NEXT_PUBLIC_SYNC_URL: ${{ secrets.NEXT_PUBLIC_SYNC_URL }}

@@ -107,9 +107,12 @@ describe("tauri.conf.json CSP", () => {
     expect(csp).toContain("base-uri 'self'");
     expect(csp).toContain("form-action 'self'");
     expect(csp).toContain("upgrade-insecure-requests");
-    // script-src should NOT have 'unsafe-inline' in the more restrictive Tauri CSP
-    // (style-src still needs it for Next.js injected styles)
+    // The desktop webview serves a static export (no middleware, hence no
+    // nonce), and Next.js hydration relies on an inline RSC bootstrap script,
+    // so script-src MUST keep 'unsafe-inline' here — unlike the web build
+    // (proxy.ts) which uses 'nonce-…' + 'strict-dynamic'. The property that
+    // must never appear is 'unsafe-eval'.
     const scriptSrc = csp.match(/script-src\s+[^;]+/)?.[0] ?? "";
-    expect(scriptSrc).not.toContain("unsafe-inline");
+    expect(scriptSrc).not.toContain("unsafe-eval");
   });
 });

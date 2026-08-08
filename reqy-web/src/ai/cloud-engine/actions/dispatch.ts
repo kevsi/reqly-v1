@@ -51,9 +51,13 @@ export async function dispatchAIActions(
     applyFix?: (patch: Partial<CurrentRequest>) => Promise<void> | void;
     setDoc?: (markdown: string, title?: string) => Promise<void> | void;
     notify?: (message: string) => Promise<void> | void;
-    executeRequest?: (request: Partial<CurrentRequest>) => Promise<any> | void;
-    runBatch?: (requests: Array<Partial<CurrentRequest>>) => Promise<any[]> | void;
-    audit?: (entry: { actionType: string; detail?: any; result?: any }) => Promise<any> | void;
+    executeRequest?: (request: Partial<CurrentRequest>) => Promise<unknown> | void;
+    runBatch?: (requests: Array<Partial<CurrentRequest>>) => Promise<unknown[]> | void;
+    audit?: (entry: {
+      actionType: string;
+      detail?: unknown;
+      result?: unknown;
+    }) => Promise<unknown> | void;
   },
   ctx?: AIContext,
   options?: { allowAutoApply?: boolean },
@@ -145,7 +149,7 @@ export async function dispatchAIActions(
       case "EXPLAIN": {
         try {
           await handlers.notify?.(action.payload.message);
-        } catch (e) {
+        } catch (_e) {
           // Best effort
         }
         break;
@@ -184,7 +188,7 @@ export async function dispatchAIActions(
             blocked.push({ type: "RUN_BATCH", reason: "allowAutoApply désactivé" });
             break;
           }
-          const results: any[] = [];
+          const results: Array<{ request: Partial<CurrentRequest>; result: unknown }> = [];
           for (const req of action.payload.requests) {
             const res = await handlers.executeRequest?.(req);
             results.push({ request: req, result: res });

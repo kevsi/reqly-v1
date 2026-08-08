@@ -129,7 +129,7 @@ describe("handleOllama", () => {
     } as Response);
     vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock);
 
-    await handleOllama({ ...validBody, host: "ollama.example.com", port: 11434 as any }, {});
+    await handleOllama({ ...validBody, host: "ollama.example.com", port: 11434 as unknown }, {});
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toBe("http://ollama.example.com:11434/v1/chat/completions");
   });

@@ -8,7 +8,6 @@ import {
   makeRoute,
   normalizePath,
   stripLanguageCommentsAndStrings,
-  isHttpMethodName,
   HTTP_METHODS_UPPER_ALL,
   HTTP_METHODS_UPPER,
 } from "@/lib/detect-shared-types";
@@ -22,7 +21,6 @@ import {
   analyzeHandlerBody,
   detectAuthInArgs,
   detectBodyTypeInArgs,
-  detectAuthByStatusSignal,
 } from "@/lib/detect-shared-handler";
 
 // ── Express ─────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ export type { Dataset } from "./store/types";
 
 // ── Imports ─────────────────────────────────────────────────────────────
 
-import type { Collection, RequestItem, HttpMethod } from "./request-types";
+import type { Collection, HttpMethod } from "./request-types";
 import type { RequestStore, CollectionFolder } from "./request-types";
 import { create } from "zustand";
 import { toast } from "@/hooks/use-toast";
@@ -64,7 +64,7 @@ type RequestStoreState = RequestStore & {
   reset: () => void;
   initStore: () => Promise<void>;
   fetchWorkspacesFromApi: () => Promise<void>;
-  mergeRemote: (changes: any[]) => void;
+  mergeRemote: (changes: import("@/lib/sync/store-sync").SyncChange[]) => void;
   pullWorkspace: (workspaceId?: string | null) => Promise<{ applied: number }>;
   notify?: (message: string) => void;
   exportActiveRequest: (data: {
@@ -92,7 +92,10 @@ let syncEngine: SyncEngine | null = null;
 
 // ── Commit helper (used by mutations AND sync) ──────────────────────────
 
-function createBoundCommit(set: any, get: () => RequestStore) {
+function createBoundCommit(
+  set: (partial: Partial<RequestStore> | ((prev: RequestStore) => Partial<RequestStore>)) => void,
+  _get: () => RequestStore,
+) {
   return (updater: (prev: RequestStore) => RequestStore) => {
     set((prev: RequestStore) => {
       const next = updater(prev);

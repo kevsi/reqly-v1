@@ -375,7 +375,10 @@ export const executeRequest = async (context: ExecuteRequestContext) => {
             responseHeaders["content-type"] ||
             responseHeaders["Content-Type"] ||
             "application/octet-stream";
-          const binary = Uint8Array.from(atob(proxyResult.body ?? ""), (c) => c.charCodeAt(0));
+          const binary = Uint8Array.from(
+            atob(typeof proxyResult.body === "string" ? proxyResult.body : ""),
+            (c) => c.charCodeAt(0),
+          );
           responseBody = "[binary data]";
           responseData = new Blob([binary], { type: contentType });
           responseSize = formatSize(responseData.size);

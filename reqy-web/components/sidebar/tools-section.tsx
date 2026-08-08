@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Code2, Package, GitBranch } from "lucide-react";
+import { Code2, Package, GitBranch, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Text } from "@/components/ui/text";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,7 +11,7 @@ import { useSidebar } from "@/contexts/sidebar-context";
 const TOOLS = [
   { href: "/graphql/", label: "GraphQL", icon: Code2, color: "text-purple-500" },
   { href: "/sdks/", label: "SDKs", icon: Package, color: "text-orange-500" },
-  // { href: "/sse/", label: "SSE", icon: Radio, color: "text-amber-500" }, // Hidden v1 - feature complete but low priority
+  { href: "/sse/", label: "SSE", icon: Radio, color: "text-amber-500" },
   { href: "/git/", label: "Git", icon: GitBranch, color: "text-rose-500" },
 ];
 

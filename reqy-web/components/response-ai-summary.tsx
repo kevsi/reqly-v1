@@ -21,7 +21,7 @@ export const ResponseAiSummary = memo(function ResponseAiSummary({
   return (
     <div
       className={cn(
-        "border-b border-border px-4 py-3 transition-all duration-300 animate-slide-up",
+        "border-b border-border px-4 py-3 transition-colors duration-300 animate-slide-up",
         aiIsLoading && "bg-primary/[0.02]",
       )}
     >

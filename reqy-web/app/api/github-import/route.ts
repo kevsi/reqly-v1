@@ -29,8 +29,11 @@ const FETCH_TIMEOUT = 15000;
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 20 });
 
 function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  if (process.env.TRUSTED_PROXY === "true") {
+    const forwarded = request.headers.get("x-forwarded-for");
+    return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  }
+  return "unknown";
 }
 
 const LANGUAGE_EXTENSION_MAP_FETCH: Record<string, string[]> = {
@@ -295,10 +298,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(validated.data);
   } catch (error) {
     console.error("GitHub import error:", error);
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }
 

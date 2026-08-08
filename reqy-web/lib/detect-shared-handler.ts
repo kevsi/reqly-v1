@@ -431,7 +431,6 @@ export function inferAuthFromPathAndName(
   routeName: string,
 ): { required: boolean; type?: DetectedRoute["authType"] } {
   const lowerPath = routePath.toLowerCase();
-  const lowerName = routeName.toLowerCase();
   if (
     /(\/(admin|dashboard|profile|settings|account|private|protected|user\/[^/]+|me|secure)(?:\/|$))/i.test(
       routePath,

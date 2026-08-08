@@ -3,7 +3,7 @@
   "exportedAt": "2026-08-04T00:00:00.000Z",
   "collections": [
     {
-      "name": "Reqly Demo API",
+      "name": "Reqly Demo ",
       "description": "Collection de démo pour tester `recli ui` — mélange de succès, d'échecs volontaires, de chaining et de GraphQL.",
       "requests": [
         {
@@ -11,7 +11,7 @@
           "method": "GET",
           "url": "{{BASE_URL}}/posts",
           "endpoint": "/posts",
-          "queryParams": [{ "key": "_limit", "value": "3" }],
+          "queryParams": [{ "key": "_limit", "value": "5" }],
           "assert": [
             { "name": "status is 200", "expr": "status == 200" },
             { "name": "returns posts", "expr": "body.length >= 1" }

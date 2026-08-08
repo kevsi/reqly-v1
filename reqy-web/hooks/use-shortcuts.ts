@@ -50,8 +50,8 @@ type ShortcutActions = { router: ReturnType<typeof useRouter>; toggleSidebar: ()
 
 export function useShortcuts() {
   const custom = useSyncExternalStore(subscribeToShortcuts, getSnapshot, getSnapshot);
-  const router = useRouter();
-  const { toggleSidebar } = useSidebar();
+  useRouter();
+
   // No render-time ref assignment here; ShortcutsRegistrar maintains the
   // stable ref for runtime actions.
 

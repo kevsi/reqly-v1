@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { Plus, Trash2, Code } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { AutocompleteInput, type AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import { Textarea } from "@/components/ui/textarea";
 import {

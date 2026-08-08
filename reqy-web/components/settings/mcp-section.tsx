@@ -64,7 +64,14 @@ export default function McpSection() {
         await start(Object.values(collections), Object.values(environments ?? {}), { port });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Échec du démarrage du serveur MCP");
+      // Tauri rejette les erreurs de commande comme des strings, pas des Error.
+      const msg =
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+            ? err.message
+            : "Échec du démarrage du serveur MCP";
+      setError(msg);
     }
   };
 

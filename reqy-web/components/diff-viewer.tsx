@@ -121,7 +121,7 @@ export function DiffViewer({
   copiedLeft,
   copiedRight,
 }: DiffViewerProps) {
-  const { diff, leftFormatted, rightFormatted } = useMemo(() => {
+  const { diff } = useMemo(() => {
     const leftFmt = isValidJson(left) ? tryFormatJson(left) : left;
     const rightFmt = isValidJson(right) ? tryFormatJson(right) : right;
     return {

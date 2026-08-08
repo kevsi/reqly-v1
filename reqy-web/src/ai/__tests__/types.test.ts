@@ -1,13 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type {
-  RequestContext,
-  Diagnostic,
-  Fix,
-  Rule,
-  Severity,
-  Confidence,
-  DiagnosticSource,
-} from "@/src/ai/types";
+import type { RequestContext, Diagnostic, Fix, Rule } from "@/src/ai/types";
 
 describe("AI types compile correctly", () => {
   it("RequestContext accepts full payload", () => {
@@ -68,8 +60,19 @@ describe("AI types compile correctly", () => {
       category: "auth",
       severity: "warning",
       match: () => true,
-      build: () => ({ severity: "warning", category: "auth", title: "t", explanation: "e", confidence: "probable" }),
+      build: () => ({
+        severity: "warning",
+        category: "auth",
+        title: "t",
+        explanation: "e",
+        confidence: "probable",
+      }),
     };
-    expect(rule.match({ request: { method: "GET", url: "", headers: {}, body: null, authType: "none" }, timestamp: 0 })).toBe(true);
+    expect(
+      rule.match({
+        request: { method: "GET", url: "", headers: {}, body: null, authType: "none" },
+        timestamp: 0,
+      }),
+    ).toBe(true);
   });
 });

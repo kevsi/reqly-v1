@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, Eye, EyeOff, Braces, X } from "lucide-react";
+import { Copy, Check, Eye, EyeOff, Braces } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRequestStore } from "@/hooks/use-request-store";
-import { useShallow } from "zustand/react/shallow";
+
 import { interpolate } from "@/lib/utils";
 
 export function VariablesPanel() {

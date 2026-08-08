@@ -14,7 +14,7 @@ vi.mock("@/lib/security/dns-cache", () => ({
 }));
 
 import { structuredError } from "../lib/errors";
-import { getCustomUrl, isOllamaHostAllowed } from "../lib/url-utils";
+import { getCustomUrl, isOllamaHostAllowed, assertSafeBaseUrl } from "../lib/url-utils";
 import {
   buildOpenAIToolHistory,
   buildAnthropicToolHistory,
@@ -90,6 +90,35 @@ describe("getCustomUrl", () => {
     await expect(getCustomUrl({ openaiUrl: "not-a-url" })).rejects.toThrow(
       "Invalid custom provider URL",
     );
+  });
+});
+
+describe("assertSafeBaseUrl", () => {
+  it("accepts a public hostname", async () => {
+    await expect(assertSafeBaseUrl("https://example.com/v1")).resolves.toBe(
+      "https://example.com/v1",
+    );
+  });
+
+  it("rejects localhost", async () => {
+    await expect(assertSafeBaseUrl("http://localhost:8080/v1")).rejects.toThrow(
+      "cannot point to localhost",
+    );
+  });
+
+  it("rejects private IP literals", async () => {
+    await expect(assertSafeBaseUrl("http://10.0.0.1/v1")).rejects.toThrow("cannot point");
+  });
+
+  it("rejects non-http(s) protocols", async () => {
+    await expect(assertSafeBaseUrl("ftp://example.com/v1")).rejects.toThrow(
+      "URL must use http or https",
+    );
+  });
+
+  it("rejects hosts that fail DNS resolution (fail-closed)", async () => {
+    // The dns-cache mock returns null for unknown hostnames → blocked.
+    await expect(assertSafeBaseUrl("https://unknown.invalid/v1")).rejects.toThrow("cannot point");
   });
 });
 

@@ -23,8 +23,8 @@ describe("decodeJwt", () => {
   it("decodes a valid JWT", () => {
     const r = decodeJwt(FUTURE_JWT);
     expect(r).not.toBeNull();
-    expect((r!.header as any).alg).toBe("HS256");
-    expect((r!.payload as any).sub).toBe("user1");
+    expect((r!.header as unknown).alg).toBe("HS256");
+    expect((r!.payload as unknown).sub).toBe("user1");
     expect(r!.expired).toBe(false);
     expect(r!.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
@@ -41,8 +41,8 @@ describe("decodeJwt", () => {
   });
 
   it("returns null for non-string", () => {
-    expect(decodeJwt(null as any)).toBeNull();
-    expect(decodeJwt(undefined as any)).toBeNull();
+    expect(decodeJwt(null as unknown)).toBeNull();
+    expect(decodeJwt(undefined as unknown)).toBeNull();
   });
 });
 

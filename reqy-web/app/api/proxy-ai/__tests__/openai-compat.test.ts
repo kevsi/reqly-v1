@@ -137,7 +137,7 @@ describe("handleOpenAICompat", () => {
     } as Response);
 
     const res = await handleOpenAICompat(
-      { ...validBody, stream: true, tools: [{ name: "test" } as any] },
+      { ...validBody, stream: true, tools: [{ name: "test" } as unknown] },
       {},
     );
     const body = await res.json();
@@ -148,7 +148,9 @@ describe("handleOpenAICompat", () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Bonjour"}}]}\n\n'));
+        controller.enqueue(
+          encoder.encode('data: {"choices":[{"delta":{"content":"Bonjour"}}]}\n\n'),
+        );
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       },
@@ -161,7 +163,7 @@ describe("handleOpenAICompat", () => {
     } as Response);
 
     const res = await handleOpenAICompat(
-      { ...validBody, stream: true, tools: [{ name: "test" } as any] },
+      { ...validBody, stream: true, tools: [{ name: "test" } as unknown] },
       {},
     );
     expect(res.status).toBe(200);

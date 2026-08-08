@@ -67,6 +67,9 @@ export function importOpenAPI(specYamlOrJson: string): ExportBundle {
     }
   }
 
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+    throw new Error("Invalid OpenAPI spec: not an object");
+  }
   if (!doc.openapi || !doc.paths) {
     throw new Error("Invalid OpenAPI spec: missing 'openapi' version or 'paths'");
   }

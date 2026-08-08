@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { persistence } from "@/lib/persistence";
 
 export type ChatRole = "user" | "assistant";
@@ -29,7 +29,7 @@ export interface UseChatHistoryResult {
   append: (
     role: ChatRole,
     content: string,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ) => Promise<ChatMessageRecord | null>;
   clear: (id?: string) => Promise<void>;
 }
@@ -66,7 +66,7 @@ function nextId() {
  */
 export function useChatHistory(
   requestId: string | null,
-  options: { enabled?: boolean } = {}
+  options: { enabled?: boolean } = {},
 ): UseChatHistoryResult {
   const enabled = options.enabled !== false;
   const [messages, setMessages] = useState<ChatMessageRecord[]>([]);
@@ -83,8 +83,8 @@ export function useChatHistory(
     try {
       const data = loadFromStorage(requestId);
       setMessages(data);
-    } catch (e: any) {
-      setError(e?.message ?? "Erreur de chargement de l'historique");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erreur de chargement de l'historique");
     } finally {
       setLoading(false);
     }
@@ -98,7 +98,7 @@ export function useChatHistory(
     async (
       role: ChatRole,
       content: string,
-      metadata: Record<string, unknown> = {}
+      metadata: Record<string, unknown> = {},
     ): Promise<ChatMessageRecord | null> => {
       if (!requestId) return null;
       const record: ChatMessageRecord = {
@@ -116,7 +116,7 @@ export function useChatHistory(
       });
       return record;
     },
-    [requestId]
+    [requestId],
   );
 
   const clear = useCallback(
@@ -128,7 +128,7 @@ export function useChatHistory(
         return next;
       });
     },
-    [requestId]
+    [requestId],
   );
 
   return { messages, loading, error, authenticated: true, refetch, append, clear };

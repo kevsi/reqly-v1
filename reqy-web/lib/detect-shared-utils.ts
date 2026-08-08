@@ -2,13 +2,7 @@
  * Language, framework, and port detection utilities.
  */
 
-import {
-  stripLanguageCommentsAndStrings,
-  LANGUAGE_EXTENSION_MAP,
-  FRAMEWORK_FILE_EXTENSIONS,
-  type DetectedRoute,
-} from "@/lib/detect-shared-types";
-import type { HttpMethod } from "@/lib/types";
+import { stripLanguageCommentsAndStrings, LANGUAGE_EXTENSION_MAP } from "@/lib/detect-shared-types";
 
 // ── Language detection ──────────────────────────────────────────────────────
 
@@ -155,9 +149,6 @@ export function detectFramework(files: { path: string; content: string }[]): str
   if (/pom\.xml|build\.gradle/.test(paths)) return "spring";
   if (/\.kt$/.test(paths)) return "kotlin";
   if (/pyproject\.toml|requirements\.txt|setup\.py/.test(paths)) return "fastapi";
-
-  const flexible = (pattern: RegExp) =>
-    new RegExp(pattern.source.replace(/\\s\+/g, "\\s*"), pattern.flags);
 
   if (/from\s+['"]?next['"]?|next\/(?:server|router|link)|next\.config/.test(sanitized))
     return "nextjs";

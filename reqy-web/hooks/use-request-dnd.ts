@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import {
   type DragEndEvent,
   type DragStartEvent,
-  DragOverEvent,
   PointerSensor,
   KeyboardSensor,
   useSensor,

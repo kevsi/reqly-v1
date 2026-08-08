@@ -102,6 +102,7 @@ pub fn start_mcp_server(
   let mut cmd = Command::new(node);
   cmd
     .arg(&script_path)
+    .arg("serve")
     .arg("--file")
     .arg(&bundle_path)
     .arg("--port")
@@ -110,6 +111,10 @@ pub fn start_mcp_server(
     .arg("30000");
 
   if cfg.allow_local_hosts {
+    log::warn!(
+      "[mcp] allow_local_hosts is enabled — the MCP server can reach local/private networks. \
+       Only enable this if you trust the MCP bundle. This flag bypasses the netguard SSRF protection."
+    );
     cmd.arg("--allow-local-hosts");
   }
 
@@ -310,20 +315,25 @@ pub fn sync_mcp_collections(
   Ok(())
 }
 
-/// Locate the reqy-mcp `dist/index.js` script.
+/// Locate the recli `dist/index.js` script (the MCP server runs via `recli serve`).
 fn resolve_script_path(app: &AppHandle) -> Result<String, AppError> {
   let candidates: Vec<std::path::PathBuf> = if cfg!(debug_assertions) {
+    // Dev: the workspace checkout lives either at `cwd` (project root) or one
+    // level up (when launched from inside `src-tauri`).
     let cwd = std::env::current_dir().map_err(|e| AppError::Internal(e.to_string()))?;
     vec![
-      cwd.join("reqy-mcp").join("dist").join("index.js"),
-      cwd.join("..").join("reqy-mcp").join("dist").join("index.js"),
-      cwd.join("..\\reqy-mcp\\dist\\index.js").into(),
+      cwd.join("recli").join("dist").join("index.js"),
+      cwd.join("..").join("recli").join("dist").join("index.js"),
     ]
   } else {
-    let resource_dir = app.path().resource_dir().map_err(|e| AppError::Internal(e.to_string()))?;
-    vec![
-      resource_dir.join("reqy-mcp").join("dist").join("index.js"),
-    ]
+    // Release: recli (dist + prod node_modules) is bundled as a Tauri resource
+    // (see `bundle.resources` in tauri.conf.json) so `node recli serve` works
+    // without a global install.
+    let resource_dir = app
+      .path()
+      .resource_dir()
+      .map_err(|e| AppError::Internal(e.to_string()))?;
+    vec![resource_dir.join("recli").join("dist").join("index.js")]
   };
 
   for p in &candidates {
@@ -333,7 +343,7 @@ fn resolve_script_path(app: &AppHandle) -> Result<String, AppError> {
   }
 
   Err(AppError::NotFound(format!(
-    "reqy-mcp script not found (tried: {})",
+    "recli script not found (tried: {})",
     candidates
       .iter()
       .map(|p| p.display().to_string())

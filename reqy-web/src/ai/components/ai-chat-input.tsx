@@ -113,7 +113,7 @@ export function AiChatInput({
           type="submit"
           disabled={!value.trim() || isLoading}
           aria-label="Envoyer"
-          className="flex size-8 mr-1.5 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm transition-all hover:shadow-md hover:brightness-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none shrink-0"
+          className="flex size-8 mr-1.5 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm transition-[transform,box-shadow,filter,opacity] duration-150 hover:shadow-md hover:brightness-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none shrink-0"
         >
           <SendHorizontal className="size-4" />
         </button>
@@ -131,7 +131,7 @@ export function AiChatInput({
         )}
       </form>
       <p className="text-[10px] text-muted-foreground/50 mt-1.5 text-center">
-        L&apos;IA n&apos;agit que sur demande explicite
+        / commandes · @ contexte · ⌘+I fermer
       </p>
     </div>
   );

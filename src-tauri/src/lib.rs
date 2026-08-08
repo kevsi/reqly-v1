@@ -10,7 +10,6 @@ mod open;
 mod fetch;
 mod store;
 mod oauth;
-pub mod websocket;
 pub mod git;
 #[cfg(feature = "ts-export")]
 mod ts_bindings;
@@ -52,6 +51,7 @@ pub fn run() {
     .build()
     .expect("failed to create HTTP client");
 
+  #[cfg(debug_assertions)]
   let insecure_client = reqwest::Client::builder()
     .timeout(std::time::Duration::from_secs(CLIENT_TIMEOUT_SECS))
     .cookie_store(true)

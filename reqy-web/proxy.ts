@@ -35,8 +35,55 @@ function extractBearerToken(authorization: string | null): string | null {
   return match[1].trim();
 }
 
+// Constant-time string comparison. Edge-safe (no node:crypto available in the
+// Next.js 16 proxy runtime): compares every char regardless of matches so a
+// caller cannot learn the token length/prefix from response timing. Used for
+// the proxy service + visitor token checks below.
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+const VISITOR_COOKIE = "proxy_visitor";
+
+// Per-visitor runtime token, issued by this proxy and read back by the
+// client at runtime (`lib/proxy-auth.ts`). Unlike a static NEXT_PUBLIC_* env
+// var it is never inlined in the bundle, so a cross-site page or third-party
+// process cannot extract it. Server-side callers keep using
+// PROXY_SERVICE_TOKEN (never exposed to the client bundle).
+function getVisitorToken(request: NextRequest): string | null {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const match = cookieHeader.match(/(?:^|;\s*)proxy_visitor=([^;]+)/);
+  if (!match) return null;
+  try {
+    const value = decodeURIComponent(match[1]);
+    return value.length >= 32 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function ensureVisitorCookie(response: NextResponse, request: NextRequest): NextResponse {
+  if (getVisitorToken(request)) return response;
+  const token = crypto.randomUUID(); // 36 chars, > 32 minimum
+  response.headers.append(
+    "Set-Cookie",
+    `${VISITOR_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}${
+      process.env.NODE_ENV === "production" ? "; Secure" : ""
+    }`,
+  );
+  return response;
+}
+
 function buildCsp(nonce: string): string {
-  const syncUrl = (process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly.duckdns.org").replace(/\/$/, "");
+  const syncUrl = (process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly.duckdns.org").replace(
+    /\/$/,
+    "",
+  );
   let syncConnectTargets = "https://reqly.duckdns.org wss://reqly.duckdns.org";
   try {
     const syncOrigin = new URL(syncUrl).origin;
@@ -45,12 +92,11 @@ function buildCsp(nonce: string): string {
   } catch {}
   return [
     "default-src 'self'",
-    // TODO: Migrate to nonce-based CSP ('nonce-…' + 'strict-dynamic').
-    // Currently using 'unsafe-inline' because Next.js 16 does not expose
-    // the nonce from middleware to client components.  Once
-    // https://github.com/vercel/next.js/issues/56767 is resolved, replace
-    // 'unsafe-inline' with "'nonce-{nonce}' 'strict-dynamic'".
-    `script-src 'self' 'unsafe-inline' 'nonce-${nonce}'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+    // Nonce-based script-src: Next.js 16 applies the `x-nonce` request header
+    // set below to its injected inline scripts, so 'unsafe-inline' is not
+    // needed. 'strict-dynamic' trusts scripts loaded by an already-trusted
+    // script, which lets lazy-loaded bundles work without a long host allowlist.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     `connect-src 'self' https: wss: ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
@@ -59,6 +105,7 @@ function buildCsp(nonce: string): string {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    "report-uri /api/csp-reports",
     "upgrade-insecure-requests",
   ].join("; ");
 }
@@ -73,33 +120,42 @@ export function proxy(request: NextRequest): NextResponse {
   if (isExempt(pathname)) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set("Content-Security-Policy", buildCsp(nonce));
-    return response;
+    return ensureVisitorCookie(response, request);
   }
 
   if (!isProtected(pathname)) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set("Content-Security-Policy", buildCsp(nonce));
-    return response;
+    return ensureVisitorCookie(response, request);
   }
 
-  const token = process.env.PROXY_SERVICE_TOKEN;
+  const envToken = process.env.PROXY_SERVICE_TOKEN ?? "";
+  const envTokenValid = envToken.length >= 32;
+  const visitorToken = getVisitorToken(request);
 
-  if (!token || token.length < 32) {
+  // Fail closed when no auth is configured at all.
+  if (!envTokenValid && !visitorToken) {
     return NextResponse.json({ error: "Service token not configured" }, { status: 503 });
   }
 
   const bearer = extractBearerToken(request.headers.get("authorization"));
 
-  if (!bearer || bearer !== token) {
-    return NextResponse.json(
+  // Constant-time comparison so token checks don't leak length/prefix via timing.
+  const authorized =
+    (!!bearer && envTokenValid && safeEqual(bearer, envToken)) ||
+    (!!bearer && !!visitorToken && safeEqual(bearer, visitorToken));
+
+  if (!authorized) {
+    const error = NextResponse.json(
       { error: "Unauthorized", code: "PROXY_AUTH_REQUIRED" },
       { status: 401 },
     );
+    return ensureVisitorCookie(error, request);
   }
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", buildCsp(nonce));
-  return response;
+  return ensureVisitorCookie(response, request);
 }
 
 export const config = {

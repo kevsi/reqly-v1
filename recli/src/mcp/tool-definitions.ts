@@ -11,6 +11,11 @@ export interface ToolHandlerOptions {
   maxResponseSize?: number;
   maxBatchSize?: number;
   maxConcurrency?: number;
+  /** Emit an MCP progress notification. Token comes from the caller's `_meta`. */
+  onProgress?: (
+    progressToken: string | number | undefined,
+    params: Record<string, unknown>,
+  ) => void;
 }
 
 export const DEFAULT_MAX_BATCH_SIZE = 20;
@@ -413,22 +418,6 @@ const TOOLS: Tool[] = [
         },
       },
       required: ["request_id", "target_collection_id"],
-    },
-  },
-  {
-    name: "generate_request_from_description",
-    description: "Generate a request definition from a plain-text description",
-    inputSchema: {
-      type: "object",
-      properties: {
-        description: { type: "string", description: "Plain-text description of the request" },
-        collection_id: {
-          type: "string",
-          description: "Optional collection ID to save the generated request",
-        },
-        name: { type: "string", description: "Optional override name for the generated request" },
-      },
-      required: ["description"],
     },
   },
   {

@@ -40,13 +40,19 @@ export function getChangesSince(workspaceId: string, since: number): SyncChange[
   const result: SyncChange[] = [];
   for (const entityType of ["collection", "environment", "folder"] as const) {
     const table = tableFor(entityType);
-    const idField = entityType === "folder" ? "collection_id" : "workspace_id";
+    // Folders are keyed by their parent collection, not by the workspace.
+    // Query them through the workspace's collections so pushed folders
+    // actually come back in polls.
+    const where =
+      entityType === "folder"
+        ? `collection_id IN (SELECT id FROM collections WHERE workspace_id = ?) AND updated_at > ?`
+        : `workspace_id = ? AND updated_at > ?`;
     const rows = db
       .prepare(
         `
       SELECT id, data, version, updated_at as updatedAt, updated_by as updatedBy, deleted
       FROM ${table}
-      WHERE ${idField} = ? AND updated_at > ?
+      WHERE ${where}
       ORDER BY updated_at ASC
     `,
       )
@@ -73,6 +79,19 @@ export function isMember(workspaceId: string, userId: string): boolean {
   return !!row;
 }
 
+export function getRole(workspaceId: string, userId: string): string | null {
+  const row = db
+    .prepare(`SELECT role FROM memberships WHERE workspace_id = ? AND user_id = ?`)
+    .get(workspaceId, userId) as { role: string } | undefined;
+  return row?.role ?? null;
+}
+
+/** view-only members must not push changes (write access requires owner/editor). */
+export function canWrite(workspaceId: string, userId: string): boolean {
+  const role = getRole(workspaceId, userId);
+  return role === "owner" || role === "editor";
+}
+
 export function pushChanges(
   workspaceId: string,
   userId: string,
@@ -84,9 +103,42 @@ export function pushChanges(
   const tx = db.transaction(() => {
     for (const change of changes) {
       const table = tableFor(change.entityType);
+
+      // Folders are keyed by their parent collection. Reject any folder whose
+      // parent collection does not belong to this workspace (orphan / cross-workspace write).
+      if (change.entityType === "folder") {
+        const parentCollectionId = (change.data as { collectionId?: string }).collectionId ?? "";
+        const belongs = db
+          .prepare(`SELECT 1 FROM collections WHERE id = ? AND workspace_id = ?`)
+          .get(parentCollectionId, workspaceId);
+        if (!belongs) {
+          conflicts.push({
+            entityType: "folder",
+            id: change.id,
+            serverVersion: 0,
+            serverUpdatedAt: 0,
+          });
+          continue;
+        }
+      }
+
       const existing = db
         .prepare(`SELECT version, updated_at as updatedAt FROM ${table} WHERE id = ?`)
         .get(change.id) as { version: number; updatedAt: number } | undefined;
+
+      // Optimistic concurrency: when the client sends a baseVersion it must
+      // match the server version, otherwise the edit was made on a stale copy
+      // (client clock skew can otherwise falsify the updatedAt LWW). Pushes
+      // without baseVersion (legacy clients) keep the timestamp LWW behavior.
+      if (existing && change.baseVersion !== undefined && change.baseVersion !== existing.version) {
+        conflicts.push({
+          entityType: change.entityType,
+          id: change.id,
+          serverVersion: existing.version,
+          serverUpdatedAt: existing.updatedAt,
+        });
+        continue;
+      }
 
       if (existing && existing.updatedAt > change.updatedAt) {
         conflicts.push({

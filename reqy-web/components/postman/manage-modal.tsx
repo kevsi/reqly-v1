@@ -37,7 +37,8 @@ export function PostmanManageModal({
   onSelectCollection,
   onGoToSettings,
 }: PostmanManageModalProps) {
-  const { toast } = useToast();
+  useToast();
+
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

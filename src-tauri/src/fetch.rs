@@ -52,6 +52,7 @@ pub struct TauriFetchResponse {
 #[derive(Clone)]
 pub struct SharedClient {
   pub normal: reqwest::Client,
+  #[cfg(debug_assertions)]
   pub insecure: reqwest::Client,
 }
 
@@ -185,11 +186,14 @@ pub async fn fetch_proxy(
     }
   }
 
+  #[cfg(debug_assertions)]
   let http_client = if accept_invalid_certs.unwrap_or(false) {
     &client.insecure
   } else {
     &client.normal
   };
+  #[cfg(not(debug_assertions))]
+  let http_client = &client.normal;
   let mut request = http_client
     .request(method.parse::<reqwest::Method>().map_err(|e| AppError::InvalidInput(e.to_string()))?, &url);
 

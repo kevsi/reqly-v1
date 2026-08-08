@@ -230,4 +230,66 @@ describe("routes/workspaces", () => {
       expect(res.status).toBe(403);
     });
   });
+
+  describe("DELETE /:id", () => {
+    beforeEach(() => {
+      db.prepare(
+        "INSERT INTO workspaces (id, name, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).run(WS, "W", USER_A, 1, 1);
+      db.prepare(
+        "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_A, "owner", 1);
+    });
+
+    it("cascades child collections/environments/folders on delete (FK NO ACTION)", async () => {
+      // Seed a collection, an environment, and a folder under the workspace.
+      db.prepare(
+        "INSERT INTO collections (id, workspace_id, name, data, version, updated_at, updated_by, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+      ).run("col-1", WS, "Col", JSON.stringify({ name: "Col" }), 1, 1, USER_A);
+      db.prepare(
+        "INSERT INTO environments (id, workspace_id, name, data, version, updated_at, updated_by, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+      ).run("env-1", WS, "Env", JSON.stringify({ name: "Env" }), 1, 1, USER_A);
+      db.prepare(
+        "INSERT INTO folders (id, collection_id, name, data, version, updated_at, updated_by, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+      ).run("fol-1", "col-1", "Fol", JSON.stringify({ name: "Fol" }), 1, 1, USER_A);
+
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces/${WS}`, {
+        method: "DELETE",
+        headers: { cookie: `auth_session=${cookie}` },
+      });
+      expect(res.status).toBe(200);
+
+      // Workspace and all children must be gone (no orphaned rows, no FK error).
+      expect(db.prepare("SELECT 1 FROM workspaces WHERE id = ?").get(WS)).toBeUndefined();
+      expect(db.prepare("SELECT 1 FROM collections WHERE id = ?").get("col-1")).toBeUndefined();
+      expect(db.prepare("SELECT 1 FROM environments WHERE id = ?").get("env-1")).toBeUndefined();
+      expect(db.prepare("SELECT 1 FROM folders WHERE id = ?").get("fol-1")).toBeUndefined();
+    });
+
+    it("rejects non-owner with 403", async () => {
+      db.prepare(
+        "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_B, "editor", 1);
+
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_B);
+      const res = await app.request(`/workspaces/${WS}`, {
+        method: "DELETE",
+        headers: { cookie: `auth_session=${cookie}` },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it("returns 404 for a missing workspace", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces/nope`, {
+        method: "DELETE",
+        headers: { cookie: `auth_session=${cookie}` },
+      });
+      expect(res.status).toBe(404);
+    });
+  });
 });

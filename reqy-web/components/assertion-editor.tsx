@@ -1,25 +1,30 @@
-"use client"
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Trash2, Plus } from "lucide-react"
-import type { Assertion } from "@/lib/test-runner/types"
-import { createJsonKeyDownHandler } from "@/lib/json-textarea-utils"
+"use client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Trash2, Plus } from "lucide-react";
+import type { Assertion } from "@/lib/test-runner/types";
+import { createJsonKeyDownHandler } from "@/lib/json-textarea-utils";
 
 interface Props {
-  assertions: Assertion[]
-  onChange: (next: Assertion[]) => void
+  assertions: Assertion[];
+  onChange: (next: Assertion[]) => void;
 }
 
 export function AssertionEditor({ assertions, onChange }: Props) {
-  const add = () => onChange([...assertions, { type: "status", expected: 200 }])
-  const remove = (i: number) => onChange(assertions.filter((_, idx) => idx !== i))
+  const add = () => onChange([...assertions, { type: "status", expected: 200 }]);
+  const remove = (i: number) => onChange(assertions.filter((_, idx) => idx !== i));
   const update = (i: number, a: Assertion) => {
-    const next = [...assertions]
-    next[i] = a
-    onChange(next)
-  }
+    const next = [...assertions];
+    next[i] = a;
+    onChange(next);
+  };
 
   return (
     <div className="space-y-2">
@@ -34,8 +39,13 @@ export function AssertionEditor({ assertions, onChange }: Props) {
       )}
       {assertions.map((a, i) => (
         <div key={i} className="flex items-center gap-2 p-2 border rounded">
-          <Select value={a.type} onValueChange={(v) => update(i, defaultAssertion(v as Assertion["type"]))}>
-            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+          <Select
+            value={a.type}
+            onValueChange={(v) => update(i, defaultAssertion(v as Assertion["type"]))}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="status">Status</SelectItem>
               <SelectItem value="responseTime">Time</SelectItem>
@@ -50,19 +60,29 @@ export function AssertionEditor({ assertions, onChange }: Props) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 function defaultAssertion(type: Assertion["type"]): Assertion {
   switch (type) {
-    case "status": return { type: "status", expected: 200 }
-    case "responseTime": return { type: "responseTime", operator: "<", valueMs: 1000 }
-    case "jsonPath": return { type: "jsonPath", path: "$.id", operator: "equals", value: "" }
-    case "schema": return { type: "schema", schema: { type: "object" } }
+    case "status":
+      return { type: "status", expected: 200 };
+    case "responseTime":
+      return { type: "responseTime", operator: "<", valueMs: 1000 };
+    case "jsonPath":
+      return { type: "jsonPath", path: "$.id", operator: "equals", value: "" };
+    case "schema":
+      return { type: "schema", schema: { type: "object" } };
   }
 }
 
-function AssertionFields({ assertion, onChange }: { assertion: Assertion; onChange: (a: Assertion) => void }) {
+function AssertionFields({
+  assertion,
+  onChange,
+}: {
+  assertion: Assertion;
+  onChange: (a: Assertion) => void;
+}) {
   if (assertion.type === "status") {
     return (
       <Input
@@ -71,13 +91,18 @@ function AssertionFields({ assertion, onChange }: { assertion: Assertion; onChan
         onChange={(e) => onChange({ type: "status", expected: Number(e.target.value) })}
         className="w-24"
       />
-    )
+    );
   }
   if (assertion.type === "responseTime") {
     return (
       <div className="flex items-center gap-1">
-        <Select value={assertion.operator} onValueChange={(v) => onChange({ ...assertion, operator: v as "<" | "<=" | ">" | ">=" })}>
-          <SelectTrigger className="w-16"><SelectValue /></SelectTrigger>
+        <Select
+          value={assertion.operator}
+          onValueChange={(v) => onChange({ ...assertion, operator: v as "<" | "<=" | ">" | ">=" })}
+        >
+          <SelectTrigger className="w-16">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="<">&lt;</SelectItem>
             <SelectItem value="<=">&le;</SelectItem>
@@ -93,7 +118,7 @@ function AssertionFields({ assertion, onChange }: { assertion: Assertion; onChan
         />
         <span className="text-xs text-muted-foreground">ms</span>
       </div>
-    )
+    );
   }
   if (assertion.type === "jsonPath") {
     return (
@@ -104,8 +129,18 @@ function AssertionFields({ assertion, onChange }: { assertion: Assertion; onChan
           onChange={(e) => onChange({ ...assertion, path: e.target.value })}
           className="flex-1"
         />
-        <Select value={assertion.operator} onValueChange={(v) => onChange({ ...assertion, operator: v as "equals" | "contains" | "exists" | "notExists" })}>
-          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+        <Select
+          value={assertion.operator}
+          onValueChange={(v) =>
+            onChange({
+              ...assertion,
+              operator: v as "equals" | "contains" | "exists" | "notExists",
+            })
+          }
+        >
+          <SelectTrigger className="w-28">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="equals">equals</SelectItem>
             <SelectItem value="contains">contains</SelectItem>
@@ -122,7 +157,7 @@ function AssertionFields({ assertion, onChange }: { assertion: Assertion; onChan
           />
         )}
       </>
-    )
+    );
   }
   if (assertion.type === "schema") {
     return (
@@ -130,14 +165,22 @@ function AssertionFields({ assertion, onChange }: { assertion: Assertion; onChan
         placeholder='{ "type": "object" }'
         value={JSON.stringify(assertion.schema)}
         onChange={(e) => {
-          try { onChange({ ...assertion, schema: JSON.parse(e.target.value) }) } catch { /* ignore */ }
+          try {
+            onChange({ ...assertion, schema: JSON.parse(e.target.value) });
+          } catch {
+            /* ignore */
+          }
         }}
         onKeyDown={createJsonKeyDownHandler(JSON.stringify(assertion.schema), (next) => {
-          try { onChange({ ...assertion, schema: JSON.parse(next) }) } catch { /* ignore */ }
+          try {
+            onChange({ ...assertion, schema: JSON.parse(next) });
+          } catch {
+            /* ignore */
+          }
         })}
         className="flex-1 font-mono text-xs"
       />
-    )
+    );
   }
-  return null
+  return null;
 }

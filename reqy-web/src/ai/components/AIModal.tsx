@@ -9,17 +9,7 @@
  * Replaces the previous multi-tab AI layout (Chat + ReqlyAI).
  */
 import { useMemo, useState, useCallback, useRef } from "react";
-import {
-  Bot,
-  Loader2,
-  Sparkles,
-  Clipboard,
-  FileText,
-  FlaskConical,
-  Lightbulb,
-  Settings,
-  Key,
-} from "lucide-react";
+import { Bot, Loader2, Sparkles, Clipboard, FileText, Lightbulb, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,25 +32,16 @@ import { analyze } from "@/src/ai/local-engine/analyzer";
 import { buildRequestContext } from "@/src/ai/local-engine/context";
 import { Panel } from "./Panel";
 import { searchIndex, buildSearchText } from "@/src/ai/cloud-engine/search-index";
-import type { Diagnostic, RequestPayload } from "@/src/ai/types";
-import {
-  buildTestSuggestionsPrompt,
-  isValidSuggestion,
-} from "@/src/ai/cloud-engine/test-suggestions";
+import type { Diagnostic, RequestPayload, AIProvider } from "@/src/ai/types";
+import { buildTestSuggestionsPrompt } from "@/src/ai/cloud-engine/test-suggestions";
 import {
   decodeJwt,
   explainHeader,
   annotateJson,
   summarizeAnnotated,
 } from "@/src/ai/cloud-engine/explain";
-import { buildNaturalLanguagePrompt } from "@/src/ai/cloud-engine/generate";
-import {
-  streamLLM,
-  type StreamLLMOptions,
-  type LLMToken,
-  type LLMTextEvent,
-  type LLMToolCallEvent,
-} from "@/src/ai/cloud-engine/llm";
+
+import { streamLLM, type StreamLLMOptions } from "@/src/ai/cloud-engine/llm";
 import { type RetrievedChunk } from "@/src/ai/cloud-engine/prompt";
 import { extractCitations } from "@/src/ai/cloud-engine/citations";
 import { detectLanguage } from "@/src/ai/cloud-engine/language";
@@ -187,7 +168,7 @@ export function AIModal(props: AIModalProps) {
     }
     return buildRequestContext(
       {
-        method: props.method as any,
+        method: props.method as RequestPayload["method"],
         url: props.url ?? "",
         headers: headerRecord,
         body: props.requestBody ?? null,
@@ -237,7 +218,7 @@ export function AIModal(props: AIModalProps) {
       default:
         return "";
     }
-  }, [activeTab, userPrompt, props, ctx]);
+  }, [activeTab, props]);
 
   const citations = useMemo(() => {
     if (props.responseStatus && props.responseStatus >= 400) return [];
@@ -259,13 +240,13 @@ export function AIModal(props: AIModalProps) {
       toast.error("Veuillez entrer une clé API");
       return;
     }
-    saveAIProvider(configProvider as any);
-    saveApiKey(configProvider as any, configApiKey.trim());
+    saveAIProvider(configProvider as AIProvider);
+    saveApiKey(configProvider as AIProvider, configApiKey.trim());
     toast.success("Clé API enregistrée");
     setShowConfig(false);
   }, [configProvider, configApiKey]);
 
-  async function runOneTurn() {
+  const runOneTurn = useCallback(async function runOneTurn() {
     if (!baseOptsRef.current) return;
     const turnNum = turnCountRef.current;
     if (turnNum >= MAX_TOOL_TURNS) {
@@ -300,13 +281,13 @@ export function AIModal(props: AIModalProps) {
           );
         }
       }
-    } catch (e: any) {
+    } catch (e) {
       // Si l'erreur ressemble à un rejet des tools/function calling et
       // qu'on n'a pas déjà retenté, on relance sans outils.
       if (
         baseOptsRef.current?.tools &&
         !retriedWithoutToolsRef.current &&
-        isToolUnsupportedError(e?.message ?? "")
+        isToolUnsupportedError(e instanceof Error ? e.message : typeof e === "string" ? e : "")
       ) {
         retriedWithoutToolsRef.current = true;
         baseOptsRef.current = { ...baseOptsRef.current, tools: undefined, tool_choice: undefined };
@@ -316,7 +297,13 @@ export function AIModal(props: AIModalProps) {
         runOneTurn(); // retry sans tools
         return;
       }
-      setLlmError(e?.message ?? "Erreur de communication avec l'IA");
+      setLlmError(
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : "Erreur de communication avec l'IA",
+      );
       setLlmLoading(false);
       return;
     }
@@ -362,12 +349,12 @@ export function AIModal(props: AIModalProps) {
               : s,
           ),
         );
-      } catch (e: any) {
+      } catch (e) {
         results.push({
           callId: tc.callId,
           name: tc.name,
           content: "",
-          error: e?.message ?? "Erreur inconnue",
+          error: e instanceof Error ? e.message : typeof e === "string" ? e : "Erreur inconnue",
         });
         setSteps((prev) =>
           prev.map((s) => (s.id === turnSteps[i]?.id ? { ...s, status: "error" as const } : s)),
@@ -427,14 +414,14 @@ export function AIModal(props: AIModalProps) {
 
     // Prochain tour
     runOneTurn();
-  }
+  }, []);
 
   const handleConfirmToolCall = useCallback(
     async (stepId: string, confirmed: boolean) => {
       const pending = pendingConfirmation;
       if (!pending || pending.stepId !== stepId) return;
 
-      const { toolCall, toolCallsThisTurn, results, turnSteps, reasoningContent } = pending;
+      const { toolCall, toolCallsThisTurn, results, reasoningContent } = pending;
       setPendingConfirmation(null);
 
       // Marquer l'étape "en cours" pendant la ré-exécution
@@ -503,74 +490,80 @@ export function AIModal(props: AIModalProps) {
 
         // Reprendre la boucle multi-turn
         runOneTurn();
-      } catch (e: any) {
+      } catch (e) {
         setSteps((prev) =>
           prev.map((s) => (s.id === stepId ? { ...s, status: "error" as const } : s)),
         );
-        setLlmError(e?.message ?? "Erreur lors de la confirmation");
+        setLlmError(
+          e instanceof Error
+            ? e.message
+            : typeof e === "string"
+              ? e
+              : "Erreur lors de la confirmation",
+        );
         setLlmLoading(false);
       }
     },
-    [pendingConfirmation],
+    [pendingConfirmation, runOneTurn],
   );
 
-   async function handleRunLLM() {
-     if (!prompt) return;
+  async function handleRunLLM() {
+    if (!prompt) return;
 
-     // Check AI config — if missing, show config form instead
-     const provider = loadAIProvider();
-     const apiKey = loadApiKey(provider);
-     if (!isAiConfigured()) {
-       setConfigProvider(provider);
-       setConfigApiKey("");
-       setShowConfig(true);
-       return;
-     }
+    // Check AI config — if missing, show config form instead
+    const provider = loadAIProvider();
+    const apiKey = loadApiKey(provider);
+    if (!isAiConfigured()) {
+      setConfigProvider(provider);
+      setConfigApiKey("");
+      setShowConfig(true);
+      return;
+    }
 
-     const model = loadAiModel(provider);
-     const openaiUrl = loadAiBaseUrl(provider);
-     const ollamaConfig = loadOllamaConfig();
+    const model = loadAiModel(provider);
+    const openaiUrl = loadAiBaseUrl(provider);
+    const ollamaConfig = loadOllamaConfig();
 
-     // Fetch RAG chunks from similar historical requests
-     let retrievedChunks: RetrievedChunk[] = [];
-     try {
-       const q = buildSearchText(
-         props.method,
-         props.url ?? "",
-         props.url ?? "",
-         props.requestBody ?? undefined,
-       );
-       const ragResults = await searchIndex(q, 5);
-       retrievedChunks = ragResults.map((r) => ({
-         source: `${r.item.collectionName} · ${r.item.method} ${r.item.url}`,
-         content: r.item.text,
-         score: r.score,
-         origin: "historical-requests",
-       }));
-     } catch {
-       /* RAG unavailable (no Jina key, no indexed requests, etc.) */
-     }
+    // Fetch RAG chunks from similar historical requests
+    let retrievedChunks: RetrievedChunk[] = [];
+    try {
+      const q = buildSearchText(
+        props.method,
+        props.url ?? "",
+        props.url ?? "",
+        props.requestBody ?? undefined,
+      );
+      const ragResults = await searchIndex(q, 5);
+      retrievedChunks = ragResults.map((r) => ({
+        source: `${r.item.collectionName} · ${r.item.method} ${r.item.url}`,
+        content: r.item.text,
+        score: r.score,
+        origin: "historical-requests",
+      }));
+    } catch {
+      /* RAG unavailable (no Jina key, no indexed requests, etc.) */
+    }
 
-     // Initialiser les refs
-     accRef.current = "";
-     previousTurnsRef.current = [];
-     turnCountRef.current = 0;
-     retriedWithoutToolsRef.current = false;
-     baseOptsRef.current = {
-       provider: provider as any,
-       apiKey: apiKey || "",
-       model: model,
-       openaiUrl: openaiUrl,
-       host: ollamaConfig?.host,
-       port: ollamaConfig?.port,
-       question: userPrompt || prompt,
-       ctx,
-       diagnostics,
-       signal: undefined,
-       tools: REQLY_TOOLS,
-       tool_choice: "auto",
-       retrievedChunks,
-     };
+    // Initialiser les refs
+    accRef.current = "";
+    previousTurnsRef.current = [];
+    turnCountRef.current = 0;
+    retriedWithoutToolsRef.current = false;
+    baseOptsRef.current = {
+      provider,
+      apiKey: apiKey || "",
+      model: model,
+      openaiUrl: openaiUrl,
+      host: ollamaConfig?.host,
+      port: ollamaConfig?.port,
+      question: userPrompt || prompt,
+      ctx,
+      diagnostics,
+      signal: undefined,
+      tools: REQLY_TOOLS,
+      tool_choice: "auto",
+      retrievedChunks,
+    };
 
     setLlmLoading(true);
     setLlmError(null);
@@ -580,8 +573,8 @@ export function AIModal(props: AIModalProps) {
 
     try {
       await runOneTurn();
-    } catch (e: any) {
-      setLlmError(e?.message ?? "Erreur inconnue");
+    } catch (e) {
+      setLlmError(e instanceof Error ? e.message : typeof e === "string" ? e : "Erreur inconnue");
       setLlmLoading(false);
     }
   }
@@ -593,17 +586,18 @@ export function AIModal(props: AIModalProps) {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  const { onPatchRequest: handlePatch } = props;
   const handleApplyFix = useCallback(
     (diag: Diagnostic) => {
       if (!diag.fix) return;
-      if (props.onPatchRequest) {
-        props.onPatchRequest(diag.fix.applyFix());
+      if (handlePatch) {
+        handlePatch(diag.fix.applyFix());
         toast.success("Fix appliqué", { description: diag.title });
       } else {
         toast.info("Aucune cible de patch disponible pour cette requête.");
       }
     },
-    [props.onPatchRequest],
+    [handlePatch],
   );
 
   const isLocalTab = activeTab === "analyse" || activeTab === "explain";

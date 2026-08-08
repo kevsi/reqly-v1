@@ -30,7 +30,6 @@ test.describe("Request export (cURL / Fetch)", () => {
       await exportSelect.click();
       // Should see options
       const curlOption = page.getByRole("option", { name: /cURL/i }).first();
-      const fetchOption = page.getByRole("option", { name: /Fetch/i }).first();
 
       if (await curlOption.isVisible({ timeout: 2000 }).catch(() => false)) {
         await curlOption.click();

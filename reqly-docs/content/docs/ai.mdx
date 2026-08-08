@@ -1,0 +1,34 @@
+---
+title: AI assistant
+description: Generate follow-up API requests based on previous responses using AI.
+icon: Sparkles
+---
+
+Reqly includes an **AI-powered follow-up request generator** that helps you build related API requests based on previous responses.
+
+## How it works
+
+<Steps>
+  <Step>Send a request and receive a response — for example a `POST` that creates a user.</Step>
+  <Step>In the **History panel**, hover over the entry and click the sparkles icon.</Step>
+  <Step>The AI analyzes the response and generates a follow-up request — for example a `GET` request to fetch the newly created user.</Step>
+  <Step>The generated request opens in a new tab, ready to send.</Step>
+</Steps>
+
+## Configuration
+
+AI features require an API key configured in **Settings → AI Configuration**.
+
+Supported providers:
+
+- OpenAI
+- Anthropic
+- Any OpenAI-compatible endpoint (Azure, Ollama, local servers, and more)
+
+<Callout type="warning" title="Note">
+  AI calls are sent through Reqly&apos;s server-side proxy when running in the hosted web version, so your API key is not exposed to the browser. In the desktop app (Tauri), requests go directly to your configured endpoint.
+</Callout>
+
+## Other AI features
+
+Depending on your setup, Reqly may also surface AI-powered request generation, response summarization, and endpoint suggestions from the AI panel in the sidebar.

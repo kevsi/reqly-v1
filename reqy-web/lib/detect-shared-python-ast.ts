@@ -7,15 +7,22 @@
 import { makeRoute } from "@/lib/detect-shared-types";
 import type { DetectedRoute } from "@/lib/detect-shared-types";
 
-function escapeRegExpStr(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+interface PythonAstRoute {
+  method: string;
+  path: string;
+  name?: string;
+  controller?: string;
+  auth?: boolean;
+  framework?: string;
 }
 
 export function detectPythonRoutesAST(content: string, targetFramework?: string): DetectedRoute[] {
   try {
     if (typeof window !== "undefined") return [];
-    const cpRequire = Function('return require("child_process")')();
-    const spawnSync = cpRequire.spawnSync as (typeof import("child_process"))["spawnSync"];
+    if (typeof process.getBuiltinModule !== "function") return [];
+    const cp = process.getBuiltinModule("child_process") as typeof import("child_process");
+    if (!cp) return [];
+    const spawnSync = cp.spawnSync;
     const py = spawnSync(
       "python",
       [
@@ -300,11 +307,11 @@ print(json.dumps(routes))
       return [];
     }
     if (py.stdout) {
-      const parsed = JSON.parse(py.stdout.toString());
-      if (!targetFramework) return parsed.map((r: any) => makeRoute(r.method, r.path, r.name));
+      const parsed = JSON.parse(py.stdout.toString()) as PythonAstRoute[];
+      if (!targetFramework) return parsed.map((r) => makeRoute(r.method, r.path, r.name ?? ""));
       return parsed
-        .filter((r: any) => r.framework === targetFramework)
-        .map((r: any) => {
+        .filter((r) => r.framework === targetFramework)
+        .map((r) => {
           const route = makeRoute(r.method, r.path, r.name || "");
           if (r.controller) route.controller = r.controller;
           if (r.auth) {

@@ -45,17 +45,13 @@ export function Ecosystem() {
             <Reveal key={c.title} delay={i * 80}>
               <SpotlightCard className="card-hover group flex h-full flex-col rounded-xl border border-ink-700 bg-ink-850/70 p-5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-mint-500/12 ring-1 ring-mint-500/25 transition group-hover:bg-mint-500/20 group-hover:ring-mint-500/40">
-                  <c.icon className="h-5 w-5 text-mint-400" strokeWidth={1.8} />
+                  <c.icon className="icon-pop-on-hover h-5 w-5 text-mint-400" strokeWidth={1.8} />
                 </div>
-                <h3 className="mt-4 text-sm font-semibold text-white">
-                  {c.title}
-                </h3>
+                <h3 className="mt-4 text-sm font-semibold text-white">{c.title}</h3>
                 <span className="mt-1 font-mono text-[10.5px] uppercase tracking-wide text-mint-400/80">
                   {c.tech}
                 </span>
-                <p className="mt-3 text-[13px] leading-relaxed text-zinc-400">
-                  {c.desc}
-                </p>
+                <p className="mt-3 text-[13px] leading-relaxed text-zinc-400">{c.desc}</p>
               </SpotlightCard>
             </Reveal>
           ))}

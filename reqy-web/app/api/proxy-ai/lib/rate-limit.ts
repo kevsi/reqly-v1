@@ -6,7 +6,13 @@ export const rateLimiter = createRateLimiter({
   maxRequests: 30,
 });
 
+const TRUSTED_PROXY = (): boolean => process.env.TRUSTED_PROXY === "true";
+
 export function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  if (TRUSTED_PROXY()) {
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+    return ip;
+  }
+  return "unknown";
 }

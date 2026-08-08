@@ -31,8 +31,8 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
-  // CSP is now set by middleware.ts (nonce-based). This next.config fallback
-  // is used only for build-time static pages where middleware doesn't run.
+  // CSP is now set by proxy.ts (nonce-based). This next.config fallback
+  // is used only for build-time static pages where proxy.ts doesn't run.
   // The nonce-based CSP in middleware replaces 'unsafe-inline' with
   // 'nonce-<random>' + 'strict-dynamic' for better XSS protection.
   {
@@ -49,6 +49,7 @@ const securityHeaders = [
       "base-uri 'self'",
       "form-action 'self'",
       "upgrade-insecure-requests",
+      "report-uri /api/csp-reports",
     ].join("; "),
   },
   // HSTS only in production — breaks dev over plain HTTP otherwise.

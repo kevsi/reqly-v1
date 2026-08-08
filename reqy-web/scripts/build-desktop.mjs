@@ -8,10 +8,12 @@
 //      pure proxies to NEXT_PUBLIC_SYNC_URL; the desktop frontend calls
 //      SYNC_URL directly (lib/workspace-api.ts). Next static export cannot run
 //      API route handlers, and the `[id]` dynamic segments cannot be exported,
-//      so the whole workspace API tree is moved aside during the build.
-//   3. Patch each remaining `app/api/**/route.ts` so the `dynamic` export is a
+//      so the whole workspace API tree is moved aside during the build.// 3. Patch each remaining `app/api/**/route.ts` so the `dynamic` export is a
 //      string literal Next.js 16 can statically analyze (`force-dynamic` ->
 //      `force-static`), then restore originals in `finally`.
+// 4. Build + deploy recli (dist + prod node_modules) into src-tauri/resources
+//      so the packaged desktop app can spawn `node recli/dist/index.js serve`
+//      (see src-tauri/src/mcp.rs resolve_script_path).
 //
 // Copy-based exclusion (not rename) avoids EPERM that rename can hit when an
 // IDE/antivirus holds a file lock inside the folder.
@@ -66,6 +68,42 @@ const workspacesExcluded = excludeWorkspaces()
 if (workspacesExcluded) {
   console.log('[build-desktop] Excluded app/api/workspaces from desktop export (uses SYNC_URL directly)')
 }
+
+// Build + deploy recli (dist + prod node_modules) as a Tauri resource so the
+// packaged app can spawn `node recli/dist/index.js serve` — see
+// src-tauri/src/mcp.rs resolve_script_path. Best-effort: a network hiccup while
+// resolving prod deps must not sink the whole desktop build, so on failure we
+// warn and continue (the packaged app then simply has no MCP server).
+// ponytail: `pnpm deploy` re-resolves prod deps (network) and can be slow;
+// upgrade path is an offline bundle (esbuild single-file) if builds must be hermetic.
+function deployRecliForDesktop() {
+  const root = path.resolve('..')
+  const target = path.resolve(root, 'src-tauri', 'resources', 'recli')
+  console.log('[build-desktop] Building recli...')
+  const build = spawnSync('pnpm', ['--dir', 'recli', 'build'], {
+    stdio: 'inherit',
+    shell: true,
+    env: process.env,
+  })
+  if (build.status !== 0) {
+    console.warn('[build-desktop] recli build failed — packaged app will have no MCP server')
+    return
+  }
+  removeDirRobust(target)
+  console.log('[build-desktop] Deploying recli (prod deps) into src-tauri/resources/recli...')
+  const deploy = spawnSync(
+    'pnpm',
+    ['--filter', 'recli', 'deploy', '--legacy', '--prod', target],
+    { stdio: 'inherit', shell: true, env: process.env },
+  )
+  if (deploy.status !== 0) {
+    console.warn('[build-desktop] recli deploy failed — packaged app will have no MCP server')
+  } else {
+    console.log('[build-desktop] recli deployed to src-tauri/resources/recli')
+  }
+}
+
+deployRecliForDesktop()
 
 // Clean stale build artifacts AFTER excluding workspaces, so Next regenerates
 // route type validators without the excluded tree (avoids stale "cannot find

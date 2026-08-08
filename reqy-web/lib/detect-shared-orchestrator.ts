@@ -14,8 +14,6 @@ import {
   detectHapi,
   detectKtor,
   detectNestJS,
-  detectNextjsAppRouter,
-  detectNextjsPagesRouter,
 } from "@/lib/detect-shared-js-frameworks";
 
 // Python framework detectors
@@ -73,8 +71,9 @@ export async function ensureTreeSitterLoaded() {
 function enhanceDetectionResults(
   routes: DetectedRoute[],
   content: string,
-  framework: string,
+  _framework: string,
 ): DetectedRoute[] {
+  void _framework;
   const seen = new Set<string>();
   const deduped: DetectedRoute[] = [];
 
@@ -119,16 +118,6 @@ function enhanceDetectionResults(
   }
 
   return deduped;
-}
-
-function wrapDetector(
-  detector: (content: string) => DetectedRoute[],
-  framework: string,
-): (content: string) => DetectedRoute[] {
-  return (content: string) => {
-    const routes = detector(content);
-    return enhanceDetectionResults(routes, content, framework);
-  };
 }
 
 // ── Route dispatcher ─────────────────────────────────────────────────────
@@ -280,7 +269,7 @@ export async function detectRoutes(
     await ensureTreeSitterLoaded();
     const tsRoutes = await detectRoutesWithTreeSitter!(content, filePath, framework);
     if (tsRoutes.length > 0) {
-      return tsRoutes.map((r: any) => {
+      return tsRoutes.map((r) => {
         const route = makeRoute(r.method, r.path, r.name || "");
         if (r.controller) route.controller = r.controller;
         if (r.authRequired) {
@@ -467,6 +456,12 @@ export function analyzeMiddlewareChain(
         middlewares.forEach((m) => globalMiddleware.push(m.replace(/["']/g, "")));
       }
     }
+  }
+
+  // Surface global (unscoped) middleware under the "/|*" key — it was
+  // previously collected but never returned to callers.
+  if (globalMiddleware.length > 0) {
+    middlewareByRoute.set("/|*", globalMiddleware);
   }
 
   return middlewareByRoute;

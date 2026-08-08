@@ -86,11 +86,15 @@ export class InMemoryRateLimiter {
  *   - API:    120 req / 60 s
  *   - Auth:    20 req / 60 s  (login/register)
  *   - Sync:    60 req / 60 s  (poll/push — bursty but bounded)
+ *   - Sync:    60 req / 60 s  (poll/push — bursty but bounded)
  *   - WS:      10 conn / 60 s (WebSocket upgrade)
+ *   - Hook:    60 req / 60 s  (public webhook ingest — must be bounded)
  */
 export const apiLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 120 });
+export const authLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 20 });
 export const syncLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 60 });
 export const wsLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 10 });
+export const hookLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 60 });
 
 /**
  * Hono middleware that checks the rate limiter for the client IP.
@@ -98,12 +102,34 @@ export const wsLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests
  */
 import type { Context, Next } from "hono";
 
-export function rateLimitMiddleware(limiter: InMemoryRateLimiter) {
-  return async (c: Context, next: Next): Promise<Response | void> => {
-    const ip =
+/**
+ * Resolve the client IP without trusting spoofable headers.
+ *
+ * `x-forwarded-for` / `x-real-ip` are plain client-supplied headers: an
+ * attacker can set them to anything, so bucketing by them would let a client
+ * bypass the limiter with a rotating value. Only when the deployment sits
+ * behind a trusted reverse proxy (which overwrites these headers) should we
+ * read them — opt in via TRUSTED_PROXY=true. Otherwise fall back to the
+ * socket address, which the client cannot forge.
+ */
+const TRUSTED_PROXY = (): boolean => process.env.TRUSTED_PROXY === "true";
+
+export function clientIp(c: Context): string {
+  if (TRUSTED_PROXY()) {
+    return (
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
       c.req.header("x-real-ip") ||
-      "unknown";
+      "unknown"
+    );
+  }
+  const incoming = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)
+    ?.incoming;
+  return incoming?.socket?.remoteAddress ?? "unknown";
+}
+
+export function rateLimitMiddleware(limiter: InMemoryRateLimiter) {
+  return async (c: Context, next: Next): Promise<Response | void> => {
+    const ip = clientIp(c);
     const result = limiter.check(`ip:${ip}`);
     if (!result.allowed) {
       return c.json({ error: "Too many requests. Please slow down." }, 429, {

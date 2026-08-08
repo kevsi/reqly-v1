@@ -29,7 +29,14 @@ export default tseslint.config(
       "react/react-in-jsx-scope": "off",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-require-imports": "warn",
-      "@typescript-eslint/no-unused-vars": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          "argsIgnorePattern": "^_",
+          "varsIgnorePattern": "^_",
+          "caughtErrorsIgnorePattern": "^_"
+        }
+      ],
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
@@ -38,6 +45,16 @@ export default tseslint.config(
     },
   },
   {
-    ignores: [".next/", "dist/", "node_modules/", "build/", "playwright-report/", "test-results/"],
+    // Build output and vendored artifacts must never be linted. `out/` is the
+    // static-export target of the desktop build (BUILD_TARGET=desktop).
+    ignores: [
+      ".next/",
+      "out/",
+      "dist/",
+      "node_modules/",
+      "build/",
+      "playwright-report/",
+      "test-results/",
+    ],
   }
 );

@@ -1,5 +1,5 @@
 import type { Workspace } from "@/hooks/request-types";
-import { CommitFn, WORKSPACE_PERSONAL_ID } from "./types";
+import { CommitFn } from "./types";
 
 export function createWorkspacesMutations(commit: CommitFn) {
   const addWorkspace = (data: Omit<Workspace, "id" | "createdAt" | "updatedAt">) => {

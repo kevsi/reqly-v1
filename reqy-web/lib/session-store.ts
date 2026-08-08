@@ -5,7 +5,6 @@ import {
   authResendCode,
   authLogin,
   authLogout,
-  authMe,
   type AuthUser,
   type SignupResult,
 } from "@/lib/auth-client";
@@ -62,11 +61,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // If the auth backend returned a token (some setups auto-login on signup),
     // mark the session authenticated so callers/tests relying
     // on that behaviour continue to work.
-    if (result && (result as any).token) {
-      const { user, token } = result as { user: AuthUser; token: string };
-      set({ user, token, status: "authenticated" });
+    if (result.token) {
+      set({ user: result.user, token: result.token, status: "authenticated" });
     }
-    return result as any;
+    // The /signup endpoint returns { userId, email } without a `user` object
+    // when verification is required — guard against the missing shape.
+    return {
+      userId: result.user?.id ?? "",
+      email: result.user?.email ?? email,
+      message: "",
+    };
   },
 
   verify: async (email, code) => {

@@ -20,11 +20,7 @@ import { ToolsSection } from "@/components/sidebar/tools-section";
 import { ModuleNavList } from "@/components/modules/module-nav-list";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { usePathname } from "next/navigation";
-import { useRequestStore } from "@/hooks/use-request-store";
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAiChatHidden, setAiChatHidden } from "@/src/ai/hooks/use-ai-chat-visibility";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard/", key: "dashboard" },
@@ -70,33 +66,20 @@ export function ApiSidebar({
   const handleNavClick = () => {
     if (isMobile) onMobileClose?.();
   };
-  // Atomic selectors: this sidebar no longer re-renders on unrelated store
-  // mutations (tab switches, response updates, etc.) — only when the workspace
-  // list or the active workspace id actually changes.
-  const activeWorkspaceId = useRequestStore((s) => s.activeWorkspaceId);
-
-  // Subscribed via useSyncExternalStore — no polling. Wakes up on the storage
-  // event fired by `setAiChatHidden` (and by other tabs via the native
-  // cross-tab storage event).
-  const aiHidden = useAiChatHidden();
-
-  const pathname = usePathname();
 
   return (
     <aside
       aria-label="Main navigation"
       aria-hidden={isMobile && !mobileOpen}
       className={cn(
-        "group/sidebar fixed inset-y-0 left-0 z-30 flex h-screen flex-col border-r bg-sidebar transition-all duration-200 ease-out will-change-auto",
+        "group/sidebar fixed inset-y-0 left-0 z-30 flex h-screen flex-col border-r bg-sidebar transition-[width,transform,visibility] duration-200 ease-out will-change-auto",
         // Desktop: rail replié ou déplié
         !isMobile && (collapsed ? "w-[60px]" : "w-64"),
         // Mobile: drawer off-canvas (pleine hauteur, glissé hors-écran quand fermé)
         isMobile &&
           cn(
-            "w-72 shadow-2xl shadow-black/30",
-            mobileOpen
-              ? "translate-x-0"
-              : "-translate-x-full invisible pointer-events-none",
+            "w-[85vw] max-w-[280px] shadow-2xl shadow-black/30",
+            mobileOpen ? "translate-x-0" : "-translate-x-full invisible pointer-events-none",
           ),
       )}
     >
@@ -147,7 +130,7 @@ export function ApiSidebar({
                   onClick={handleNavClick}
                   title={!expanded ? item.label : undefined}
                   className={cn(
-                    "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150",
+                    "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150",
                     expanded ? "gap-3 px-3" : "justify-center",
                     isActive
                       ? "bg-primary/10 text-primary"
@@ -167,7 +150,9 @@ export function ApiSidebar({
                     <span
                       className={cn(
                         "rounded-full bg-primary shadow-sm shadow-primary/50",
-                        expanded ? "ml-auto flex size-1.5" : "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2",
+                        expanded
+                          ? "ml-auto flex size-1.5"
+                          : "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2",
                       )}
                     />
                   )}
@@ -186,7 +171,7 @@ export function ApiSidebar({
           href="/ai-insights"
           onClick={handleNavClick}
           className={cn(
-            "group/ai relative flex items-center rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-accent/30 px-3 py-2.5 text-sm font-medium text-foreground transition-all duration-200 hover:from-primary/15 hover:via-primary/10 hover:to-accent/50 hover:animate-pulse-glow",
+            "group/ai relative flex items-center rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-accent/30 px-3 py-2.5 text-sm font-medium text-foreground transition-colors duration-200 hover:from-primary/15 hover:via-primary/10 hover:to-accent/50",
             expanded ? "gap-3" : "justify-center px-2",
           )}
         >
@@ -202,27 +187,11 @@ export function ApiSidebar({
         </Link>
       </div>
 
-      {/* Restore hidden AI chat (only visible when the user has hidden it) */}
-      {expanded && aiHidden && (
-        <div className="border-t border-sidebar-border p-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-xs text-muted-foreground"
-            onClick={() => setAiChatHidden(false)}
-            data-testid="show-ai-chat-button"
-          >
-            <Sparkles className="mr-2 size-3" />
-            Show AI chat
-          </Button>
-        </div>
-      )}
-
       {/* Collapse toggle button — desktop only (mobile uses the drawer) */}
       <button
         onClick={() => setCollapsed(!collapsed)}
         aria-label="Collapse sidebar"
-        className="absolute -right-3 top-[72px] flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-all duration-200 hover:border-primary/40 hover:bg-accent hover:text-foreground hover:shadow-md hover:shadow-primary/10 active:scale-90 opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
+        className="absolute -right-3 top-[72px] flex size-8 sm:size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-[opacity,transform,box-shadow,color,background-color,border-color] duration-200 hover:border-primary/40 hover:bg-accent hover:text-foreground hover:shadow-md hover:shadow-primary/10 active:scale-90 opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {collapsed ? (
