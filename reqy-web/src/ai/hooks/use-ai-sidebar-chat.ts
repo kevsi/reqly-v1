@@ -98,7 +98,7 @@ export function useAiSidebarChat() {
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   // Note: `messagesEndRef` pointe sur le conteneur scrollable lui-même (voir

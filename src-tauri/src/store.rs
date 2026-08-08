@@ -74,6 +74,16 @@ pub struct QueueStore {
     queue: Mutex<Vec<QueuedRequest>>,
 }
 
+const SENSITIVE_HEADER_PREFIXES: &[&str] = &["authorization", "cookie", "proxy-authorization", "x-api-key", "x-auth-token"];
+
+fn redact_headers(headers: &[(String, String)]) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .filter(|(k, _)| !SENSITIVE_HEADER_PREFIXES.iter().any(|p| k.eq_ignore_ascii_case(p)))
+        .cloned()
+        .collect()
+}
+
 impl QueueStore {
     /// Open (creating if necessary) the queue store backed by `file_path`.
     /// Parent directories are created on demand.
@@ -105,10 +115,17 @@ impl QueueStore {
         &self.file_path
     }
 
-    /// Serialize the in-memory queue to disk.
+    /// Serialize the in-memory queue to disk with sensitive headers redacted.
     fn persist(&self) -> Result<(), AppError> {
         let guard = self.queue.lock()?;
-        let json = serde_json::to_string_pretty(&*guard)?;
+        let redacted: Vec<QueuedRequest> = guard
+            .iter()
+            .map(|req| QueuedRequest {
+                headers: redact_headers(&req.headers),
+                ..req.clone()
+            })
+            .collect();
+        let json = serde_json::to_string_pretty(&redacted)?;
         fs::write(&self.file_path, json)?;
         Ok(())
     }

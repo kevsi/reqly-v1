@@ -255,7 +255,15 @@ pub async fn fetch_proxy(
     (general_purpose::STANDARD.encode(&bytes), "base64".to_string())
   } else {
     let text = response.text().await.map_err(|e| AppError::Network(e.to_string()))?;
-    (decode_html_entities(&text), "utf8".to_string())
+    // HTML entity decoding is only meaningful for HTML documents. Applying
+    // it to JSON/XML/text corrupts legitimate data (e.g. `&#123;` inside a
+    // JSON string becomes `{`).
+    let decoded = if matches!(content_type.as_str(), "text/html" | "application/xhtml+xml") {
+      decode_html_entities(&text)
+    } else {
+      text
+    };
+    (decoded, "utf8".to_string())
   };
 
   let duration_ms = start.elapsed().as_millis() as u64;

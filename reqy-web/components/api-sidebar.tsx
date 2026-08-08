@@ -18,6 +18,7 @@ import {
 import { AppIcon } from "@/components/app-icon";
 import { ToolsSection } from "@/components/sidebar/tools-section";
 import { ModuleNavList } from "@/components/modules/module-nav-list";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -120,43 +121,57 @@ export function ApiSidebar({
         <ul className="space-y-0.5">
           {navItems.map((item) => {
             const isActive = item.key === activePage;
+            const linkContent = (
+              <>
+                <item.icon
+                  aria-hidden="true"
+                  className={cn(
+                    "size-[18px] shrink-0",
+                    isActive && "text-primary",
+                    !isActive && "group-hover/nav-item:text-foreground",
+                  )}
+                />
+                {expanded && <span className="truncate">{item.label}</span>}
+                {isActive && (
+                  <span
+                    className={cn(
+                      "rounded-full bg-primary shadow-sm shadow-primary/50",
+                      expanded
+                        ? "ml-auto flex size-1.5"
+                        : "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2",
+                    )}
+                  />
+                )}
+              </>
+            );
+            const linkClassName = cn(
+              "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150",
+              expanded ? "gap-3 px-3" : "justify-center",
+              isActive
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            );
             return (
               <li key={item.label} className="relative">
                 {isActive && (
                   <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary shadow-sm shadow-primary/50" />
                 )}
-                <Link
-                  href={item.href}
-                  onClick={handleNavClick}
-                  title={!expanded ? item.label : undefined}
-                  className={cn(
-                    "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150",
-                    expanded ? "gap-3 px-3" : "justify-center",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                  )}
-                >
-                  <item.icon
-                    aria-hidden="true"
-                    className={cn(
-                      "size-[18px] shrink-0",
-                      isActive && "text-primary",
-                      !isActive && "group-hover/nav-item:text-foreground",
-                    )}
-                  />
-                  {expanded && <span className="truncate">{item.label}</span>}
-                  {isActive && (
-                    <span
-                      className={cn(
-                        "rounded-full bg-primary shadow-sm shadow-primary/50",
-                        expanded
-                          ? "ml-auto flex size-1.5"
-                          : "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2",
-                      )}
-                    />
-                  )}
-                </Link>
+                {!expanded ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href} onClick={handleNavClick} className={linkClassName}>
+                        {linkContent}
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {item.label}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Link href={item.href} onClick={handleNavClick} className={linkClassName}>
+                    {linkContent}
+                  </Link>
+                )}
               </li>
             );
           })}

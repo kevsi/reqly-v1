@@ -21,6 +21,16 @@ use tiny_http::{Header, Request, Response, Server};
 use ts_rs::TS;
 use uuid::Uuid;
 
+const SENSITIVE_HEADER_PREFIXES: &[&str] = &["authorization", "cookie", "proxy-authorization", "x-api-key", "x-auth-token"];
+
+fn redact_headers(headers: &[(String, String)]) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .filter(|(k, _)| !SENSITIVE_HEADER_PREFIXES.iter().any(|p| k.eq_ignore_ascii_case(p)))
+        .cloned()
+        .collect()
+}
+
 use crate::error::AppError;
 use crate::fetch::SharedClient;
 
@@ -117,7 +127,18 @@ fn write_captures_to(reqs: &[CapturedRequest], path: &Path) -> Result<(), AppErr
   if let Some(parent) = path.parent() {
     let _ = fs::create_dir_all(parent);
   }
-  let json = serde_json::to_string_pretty(reqs)?;
+  let redacted: Vec<CapturedRequest> = reqs
+    .iter()
+    .map(|req| CapturedRequest {
+      headers: redact_headers(&req.headers),
+      response_headers: req
+        .response_headers
+        .as_ref()
+        .map(|h| redact_headers(h)),
+      ..req.clone()
+    })
+    .collect();
+  let json = serde_json::to_string_pretty(&redacted)?;
   fs::write(path, json)?;
   Ok(())
 }

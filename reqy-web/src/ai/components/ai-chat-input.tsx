@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type FormEvent } from "react";
+import { useRef, useCallback, type FormEvent, type KeyboardEvent } from "react";
 import { SendHorizontal, Square, X, Folder, Globe, Zap, Paperclip } from "lucide-react";
 import { AiContextPicker } from "@/src/ai/components/ai-context-picker";
 import { AiCommandMenu } from "@/src/ai/components/ai-command-menu";
@@ -14,26 +14,16 @@ const ATTACH_ICONS: Partial<Record<ContextAttachmentType, typeof Folder>> = {
 };
 
 interface AiChatInputProps {
-  /** Texte courant de l'input */
   value: string;
-  /** Change handler — reçoit la nouvelle valeur */
   onValueChange: (value: string) => void;
-  /** Callback quand le formulaire est soumis (Enter / bouton) */
   onSend: () => void;
-  /** Stop la génération en cours */
   onStop?: () => void;
-  /** Affiche le spinner loading dans le bouton */
   isLoading?: boolean;
-  /** Texte du placeholder */
   placeholder?: string;
-  /** Ref forwardée vers l'input natif. Si absent, une ref interne est créée. */
-  inputRef?: React.RefObject<HTMLInputElement | null>;
-  /** Attachements de contexte affichés en chips */
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   attachments?: ContextAttachment[];
   onRemoveAttachment?: (id: string) => void;
-  /** Résultats du menu de commandes slash */
   commandResults?: SlashCommand[];
-  /** Résultats du picker @-mentions */
   mentionResults?: ContextAttachment[];
   onSelectCommand?: (name: string) => void;
   onSelectMention?: (a: ContextAttachment) => void;
@@ -45,7 +35,7 @@ export function AiChatInput({
   onSend,
   onStop,
   isLoading = false,
-  placeholder = "Demande à l'assistant… (/ pour les commandes, @ pour le contexte)",
+  placeholder = "Demande à l'assistant… (/ commandes · @ contexte)",
   inputRef,
   attachments = [],
   onRemoveAttachment,
@@ -54,17 +44,41 @@ export function AiChatInput({
   onSelectCommand,
   onSelectMention,
 }: AiChatInputProps) {
-  const internalRef = useRef<HTMLInputElement>(null);
+  const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = inputRef ?? internalRef;
+
+  // Auto-resize the textarea as content grows (max ~5 lines)
+  const handleInput = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      onValueChange(e.target.value);
+      const el = e.target;
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    },
+    [onValueChange],
+  );
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter = send, Shift+Enter = newline
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
+      e.preventDefault();
+      if (!value.trim() || isLoading) return;
+      onSend();
+      // Reset height
+      if (ref.current) ref.current.style.height = "auto";
+    }
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!value.trim() || isLoading) return;
     onSend();
+    if (ref.current) ref.current.style.height = "auto";
   };
 
   return (
-    <div className="border-t border-border p-3 shrink-0">
+    <div className="border-t border-border/60 p-3 shrink-0 bg-background/80">
+      {/* Attachment chips */}
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1">
           {attachments.map((a) => {
@@ -72,14 +86,14 @@ export function AiChatInput({
             return (
               <span
                 key={a.id}
-                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary ring-1 ring-primary/15"
+                className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[10px] text-primary"
               >
                 <Icon className="size-2.5" />
                 {a.label}
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment?.(a.id)}
-                  className="ml-0.5 opacity-60 hover:opacity-100"
+                  className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
                   aria-label={`Retirer ${a.label}`}
                 >
                   <X className="size-2.5" />
@@ -90,48 +104,68 @@ export function AiChatInput({
         </div>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="relative flex items-center rounded-lg border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
-      >
+      <form onSubmit={handleSubmit} className="relative">
+        {/* Slash command menu */}
         {onSelectCommand && (
           <AiCommandMenu commands={commandResults ?? []} onSelect={onSelectCommand} />
         )}
+        {/* @-mention picker */}
         {onSelectMention && (
           <AiContextPicker results={mentionResults ?? []} onSelect={onSelectMention} />
         )}
 
-        <input
-          ref={ref}
-          value={value}
-          onChange={(e) => onValueChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={isLoading}
-          className="flex-1 min-w-0 bg-transparent px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={!value.trim() || isLoading}
-          aria-label="Envoyer"
-          className="flex size-8 mr-1.5 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm transition-[transform,box-shadow,filter,opacity] duration-150 hover:shadow-md hover:brightness-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none shrink-0"
+        <div
+          className="flex items-end gap-1.5 rounded-xl border border-input bg-card shadow-xs
+                     transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
         >
-          <SendHorizontal className="size-4" />
-        </button>
-        {isLoading && onStop && (
-          <button
-            type="button"
-            onClick={onStop}
-            aria-label="Arrêter"
-            title="Arrêter la génération"
-            className="flex size-8 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10"
-            data-testid="ai-stop"
-          >
-            <Square className="size-3.5" />
-          </button>
-        )}
+          <textarea
+            ref={ref}
+            value={value}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={isLoading}
+            rows={1}
+            className="min-h-[36px] max-h-[120px] flex-1 resize-none overflow-y-auto
+                       bg-transparent px-3 py-2 text-sm leading-snug outline-none
+                       placeholder:text-muted-foreground/60
+                       disabled:cursor-not-allowed disabled:opacity-50"
+          />
+
+          <div className="flex shrink-0 items-center gap-0.5 pb-1 pr-1.5">
+            {isLoading && onStop ? (
+              <button
+                type="button"
+                onClick={onStop}
+                aria-label="Arrêter la génération"
+                title="Arrêter"
+                className="flex size-7 items-center justify-center rounded-lg border border-destructive/30
+                           text-destructive transition-colors hover:bg-destructive/10"
+                data-testid="ai-stop"
+              >
+                <Square className="size-3" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!value.trim() || isLoading}
+                aria-label="Envoyer"
+                className="flex size-7 items-center justify-center rounded-lg
+                           bg-gradient-to-br from-primary to-primary/80 text-primary-foreground
+                           shadow-sm transition-[transform,opacity] duration-150
+                           hover:brightness-105 active:scale-95
+                           disabled:opacity-35 disabled:pointer-events-none"
+              >
+                <SendHorizontal className="size-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
       </form>
-      <p className="text-[10px] text-muted-foreground/50 mt-1.5 text-center">
-        / commandes · @ contexte · ⌘+I fermer
+
+      {/* Hint row */}
+      <p className="mt-1.5 text-center text-[10px] text-muted-foreground/45">
+        Entrée pour envoyer · Shift+Entrée pour aller à la ligne · ⌘I pour fermer
       </p>
     </div>
   );

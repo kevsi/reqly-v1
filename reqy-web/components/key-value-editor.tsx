@@ -55,8 +55,14 @@ export function KeyValueEditor({
   return (
     <div>
       {pairs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-6 text-xs text-muted-foreground/60">
-          <span>{emptyLabel}</span>
+        <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/50 py-8 text-center">
+          <div className="flex size-8 items-center justify-center rounded-full bg-muted/50">
+            <Plus className="size-4 text-muted-foreground/40" />
+          </div>
+          <span className="text-xs font-medium text-muted-foreground/60">{emptyLabel}</span>
+          <span className="text-[11px] text-muted-foreground/40">
+            Click below to add your first entry
+          </span>
         </div>
       ) : (
         <div className="space-y-2">
@@ -64,7 +70,7 @@ export function KeyValueEditor({
             <div
               key={index}
               className={cn(
-                "group/row flex items-center gap-2 rounded-lg transition-all duration-200 hover:bg-muted/20 -mx-1 px-1",
+                "group/row flex items-center gap-2 rounded-lg border border-transparent px-1 py-0.5 transition-all duration-200 hover:border-border/40 hover:bg-muted/30",
                 showToggle && pair.enabled === false && "opacity-50",
               )}
             >

@@ -182,7 +182,10 @@ export function RequestTabBar({
               <button
                 type="button"
                 onClick={(e) => onCloseTab(tab.id, e)}
-                className="ml-0.5 rounded p-0.5 opacity-0 transition-all duration-150 hover:bg-muted-foreground/10 group-hover:opacity-100 hover:scale-110"
+                className={cn(
+                  "ml-0.5 rounded p-0.5 transition-all duration-150 hover:bg-muted-foreground/10 group-hover:opacity-100 hover:scale-110",
+                  activeTabId === tab.id ? "opacity-30" : "opacity-0",
+                )}
                 data-testid="tabbar-close-tab"
               >
                 <X className="size-3 text-muted-foreground/50 hover:text-foreground" />
