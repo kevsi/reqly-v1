@@ -1,6 +1,5 @@
 import type { ModuleManifest, ModuleNavItem, ModuleRouteContribution } from "./types";
 import { encodeDecodeManifest } from "@/modules/encode-decode/manifest";
-import { mockServerManifest } from "@/modules/mock-server/manifest";
 
 /**
  * Central registry of Reqly modules.
@@ -18,7 +17,7 @@ import { mockServerManifest } from "@/modules/mock-server/manifest";
  * Modules are statically imported so their code can be tree-shaken; only
  * enabled modules are surfaced by the app (nav, routes, code loading).
  */
-const AVAILABLE: ModuleManifest[] = [encodeDecodeManifest, mockServerManifest];
+const AVAILABLE: ModuleManifest[] = [encodeDecodeManifest];
 
 const installState = new Map<string, boolean>();
 
