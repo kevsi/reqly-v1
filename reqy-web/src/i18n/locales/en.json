@@ -1738,6 +1738,23 @@
     "unknownError": "Unknown error"
   },
   "ai": {
+    "code": {
+      "copy": "Copy",
+      "copied": "Copied",
+      "execute": "Run",
+      "executeTitle": "Run this request",
+      "confirmTitle": "Confirm execution",
+      "confirmDetails": "{{headers}} header(s) · {{body}}",
+      "bodyIncluded": "body included",
+      "noBody": "no body",
+      "confirm": "Run request",
+      "cancel": "Cancel",
+      "executing": "Running…",
+      "executionDone": "Request executed",
+      "executionFailed": "Request failed",
+      "executionError": "The request could not be executed: {{error}}",
+      "runRequestMessage": "Run {{method}} {{url}}"
+    },
     "sidebar": {
       "title": "AI Assistant",
       "closePanelAria": "Close the assistant panel",

@@ -1738,6 +1738,23 @@
     "unknownError": "Erreur inconnue"
   },
   "ai": {
+    "code": {
+      "copy": "Copier",
+      "copied": "Copié",
+      "execute": "Exécuter",
+      "executeTitle": "Exécuter cette requête",
+      "confirmTitle": "Confirmer l'exécution",
+      "confirmDetails": "{{headers}} en-tête(s) · {{body}}",
+      "bodyIncluded": "body inclus",
+      "noBody": "sans body",
+      "confirm": "Exécuter la requête",
+      "cancel": "Annuler",
+      "executing": "Exécution…",
+      "executionDone": "Requête exécutée",
+      "executionFailed": "Échec de la requête",
+      "executionError": "La requête n'a pas pu être exécutée : {{error}}",
+      "runRequestMessage": "Exécuter {{method}} {{url}}"
+    },
     "sidebar": {
       "title": "Assistant IA",
       "closePanelAria": "Fermer le panneau de l'assistant",

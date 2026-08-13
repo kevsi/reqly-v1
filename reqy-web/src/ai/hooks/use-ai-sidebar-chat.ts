@@ -29,6 +29,7 @@ import { emptyUsage, addUsage } from "@/src/ai/agent/usage";
 import { createDefaultCommands, type SlashCommandContext } from "@/src/ai/agent/commands";
 import { extractTextToolCalls, stripToolCallText } from "@/src/ai/agent/text-tools";
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
+import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
 
 const STALL_TIMEOUT_MS = 45_000;
 
@@ -68,6 +69,11 @@ export function useAiSidebarChat() {
 
   // Copy state
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Explicit execution requested from a code block. It is kept separate from
+  // the model confirmation resolver so a user can review the request first.
+  const [pendingCodeRequest, setPendingCodeRequest] = useState<ParsedCodeRequest | null>(null);
+  const [isExecutingCode, setIsExecutingCode] = useState(false);
 
   // ── Agent state ───────────────────────────────────────────────────────────
   const [agentMode, setAgentMode] = useState<AgentMode>("act");
@@ -152,6 +158,71 @@ export function useAiSidebarChat() {
     },
     [],
   );
+
+  const requestCodeExecution = useCallback((request: ParsedCodeRequest) => {
+    setPendingCodeRequest(request);
+  }, []);
+
+  const cancelCodeExecution = useCallback(() => {
+    if (!isExecutingCode) setPendingCodeRequest(null);
+  }, [isExecutingCode]);
+
+  const confirmCodeExecution = useCallback(async () => {
+    const request = pendingCodeRequest;
+    if (!request || isExecutingCode) return;
+
+    setPendingCodeRequest(null);
+    setIsExecutingCode(true);
+    const callId = `code-${Date.now()}`;
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: i18n.t("ai.code.runRequestMessage", { method: request.method, url: request.url }),
+    };
+    const runningStep: ProcessStep = {
+      type: "execute",
+      label: i18n.t("ai.code.executing"),
+      status: "in_progress",
+    };
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      { role: "assistant", content: "", steps: [runningStep], phase: "tool_calling" },
+    ]);
+
+    try {
+      const result = await gatedExecute(
+        {
+          callId,
+          name: "execute_request",
+          arguments: JSON.stringify(request),
+        },
+        true,
+      );
+      const step: ProcessStep = {
+        type: "execute",
+        label: result.error ? i18n.t("ai.code.executionFailed") : i18n.t("ai.code.executionDone"),
+        status: result.error ? "error" : "done",
+        detail: result.error ?? result.content,
+      };
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last?.role === "assistant") {
+          copy[copy.length - 1] = {
+            ...last,
+            content: result.error
+              ? i18n.t("ai.code.executionError", { error: result.error })
+              : result.content,
+            steps: [step],
+            phase: "done",
+          };
+        }
+        return copy;
+      });
+    } finally {
+      setIsExecutingCode(false);
+    }
+  }, [gatedExecute, isExecutingCode, pendingCodeRequest]);
 
   const sendMessage = useCallback(
     async (
@@ -977,6 +1048,8 @@ export function useAiSidebarChat() {
     editingIndex,
     editingText,
     copiedIndex,
+    pendingCodeRequest,
+    isExecutingCode,
     // Agent state
     agentMode,
     setAgentMode,
@@ -1016,6 +1089,9 @@ export function useAiSidebarChat() {
     handleRetry,
     handleCopy,
     handleNewMessages,
+    requestCodeExecution,
+    cancelCodeExecution,
+    confirmCodeExecution,
     clearMessages,
     sendMessage,
   };

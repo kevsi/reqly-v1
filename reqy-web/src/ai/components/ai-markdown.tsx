@@ -1,27 +1,121 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import { Check, Clipboard, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { parseCurlRequest, type ParsedCodeRequest } from "@/src/ai/agent/code-request";
 
 interface AiMarkdownProps {
   content: string;
   className?: string;
+  onExecuteRequest?: (request: ParsedCodeRequest) => void;
+}
+
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      return copied;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function CodeBlock({
+  className,
+  children,
+  onExecuteRequest,
+}: {
+  className?: string;
+  children: React.ReactNode;
+  onExecuteRequest?: (request: ParsedCodeRequest) => void;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const source = String(children).replace(/\n$/, "");
+  const isBlock = /language-/.test(className ?? "");
+
+  if (!isBlock) {
+    return (
+      <code className="rounded bg-muted/80 px-1 py-0.5 font-mono text-[0.85em] text-foreground">
+        {children}
+      </code>
+    );
+  }
+
+  const language = className?.match(/language-([^\s]+)/)?.[1] ?? "text";
+  const parsedRequest = parseCurlRequest(source);
+
+  const handleCopy = async () => {
+    const success = await copyText(source);
+    if (!success) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div className="my-2 overflow-hidden rounded-lg border border-border/60 bg-code-bg text-code-text">
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-background/40 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+        <span className="font-mono uppercase tracking-wide">{language}</span>
+        <div className="flex items-center gap-1">
+          {parsedRequest && onExecuteRequest && (
+            <button
+              type="button"
+              onClick={() => onExecuteRequest(parsedRequest)}
+              className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10 hover:text-primary"
+              title={t("ai.code.executeTitle")}
+              aria-label={t("ai.code.executeTitle")}
+              data-testid="ai-code-execute"
+            >
+              <Play className="size-3" />
+              {t("ai.code.execute")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleCopy()}
+            className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={copied ? t("ai.code.copied") : t("ai.code.copy")}
+            aria-label={copied ? t("ai.code.copied") : t("ai.code.copy")}
+            data-testid="ai-code-copy"
+          >
+            {copied ? <Check className="size-3 text-success" /> : <Clipboard className="size-3" />}
+            {copied ? t("ai.code.copied") : t("ai.code.copy")}
+          </button>
+        </div>
+      </div>
+      <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-code-text">
+        <code className={cn("font-mono", className)}>{children}</code>
+      </pre>
+    </div>
+  );
 }
 
 /**
- * Renders an AI response as formatted markdown.
- *
- * Used everywhere an LLM answer is displayed (sidebar chat, Monu IA page,
- * AIModal, step final text). Safe by default: react-markdown does not render
- * raw HTML, so no sanitization pass is required.
- *
- * Memoized: the sidebar re-renders all messages on every streamed token, and
- * re-parsing unchanged messages' markdown each time would be wasteful.
+ * Renders an AI response as formatted markdown with per-code-block actions.
+ * Safe by default: react-markdown does not render raw HTML.
  */
-export const AiMarkdown = memo(function AiMarkdown({ content, className }: AiMarkdownProps) {
+export const AiMarkdown = memo(function AiMarkdown({
+  content,
+  className,
+  onExecuteRequest,
+}: AiMarkdownProps) {
   return (
     <div className={cn("text-sm leading-relaxed break-words", className)}>
       <ReactMarkdown
@@ -63,23 +157,12 @@ export const AiMarkdown = memo(function AiMarkdown({ content, className }: AiMar
             </blockquote>
           ),
           hr: () => <hr className="my-3 border-border" />,
-          pre: ({ children }) => (
-            <pre className="my-2 overflow-x-auto rounded-lg border border-border/50 bg-code-bg p-3 font-mono text-xs leading-relaxed text-code-text [&_code]:bg-transparent [&_code]:px-0 [&_code]:py-0 [&_code]:text-code-text">
+          pre: ({ children }) => <>{children}</>,
+          code: ({ className: codeClassName, children }) => (
+            <CodeBlock className={codeClassName} onExecuteRequest={onExecuteRequest}>
               {children}
-            </pre>
+            </CodeBlock>
           ),
-          code: ({ className, children }) => {
-            // Fenced blocks carry a `language-xxx` class; anything else is inline code.
-            const isBlock = /language-/.test(className ?? "");
-            if (isBlock) {
-              return <code className={cn("font-mono", className)}>{children}</code>;
-            }
-            return (
-              <code className="rounded bg-muted/80 px-1 py-0.5 font-mono text-[0.85em] text-foreground">
-                {children}
-              </code>
-            );
-          },
           table: ({ children }) => (
             <div className="my-2 overflow-x-auto">
               <table className="w-full border-collapse text-xs">{children}</table>

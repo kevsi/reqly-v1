@@ -26,6 +26,7 @@ import type { ContextAttachment } from "@/src/ai/agent/types";
 import { AiHistoryPanel } from "@/src/ai/components/ai-history-panel";
 import { AiChatMessage } from "@/src/ai/components/ai-chat-message";
 import { AiChatInput } from "@/src/ai/components/ai-chat-input";
+import { AiCodeExecutionCard } from "@/src/ai/components/ai-code-execution-card";
 import { AiAgentControls } from "@/src/ai/components/ai-agent-controls";
 import { AiPlanPanel } from "@/src/ai/components/ai-plan-panel";
 import { AiRulesPanel } from "@/src/ai/components/ai-rules-panel";
@@ -396,6 +397,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                   onEditingTextChange={chat.setEditingText}
                   onConfirm={(_stepId, confirmed) => chat.confirmAction(confirmed)}
                   onTypingUpdate={chat.scrollToBottom}
+                  onExecuteRequest={chat.requestCodeExecution}
                 />
               ))}
 
@@ -429,6 +431,15 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               )}
             </div>
           </div>
+
+          {chat.pendingCodeRequest && (
+            <AiCodeExecutionCard
+              request={chat.pendingCodeRequest}
+              isExecuting={chat.isExecutingCode}
+              onConfirm={() => void chat.confirmCodeExecution()}
+              onCancel={chat.cancelCodeExecution}
+            />
+          )}
 
           {/* ── Input ─────────────────────────────────────────────── */}
           <AiChatInput

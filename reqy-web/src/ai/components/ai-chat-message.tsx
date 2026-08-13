@@ -11,6 +11,7 @@ import {
 } from "@/src/ai/components/assistant-steps-renderer";
 import { ProgressiveMarkdown } from "@/src/ai/components/progressive-markdown";
 import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
+import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
 import { formatTokens } from "@/src/ai/agent/usage";
 
 interface AiChatMessageProps {
@@ -28,6 +29,7 @@ interface AiChatMessageProps {
   onConfirm?: (stepId: string, confirmed: boolean) => void;
   /** Appelé quand le texte affiché évolue pendant la révélation progressive (auto-scroll). */
   onTypingUpdate?: () => void;
+  onExecuteRequest?: (request: ParsedCodeRequest) => void;
 }
 
 export function AiChatMessage({
@@ -44,6 +46,7 @@ export function AiChatMessage({
   onEditingTextChange,
   onConfirm,
   onTypingUpdate,
+  onExecuteRequest,
 }: AiChatMessageProps) {
   const { t } = useTranslation();
   const isAssistant = message.role === "assistant";
@@ -170,7 +173,11 @@ export function AiChatMessage({
                   <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:300ms]" />
                 </span>
               ) : (
-                <ProgressiveMarkdown content={message.content} onTextChange={onTypingUpdate} />
+                <ProgressiveMarkdown
+                  content={message.content}
+                  onTextChange={onTypingUpdate}
+                  onExecuteRequest={onExecuteRequest}
+                />
               )
             ) : (
               message.content

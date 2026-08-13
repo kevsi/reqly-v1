@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react";
 import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 import { useProgressiveText } from "@/src/ai/hooks/use-progressive-text";
+import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
 
 interface ProgressiveMarkdownProps {
   content: string;
   className?: string;
-  /** Appelé à chaque fois que le texte affiché évolue (utilisé pour l'auto-scroll). */
+  /** Appelé à chaque fois que le texte affiché évolue (utilisé pour l’auto-scroll). */
   onTextChange?: () => void;
+  onExecuteRequest?: (request: ParsedCodeRequest) => void;
 }
 
 /**
@@ -22,6 +24,7 @@ export function ProgressiveMarkdown({
   content,
   className,
   onTextChange,
+  onExecuteRequest,
 }: ProgressiveMarkdownProps) {
   const display = useProgressiveText(content);
   const lastDisplay = useRef(display);
@@ -33,5 +36,5 @@ export function ProgressiveMarkdown({
     }
   }, [display, onTextChange]);
 
-  return <AiMarkdown content={display} className={className} />;
+  return <AiMarkdown content={display} className={className} onExecuteRequest={onExecuteRequest} />;
 }
