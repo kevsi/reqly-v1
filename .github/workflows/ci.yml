@@ -96,6 +96,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared package
+        run: pnpm --filter @reqly/shared build
       - name: Generate CI secrets
         working-directory: reqy-web
         run: node scripts/generate-dev-secrets.mjs

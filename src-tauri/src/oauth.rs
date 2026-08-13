@@ -321,8 +321,10 @@ mod tests {
 
     /// Point the provider at a local mock token endpoint.
     fn mock_token_url(server: &Server) -> String {
-        let ListenAddr::IP(addr) = server.server_addr();
-        format!("http://127.0.0.1:{}/token", addr.port())
+        match server.server_addr() {
+            ListenAddr::IP(addr) => format!("http://127.0.0.1:{}/token", addr.port()),
+            ListenAddr::Unix(_) => panic!("mock OAuth server must listen on TCP"),
+        }
     }
 
     /// Serve one request against the mock endpoint and capture the received
