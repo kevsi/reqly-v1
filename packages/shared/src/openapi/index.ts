@@ -80,7 +80,7 @@ export function importOpenAPI(specYamlOrJson: string): ExportBundle {
 
   for (const [path, methods] of Object.entries(doc.paths)) {
     for (const method of HTTP_METHODS) {
-      const op: OAS3Operation | undefined = (methods as any)[method];
+      const op: OAS3Operation | undefined = methods[method];
       if (!op) continue;
 
       const name = op.operationId || op.summary || `${method.toUpperCase()} ${path}`;
@@ -181,10 +181,10 @@ function generateExampleFromSchema(schema: Record<string, unknown>): unknown {
   }
   if (schema.type === "string") {
     if (schema.enum && Array.isArray(schema.enum)) return schema.enum[0];
-    if ((schema as any).format === "date-time") return new Date().toISOString();
-    if ((schema as any).format === "email") return "user@example.com";
-    if ((schema as any).format === "uri") return "https://example.com";
-    if ((schema as any).format === "uuid") return "550e8400-e29b-41d4-a716-446655440000";
+    if (schema.format === "date-time") return new Date().toISOString();
+    if (schema.format === "email") return "user@example.com";
+    if (schema.format === "uri") return "https://example.com";
+    if (schema.format === "uuid") return "550e8400-e29b-41d4-a716-446655440000";
     return "string";
   }
   if (schema.type === "integer" || schema.type === "number") return 0;

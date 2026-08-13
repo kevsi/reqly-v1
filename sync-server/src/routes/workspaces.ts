@@ -8,6 +8,15 @@ import { safeParseJson } from "../validation.js";
 const workspaces = new Hono<{ Variables: { auth: AuthContext } }>();
 workspaces.use("*", requireAuth);
 
+interface WorkspaceRow {
+  id: string;
+  name: string;
+  ownerId: string;
+  createdAt: number;
+  updatedAt: number;
+  role: string;
+}
+
 const CreateSchema = z.object({ name: z.string().min(1).max(100) });
 
 workspaces.post("/", async (c) => {
@@ -50,7 +59,7 @@ workspaces.get("/", (c) => {
     ORDER BY w.updated_at DESC
   `,
     )
-    .all(auth.userId) as any[];
+    .all(auth.userId) as WorkspaceRow[];
   return c.json({ workspaces: rows });
 });
 

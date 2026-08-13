@@ -82,23 +82,23 @@ function publicUser(user: { id: string; email: string; name: string | null }) {
 
 // --- Helpers --------------------------------------------------------------
 
-function getUserByEmail(email: string):
-  | {
-      id: string;
-      email: string;
-      name: string | null;
-      password_hash: string | null;
-      verified: number;
-      verification_code: string | null;
-      verification_code_expires_at: number | null;
-    }
-  | undefined {
+interface UserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  password_hash: string | null;
+  verified: number;
+  verification_code: string | null;
+  verification_code_expires_at: number | null;
+}
+
+function getUserByEmail(email: string): UserRow | undefined {
   return db
     .prepare(
       `SELECT id, email, name, password_hash, verified, verification_code, verification_code_expires_at
        FROM users WHERE email = ?`,
     )
-    .get(email) as any;
+    .get(email) as UserRow | undefined;
 }
 
 function setVerificationCode(userId: string, code: string) {

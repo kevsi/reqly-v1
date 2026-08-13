@@ -36,6 +36,15 @@ function tableFor(entityType: SyncChange["entityType"]): string {
   return "folders";
 }
 
+interface ChangeRow {
+  id: string;
+  data: string;
+  version: number;
+  updatedAt: number;
+  updatedBy: string;
+  deleted: number;
+}
+
 export function getChangesSince(workspaceId: string, since: number): SyncChange[] {
   const result: SyncChange[] = [];
   for (const entityType of ["collection", "environment", "folder"] as const) {
@@ -56,7 +65,7 @@ export function getChangesSince(workspaceId: string, since: number): SyncChange[
       ORDER BY updated_at ASC
     `,
       )
-      .all(workspaceId, since) as any[];
+      .all(workspaceId, since) as ChangeRow[];
     for (const row of rows) {
       result.push({
         entityType,
