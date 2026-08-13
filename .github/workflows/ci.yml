@@ -133,6 +133,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared package
+        run: pnpm --filter @reqly/shared build
       - name: Build web (with bundle analyzer)
         run: pnpm build
         env:

@@ -131,19 +131,23 @@ if (routeFiles.length === 0) {
   process.exit(1);
 }
 
+// The web build keeps the root layout dynamic for nonce propagation. Tauri is
+// a static export, so patch that layout for this build and restore it in finally.
+const layoutFile = path.resolve("app/layout.tsx");
+const filesToPatch = fs.existsSync(layoutFile) ? [...routeFiles, layoutFile] : routeFiles;
 console.log(
-  `[build-desktop] Patching ${routeFiles.length} route files (dynamic: force-dynamic → force-static)`,
+  `[build-desktop] Patching ${filesToPatch.length} files (dynamic: force-dynamic → force-static)`,
 );
 
 // Snapshot originals so we can restore even if the build crashes.
 const backups = new Map();
-for (const file of routeFiles) {
+for (const file of filesToPatch) {
   backups.set(file, fs.readFileSync(file, "utf8"));
 }
 
 let buildStatus;
 try {
-  for (const file of routeFiles) {
+  for (const file of filesToPatch) {
     const original = backups.get(file);
     if (!DYNAMIC_RE.test(original)) {
       console.warn(
