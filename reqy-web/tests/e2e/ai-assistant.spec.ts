@@ -6,17 +6,21 @@ test.describe("AI Assistant sidebar", () => {
     await expect(page.locator("body")).toBeVisible({ timeout: 10000 });
 
     // Open via header toggle button (Sparkles icon)
-    const toggle = page.getByTitle(/Ouvrir l'assistant IA/i);
+    const toggle = page.getByTestId("ai-sidebar-toggle");
     await expect(toggle).toBeVisible();
     await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toHaveAttribute("aria-controls", "reqly-ai-sidebar");
 
     // Sidebar appears with data-testid="ai-sidebar"
     const sidebar = page.getByTestId("ai-sidebar");
     await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveAttribute("id", "reqly-ai-sidebar");
 
     // Close via Escape
     await page.keyboard.press("Escape");
     await expect(sidebar).toHaveAttribute("aria-hidden", "true");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 
   test("suggestion prompts are shown in empty state", async ({ page }) => {
