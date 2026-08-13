@@ -1779,6 +1779,10 @@
       "retry": "Retry"
     },
     "agent": {
+      "mode": "Execution mode",
+      "controls": "Controls",
+      "autoApplyOn": "Auto-approval",
+      "confirmationRequired": "Confirmation required",
       "planModeTitle": "Plan mode — the AI proposes a plan before acting",
       "plan": "Plan",
       "actModeTitle": "Act mode — the AI acts directly",

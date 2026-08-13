@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { AiAssistantModal } from "@/components/ai-assistant-modal";
+import { useAiSidebar } from "@/contexts/ai-sidebar-context";
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, key: "sidebar.nav.dashboard", href: "/dashboard/", id: "dashboard" },
@@ -53,7 +53,7 @@ export function ApiSidebar({
   onMobileClose,
 }: ApiSidebarProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
-  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const { setAiSidebarOpen } = useAiSidebar();
   const { t } = useTranslation();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const isMobile = useIsMobile(768);
@@ -188,7 +188,7 @@ export function ApiSidebar({
         <button
           type="button"
           onClick={() => {
-            setAiModalOpen(true);
+            setAiSidebarOpen(true);
             handleNavClick();
           }}
           className={cn(
@@ -221,8 +221,6 @@ export function ApiSidebar({
           <ChevronsLeft className="size-3.5 transition-transform duration-200 hover:-translate-x-0.5" />
         )}
       </button>
-
-      <AiAssistantModal open={aiModalOpen} onOpenChange={setAiModalOpen} />
     </aside>
   );
 }

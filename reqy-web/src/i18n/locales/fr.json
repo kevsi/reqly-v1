@@ -1779,6 +1779,10 @@
       "retry": "Réessayer"
     },
     "agent": {
+      "mode": "Mode d'exécution",
+      "controls": "Contrôles",
+      "autoApplyOn": "Approbation automatique",
+      "confirmationRequired": "Confirmation requise",
       "planModeTitle": "Mode Plan — l'IA propose un plan avant d'agir",
       "plan": "Plan",
       "actModeTitle": "Mode Action — l'IA agit directement",
