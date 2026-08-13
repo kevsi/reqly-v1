@@ -142,6 +142,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
       {/* Sidebar panel */}
       <div
         ref={sidebarRef}
+        id="reqly-ai-sidebar"
         role="complementary"
         aria-label={t("ai.sidebar.title")}
         data-testid="ai-sidebar"

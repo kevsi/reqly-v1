@@ -342,7 +342,11 @@ function AiSidebarToggle() {
   const { t } = useTranslation();
   return (
     <button
+      type="button"
       onClick={() => setAiSidebarOpen(!aiSidebarOpen)}
+      aria-expanded={aiSidebarOpen}
+      aria-controls="reqly-ai-sidebar"
+      data-testid="ai-sidebar-toggle"
       className={cn(
         "relative flex size-9 items-center justify-center rounded-lg border transition-all duration-200",
         aiSidebarOpen
