@@ -55,6 +55,7 @@ export default tseslint.config(
       "build/",
       "playwright-report/",
       "test-results/",
+      "coverage/",
     ],
   }
 );

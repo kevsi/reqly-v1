@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "generate": "node scripts/build-desktop.mjs",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "dev:local": "cd reqy-web && next dev",
     "test:e2e": "playwright test",
