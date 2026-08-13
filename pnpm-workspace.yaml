@@ -24,8 +24,14 @@ overrides:
   # v1 path via minimatch@3 (eslint, test-exclude); v2 path via direct dependents.
   "brace-expansion@^1": "1.1.18"
   "brace-expansion@^2": "2.1.4"
+  # brace-expansion v3/v4/v5 via minimatch@10 (vitest-coverage, eslint): DoS
+  # exponential/OOM (GHSA-3jxr etc.), patched >=5.0.9.
+  "brace-expansion@^5": "5.0.9"
   # undici: multiple high/moderate advisories — force patched version.
-  undici: ">=7.29.0"
+  # Keep <8: undici 8 removed lib/handler/wrap-handler.js, breaking jsdom@29.
+  undici: ">=7.29.0 <8"
+  # nanoid <3.3.17: infinite loop via sequential size arguments (CWE-835) - pulled in by postcss.
+  nanoid: "^3.3.17"
 allowBuilds:
   better-sqlite3: true
   esbuild: false
