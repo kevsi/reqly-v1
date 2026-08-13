@@ -1,37 +1,34 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Loader2, RefreshCw, Search, Plus, Check, X } from "lucide-react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Command,
-  CommandList,
-  CommandEmpty,
-} from "@/components/ui/command"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
-import type { AIProvider } from "@/lib/types"
-import { ANTHROPIC_NO_FETCH } from "@/lib/provider-models"
-import type { ModelOption } from "@/lib/provider-models"
+import { useState } from "react";
+import { Loader2, RefreshCw, Search, Plus, Check, X } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Command, CommandList, CommandEmpty } from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { AIProvider } from "@/lib/types";
+import { ANTHROPIC_NO_FETCH } from "@/lib/provider-models";
+import type { ModelOption } from "@/lib/provider-models";
+import { useTranslation } from "react-i18next";
 
 interface ModelSearchListProps {
-  models: ModelOption[]
-  selectedModelId: string
-  onModelSelect: (id: string) => void
-  provider: AIProvider
-  isCustom: boolean
-  onFetchModels: () => void
-  fetchingModels: boolean
-  modelsFetched: boolean
-  apiKey: string
-  baseUrl: string
+  models: ModelOption[];
+  selectedModelId: string;
+  onModelSelect: (id: string) => void;
+  provider: AIProvider;
+  isCustom: boolean;
+  onFetchModels: () => void;
+  fetchingModels: boolean;
+  modelsFetched: boolean;
+  apiKey: string;
+  baseUrl: string;
   /** Called when user adds a manual model ID (custom providers only) */
-  onAddModel?: (modelId: string) => void
+  onAddModel?: (modelId: string) => void;
   /** Called when user removes a manually-added model */
-  onRemoveModel?: (modelId: string) => void
+  onRemoveModel?: (modelId: string) => void;
 }
 
 export function ModelSearchList({
@@ -48,44 +45,45 @@ export function ModelSearchList({
   onAddModel,
   onRemoveModel,
 }: ModelSearchListProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [manualModelInput, setManualModelInput] = useState("")
+  const [searchQuery, setSearchQuery] = useState("");
+  const [manualModelInput, setManualModelInput] = useState("");
+  const { t } = useTranslation();
 
   const filteredModels = models.filter(
     (m) =>
       m.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.label.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  );
 
-  const selectedModelObj = models.find((m) => m.id === selectedModelId)
+  const selectedModelObj = models.find((m) => m.id === selectedModelId);
 
   const canFetchModels = Boolean(
     !fetchingModels &&
-      (provider === "ollama" || ANTHROPIC_NO_FETCH.has(provider) || apiKey) &&
-      (!isCustom || baseUrl.trim()),
-  )
+    (provider === "ollama" || ANTHROPIC_NO_FETCH.has(provider) || apiKey) &&
+    (!isCustom || baseUrl.trim()),
+  );
 
   const handleAddManual = () => {
-    const id = manualModelInput.trim()
-    if (!id) return
+    const id = manualModelInput.trim();
+    if (!id) return;
     if (models.some((m) => m.id === id)) {
-      toast.info("Ce modèle existe déjà dans la liste.")
-      setManualModelInput("")
-      return
+      toast.info(t("settings.ai.models.alreadyExists"));
+      setManualModelInput("");
+      return;
     }
-    onAddModel?.(id)
-    setManualModelInput("")
-  }
+    onAddModel?.(id);
+    setManualModelInput("");
+  };
 
   const handleRemoveModel = (modelId: string) => {
-    onRemoveModel?.(modelId)
-  }
+    onRemoveModel?.(modelId);
+  };
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
         <label className="text-sm font-medium text-foreground">
-          Modèle{isCustom ? "s" : ""}
+          {t(isCustom ? "settings.ai.models.titlePlural" : "settings.ai.models.title")}
         </label>
         <div className="flex items-center gap-1.5">
           <Button
@@ -95,21 +93,21 @@ export function ModelSearchList({
             onClick={onFetchModels}
             title={
               ANTHROPIC_NO_FETCH.has(provider)
-                ? "Cet éditeur n'expose pas d'endpoint public"
+                ? t("settings.ai.models.noPublicEndpoint")
                 : !apiKey
-                  ? "Entrez une clé API pour activer le chargement"
-                  : "Charger la liste depuis l'API"
+                  ? t("settings.ai.models.needApiKey")
+                  : t("settings.ai.models.loadFromApi")
             }
           >
             {fetchingModels ? (
               <>
                 <Loader2 className="mr-1.5 size-3 animate-spin" />
-                Chargement...
+                {t("settings.ai.models.loading")}
               </>
             ) : (
               <>
                 <RefreshCw className="mr-1.5 size-3" />
-                Charger
+                {t("settings.ai.models.load")}
               </>
             )}
           </Button>
@@ -121,7 +119,7 @@ export function ModelSearchList({
               disabled={!manualModelInput.trim()}
             >
               <Plus className="mr-1 size-3" />
-              Ajouter
+              {t("settings.ai.models.add")}
             </Button>
           )}
         </div>
@@ -134,11 +132,11 @@ export function ModelSearchList({
             <Input
               value={manualModelInput}
               onChange={(e) => setManualModelInput(e.target.value)}
-              placeholder="Entrez un ID de modèle manuellement..."
+              placeholder={t("settings.ai.models.manualPlaceholder")}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  e.preventDefault()
-                  handleAddManual()
+                  e.preventDefault();
+                  handleAddManual();
                 }
               }}
             />
@@ -149,10 +147,7 @@ export function ModelSearchList({
       {/* Selected model badge */}
       {selectedModelObj && (
         <div className="mb-3">
-          <Badge
-            variant="secondary"
-            className="flex items-center gap-1 px-3 py-1 text-xs"
-          >
+          <Badge variant="secondary" className="flex items-center gap-1 px-3 py-1 text-xs">
             <Check className="size-3" />
             {selectedModelObj.label}
             <button
@@ -174,7 +169,7 @@ export function ModelSearchList({
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher un modèle..."
+              placeholder={t("settings.ai.models.searchPlaceholder")}
               className="flex h-8 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
             {searchQuery && (
@@ -194,10 +189,10 @@ export function ModelSearchList({
                 <div className="flex flex-col items-center gap-2 py-6 text-sm text-muted-foreground">
                   <Search className="size-8 opacity-30" />
                   {modelsFetched
-                    ? "Aucun modèle trouvé"
+                    ? t("settings.ai.models.noModels")
                     : isCustom
-                      ? "Chargez les modèles depuis l'API ou ajoutez-en manuellement"
-                      : "Cliquez sur « Charger » pour récupérer les modèles"}
+                      ? t("settings.ai.models.customEmpty")
+                      : t("settings.ai.models.loadHint")}
                 </div>
               </CommandEmpty>
             )}
@@ -231,29 +226,23 @@ export function ModelSearchList({
                             : "border-muted-foreground/30",
                         )}
                       >
-                        {selectedModelId === m.id && (
-                          <Check className="size-3" />
-                        )}
+                        {selectedModelId === m.id && <Check className="size-3" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="truncate font-medium">
-                          {m.label}
-                        </div>
+                        <div className="truncate font-medium">{m.label}</div>
                         {m.id !== m.label && (
-                          <div className="truncate text-xs text-muted-foreground">
-                            {m.id}
-                          </div>
+                          <div className="truncate text-xs text-muted-foreground">{m.id}</div>
                         )}
                       </div>
                       {isCustom && onRemoveModel && (
                         <button
                           type="button"
                           onClick={(e) => {
-                            e.stopPropagation()
-                            handleRemoveModel(m.id)
+                            e.stopPropagation();
+                            handleRemoveModel(m.id);
                           }}
                           className="shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                          title="Retirer"
+                          title={t("settings.ai.models.remove")}
                         >
                           <X className="size-3.5" />
                         </button>
@@ -269,11 +258,11 @@ export function ModelSearchList({
 
       <p className="mt-1.5 text-xs text-muted-foreground">
         {isCustom
-          ? "Ajoutez des modèles manuellement ou chargez-les depuis l'API."
+          ? t("settings.ai.models.footerCustom")
           : provider === "anthropic"
-            ? "Anthropic n'expose pas d'endpoint public. Utilisez la liste statique."
-            : "Laissez vide pour utiliser le modèle par défaut."}
+            ? t("settings.ai.models.footerAnthropic")
+            : t("settings.ai.models.footerDefault")}
       </p>
     </div>
-  )
+  );
 }

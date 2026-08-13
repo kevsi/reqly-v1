@@ -102,7 +102,7 @@ describe("GraphqlTabBar", () => {
     renderBar({ onClose, onCloseOthers });
     fireEvent.contextMenu(screen.getByTestId("graphql-tab-tab-2"));
     expect(screen.getByTestId("graphql-tab-context-menu")).toBeTruthy();
-    fireEvent.click(screen.getByText("Close Others"));
+    fireEvent.click(screen.getByText("Fermer les autres"));
     expect(onCloseOthers).toHaveBeenCalledWith("tab-2");
   });
 
@@ -110,7 +110,7 @@ describe("GraphqlTabBar", () => {
     const onRename = vi.fn();
     renderBar({ onRename });
     fireEvent.contextMenu(screen.getByTestId("graphql-tab-tab-2"));
-    fireEvent.click(screen.getByText("Rename"));
+    fireEvent.click(screen.getByText("Renommer"));
     const input = screen.getByDisplayValue("Query 2") as HTMLInputElement;
     expect(input).toBeTruthy();
     fireEvent.change(input, { target: { value: "Renamed" } });

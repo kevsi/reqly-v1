@@ -2,6 +2,7 @@
 
 import { X, Download, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 interface SelectionToolbarProps {
   selectedCollectionCount: number;
@@ -20,6 +21,7 @@ export function SelectionToolbar({
   onBulkExport,
   onBulkDelete,
 }: SelectionToolbarProps) {
+  const { t } = useTranslation();
   if (selectedCollectionCount === 0 && selectedRequestCount === 0) return null;
 
   return (
@@ -29,11 +31,11 @@ export function SelectionToolbar({
           {selectedCollectionCount + selectedRequestCount}
         </span>
         {selectedCollectionCount > 0 &&
-          `${selectedCollectionCount} collection${selectedCollectionCount > 1 ? "s" : ""}`}
-        {selectedCollectionCount > 0 && selectedRequestCount > 0 && " + "}
+          t("collections.selection.selectedCollections", { count: selectedCollectionCount })}
+        {selectedCollectionCount > 0 && selectedRequestCount > 0 && t("collections.selection.plus")}
         {selectedRequestCount > 0 &&
-          `${selectedRequestCount} requête${selectedRequestCount > 1 ? "s" : ""}`}
-        {" sélectionné"}
+          t("collections.selection.selectedRequests", { count: selectedRequestCount })}
+        {t("collections.selection.suffix")}
       </span>
       <div className="flex items-center gap-0.5">
         <Button
@@ -43,7 +45,7 @@ export function SelectionToolbar({
           className="h-8 px-3 text-xs font-medium text-muted-foreground transition-all duration-150 hover:scale-105 active:scale-95 hover:text-foreground"
         >
           <X className="size-3.5 mr-1.5" />
-          Clear
+          {t("collections.selection.clear")}
         </Button>
         <div className="w-px h-4 bg-border/40 mx-0.5" />
         <Button
@@ -58,7 +60,7 @@ export function SelectionToolbar({
           ) : (
             <Download className="size-3.5 mr-1.5" />
           )}
-          Export
+          {t("collections.selection.export")}
         </Button>
         <Button
           variant="ghost"
@@ -67,7 +69,7 @@ export function SelectionToolbar({
           className="h-8 px-3 text-xs font-medium text-destructive transition-all duration-150 hover:scale-105 active:scale-95 hover:text-destructive hover:bg-destructive/10"
         >
           <Trash2 className="size-3.5 mr-1.5" />
-          Delete
+          {t("collections.selection.delete")}
         </Button>
       </div>
     </div>

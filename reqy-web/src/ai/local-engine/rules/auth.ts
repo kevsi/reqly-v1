@@ -3,16 +3,15 @@
  * and 403 (scope, role, admin).
  */
 import type { Rule, RequestContext } from "@/src/ai/types";
+import i18n from "@/src/i18n";
 
 function hasAuthHeader(ctx: RequestContext): boolean {
-  return Object.keys(ctx.request.headers).some(
-    (k) => k.toLowerCase() === "authorization"
-  );
+  return Object.keys(ctx.request.headers).some((k) => k.toLowerCase() === "authorization");
 }
 
 function isBearer(ctx: RequestContext): boolean {
   const auth = Object.entries(ctx.request.headers).find(
-    ([k]) => k.toLowerCase() === "authorization"
+    ([k]) => k.toLowerCase() === "authorization",
   )?.[1];
   return !!auth && /^Bearer\s+/i.test(auth);
 }
@@ -41,16 +40,21 @@ export const authRules: Rule[] = [
     build: () => ({
       severity: "error",
       category: "auth",
-      title: "Token Bearer manquant",
-      explanation: "La requête ne contient pas de header Authorization. L'endpoint requiert une authentification.",
+      title: i18n.t("ai.diag.auth.401.bearer.missing.title"),
+      explanation: i18n.t("ai.diag.auth.401.bearer.missing.explanation"),
       fix: {
         type: "header",
-        description: "Ajouter le header Authorization: Bearer <token>",
+        description: i18n.t("ai.diag.auth.401.bearer.missing.fix"),
         patch: { headers: { authorization: "Bearer {{token}}" } },
         applyFix: () => ({ headers: { authorization: "Bearer {{token}}" } }),
       },
       confidence: "certain",
-      references: [{ label: "MDN — Authorization", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization" }],
+      references: [
+        {
+          label: "MDN — Authorization",
+          url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization",
+        },
+      ],
     }),
   },
   {
@@ -65,16 +69,21 @@ export const authRules: Rule[] = [
     build: () => ({
       severity: "error",
       category: "auth",
-      title: "Token Bearer expiré",
-      explanation: "Le serveur signale que le token a expiré. Régénérez-le via un refresh ou un nouveau login.",
+      title: i18n.t("ai.diag.auth.401.bearer.expired.title"),
+      explanation: i18n.t("ai.diag.auth.401.bearer.expired.explanation"),
       fix: {
         type: "auth",
-        description: "Régénérer le token (refresh token ou re-login)",
+        description: i18n.t("ai.diag.auth.401.bearer.expired.fix"),
         patch: {},
         applyFix: () => ({}),
       },
       confidence: "certain",
-      references: [{ label: "RFC 6750 — Bearer Token Usage", url: "https://datatracker.ietf.org/doc/html/rfc6750" }],
+      references: [
+        {
+          label: "RFC 6750 — Bearer Token Usage",
+          url: "https://datatracker.ietf.org/doc/html/rfc6750",
+        },
+      ],
     }),
   },
   {
@@ -92,11 +101,11 @@ export const authRules: Rule[] = [
     build: () => ({
       severity: "error",
       category: "auth",
-      title: "Token Bearer invalide",
-      explanation: "Le serveur rejette le token (signature invalide, format incorrect, ou audience non autorisée).",
+      title: i18n.t("ai.diag.auth.401.bearer.invalid.title"),
+      explanation: i18n.t("ai.diag.auth.401.bearer.invalid.explanation"),
       fix: {
         type: "auth",
-        description: "Vérifier la validité du token (jwt.io)",
+        description: i18n.t("ai.diag.auth.401.bearer.invalid.fix"),
         patch: {},
         applyFix: () => ({}),
       },
@@ -111,11 +120,11 @@ export const authRules: Rule[] = [
     build: () => ({
       severity: "error",
       category: "auth",
-      title: "Identifiants Basic incorrects",
-      explanation: "L'authentification Basic a échoué. Vérifiez le nom d'utilisateur et le mot de passe.",
+      title: i18n.t("ai.diag.auth.401.basic.bad_credentials.title"),
+      explanation: i18n.t("ai.diag.auth.401.basic.bad_credentials.explanation"),
       fix: {
         type: "auth",
-        description: "Vérifier les identifiants encodés en base64",
+        description: i18n.t("ai.diag.auth.401.basic.bad_credentials.fix"),
         patch: {},
         applyFix: () => ({}),
       },
@@ -128,20 +137,23 @@ export const authRules: Rule[] = [
     severity: "error",
     match: (ctx) =>
       isStatus(ctx, 403) &&
-      (responseBodyString(ctx).includes("scope") || responseBodyString(ctx).includes("insufficient")),
+      (responseBodyString(ctx).includes("scope") ||
+        responseBodyString(ctx).includes("insufficient")),
     build: () => ({
       severity: "error",
       category: "auth",
-      title: "Scope insuffisant",
-      explanation: "Le token est valide mais ne dispose pas des permissions (scopes) nécessaires.",
+      title: i18n.t("ai.diag.auth.403.scope.title"),
+      explanation: i18n.t("ai.diag.auth.403.scope.explanation"),
       fix: {
         type: "auth",
-        description: "Demander un token avec les scopes requis",
+        description: i18n.t("ai.diag.auth.403.scope.fix"),
         patch: {},
         applyFix: () => ({}),
       },
       confidence: "probable",
-      references: [{ label: "RFC 6749 — OAuth 2.0", url: "https://datatracker.ietf.org/doc/html/rfc6749" }],
+      references: [
+        { label: "RFC 6749 — OAuth 2.0", url: "https://datatracker.ietf.org/doc/html/rfc6749" },
+      ],
     }),
   },
   {
@@ -152,11 +164,11 @@ export const authRules: Rule[] = [
     build: () => ({
       severity: "error",
       category: "auth",
-      title: "Permissions admin requises",
-      explanation: "L'endpoint /admin/ nécessite un rôle administrateur.",
+      title: i18n.t("ai.diag.auth.403.admin.title"),
+      explanation: i18n.t("ai.diag.auth.403.admin.explanation"),
       fix: {
         type: "auth",
-        description: "Utiliser un compte avec rôle admin",
+        description: i18n.t("ai.diag.auth.403.admin.fix"),
         patch: {},
         applyFix: () => ({}),
       },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   GitBranch,
   GitCommit,
@@ -40,6 +41,7 @@ interface GitPanelProps {
 }
 
 export function GitPanel({ collections }: GitPanelProps) {
+  const { t } = useTranslation();
   const git = useGit(collections);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
@@ -140,7 +142,7 @@ export function GitPanel({ collections }: GitPanelProps) {
                   onDelete={git.branchDelete}
                 />
               ) : (
-                <p className="text-[10px] text-muted-foreground/40">Repository not initialized</p>
+                <p className="text-[10px] text-muted-foreground/40">{t("git.notInitialized")}</p>
               )}
             </div>
           </div>
@@ -153,7 +155,7 @@ export function GitPanel({ collections }: GitPanelProps) {
               className="h-7 gap-1.5 text-xs font-medium"
             >
               <GitCommit className="size-3.5" />
-              Commit
+              {t("git.commit")}
             </Button>
           )}
         </div>
@@ -196,13 +198,13 @@ export function GitPanel({ collections }: GitPanelProps) {
               value="history"
               className="h-6 px-3 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-xs"
             >
-              History
+              {t("git.history")}
             </TabsTrigger>
             <TabsTrigger
               value="status"
               className="h-6 px-3 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-xs"
             >
-              Status
+              {t("git.status")}
               {statusFiles.length > 0 && (
                 <Badge variant="secondary" className="ml-1.5 h-4 min-w-4 px-1 text-[9px]">
                   {statusFiles.length}
@@ -213,7 +215,7 @@ export function GitPanel({ collections }: GitPanelProps) {
               value="diff"
               className="h-6 px-3 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-xs"
             >
-              Diff
+              {t("git.diff")}
             </TabsTrigger>
           </TabsList>
 
@@ -225,9 +227,11 @@ export function GitPanel({ collections }: GitPanelProps) {
                     <div className="rounded-2xl bg-muted/20 p-5 mb-3 ring-1 ring-border/40">
                       <GitCommitHorizontal className="size-8 text-muted-foreground/20" />
                     </div>
-                    <p className="text-sm font-medium text-foreground/80">No commits yet</p>
+                    <p className="text-sm font-medium text-foreground/80">
+                      {t("git.noCommitsTitle")}
+                    </p>
                     <p className="text-xs text-muted-foreground/60 mt-1">
-                      Make your first commit to track changes
+                      {t("git.noCommitsDescription")}
                     </p>
                   </div>
                 ) : (
@@ -245,15 +249,17 @@ export function GitPanel({ collections }: GitPanelProps) {
                 {statusFiles.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <CheckCircle2 className="size-8 text-success/40 mb-3" />
-                    <p className="text-sm font-medium text-foreground/80">Working tree clean</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">No changes to commit</p>
+                    <p className="text-sm font-medium text-foreground/80">{t("git.cleanTitle")}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">
+                      {t("git.cleanDescription")}
+                    </p>
                   </div>
                 ) : (
                   <>
                     {statusFiles.length > 0 && (
                       <div className="flex items-center justify-between px-1 mb-2">
                         <span className="text-xs text-muted-foreground">
-                          {statusFiles.length} files changed
+                          {t("git.filesChanged", { count: statusFiles.length })}
                         </span>
                         <Button
                           variant="ghost"
@@ -261,7 +267,7 @@ export function GitPanel({ collections }: GitPanelProps) {
                           className="h-6 text-xs gap-1"
                           onClick={() => git.stageAll()}
                         >
-                          Stage all
+                          {t("git.stageAll")}
                         </Button>
                       </div>
                     )}
@@ -293,7 +299,7 @@ export function GitPanel({ collections }: GitPanelProps) {
                         if (a && b) handleDiff(a, b);
                       }}
                     >
-                      <option value="">Select commits to compare</option>
+                      <option value="">{t("git.selectCommits")}</option>
                       {git.commits.map((c, i) =>
                         git.commits.slice(i + 1).map((d) => (
                           <option key={`${d.oid}..${c.oid}`} value={`${d.oid}..${c.oid}`}>
@@ -316,9 +322,9 @@ export function GitPanel({ collections }: GitPanelProps) {
             <GitBranch className="size-10 text-muted-foreground/20" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground/80">No Git repository</p>
+            <p className="text-sm font-semibold text-foreground/80">{t("git.noRepoTitle")}</p>
             <p className="text-xs text-muted-foreground/60 max-w-[260px] leading-relaxed">
-              Pick a folder to version your collections locally with Git.
+              {t("git.noRepoDescription")}
             </p>
           </div>
 
@@ -326,7 +332,7 @@ export function GitPanel({ collections }: GitPanelProps) {
             <Input
               value={repoPathInput}
               onChange={(e) => setRepoPathInput(e.target.value)}
-              placeholder="Path to repo folder…"
+              placeholder={t("git.repoPathPlaceholder")}
               className="flex-1 text-xs h-8"
               readOnly={isTauriAvailable()}
             />
@@ -337,7 +343,7 @@ export function GitPanel({ collections }: GitPanelProps) {
                 onClick={pickRepoFolder}
                 className="h-8 shrink-0 gap-1"
               >
-                <FolderOpen className="size-3.5" /> Browse
+                <FolderOpen className="size-3.5" /> {t("git.browse")}
               </Button>
             )}
           </div>
@@ -361,7 +367,7 @@ export function GitPanel({ collections }: GitPanelProps) {
               ) : (
                 <GitBranch className="size-3.5" />
               )}
-              {initLoading ? "Initializing…" : "Init new repo"}
+              {initLoading ? t("git.initializing") : t("git.initNew")}
             </Button>
             <Button
               size="sm"
@@ -382,7 +388,7 @@ export function GitPanel({ collections }: GitPanelProps) {
               ) : (
                 <FolderOpen className="size-3.5" />
               )}
-              {openLoading ? "Opening…" : "Open existing"}
+              {openLoading ? t("git.opening") : t("git.openExisting")}
             </Button>
           </div>
         </div>
@@ -394,13 +400,13 @@ export function GitPanel({ collections }: GitPanelProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sm">
               <GitCommit className="size-4 text-primary" />
-              Commit changes
+              {t("git.commitChanges")}
             </DialogTitle>
           </DialogHeader>
           <Textarea
             value={commitMessage}
             onChange={(e) => setCommitMessage(e.target.value)}
-            placeholder="Describe your changes…"
+            placeholder={t("git.commitPlaceholder")}
             className="min-h-[80px] text-sm resize-none"
           />
           <DialogFooter>
@@ -410,7 +416,7 @@ export function GitPanel({ collections }: GitPanelProps) {
               onClick={() => setCommitDialogOpen(false)}
               className="text-xs"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -421,10 +427,10 @@ export function GitPanel({ collections }: GitPanelProps) {
               {commitLoading ? (
                 <span className="inline-flex items-center gap-1.5">
                   <Loader2 className="size-3.5 animate-spin" />
-                  Committing…
+                  {t("git.committing")}
                 </span>
               ) : (
-                "Commit"
+                t("git.commit")
               )}
             </Button>
           </DialogFooter>
@@ -435,6 +441,7 @@ export function GitPanel({ collections }: GitPanelProps) {
 }
 
 function CommitRow({ commit, onDiff }: { commit: GitCommitType; onDiff: (oid: string) => void }) {
+  const { t } = useTranslation();
   const date = new Date(commit.author.timestamp * 1000).toLocaleString();
   return (
     <div className="group flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-accent/50 transition-colors">
@@ -455,7 +462,7 @@ function CommitRow({ commit, onDiff }: { commit: GitCommitType; onDiff: (oid: st
         size="sm"
         className="size-6 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
         onClick={() => onDiff(commit.oid)}
-        title="Diff with previous"
+        title={t("git.diffWithPrevious")}
       >
         <Diff className="size-3" />
       </Button>

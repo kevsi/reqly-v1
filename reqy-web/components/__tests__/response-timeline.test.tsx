@@ -11,15 +11,15 @@ describe("ResponseTimeline", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders Transfer segment when all explicit timings are 0 but totalMs > 0", () => {
+  it("renders Transfert segment when all explicit timings are 0 but totalMs > 0", () => {
     const { container } = render(
       <ResponseTimeline timings={{ dnsMs: 0, connectMs: 0, ttfbMs: 0, totalMs: 100 }} />,
     );
     // When no explicit segments are provided but totalMs > 0,
     // the remaining time is treated as transfer time.
     expect(container.firstChild).not.toBeNull();
-    expect(screen.getByText("Transfer")).toBeTruthy();
-    // Transfer value should appear somewhere
+    expect(screen.getByText("Transfert")).toBeTruthy();
+    // Transfert value should appear somewhere
     const valueSpans = container.querySelectorAll("span");
     const values = Array.from(valueSpans).map((s) => s.textContent);
     expect(values).toContain("100");
@@ -44,9 +44,9 @@ describe("ResponseTimeline", () => {
     expect(screen.queryByText("DNS")).toBeNull();
   });
 
-  it("shows Connect label when connectMs > 0", () => {
+  it("shows Connexion label when connectMs > 0", () => {
     render(<ResponseTimeline timings={{ connectMs: 25, ttfbMs: 100, totalMs: 200 }} />);
-    expect(screen.getByText("Connect")).toBeTruthy();
+    expect(screen.getByText("Connexion")).toBeTruthy();
   });
 
   it("shows warning icon for dominant segment (>50%)", () => {
@@ -63,16 +63,16 @@ describe("ResponseTimeline", () => {
     expect(dnsLabel.parentElement?.querySelector("svg")).toBeNull();
   });
 
-  it("renders Transfer segment when remaining time exists", () => {
+  it("renders Transfert segment when remaining time exists", () => {
     render(<ResponseTimeline timings={{ dnsMs: 10, ttfbMs: 100, totalMs: 200 }} />);
-    expect(screen.getByText("Transfer")).toBeTruthy();
+    expect(screen.getByText("Transfert")).toBeTruthy();
   });
 
   it("handles only ttfbMs without connectMs", () => {
     render(<ResponseTimeline timings={{ ttfbMs: 150, totalMs: 200 }} />);
     expect(screen.getByText("TTFB")).toBeTruthy();
-    expect(screen.getByText("Transfer")).toBeTruthy();
-    expect(screen.queryByText("Connect")).toBeNull();
+    expect(screen.getByText("Transfert")).toBeTruthy();
+    expect(screen.queryByText("Connexion")).toBeNull();
   });
 
   it("renders multiple segments with correct proportions", () => {

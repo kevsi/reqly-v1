@@ -64,7 +64,7 @@ describe("useAiSidebarChat — bug #2 (boucle de confirmation infinie)", () => {
         }) as never,
     );
 
-    const p = result.current.sendMessage("supprime ma collection");
+    void result.current.sendMessage("supprime ma collection");
     // On confirme de manière réitérée : le premier appel arrive peut-être
     // avant que le hook ait positionné `confirmResolverRef`, les suivants
     // tombent pendant la fenêtre d'attente, et un d'eux finit par résoudre.
@@ -77,5 +77,52 @@ describe("useAiSidebarChat — bug #2 (boucle de confirmation infinie)", () => {
     } finally {
       clearInterval(timer);
     }
+  });
+
+  it("C: les outils en attente de confirmation s'affichent « en attente », pas « erreur »", async () => {
+    const { result } = renderHook(() => useAiSidebarChat());
+    let streamCalls = 0;
+    vi.mocked(streamLLM).mockImplementation(async function* () {
+      streamCalls++;
+      if (streamCalls === 1) {
+        yield {
+          type: "tool_calls",
+          calls: [
+            { id: "c1", name: "delete_collection", arguments: "{}" },
+            { id: "c2", name: "create_collection", arguments: "{}" },
+          ],
+        };
+      }
+    });
+    // Chaque outil « ask » renvoie requireConfirmation sans s'exécuter.
+    vi.mocked(executeToolCall).mockImplementation(
+      async () =>
+        ({
+          callId: "c",
+          name: "n",
+          content: "",
+          error: "Confirmation requise",
+          requireConfirmation: true,
+        }) as never,
+    );
+
+    void result.current.sendMessage("fais deux actions");
+
+    // Les DEUX étapes doivent être en attente de confirmation, jamais en erreur
+    // (bug : la boucle initiale marquait toutes les confirmations requises en
+    // « error », seules la première passait ensuite en awaiting_confirmation).
+    await waitFor(() => {
+      const last = result.current.messages[result.current.messages.length - 1];
+      const steps = last?.steps ?? [];
+      expect(steps.filter((s) => s.status === "awaiting_confirmation")).toHaveLength(2);
+    });
+    const awaitingSteps = result.current.messages[result.current.messages.length - 1]?.steps ?? [];
+    expect(awaitingSteps.filter((s) => s.status === "error")).toHaveLength(0);
+
+    // Confirmer la première : elle s'exécute, la boucle se referme (le mock
+    // redemande toujours confirmation → garde-fou anti-boucle), isLoading repasse
+    // à false sans attente infinie.
+    result.current.confirmAction(true);
+    await waitFor(() => expect(result.current.isLoading).toBe(false), { timeout: 4000 });
   });
 });

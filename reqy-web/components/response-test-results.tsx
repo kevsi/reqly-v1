@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle, XCircle, FlaskConical } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { TestResult } from "@/lib/types";
 import { AssertionCorrection } from "@/components/assertion-correction";
@@ -23,15 +24,16 @@ export function TestResultsSection({
   askAI,
   onApplyCorrection,
 }: TestResultsSectionProps) {
+  const { t } = useTranslation();
   if (!testResults || testResults.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center text-center px-4">
         <div className="rounded-2xl bg-muted/40 border border-border p-5 mb-4">
           <FlaskConical className="size-10 text-muted-foreground/30" />
         </div>
-        <p className="text-sm font-semibold text-foreground/80">No test results</p>
+        <p className="text-sm font-semibold text-foreground/80">{t("response.testEmptyTitle")}</p>
         <p className="mt-1 text-xs text-muted-foreground/60 max-w-[200px]">
-          Add assertions in the Tests panel and send a request to see results
+          {t("response.testEmptyDescription")}
         </p>
       </div>
     );
@@ -46,7 +48,7 @@ export function TestResultsSection({
         <span
           className={cn("text-xs font-semibold", allPassed ? "text-success" : "text-destructive")}
         >
-          {passedCount}/{testResults.length} passed
+          {t("response.testPassedSummary", { passed: passedCount, total: testResults.length })}
         </span>
       </div>
       {testResults.map((result) => (

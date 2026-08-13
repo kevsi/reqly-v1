@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -36,6 +37,7 @@ export function CodeSnippet({
 }: CodeSnippetProps) {
   const [selectedLang, setSelectedLang] = useState("python");
   const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
 
   const generateCodeSnippet = (language: string) => {
     const headersObj = requestHeaders.reduce(
@@ -455,12 +457,12 @@ export function CodeSnippet({
           {copied ? (
             <>
               <Check />
-              Copied!
+              {t("common.copied")}
             </>
           ) : (
             <>
               <Copy />
-              Copy
+              {t("common.copy")}
             </>
           )}
         </Button>

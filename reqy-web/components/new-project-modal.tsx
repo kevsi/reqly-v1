@@ -12,6 +12,7 @@ import type { AnalysisMode, SavedProject } from "@/lib/config";
 import { loadApiKey, loadAIProvider } from "@/lib/config";
 import { analyzeProject } from "../lib/project-analyzer";
 import { toast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 
 interface NewProjectModalProps {
   open: boolean;
@@ -20,6 +21,7 @@ interface NewProjectModalProps {
 }
 
 export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<AnalysisMode>("static");
   const [folderPath, setFolderPath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,34 +38,34 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
           setAnalysisResult(null);
         }
       } catch {
-        toast({ title: "Impossible d'ouvrir le sélecteur de dossier", variant: "destructive" });
+        toast({ title: t("newProject.pickerError"), variant: "destructive" });
       }
     } else {
       toast({
-        title: "Saisissez le chemin du dossier manuellement",
-        description: "Le sélecteur natif est disponible via l'application de bureau.",
+        title: t("newProject.manualPath"),
+        description: t("newProject.manualPathDesc"),
       });
     }
   };
 
   const analyze = async () => {
     if (!folderPath) {
-      toast({ title: "Sélectionnez un dossier", variant: "destructive" });
+      toast({ title: t("newProject.selectFolder"), variant: "destructive" });
       return;
     }
     const aiProvider = loadAIProvider();
     const aiKey = loadApiKey(aiProvider);
     if (mode === "ai" && aiProvider !== "ollama" && !aiKey.trim()) {
       toast({
-        title: "Aucune clé IA configurée",
-        description: "Configurez un provider IA dans les Settings",
+        title: t("newProject.noAiKey"),
+        description: t("newProject.noAiKeyDesc"),
         variant: "destructive",
       });
       return;
     }
     setLoading(true);
     try {
-      setStep("Analyse en cours…");
+      setStep(t("newProject.analyzing"));
       const result = await analyzeProject(
         folderPath,
         mode,
@@ -72,12 +74,14 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       );
       setAnalysisResult(result);
       toast({
-        title: `Langage détecté : ${result.language ?? "Inconnu"}`,
+        title: t("newProject.languageDetected", {
+          language: result.language ?? t("newProject.unknown"),
+        }),
         meta: { event: "projectAdd" },
       });
     } catch (err) {
       toast({
-        title: `Erreur : ${String(err)}`,
+        title: t("newProject.error", { error: String(err) }),
         variant: "destructive",
         meta: { event: "projectAdd" },
       });
@@ -91,7 +95,7 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
     if (analysisResult) {
       onAdd(analysisResult);
       toast({
-        title: `${analysisResult.routes.length} routes détectées`,
+        title: t("newProject.routesDetected", { count: analysisResult.routes.length }),
         meta: { event: "projectAdd" },
       });
       onClose();
@@ -107,7 +111,7 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FolderOpen className="size-5 text-primary" /> Nouveau projet
+            <FolderOpen className="size-5 text-primary" /> {t("newProject.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -120,18 +124,18 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
             className="grid grid-cols-2"
           >
             <ToggleGroupItem value="static" className="gap-2">
-              <Code2 /> Parser statique
+              <Code2 /> {t("newProject.staticParser")}
             </ToggleGroupItem>
             <ToggleGroupItem value="ai" className="gap-2">
-              <Sparkles /> Analyse IA
+              <Sparkles /> {t("newProject.aiAnalysis")}
             </ToggleGroupItem>
           </ToggleGroup>
 
           {mode === "ai" && (
             <p className="text-xs text-muted-foreground">
-              Utilise le provider IA configuré dans les{" "}
+              {t("newProject.aiHintPrefix")}{" "}
               <a href="/settings#ai" className="text-primary hover:underline">
-                Settings
+                {t("newProject.settingsLabel")}
               </a>
             </p>
           )}
@@ -145,34 +149,35 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
                 setAnalysisResult(null);
               }}
               readOnly={isTauriAvailable()}
-              placeholder="Chemin du dossier…"
+              placeholder={t("newProject.folderPathPlaceholder")}
               className="flex-1 text-sm"
             />
             <Button variant="outline" size="sm" onClick={pickFolder} className="shrink-0 gap-1.5">
-              <FolderOpen className="size-4" /> Parcourir
+              <FolderOpen className="size-4" /> {t("newProject.browse")}
             </Button>
           </div>
           {!isTauriAvailable() && (
             <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
               <AlertCircle className="size-3" />
-              Mode navigateur : entrez le chemin manuellement ou installez l'app de bureau
+              {t("newProject.browserMode")}
             </p>
           )}
 
           {analysisResult && (
             <div className="rounded-2xl border border-border/50 bg-muted/10 p-4 text-sm text-foreground">
               <p>
-                <strong>Langage détecté :</strong> {analysisResult.language ?? "Inconnu"}
+                <strong>{t("newProject.languageLabel")} :</strong>{" "}
+                {analysisResult.language ?? t("newProject.unknown")}
               </p>
               <p>
-                <strong>Framework :</strong> {analysisResult.framework}
+                <strong>{t("newProject.frameworkLabel")} :</strong> {analysisResult.framework}
               </p>
               <p>
-                <strong>Routes :</strong> {analysisResult.routes.length}
+                <strong>{t("newProject.routesLabel")} :</strong> {analysisResult.routes.length}
               </p>
               {analysisResult.port && (
                 <p>
-                  <strong>Port :</strong> {analysisResult.port}
+                  <strong>{t("newProject.portLabel")} :</strong> {analysisResult.port}
                 </p>
               )}
             </div>
@@ -185,15 +190,15 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
           >
             {loading ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> {step || "Analyse…"}
+                <Loader2 className="size-4 animate-spin" /> {step || t("newProject.analyzing")}
               </>
             ) : analysisResult ? (
               <>
-                <Sparkles className="size-4" /> Ajouter le projet
+                <Sparkles className="size-4" /> {t("newProject.addProject")}
               </>
             ) : (
               <>
-                <Sparkles className="size-4" /> Analyser
+                <Sparkles className="size-4" /> {t("newProject.analyze")}
               </>
             )}
           </Button>

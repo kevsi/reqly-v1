@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/refs */
 
 import { useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Sparkles,
   PanelRightClose,
@@ -43,6 +44,7 @@ interface AiSidebarProps {
 }
 
 export function AiSidebar({ open, onClose }: AiSidebarProps) {
+  const { t } = useTranslation();
   const { width, isResizing, sidebarRef, handleResizeStart } = useAiSidebarWidth();
   const chat = useAiSidebarChat();
   const history = useAiSidebarHistory(chat.messages, chat.modelUsed);
@@ -133,7 +135,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
         <div
           className="fixed inset-0 z-30 bg-black/20 md:hidden"
           onClick={onClose}
-          aria-label="Fermer le panneau de l'assistant"
+          aria-label={t("ai.sidebar.closePanelAria")}
         />
       )}
 
@@ -141,7 +143,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
       <div
         ref={sidebarRef}
         role="complementary"
-        aria-label="Assistant IA"
+        aria-label={t("ai.sidebar.title")}
         data-testid="ai-sidebar"
         className={cn(
           "relative flex flex-col border-l border-border bg-background @container",
@@ -154,75 +156,74 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
         inert={!open}
         aria-hidden={!open}
       >
+        {/* Ambient top accent */}
+        <span className="ambient-bar z-20" aria-hidden />
         {/* ── Resize handle ─────────────────────────────────────── */}
         {open && (
           <div
             className={cn(
-              "absolute inset-y-0 left-0 z-20 w-px cursor-col-resize select-none",
-              "bg-border transition-colors duration-150 hover:bg-primary/40",
-              isResizing && "bg-primary/60",
-              "flex items-center justify-center",
+              "absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize select-none",
+              "-ml-0.5 flex items-center justify-center bg-transparent",
             )}
             onMouseDown={handleResizeStart}
             onTouchStart={handleResizeStart}
           >
             <div
               className={cn(
-                "flex h-4 w-3 items-center justify-center rounded-sm border border-border bg-border",
-                "opacity-0 transition-opacity duration-150 hover:opacity-100",
-                isResizing && "opacity-100",
+                "flex h-8 w-1.5 items-center justify-center rounded-full border border-border/40 bg-border/40 transition-all duration-200",
+                "opacity-0 hover:opacity-100 hover:w-2 hover:bg-primary/40",
+                isResizing && "opacity-100 w-2 bg-primary/50",
               )}
             >
-              <GripVerticalIcon className="size-2.5" />
+              <GripVerticalIcon className="size-2 text-muted-foreground/70" />
             </div>
           </div>
         )}
 
-        {/* ── Header — simplified: identity left, actions right ─── */}
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-gradient-to-b from-card/80 to-transparent px-4">
+        {/* ── Header — identity + actions ─────────────────────── */}
+        <div className="relative flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-background/80 px-3 backdrop-blur-sm">
           {/* Identity */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative shrink-0">
-              <div className="absolute -inset-1 rounded-xl bg-primary/20 blur-md" aria-hidden />
-              <div className="relative flex size-7 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-md">
-                <Sparkles className="size-3.5" />
-              </div>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="relative flex size-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-[0_2px_10px_-2px] shadow-primary/50">
+              <Sparkles className="size-3.5" />
+              <span
+                className="absolute inset-0 rounded-xl ring-1 ring-inset ring-white/20 dark:ring-black/10"
+                aria-hidden
+              />
             </div>
             <div className="min-w-0 leading-tight @max-[22rem]:hidden">
               <span className="block truncate text-sm font-semibold tracking-tight">
-                Assistant IA
+                {t("ai.sidebar.title")}
               </span>
               {isAiConfigured() ? (
                 <Link
                   href="/settings#ai"
-                  className="flex items-center gap-1 truncate text-[10px] text-muted-foreground/80 hover:text-primary transition-colors"
+                  className="flex items-center gap-1 truncate text-[10px] text-muted-foreground/70 transition-colors hover:text-foreground"
                 >
-                  <span className="relative flex size-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-success" />
-                  </span>
-                  Connecté
+                  <span className="size-1.5 rounded-full bg-success shadow-[0_0_6px] shadow-success/70" />
+                  {t("ai.sidebar.connected")}
                 </Link>
               ) : (
                 <Link
                   href="/settings#ai"
-                  className="flex items-center gap-1 truncate text-[10px] text-warning/90 hover:text-warning transition-colors"
+                  className="flex items-center gap-1 truncate text-[10px] text-warning/90 transition-colors hover:text-warning"
                 >
-                  <span className="size-1.5 rounded-full bg-warning" />À configurer →
+                  <span className="size-1.5 rounded-full bg-warning shadow-[0_0_6px] shadow-warning/70" />
+                  {t("ai.sidebar.toConfigure")}
                 </Link>
               )}
             </div>
           </div>
 
           {/* Right actions: new conversation + history + close */}
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-0.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={handleNewSession}
-              className="size-7 [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-accent"
-              title="Nouvelle conversation"
+              className="size-7 rounded-lg [&_svg]:size-3.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground"
+              title={t("ai.sidebar.newConversation")}
             >
               <Plus className="size-3.5" />
             </Button>
@@ -232,12 +233,12 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               size="icon"
               onClick={() => history.setHistoryOpen(!history.historyOpen)}
               className={cn(
-                "size-7 [&_svg]:size-3.5",
+                "size-7 rounded-lg [&_svg]:size-3.5 transition-all",
                 history.historyOpen
-                  ? "text-primary bg-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                  ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
-              title="Historique des conversations"
+              title={t("ai.sidebar.history")}
             >
               <Clock className="size-3.5" />
             </Button>
@@ -246,8 +247,8 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="size-7 [&_svg]:size-4 text-muted-foreground hover:text-foreground hover:bg-accent"
-              title="Fermer (Esc)"
+              className="size-7 rounded-lg [&_svg]:size-4 text-muted-foreground transition-all hover:bg-accent hover:text-foreground"
+              title={t("ai.sidebar.closeEsc")}
             >
               <PanelRightClose className="size-4" />
             </Button>
@@ -280,19 +281,22 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
           {/* Permissions panel — full overlay */}
           {chat.permissionsPanelOpen && (
             <div className="absolute inset-0 z-10 flex flex-col overflow-hidden bg-background">
-              <AiPermissionsPopover />
+              <AiPermissionsPopover onClose={() => chat.setPermissionsPanelOpen(false)} />
             </div>
           )}
 
           {/* History panel — full-height slide-in */}
           {history.historyOpen && (
             <div className="absolute inset-0 z-10 flex flex-col overflow-hidden bg-background animate-in slide-in-from-top-2 duration-150">
-              <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                <span className="text-sm font-medium">Conversations</span>
+              <div className="flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-sm">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="size-3.5 text-primary" />
+                  Conversations
+                </span>
                 <button
                   type="button"
                   onClick={() => history.setHistoryOpen(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   Fermer
                 </button>
@@ -310,55 +314,66 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
           )}
 
           {/* ── Messages ──────────────────────────────────────────── */}
-          <div
-            className="flex-1 overflow-y-auto bg-[linear-gradient(180deg,color-mix(in_oklch,var(--primary)_4%,transparent),transparent_180px)]"
-            ref={chat.messagesEndRef}
-          >
+          <div className="flex-1 overflow-y-auto" ref={chat.messagesEndRef}>
             <div className="space-y-5 p-4">
               {/* Empty state */}
               {chat.messages.length === 0 && (
                 <div className="flex h-full flex-col items-center justify-center py-12 text-center">
                   <div className="relative">
-                    <div
-                      className="absolute -inset-3 rounded-full bg-primary/10 blur-2xl"
+                    <div className="flex size-14 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-primary to-primary/60 text-primary-foreground shadow-[0_8px_24px_-6px] shadow-primary/40">
+                      <Sparkles className="size-6" />
+                      <span
+                        className="absolute inset-0 rounded-[1.25rem] ring-1 ring-inset ring-white/25 dark:ring-black/10"
+                        aria-hidden
+                      />
+                    </div>
+                    <span
+                      className="absolute -right-1.5 -top-1 size-3 rounded-full bg-success ring-2 ring-background shadow-[0_0_10px] shadow-success/70"
                       aria-hidden
                     />
-                    <div className="relative flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/60 text-primary-foreground shadow-[0_8px_24px_-6px] shadow-primary/40 ring-1 ring-white/10">
-                      <Sparkles className="size-7" />
-                    </div>
                   </div>
-                  <p className="mt-4 text-sm font-semibold text-foreground">Prêt</p>
+                  <p className="mt-5 text-sm font-semibold text-foreground">
+                    {t("ai.sidebar.readyToHelp")}
+                  </p>
                   <p className="mt-1 max-w-[240px] text-xs leading-relaxed text-muted-foreground">
-                    Exécute des requêtes, gère des collections, navigue dans l'app.
+                    {t("ai.sidebar.readyToHelpDesc")}
                   </p>
 
-                  {/* Suggestion chips */}
-                  <div className="mt-5 w-full max-w-[272px] space-y-1.5">
+                  <div className="mt-6 w-full max-w-[272px] space-y-1.5">
                     {[
-                      { icon: Play, hint: "Exécute GET /api/users" },
-                      { icon: FolderPlus, hint: "Crée une collection 'Tests API'" },
-                      { icon: Import, hint: "Importe le projet depuis GitHub" },
-                    ].map(({ icon: HintIcon, hint }) => (
-                      <button
-                        key={hint}
-                        type="button"
-                        onClick={() => {
-                          inputState.setValue(hint);
-                          chat.inputRef.current?.focus();
-                        }}
-                        className="group/sugg flex w-full items-center gap-2.5 rounded-xl border border-border/60 bg-card/60 px-3 py-2 text-left text-xs text-muted-foreground shadow-sm transition-all hover:border-primary/30 hover:bg-card hover:text-foreground hover:shadow-md"
-                      >
-                        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/20 transition-colors group-hover/sugg:bg-primary/15">
-                          <HintIcon className="size-3" />
-                        </span>
-                        {hint}
-                      </button>
-                    ))}
+                      { icon: Play, hintKey: "ai.sidebar.suggestion1" },
+                      { icon: FolderPlus, hintKey: "ai.sidebar.suggestion2" },
+                      { icon: Import, hintKey: "ai.sidebar.suggestion3" },
+                    ].map(({ icon: HintIcon, hintKey }) => {
+                      const hint = t(hintKey);
+                      return (
+                        <button
+                          key={hint}
+                          type="button"
+                          onClick={() => {
+                            inputState.setValue(hint);
+                            chat.inputRef.current?.focus();
+                          }}
+                          className="group/sugg flex w-full items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3 py-2 text-left text-xs text-muted-foreground shadow-xs transition-all hover:-translate-y-px hover:border-primary/40 hover:bg-card hover:text-foreground hover:shadow-md"
+                        >
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-colors group-hover/sugg:bg-primary/15">
+                            <HintIcon className="size-3" />
+                          </span>
+                          <span className="flex-1">{hint}</span>
+                          <span
+                            className="text-[10px] text-muted-foreground/0 transition-colors group-hover/sugg:text-primary/70"
+                            aria-hidden
+                          >
+                            ↗
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-5 flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1.5 text-[10px] text-muted-foreground/80">
+                  <div className="mt-6 flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-[10px] text-muted-foreground">
                     <ShieldCheck className="size-3 text-success" />
-                    L&apos;IA n&apos;agit que sur demande explicite
+                    {t("ai.sidebar.consentNote")}
                   </div>
                 </div>
               )}
@@ -379,6 +394,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                   onEditConfirm={chat.handleEditConfirm}
                   onEditingTextChange={chat.setEditingText}
                   onConfirm={(_stepId, confirmed) => chat.confirmAction(confirmed)}
+                  onTypingUpdate={chat.scrollToBottom}
                 />
               ))}
 
@@ -404,7 +420,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                     size="icon"
                     onClick={chat.handleRetry}
                     className="size-6 shrink-0 [&_svg]:size-3 text-destructive hover:text-destructive/80"
-                    title="Réessayer"
+                    title={t("ai.sidebar.retry")}
                   >
                     <RotateCcw className="size-3" />
                   </Button>

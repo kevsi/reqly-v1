@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DOMPurify from "dompurify";
+import { useTranslation } from "react-i18next";
 import {
   type ResponseFormat,
   isJson,
@@ -39,22 +40,21 @@ import { JsonTreeViewer } from "./json-tree-viewer";
 
 const formatOptions: Array<{
   value: ResponseFormat;
-  label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { value: "pretty", label: "Pretty", icon: Eye },
-  { value: "raw", label: "Raw", icon: Code },
-  { value: "preview", label: "Preview", icon: Eye },
-  { value: "visualize", label: "Visualize", icon: BarChart3 },
-  { value: "json", label: "JSON", icon: Code },
-  { value: "tree", label: "Tree", icon: ListTree },
-  { value: "xml", label: "XML", icon: Code },
-  { value: "html", label: "HTML", icon: Code },
-  { value: "image", label: "Image", icon: FileImage },
-  { value: "pdf", label: "PDF", icon: FileText },
-  { value: "binary", label: "Binary", icon: FileImage },
-  { value: "audio", label: "Audio", icon: Music },
-  { value: "video", label: "Video", icon: Video },
+  { value: "pretty", icon: Eye },
+  { value: "raw", icon: Code },
+  { value: "preview", icon: Eye },
+  { value: "visualize", icon: BarChart3 },
+  { value: "json", icon: Code },
+  { value: "tree", icon: ListTree },
+  { value: "xml", icon: Code },
+  { value: "html", icon: Code },
+  { value: "image", icon: FileImage },
+  { value: "pdf", icon: FileText },
+  { value: "binary", icon: FileImage },
+  { value: "audio", icon: Music },
+  { value: "video", icon: Video },
 ];
 
 interface ResponseContentRendererProps {
@@ -76,6 +76,7 @@ export function ResponseContentRenderer({
 }: ResponseContentRendererProps) {
   const safeBody = responseBody ?? "";
   const [copied, setCopied] = React.useState(false);
+  const { t } = useTranslation();
 
   if (!safeBody && !responseData) return null;
 
@@ -151,7 +152,7 @@ export function ResponseContentRenderer({
           srcDoc={DOMPurify.sanitize(safeBody)}
           sandbox=""
           className="w-full h-full border-0 bg-background"
-          title="HTML Preview"
+          title={t("response.htmlPreview")}
         />
       );
     }
@@ -167,7 +168,7 @@ export function ResponseContentRenderer({
             <div className="flex h-full items-center justify-center bg-code-bg">
               <img
                 src={mediaUrl}
-                alt="Response image"
+                alt={t("response.imageAlt")}
                 loading="lazy"
                 className="max-h-full max-w-full object-contain"
               />
@@ -175,7 +176,13 @@ export function ResponseContentRenderer({
           );
         }
         if (isPdf(responseData, responseHeaders)) {
-          return <iframe src={mediaUrl} className="w-full h-full border-0" title="PDF Preview" />;
+          return (
+            <iframe
+              src={mediaUrl}
+              className="w-full h-full border-0"
+              title={t("response.pdfTitle")}
+            />
+          );
         }
         if (isAudio(responseData, responseHeaders)) {
           return (
@@ -228,7 +235,7 @@ export function ResponseContentRenderer({
                 >
                   <img
                     src={url}
-                    alt={`Preview image ${index + 1}`}
+                    alt={t("response.previewImage", { index: index + 1 })}
                     loading="lazy"
                     className="h-48 w-full object-cover"
                   />
@@ -248,14 +255,14 @@ export function ResponseContentRenderer({
       } catch {
         return (
           <div className="flex items-center justify-center h-full text-muted-foreground bg-code-bg">
-            <p>Preview not available for this content type</p>
+            <p>{t("response.noPreview")}</p>
           </div>
         );
       }
     }
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground bg-code-bg">
-        <p>Preview not available for this content type</p>
+        <p>{t("response.noPreview")}</p>
       </div>
     );
   };
@@ -268,7 +275,10 @@ export function ResponseContentRenderer({
           return (
             <div className="rounded-lg border p-4 h-full overflow-auto hide-scrollbar">
               <div className="mb-4">
-                <h3 className="text-lg font-semibold">Array Visualization ({data.length} items)</h3>
+                <h3 className="text-lg font-semibold">
+                  {t("response.arrayVisualization")} ({data.length}{" "}
+                  {t("response.arrayCount", { count: data.length })})
+                </h3>
               </div>
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -298,7 +308,7 @@ export function ResponseContentRenderer({
               </table>
               {data.length > 20 && (
                 <p className="text-xs text-muted-foreground mt-4 text-center">
-                  Showing first 20 rows of {data.length} total
+                  {t("response.rowsSummary", { count: data.length })}
                 </p>
               )}
             </div>
@@ -307,7 +317,7 @@ export function ResponseContentRenderer({
         return (
           <div className="rounded-lg border p-4 h-full overflow-auto hide-scrollbar">
             <div className="mb-4">
-              <h3 className="text-lg font-semibold">Object Visualization</h3>
+              <h3 className="text-lg font-semibold">{t("response.objectVisualization")}</h3>
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {Object.entries(data).map(([key, value]) => (
@@ -330,14 +340,14 @@ export function ResponseContentRenderer({
       } catch {
         return (
           <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p>Cannot visualize this data</p>
+            <p>{t("response.cannotVisualize")}</p>
           </div>
         );
       }
     }
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
-        <p>Visualization not available for this content type</p>
+        <p>{t("response.noVisualization")}</p>
       </div>
     );
   };
@@ -348,7 +358,7 @@ export function ResponseContentRenderer({
         <div className="flex h-full items-center justify-center">
           <img
             src={mediaUrl}
-            alt="Response image"
+            alt={t("response.imageAlt")}
             loading="lazy"
             className="max-h-full max-w-full object-contain"
           />
@@ -358,7 +368,7 @@ export function ResponseContentRenderer({
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <FileImage className="size-12 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">No image available</p>
+        <p className="text-sm text-muted-foreground">{t("response.noImage")}</p>
       </div>
     );
   };
@@ -367,14 +377,18 @@ export function ResponseContentRenderer({
     if (responseData instanceof Blob && mediaUrl) {
       return (
         <div className="flex h-full flex-col">
-          <iframe src={mediaUrl} className="h-full w-full border-0" title="PDF Preview" />
+          <iframe
+            src={mediaUrl}
+            className="h-full w-full border-0"
+            title={t("response.pdfTitle")}
+          />
         </div>
       );
     }
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <FileText className="size-12 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">No PDF available</p>
+        <p className="text-sm text-muted-foreground">{t("response.noPdf")}</p>
       </div>
     );
   };
@@ -385,7 +399,7 @@ export function ResponseContentRenderer({
         <div className="flex flex-col items-center justify-center h-full gap-4">
           <FileImage className="size-12 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            Binary content ({responseData.size} bytes)
+            {t("response.binaryContent", { size: responseData.size })}
           </p>
           <Button
             variant="outline"
@@ -397,7 +411,7 @@ export function ResponseContentRenderer({
               a.click();
             }}
           >
-            Download
+            {t("response.download")}
           </Button>
         </div>
       );
@@ -405,9 +419,9 @@ export function ResponseContentRenderer({
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <FileImage className="size-12 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Binary content</p>
+        <p className="text-sm text-muted-foreground">{t("response.binaryContentNoSize")}</p>
         <Button variant="outline" size="sm" disabled>
-          Download
+          {t("response.download")}
         </Button>
       </div>
     );
@@ -436,7 +450,7 @@ export function ResponseContentRenderer({
     }
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
-        <p>Media playback not available</p>
+        <p>{t("response.noMedia")}</p>
       </div>
     );
   };
@@ -487,7 +501,7 @@ export function ResponseContentRenderer({
       <div className="shrink-0 flex items-center justify-between gap-3 border-b border-border/50 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50">
-            View
+            {t("response.viewLabel")}
           </span>
           <Select
             value={responseFormat}
@@ -501,7 +515,7 @@ export function ResponseContentRenderer({
                 <SelectItem key={option.value} value={option.value}>
                   <div className="flex items-center gap-2">
                     <option.icon className="size-3.5" />
-                    <span>{option.label}</span>
+                    <span>{t("response.format." + option.value)}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -520,12 +534,12 @@ export function ResponseContentRenderer({
           {copied ? (
             <>
               <Check className="size-3.5" />
-              Copied!
+              {t("common.copied")}
             </>
           ) : (
             <>
               <Copy className="size-3.5" />
-              Copy
+              {t("common.copy")}
             </>
           )}
         </Button>

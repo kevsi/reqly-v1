@@ -9,8 +9,6 @@ import {
   loadAiBaseUrl,
   saveAiBaseUrl,
   loadAiModel,
-  saveAiModel,
-  type AIProvider,
 } from "../config";
 import * as persistence from "../persistence";
 import * as secureStorage from "../secure-storage";
@@ -90,8 +88,7 @@ describe("config", () => {
       vi.mocked(persistence.persistence.getItem).mockReturnValue(null);
       const config = loadOllamaConfig();
 
-      expect(config.baseUrl).toBe("http://localhost:11434");
-      expect(config.model).toBe("llama3.2");
+      expect(config).toEqual({});
     });
 
     it("loads saved config", () => {

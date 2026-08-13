@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Save,
   GitCompare,
@@ -38,18 +39,6 @@ function parseResponseBody(body: string | undefined): unknown | undefined {
   }
 }
 
-function describeChange(c: FieldChange): string {
-  switch (c.kind) {
-    case "added":
-      return `Champ '${c.path}' ajouté (${c.to})`;
-    case "removed":
-      return `Champ '${c.path}' retiré (${c.from})`;
-    case "type-changed":
-    case "type-changed:null":
-      return `Champ '${c.path}' type changé : ${c.from} → ${c.to}`;
-  }
-}
-
 // ── Badge color for each change kind ─────────────────────────────────────
 
 const changeBadge: Record<string, string> = {
@@ -73,6 +62,7 @@ interface RestSnapshotPanelProps {
 }
 
 export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
+  const { t } = useTranslation();
   const [snapshotNames, setSnapshotNames] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [selectedName, setSelectedName] = useState("");
@@ -127,6 +117,18 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
 
   const handleCloseDiff = () => setDiff(null);
 
+  const describeChange = (c: FieldChange): string => {
+    switch (c.kind) {
+      case "added":
+        return t("snapshots.fieldAdded", { path: c.path, value: c.to });
+      case "removed":
+        return t("snapshots.fieldRemoved", { path: c.path, value: c.from });
+      case "type-changed":
+      case "type-changed:null":
+        return t("snapshots.fieldTypeChanged", { path: c.path, from: c.from, to: c.to });
+    }
+  };
+
   const hasResponse = responseBody !== undefined && responseBody !== null && responseBody !== "";
   const canSave = newName.trim() && parsed !== undefined;
   const canCompare = selectedName && parsed !== undefined;
@@ -137,7 +139,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
           <Camera className="size-3.5" />
-          Snapshots
+          {t("snapshots.title")}
           {snapshotNames.length > 0 && (
             <Badge variant="secondary" className="text-[10px] h-4 px-1">
               {snapshotNames.length}
@@ -145,7 +147,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
           )}
         </div>
         {!isJson && hasResponse && (
-          <span className="text-[10px] text-muted-foreground/60">JSON only</span>
+          <span className="text-[10px] text-muted-foreground/60">{t("snapshots.jsonOnly")}</span>
         )}
       </div>
 
@@ -154,7 +156,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
         <Input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Nom du snapshot…"
+          placeholder={t("snapshots.namePlaceholder")}
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSave();
           }}
@@ -167,11 +169,11 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
           className="h-7 gap-1 text-xs shrink-0"
           onClick={handleSave}
           disabled={!canSave}
-          title="Sauvegarder le snapshot"
+          title={t("snapshots.saveTitle")}
           data-testid="rest-snapshot-save"
         >
           <Save className="size-3" />
-          Save
+          {t("snapshots.save")}
         </Button>
       </div>
 
@@ -186,7 +188,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
             }}
             className="h-7 flex-1 rounded-md border border-border bg-muted/30 px-2 text-xs transition-colors hover:border-muted-foreground/30 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
           >
-            <option value="">Choisir un snapshot…</option>
+            <option value="">{t("snapshots.selectPlaceholder")}</option>
             {snapshotNames.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -199,11 +201,11 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
             className="h-7 gap-1 text-xs shrink-0"
             onClick={handleCompare}
             disabled={!canCompare}
-            title="Comparer avec la réponse actuelle"
+            title={t("snapshots.compareTitle")}
             data-testid="rest-snapshot-compare"
           >
             <GitCompare className="size-3" />
-            Compare
+            {t("snapshots.compare")}
           </Button>
           {selectedName && (
             <Button
@@ -211,7 +213,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
               variant="ghost"
               className="h-7 size-7 p-0 text-destructive shrink-0"
               onClick={() => handleDelete(selectedName)}
-              title="Supprimer ce snapshot"
+              title={t("snapshots.deleteTitle")}
             >
               <Trash2 className="size-3" />
             </Button>
@@ -222,7 +224,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
       {/* Empty state */}
       {snapshotNames.length === 0 && hasResponse && isJson && (
         <p className="text-[10px] text-muted-foreground/50 text-center py-1">
-          Tapez un nom et cliquez Save pour créer un premier snapshot
+          {t("snapshots.emptyHint")}
         </p>
       )}
 
@@ -232,7 +234,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
               <Layers className="size-3" />
-              Diff avec « {diff.name} »
+              {t("snapshots.diffTitle", { name: diff.name })}
             </span>
             <button
               onClick={handleCloseDiff}
@@ -245,7 +247,7 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
           {diff.changes.length === 0 ? (
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 py-1">
               <Check className="size-3.5" />
-              Aucun changement détecté
+              {t("snapshots.noChanges")}
             </div>
           ) : (
             <div className="space-y-0.5 max-h-48 overflow-auto">

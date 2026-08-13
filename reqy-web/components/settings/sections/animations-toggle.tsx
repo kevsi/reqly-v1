@@ -2,15 +2,17 @@
 
 import { cn } from "@/lib/utils";
 import { useAnimations } from "@/hooks/use-animations";
+import { useTranslation } from "react-i18next";
 
 export function AnimationsToggle() {
   const { enabled, toggle } = useAnimations();
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <h3 className="text-sm font-medium">Animations</h3>
+        <h3 className="text-sm font-medium">{t("settings.apparence.animations")}</h3>
         <p className="text-xs text-muted-foreground">
-          Désactive les transitions de l'interface. Recommandé pour l'accessibilité.
+          {t("settings.apparence.animationsDescription")}
         </p>
       </div>
       <button

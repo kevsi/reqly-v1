@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/src/i18n";
 import { Button } from "@/components/ui/button";
 import {
   BrainCircuit,
@@ -21,7 +23,6 @@ import {
   FileEdit,
   Trash2,
   Play,
-  Pause,
   Globe,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -47,6 +48,31 @@ export interface AssistantStepsRendererProps {
   mode?: StepDisplayMode;
   onConfirm?: (stepId: string, confirmed: boolean) => void;
   collapsible?: boolean;
+}
+
+// ── Grouped step helpers ───────────────────────────────────────────────────
+
+interface GroupedStep {
+  thinking: AssistantStep | null;
+  children: AssistantStep[];
+}
+
+function groupSteps(steps: AssistantStep[]): GroupedStep[] {
+  const groups: GroupedStep[] = [];
+  let current: GroupedStep | null = null;
+  for (const step of steps) {
+    if (step.kind === "thinking") {
+      current = { thinking: step, children: [] };
+      groups.push(current);
+    } else {
+      if (!current) {
+        current = { thinking: null, children: [] };
+        groups.push(current);
+      }
+      current.children.push(step);
+    }
+  }
+  return groups;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -90,15 +116,15 @@ export function iconForKind(
 export function defaultLabelForKind(kind: AssistantStep["kind"], detail?: string): string {
   switch (kind) {
     case "thinking":
-      return "Through…";
+      return i18n.t("ai.steps.thinking");
     case "tool_call":
-      return detail ? `Exécution : ${detail}` : "Exécution…";
+      return detail ? i18n.t("ai.steps.toolCall", { detail }) : i18n.t("ai.steps.executing");
     case "result":
-      return "Terminé";
+      return i18n.t("ai.steps.done");
     case "error":
-      return "Erreur";
+      return i18n.t("common.error");
     default:
-      return "Through…";
+      return i18n.t("ai.steps.thinking");
   }
 }
 
@@ -111,15 +137,30 @@ function parseToolLabel(label: string): { name: string; args: string } | null {
 
 // ── ThinkingRow — animated "Through…" step ─────────────────────────────────
 
-function ThinkingRow({ step }: { step: AssistantStep }) {
+function ThinkingRow({
+  step,
+  hasChildren = false,
+  expanded = true,
+  onToggle,
+}: {
+  step: AssistantStep;
+  hasChildren?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+}) {
   const isActive = step.status === "pending";
   return (
     <div
+      role={hasChildren ? "button" : undefined}
+      tabIndex={hasChildren ? 0 : undefined}
+      onClick={hasChildren ? onToggle : undefined}
+      onKeyDown={hasChildren ? (e) => e.key === "Enter" && onToggle?.() : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-xl border px-3 py-2.5",
         "animate-in slide-in-from-left-2 fade-in duration-300",
+        hasChildren && "cursor-pointer select-none hover:bg-accent/20",
         isActive
-          ? "border-primary/20 bg-gradient-to-r from-primary/5 to-transparent"
+          ? "border-primary/20 bg-gradient-to-r from-primary/[0.07] to-transparent shadow-[0_2px_12px_-6px] shadow-primary/20"
           : "border-border/40 bg-card/30",
       )}
     >
@@ -135,8 +176,8 @@ function ThinkingRow({ step }: { step: AssistantStep }) {
       </span>
       <span
         className={cn(
-          "flex-1 text-sm italic",
-          isActive ? "text-foreground/70" : "text-muted-foreground/60 line-through",
+          "flex-1 text-sm",
+          isActive ? "text-foreground/70 italic" : "text-muted-foreground",
         )}
       >
         {step.label}
@@ -148,6 +189,14 @@ function ThinkingRow({ step }: { step: AssistantStep }) {
           <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:240ms]" />
         </span>
       )}
+      {hasChildren && !isActive && (
+        <ChevronDown
+          className={cn(
+            "shrink-0 size-3.5 text-muted-foreground/50 transition-transform duration-200",
+            !expanded && "-rotate-90",
+          )}
+        />
+      )}
     </div>
   );
 }
@@ -158,11 +207,15 @@ function ToolRow({
   step,
   isLast,
   onConfirm,
+  isActiveConfirm = true,
 }: {
   step: AssistantStep;
   isLast: boolean;
   onConfirm?: (stepId: string, confirmed: boolean) => void;
+  /** Seule l'étape dont c'est le tour affiche les boutons Confirmer/Annuler. */
+  isActiveConfirm?: boolean;
 }) {
+  const { t } = useTranslation();
   const parsed = parseToolLabel(step.label);
   const ToolIcon = (parsed ? (TOOL_ICONS[parsed.name] ?? Wrench) : Wrench) as LucideIcon;
 
@@ -210,10 +263,10 @@ function ToolRow({
       <div className="mb-1.5 min-w-0 flex-1">
         <div
           className={cn(
-            "flex items-start gap-2 rounded-xl border px-3 py-2 transition-colors duration-300",
+            "flex items-start gap-2 rounded-xl border px-3 py-2 shadow-[0_1px_2px] shadow-black/[0.03] transition-colors duration-300",
             isDone && "border-success/15 bg-success/[0.03]",
             isError && "border-destructive/20 bg-destructive/[0.03]",
-            isActive && "border-primary/20 bg-primary/[0.04]",
+            isActive && "border-primary/20 bg-primary/[0.04] shadow-primary/10",
             isAwaiting && "border-warning/20 bg-warning/[0.04]",
             !isActive && !isError && !isAwaiting && !isDone && "border-border/50 bg-card/40",
           )}
@@ -239,8 +292,10 @@ function ToolRow({
           </span>
         </div>
 
-        {/* Awaiting confirmation actions */}
-        {isAwaiting && onConfirm && (
+        {/* Awaiting confirmation actions — uniquement sur l'étape active,
+            sinon chaque outil de la file afficherait ses propres boutons et
+            tous résoudraient le même resolver (le handler ignore le stepId). */}
+        {isAwaiting && onConfirm && isActiveConfirm && (
           <div className="mt-1.5 flex gap-1.5 pl-1">
             <Button
               type="button"
@@ -248,7 +303,7 @@ function ToolRow({
               onClick={() => onConfirm(step.id, true)}
               className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
             >
-              <Check className="size-3" /> Confirmer
+              <Check className="size-3" /> {t("ai.steps.confirm")}
             </Button>
             <Button
               type="button"
@@ -256,7 +311,7 @@ function ToolRow({
               onClick={() => onConfirm(step.id, false)}
               className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
             >
-              <X className="size-3" /> Annuler
+              <X className="size-3" /> {t("common.cancel")}
             </Button>
           </div>
         )}
@@ -336,7 +391,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
         {!isLast && <span className="my-1 w-px flex-1 bg-border/40" aria-hidden />}
       </div>
 
-      <div className="mb-1.5 min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-sm">
+      <div className="mb-1.5 min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-[0_2px_10px_-6px] shadow-black/[0.06]">
         <button
           type="button"
           onClick={() => exec && setOpen(!open)}
@@ -435,6 +490,51 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
   );
 }
 
+// ── StepGroupRow — thinking header + indented children ─────────────────────
+
+function StepGroupRow({
+  group,
+  onConfirm,
+  confirmStepId,
+}: {
+  group: GroupedStep;
+  onConfirm?: (stepId: string, confirmed: boolean) => void;
+  confirmStepId?: string;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const hasChildren = group.children.length > 0;
+  return (
+    <div className="space-y-1">
+      {group.thinking && (
+        <ThinkingRow
+          step={group.thinking}
+          hasChildren={hasChildren}
+          expanded={expanded}
+          onToggle={() => setExpanded((v) => !v)}
+        />
+      )}
+      {expanded && hasChildren && (
+        <div className="ml-3 space-y-1.5 border-l-2 border-primary/10 pl-3">
+          {group.children.map((child, i) => {
+            const isLast = i === group.children.length - 1;
+            if (child.detail && parseExecutionDetail(child.detail))
+              return <ExecutionCard key={child.id} step={child} isLast={isLast} />;
+            return (
+              <ToolRow
+                key={child.id}
+                step={child}
+                isLast={isLast}
+                onConfirm={onConfirm}
+                isActiveConfirm={child.id === confirmStepId}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── AssistantStepsRenderer ─────────────────────────────────────────────────
 
 export function AssistantStepsRenderer({
@@ -460,6 +560,11 @@ export function AssistantStepsRenderer({
       : steps;
 
   if (mode === "sequential" && visibleSteps.length === 0 && !finalText) return null;
+
+  // Seule la première étape en attente de confirmation est « active » : c'est
+  // elle dont le resolver est en attente, les autres de la file attendent leur
+  // tour et ne doivent pas afficher de boutons (ni un état d'échec).
+  const firstAwaitingId = steps.find((s) => s.status === "awaiting_confirmation")?.id;
 
   const canCollapse = collapsible && allDone && steps.length > 0;
   const toolSteps = steps.filter((s) => s.kind !== "thinking");
@@ -515,14 +620,31 @@ export function AssistantStepsRenderer({
 
       {/* Steps */}
       {visibleSteps.length > 0 && !collapsed && (
-        <div className="flex flex-col gap-0.5">
-          {visibleSteps.map((step, i) => {
-            const isLast = allDone || i === visibleSteps.length - 1;
-            if (step.kind === "thinking") return <ThinkingRow key={step.id} step={step} />;
-            if (step.detail && parseExecutionDetail(step.detail))
-              return <ExecutionCard key={step.id} step={step} isLast={isLast} />;
-            return <ToolRow key={step.id} step={step} isLast={isLast} onConfirm={onConfirm} />;
-          })}
+        <div className="flex flex-col gap-1">
+          {mode === "timeline"
+            ? groupSteps(visibleSteps).map((group, i) => (
+                <StepGroupRow
+                  key={group.thinking?.id ?? `group-${i}`}
+                  group={group}
+                  onConfirm={onConfirm}
+                  confirmStepId={firstAwaitingId}
+                />
+              ))
+            : visibleSteps.map((step, i) => {
+                const isLast = allDone || i === visibleSteps.length - 1;
+                if (step.kind === "thinking") return <ThinkingRow key={step.id} step={step} />;
+                if (step.detail && parseExecutionDetail(step.detail))
+                  return <ExecutionCard key={step.id} step={step} isLast={isLast} />;
+                return (
+                  <ToolRow
+                    key={step.id}
+                    step={step}
+                    isLast={isLast}
+                    onConfirm={onConfirm}
+                    isActiveConfirm={step.id === firstAwaitingId}
+                  />
+                );
+              })}
         </div>
       )}
 

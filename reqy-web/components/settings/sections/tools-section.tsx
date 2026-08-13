@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -27,47 +28,34 @@ const TOOLS: Tool[] = [
   {
     id: "postman",
     name: "Postman",
-    description: "Import et export de collections Postman.",
     logoEmoji: "📬",
     logo: PostmanIcon,
-    scopes: [],
     apiKey: {
       endpoint: "/api/postman-auth",
       placeholder: "PMAK-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-      instructions:
-        "Allez sur go.postman.co → Settings → API Keys → Generate API Key. Copiez la clé (elle commence par PMAK-).",
     },
   },
   {
     id: "jina",
     name: "Jina AI",
-    description: "Embeddings sémantiques pour la recherche intelligente.",
     logo: JinaIcon,
-    scopes: [],
     apiKey: {
       endpoint: "/api/jina-auth",
       placeholder: "jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-      instructions:
-        "Allez sur api.jina.ai → API Keys → Create API Key. " +
-        "Copiez la clé (elle commence par jina_).",
     },
   },
   {
     id: "github",
     name: "GitHub",
-    description: "Accès à vos repositories et gists.",
     logoEmoji: "🐙",
     logo: GithubIcon,
-    scopes: ["Lecture de vos repositories", "Lecture de votre profil", "Création de gists"],
     oauthUrl: "/api/github-auth/start",
   },
   {
     id: "gitlab",
     name: "GitLab",
-    description: "Accès à vos repositories et profil GitLab.",
     logoEmoji: "🦊",
     logo: GitlabIcon,
-    scopes: ["Lecture de vos repositories", "Lecture de votre profil"],
     oauthUrl: "/api/gitlab-auth/start",
   },
 ];
@@ -128,6 +116,7 @@ function ToolRow({
   refreshKey: number;
   onAssociate: (connected: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const status = useToolStatus(tool.id, refreshKey);
   return (
     <div className="flex items-center justify-between gap-4 py-3">
@@ -143,7 +132,9 @@ function ToolRow({
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium">{tool.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{tool.description}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {t(`settings.integrations.${tool.id}.description`)}
+          </p>
         </div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
@@ -164,7 +155,7 @@ function ToolRow({
                 status === "connected" ? "bg-success" : "bg-muted-foreground",
               )}
             />
-            {status === "connected" ? "Connecté" : "Non connecté"}
+            {status === "connected" ? t("common.connected") : t("common.disconnected")}
           </span>
         )}
         <Button
@@ -172,7 +163,9 @@ function ToolRow({
           variant={status === "connected" ? "outline" : "default"}
           onClick={() => onAssociate(status === "connected")}
         >
-          {status === "connected" ? "Gérer" : "Associer"}
+          {status === "connected"
+            ? t("settings.integrations.manage")
+            : t("settings.integrations.connect")}
         </Button>
       </div>
     </div>
@@ -180,6 +173,7 @@ function ToolRow({
 }
 
 export function ToolsSection() {
+  const { t } = useTranslation();
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [activeConnected, setActiveConnected] = useState(false);
   const [open, setOpen] = useState(false);
@@ -212,18 +206,18 @@ export function ToolsSection() {
     try {
       if (!throttleEnabled) {
         await setBandwidthLimit(null);
-        setThrottleStatus("Débit non limité");
+        setThrottleStatus(t("settings.integrations.network.unlimited"));
       } else {
         const kbps = Number(throttleKbps);
         if (!Number.isFinite(kbps) || kbps <= 0) {
-          setThrottleStatus("Valeur invalide (ko/s > 0)");
+          setThrottleStatus(t("settings.integrations.network.invalidValue"));
           return;
         }
         await setBandwidthLimit(kbps);
-        setThrottleStatus(`Débit limité à ${kbps} ko/s`);
+        setThrottleStatus(t("settings.integrations.network.limited", { kbps }));
       }
     } catch {
-      setThrottleStatus("Non disponible hors de l'application desktop");
+      setThrottleStatus(t("settings.integrations.network.notAvailable"));
     }
   };
 
@@ -241,10 +235,8 @@ export function ToolsSection() {
           <Plug className="size-4 text-violet-600 dark:text-violet-400" />
         </div>
         <div>
-          <h2 className="text-2xl font-semibold">Outils connectés</h2>
-          <p className="text-sm text-muted-foreground">
-            Connectez vos services tiers pour importer et synchroniser vos données.
-          </p>
+          <h2 className="text-2xl font-semibold">{t("settings.integrations.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("settings.integrations.description")}</p>
         </div>
       </div>
       <div className="divide-y divide-border rounded-lg border border-border bg-card px-4 shadow-sm">
@@ -274,17 +266,15 @@ export function ToolsSection() {
             <Cloud className="size-4 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">Intégrations MCP</h3>
+            <h3 className="text-lg font-semibold">{t("settings.integrations.mcp.title")}</h3>
             <p className="text-sm text-muted-foreground">
-              Connectez le serveur MCP local de Reqly à Claude Desktop ou Cursor. Copiez la
-              configuration ci-dessous et collez-la dans le fichier de configuration de votre
-              client.
+              {t("settings.integrations.mcp.description")}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Button size="sm" variant="default" onClick={copyMcpConfig}>
-            Copier la config MCP
+            {t("settings.integrations.mcp.copyConfig")}
           </Button>
           <a
             href="/mcp-setup.md"
@@ -292,11 +282,11 @@ export function ToolsSection() {
             rel="noreferrer"
             className="text-sm font-medium text-primary hover:underline"
           >
-            Documentation MCP
+            {t("settings.integrations.mcp.documentation")}
           </a>
           {copied ? (
             <span className="text-sm font-medium text-success" role="status" aria-live="polite">
-              Copié !
+              {t("settings.integrations.mcp.copied")}
             </span>
           ) : null}
         </div>
@@ -307,10 +297,9 @@ export function ToolsSection() {
             <Wifi className="size-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">Réseau</h3>
+            <h3 className="text-lg font-semibold">{t("settings.integrations.network.title")}</h3>
             <p className="text-sm text-muted-foreground">
-              Limitez le débit des réponses capturées pour simuler un réseau contraint (proxy de
-              capture, application desktop uniquement).
+              {t("settings.integrations.network.description")}
             </p>
           </div>
         </div>
@@ -322,11 +311,11 @@ export function ToolsSection() {
             disabled={!tauriAvailable}
           />
           <label htmlFor="ssl-toggle" className="text-sm">
-            Vérification SSL/TLS (désactiver pour les certificats auto-signés)
+            {t("settings.integrations.network.sslLabel")}
           </label>
           {!tauriAvailable ? (
             <span className="text-xs text-muted-foreground/70">
-              Disponible uniquement dans l'application desktop.
+              {t("settings.integrations.network.desktopOnly")}
             </span>
           ) : null}
         </div>
@@ -338,7 +327,7 @@ export function ToolsSection() {
             disabled={!tauriAvailable}
           />
           <label htmlFor="throttle-toggle" className="text-sm">
-            Limiter le débit (ko/s)
+            {t("settings.integrations.network.throttleLabel")}
           </label>
           <Input
             type="number"
@@ -347,10 +336,10 @@ export function ToolsSection() {
             onChange={(e) => setThrottleKbps(e.target.value)}
             disabled={!throttleEnabled || !tauriAvailable}
             className="h-8 w-24"
-            aria-label="Débit en ko/s"
+            aria-label={t("settings.integrations.network.throttleAria")}
           />
           <Button size="sm" variant="outline" onClick={applyThrottle} disabled={!tauriAvailable}>
-            Appliquer
+            {t("settings.integrations.network.apply")}
           </Button>
           {throttleStatus ? (
             <span
@@ -363,7 +352,7 @@ export function ToolsSection() {
           ) : null}
           {!tauriAvailable ? (
             <span className="text-xs text-muted-foreground/70">
-              Disponible uniquement dans l'application desktop.
+              {t("settings.integrations.network.desktopOnly")}
             </span>
           ) : null}
         </div>

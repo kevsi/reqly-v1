@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { GraphqlTab } from "@/lib/types";
+import { useTranslation } from "react-i18next";
 
 interface TabContextMenu {
   tabId: string;
@@ -59,6 +60,7 @@ export function GraphqlTabBar({
   onSaveAll = noop,
   onRename,
 }: Props) {
+  const { t } = useTranslation();
   const tabListRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -135,9 +137,9 @@ export function GraphqlTabBar({
   useEffect(() => {
     const el = tabListRef.current;
     if (!el || !activeTabId) return;
-    const activeEl = el.querySelector(`[data-testid="graphql-tab-${activeTabId}"]`) as
-      | HTMLElement
-      | null;
+    const activeEl = el.querySelector(
+      `[data-testid="graphql-tab-${activeTabId}"]`,
+    ) as HTMLElement | null;
     if (!activeEl) return;
     // scrollTo is not implemented in jsdom — guard for test environments.
     if (typeof el.scrollTo !== "function") return;
@@ -154,8 +156,8 @@ export function GraphqlTabBar({
           type="button"
           onClick={() => scrollTabs("left")}
           className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
-          title="Scroll left"
-          aria-label="Scroll left"
+          title={t("graphql.tabs.scrollLeft")}
+          aria-label={t("graphql.tabs.scrollLeft")}
         >
           <ChevronLeft className="size-3.5" />
         </button>
@@ -213,7 +215,7 @@ export function GraphqlTabBar({
                     e.stopPropagation();
                     startEdit(tab);
                   }}
-                  title="Double-click to rename"
+                  title={t("graphql.tabs.renameHint")}
                   className="truncate flex-1 text-left cursor-pointer"
                 >
                   {tab.name}
@@ -223,7 +225,7 @@ export function GraphqlTabBar({
               <span
                 role="button"
                 tabIndex={0}
-                aria-label={`Close ${tab.name}`}
+                aria-label={t("graphql.tabs.closeTab", { name: tab.name })}
                 onClick={(e) => {
                   e.stopPropagation();
                   onClose(tab.id);
@@ -246,10 +248,10 @@ export function GraphqlTabBar({
           <button
             onClick={() => onDuplicate(activeTabId)}
             className="flex shrink-0 items-center gap-1 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50"
-            title="Duplicate current tab"
+            title={t("graphql.tabs.duplicateTab")}
             data-testid="graphql-tab-duplicate"
           >
-            <Copy className="w-3 h-3" /> Duplicate
+            <Copy className="w-3 h-3" /> {t("graphql.tabs.duplicate")}
           </button>
         )}
       </div>
@@ -258,8 +260,8 @@ export function GraphqlTabBar({
           type="button"
           onClick={() => scrollTabs("right")}
           className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
-          title="Scroll right"
-          aria-label="Scroll right"
+          title={t("graphql.tabs.scrollRight")}
+          aria-label={t("graphql.tabs.scrollRight")}
         >
           <ChevronRight className="size-3.5" />
         </button>
@@ -271,7 +273,7 @@ export function GraphqlTabBar({
               variant="ghost"
               size="icon"
               className="size-7 text-muted-foreground/40 hover:text-foreground transition-all duration-200"
-              title="All tabs"
+              title={t("graphql.tabs.allTabs")}
               data-testid="graphql-tab-list"
             >
               <List className="size-3.5" />
@@ -300,7 +302,7 @@ export function GraphqlTabBar({
           onClick={onAdd}
           disabled={!hasActiveTab}
           className="size-7 text-muted-foreground/50 hover:text-foreground transition-all duration-200"
-          title="New tab"
+          title={t("graphql.tabs.newTab")}
           data-testid="graphql-tab-add"
         >
           <Plus className="size-4" />
@@ -322,7 +324,7 @@ export function GraphqlTabBar({
             }}
           >
             <Save className="size-3.5" />
-            Save
+            {t("graphql.tabs.save")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -332,7 +334,7 @@ export function GraphqlTabBar({
             }}
           >
             <Copy className="size-3.5" />
-            Duplicate
+            {t("graphql.tabs.duplicate")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -343,7 +345,7 @@ export function GraphqlTabBar({
             }}
           >
             <Pencil className="size-3.5" />
-            Rename
+            {t("graphql.tabs.rename")}
           </button>
           <div className="my-1 border-t border-border" />
           <button
@@ -354,7 +356,7 @@ export function GraphqlTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close
+            {t("graphql.tabs.close")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -364,7 +366,7 @@ export function GraphqlTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close Others
+            {t("graphql.tabs.closeOthers")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -374,7 +376,7 @@ export function GraphqlTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close to the Right
+            {t("graphql.tabs.closeToRight")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -384,7 +386,7 @@ export function GraphqlTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close All
+            {t("graphql.tabs.closeAll")}
           </button>
           <div className="my-1 border-t border-border" />
           <button
@@ -395,7 +397,7 @@ export function GraphqlTabBar({
             }}
           >
             <Save className="size-3.5" />
-            Save All
+            {t("graphql.tabs.saveAll")}
           </button>
         </div>
       )}

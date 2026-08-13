@@ -1,5 +1,6 @@
 "use client";
 import { ListChecks, Check, X, ChevronRight, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { ToolCall } from "@/lib/llm-tools";
 import { maskSensitiveObject } from "@/lib/llm-tools";
@@ -13,12 +14,13 @@ interface Props {
 }
 
 export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoading }: Props) {
+  const { t } = useTranslation();
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-primary/30 bg-card/60 shadow-sm"
+      className="overflow-hidden rounded-2xl border border-primary/30 bg-card shadow-[0_8px_24px_-12px] shadow-primary/20"
       data-testid="ai-plan-panel"
     >
-      <div className="flex items-center gap-2 border-b border-border/60 bg-primary/5 px-3 py-2.5 font-medium text-primary">
+      <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-primary/10 to-transparent px-3 py-2.5 font-medium text-primary">
         <span className="flex size-5 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/25">
           <ListChecks className="size-3.5" />
         </span>
@@ -40,7 +42,7 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
               return (
                 <div
                   key={i}
-                  className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1.5"
+                  className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5 transition-colors hover:border-primary/20"
                 >
                   <ChevronRight className="size-3 shrink-0 text-primary/70" />
                   <code className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
@@ -54,17 +56,17 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
         )}
       </div>
 
-      <div className="flex justify-end gap-1.5 border-t border-border/60 px-3 py-2.5">
+      <div className="flex justify-end gap-1.5 border-t border-border/60 bg-muted/20 px-3 py-2.5">
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={onReject}
           className="h-7 gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
-          title="Annuler le plan"
+          title={t("ai.plan.cancelTitle")}
         >
           <X className="size-3" />
-          <span className="@max-[22rem]:hidden">Annuler</span>
+          <span className="@max-[22rem]:hidden">{t("common.cancel")}</span>
         </Button>
         <Button
           type="button"
@@ -72,13 +74,13 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
           size="sm"
           onClick={onApprove}
           disabled={isLoading}
-          className="h-7 gap-1 rounded-full px-3 text-xs"
-          title="Approuver & exécuter"
+          className="h-7 gap-1 rounded-full px-3 text-xs shadow-[0_2px_10px_-2px] shadow-primary/50"
+          title={t("ai.plan.approve")}
           data-testid="ai-plan-approve"
         >
           {isLoading ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
           <span className="@max-[22rem]:hidden">
-            {isLoading ? "Exécution…" : "Approuver & exécuter"}
+            {isLoading ? t("ai.plan.executing") : t("ai.plan.approve")}
           </span>
         </Button>
       </div>

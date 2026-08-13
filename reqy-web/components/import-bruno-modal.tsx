@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { parseBrunoCollection, convertBrunoToCollections } from "@/lib/bruno-import";
 import type { CollectionImportData } from "@/lib/openapi-import";
+import { Trans, useTranslation } from "react-i18next";
 
 interface ImportBrunoModalProps {
   open: boolean;
@@ -24,6 +25,7 @@ interface ImportBrunoModalProps {
 type Step = "upload" | "preview" | "importing" | "done";
 
 export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalProps) {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [dragging, setDragging] = useState(false);
@@ -48,36 +50,39 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
     onClose();
   };
 
-  const processFile = useCallback((file: File) => {
-    setError(null);
-    setFileName(file.name);
+  const processFile = useCallback(
+    (file: File) => {
+      setError(null);
+      setFileName(file.name);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const contents = evt.target?.result as string;
-      if (!contents) {
-        setError("Impossible de lire le fichier.");
-        return;
-      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const contents = evt.target?.result as string;
+        if (!contents) {
+          setError(t("importExport.common.readFileError"));
+          return;
+        }
 
-      const result = parseBrunoCollection(contents, file.name);
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
+        const result = parseBrunoCollection(contents, file.name);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
 
-      setRawContents(contents);
-      setParseResult({
-        collectionName: result.collectionName,
-        count: result.endpoints.length,
-      });
-      setStep("preview");
-    };
-    reader.onerror = () => {
-      setError("Erreur lors de la lecture du fichier.");
-    };
-    reader.readAsText(file);
-  }, []);
+        setRawContents(contents);
+        setParseResult({
+          collectionName: result.collectionName,
+          count: result.endpoints.length,
+        });
+        setStep("preview");
+      };
+      reader.onerror = () => {
+        setError(t("importExport.common.readError"));
+      };
+      reader.readAsText(file);
+    },
+    [t],
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -131,10 +136,13 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Importer une collection Bruno</DialogTitle>
+            <DialogTitle>{t("importExport.bruno.title")}</DialogTitle>
             <DialogDescription>
-              Importez un fichier <strong>.bru</strong> ou un bundle JSON Bruno pour créer une
-              collection Reqly.
+              <Trans
+                i18nKey="importExport.bruno.description"
+                t={t}
+                components={[<strong key="bru" />]}
+              />
             </DialogDescription>
           </DialogHeader>
 
@@ -166,20 +174,23 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
                 <AlertCircle className="h-10 w-10" />
                 <p className="text-sm font-medium text-center">{error}</p>
                 <Button variant="outline" size="sm" onClick={() => setError(null)}>
-                  Réessayer
+                  {t("common.retry")}
                 </Button>
               </div>
             ) : (
               <>
                 <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
-                <p className="mb-2 text-sm font-medium">Glissez-déposez votre fichier ici</p>
-                <p className="mb-4 text-xs text-muted-foreground">ou</p>
+                <p className="mb-2 text-sm font-medium">{t("importExport.common.dragDrop")}</p>
+                <p className="mb-4 text-xs text-muted-foreground">{t("importExport.common.or")}</p>
                 <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                  Sélectionner un fichier
+                  {t("importExport.common.selectFile")}
                 </Button>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Formats supportés : <strong>.bru</strong> (Bruno DSL), <strong>.json</strong>{" "}
-                  (bundle Bruno)
+                  <Trans
+                    i18nKey="importExport.bruno.formats"
+                    t={t}
+                    components={[<strong key="a" />, <strong key="b" />]}
+                  />
                 </p>
               </>
             )}
@@ -200,35 +211,32 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
               <FileText className="h-5 w-5 text-primary" />
               {parseResult.collectionName}
             </DialogTitle>
-            <DialogDescription>Collection Bruno prête à être importée.</DialogDescription>
+            <DialogDescription>{t("importExport.bruno.ready")}</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-3 py-4">
             <div className="rounded-lg border bg-card p-3 text-center">
               <p className="text-2xl font-bold text-primary">{parseResult.count}</p>
               <p className="text-xs text-muted-foreground">
-                Requête{parseResult.count > 1 ? "s" : ""}
+                {t("importExport.bruno.requests", { count: parseResult.count })}
               </p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <p className="text-2xl font-bold">1</p>
-              <p className="text-xs text-muted-foreground">Collection</p>
+              <p className="text-xs text-muted-foreground">{t("importExport.bruno.collection")}</p>
             </div>
           </div>
 
           <DialogFooter className="flex items-center justify-between">
             <Button variant="ghost" onClick={handleBack}>
-              Changer de fichier
+              {t("importExport.common.switchFile")}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleClose}>
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button onClick={handleImport}>
-                Importer{" "}
-                {parseResult.count > 0
-                  ? `${parseResult.count} requête${parseResult.count > 1 ? "s" : ""}`
-                  : ""}
+                {t("importExport.bruno.importRequests", { count: parseResult.count })}
               </Button>
             </div>
           </DialogFooter>
@@ -244,13 +252,11 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import en cours...</DialogTitle>
+            <DialogTitle>{t("importExport.common.importing")}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Création de la collection et des requêtes...
-            </p>
+            <p className="mt-4 text-sm text-muted-foreground">{t("importExport.bruno.creating")}</p>
           </div>
         </DialogContent>
       </Dialog>
@@ -264,13 +270,12 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import terminé</DialogTitle>
+            <DialogTitle>{t("importExport.common.doneTitle")}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8">
             <CheckCircle2 className="h-8 w-8 text-success" />
             <p className="mt-4 text-sm font-medium">
-              {parseResult?.count || 0} requête{parseResult?.count !== 1 ? "s" : ""} importée
-              {parseResult?.count !== 1 ? "s" : ""} avec succès.
+              {t("importExport.bruno.doneSummary", { count: parseResult?.count || 0 })}
             </p>
           </div>
         </DialogContent>

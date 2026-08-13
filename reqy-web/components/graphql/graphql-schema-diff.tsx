@@ -10,6 +10,7 @@ import {
   findDangerousChanges,
   type GraphQLSchema,
 } from "graphql";
+import { useTranslation } from "react-i18next";
 
 const STORAGE_KEY = "reqly-graphql-schema-snapshots";
 
@@ -82,6 +83,7 @@ interface Props {
 }
 
 export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
+  const { t } = useTranslation();
   const [snapshotName, setSnapshotName] = useState("");
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [diffTarget, setDiffTarget] = useState<string>("");
@@ -116,17 +118,19 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
     setError(null);
     setChanges(null);
     if (!schema || !diffTarget || !snapshots[diffTarget]) {
-      setError("Select a snapshot to compare.");
+      setError(t("graphql.schemaDiff.selectSnapshot"));
       return;
     }
     const currentBuild = buildClientSchemaSafe(schema);
     const snapshotBuild = buildClientSchemaSafe(snapshots[diffTarget].schema);
     if (currentBuild.error || !currentBuild.schema) {
-      setError(`Current schema invalid: ${currentBuild.error}`);
+      setError(t("graphql.schemaDiff.currentSchemaInvalid", { error: currentBuild.error }));
       return;
     }
     if (snapshotBuild.error || !snapshotBuild.schema) {
-      setError(`Snapshot "${diffTarget}" invalid: ${snapshotBuild.error}`);
+      setError(
+        t("graphql.schemaDiff.snapshotInvalid", { name: diffTarget, error: snapshotBuild.error }),
+      );
       return;
     }
     try {
@@ -167,7 +171,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
         <input
           value={snapshotName}
           onChange={(e) => setSnapshotName(e.target.value)}
-          placeholder="Snapshot name (e.g. v1, prod)"
+          placeholder={t("graphql.schemaDiff.snapshotPlaceholder")}
           className="flex-1 text-xs px-2 py-1 border rounded bg-background"
           data-testid="graphql-diff-snapshot-name"
         />
@@ -179,7 +183,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
           disabled={!schema || !snapshotName.trim()}
           data-testid="graphql-diff-save"
         >
-          <Save className="w-3 h-3 mr-1" /> Save snapshot
+          <Save className="w-3 h-3 mr-1" /> {t("graphql.schemaDiff.saveSnapshot")}
         </Button>
       </div>
       <div className="flex items-center gap-2">
@@ -189,7 +193,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
           className="flex-1 text-xs px-2 py-1 border rounded bg-background"
           data-testid="graphql-diff-target"
         >
-          <option value="">Choose snapshot…</option>
+          <option value="">{t("graphql.schemaDiff.chooseSnapshot")}</option>
           {Object.entries(snapshots)
             .sort(([, a], [, b]) => b.savedAt - a.savedAt)
             .map(([name, snap]) => (
@@ -206,7 +210,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
           disabled={!schema || !diffTarget}
           data-testid="graphql-diff-compare"
         >
-          <Diff className="w-3 h-3 mr-1" /> Compare
+          <Diff className="w-3 h-3 mr-1" /> {t("graphql.schemaDiff.compare")}
         </Button>
       </div>
 
@@ -217,7 +221,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
           className="h-6 text-[10px]"
           onClick={() => removeSnapshot(diffTarget)}
         >
-          <Trash2 className="w-3 h-3 mr-1" /> Delete snapshot
+          <Trash2 className="w-3 h-3 mr-1" /> {t("graphql.schemaDiff.deleteSnapshot")}
         </Button>
       )}
 
@@ -234,7 +238,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
             }
           >
             <AlertOctagon className="w-3 h-3" />
-            {summary.breaking} breaking
+            {summary.breaking} {t("graphql.schemaDiff.breaking")}
           </span>
           <span
             className={
@@ -244,7 +248,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
             }
           >
             <AlertTriangle className="w-3 h-3" />
-            {summary.dangerous} dangerous
+            {summary.dangerous} {t("graphql.schemaDiff.dangerous")}
           </span>
         </div>
       )}
@@ -261,12 +265,11 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
         {!error && !changes && (
           <div className="text-muted-foreground flex items-center gap-1">
             <Info className="w-3 h-3" />
-            Save a snapshot of the current schema, then compare to detect breaking changes via
-            graphql-js.
+            {t("graphql.schemaDiff.hint")}
           </div>
         )}
         {!error && changes && changes.length === 0 && (
-          <div className="text-success">✅ No breaking or dangerous changes detected.</div>
+          <div className="text-success">{t("graphql.schemaDiff.noChanges")}</div>
         )}
         {!error &&
           changes &&
@@ -293,7 +296,7 @@ export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
 
       {endpoint && (
         <p className="text-[10px] text-muted-foreground">
-          Endpoint: <span className="font-mono">{endpoint}</span>
+          {t("graphql.schemaDiff.endpointLabel")}: <span className="font-mono">{endpoint}</span>
         </p>
       )}
     </div>

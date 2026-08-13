@@ -21,6 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import type { HttpMethod } from "@/lib/types";
 import { useState, useEffect } from "react";
 import { Loader2, Upload, Download, FileJson, GitFork, Package, ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -30,6 +31,7 @@ import {
 
 export default function CollectionsPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const {
     collections,
     history,
@@ -138,17 +140,17 @@ export default function CollectionsPage() {
     });
 
     toast({
-      title: `Collection Postman importée: ${uniqueName}`,
+      title: t("collections.toast.postmanImported", { name: uniqueName }),
       description:
         uniqueName !== collection.name
-          ? `Renommée depuis « ${collection.name} » (conflit de nom).`
+          ? t("collections.toast.postmanRenamed", { old: collection.name })
           : undefined,
     });
   };
 
   const handleExportCollectionsToPostman = async (selectedCollectionIds: string[]) => {
     if (!postmanConnected) {
-      toast({ title: "Postman non connecté", variant: "destructive" });
+      toast({ title: t("collections.toast.postmanNotConnected"), variant: "destructive" });
       return;
     }
 
@@ -157,7 +159,7 @@ export default function CollectionsPage() {
     );
 
     if (!selectedCollections.length) {
-      toast({ title: "Aucune collection sélectionnée", variant: "destructive" });
+      toast({ title: t("collections.toast.noCollectionSelected"), variant: "destructive" });
       return;
     }
 
@@ -173,8 +175,12 @@ export default function CollectionsPage() {
               : `Export Reqly - ${selectedCollections.length} collections`,
           description:
             selectedCollections.length === 1
-              ? `Collection exportée depuis Reqly : ${selectedCollections[0].name}`
-              : `Export de ${selectedCollections.length} collections depuis Reqly`,
+              ? t("collections.toast.postmanExportDescOne", {
+                  name: selectedCollections[0].name,
+                })
+              : t("collections.toast.postmanExportDescMany", {
+                  count: selectedCollections.length,
+                }),
           requests: selectedCollections.flatMap((collection) =>
             collection.requests.map((request) => ({
               collectionName: collection.name,
@@ -190,19 +196,20 @@ export default function CollectionsPage() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || "Erreur lors de l'export vers Postman");
+        throw new Error(error.message || t("collections.toast.postmanExportError"));
       }
 
       const data = await response.json();
       toast({
-        title: "Export vers Postman réussi",
-        description: data.message || "Collection créée dans Postman",
+        title: t("collections.toast.postmanExportSuccess"),
+        description: data.message || t("collections.toast.postmanCollectionCreated"),
         meta: { event: "importExport" },
       });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Impossible d'exporter vers Postman",
+        title: t("common.error"),
+        description:
+          err instanceof Error ? err.message : t("collections.toast.postmanExportFailed"),
         variant: "destructive",
         meta: { event: "importExport" },
       });
@@ -233,7 +240,7 @@ export default function CollectionsPage() {
       protocol: request.protocol,
       graphql: request.graphql,
     });
-    toast({ title: "Requête chargée dans l'éditeur" });
+    toast({ title: t("collections.toast.requestLoaded") });
     router.push("/");
   };
 
@@ -260,7 +267,7 @@ export default function CollectionsPage() {
       graphql: request.graphql,
       sendImmediately: true,
     });
-    toast({ title: `"${request.name}" loaded and sent` });
+    toast({ title: t("collections.toast.requestLoadedAndSent", { name: request.name }) });
     router.push("/");
   };
 
@@ -335,8 +342,11 @@ export default function CollectionsPage() {
     }
 
     toast({
-      title: `Import OpenAPI terminé`,
-      description: `${createdCount} requête${createdCount > 1 ? "s" : ""} importée${createdCount > 1 ? "s" : ""} dans ${incomingCollections.length} collection${incomingCollections.length > 1 ? "s" : ""}.`,
+      title: t("collections.toast.openApiImportDone"),
+      description: t("collections.toast.openApiImportDetails", {
+        count: createdCount,
+        collections: incomingCollections.length,
+      }),
       meta: { event: "importExport" },
     });
   };
@@ -398,15 +408,15 @@ export default function CollectionsPage() {
     <main className="flex-1 overflow-auto">
       <div className="flex flex-col gap-4 border-b border-border bg-background/80 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="shrink-0">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Collections</h1>
-          <p className="text-sm text-muted-foreground">
-            Gérez vos groupes de requêtes et exportez-les en OpenAPI.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {t("collections.title")}
+          </h1>
+          <p className="text-sm text-muted-foreground">{t("collections.description")}</p>
         </div>
         <div className="flex flex-col items-start gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-              Importer
+              {t("collections.import")}
             </span>
             <Button
               variant="outline"
@@ -450,7 +460,7 @@ export default function CollectionsPage() {
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem onClick={() => setPostmanManageOpen(true)}>
                   <Upload className="mr-2 size-4" />
-                  Importer depuis Postman
+                  {t("collections.importFromPostman")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setPostmanExportOpen(true)}
@@ -461,7 +471,9 @@ export default function CollectionsPage() {
                   ) : (
                     <Download className="mr-2 size-4" />
                   )}
-                  {exportingPostman ? "Export en cours..." : "Exporter vers Postman"}
+                  {exportingPostman
+                    ? t("collections.exportingToPostman")
+                    : t("collections.exportToPostman")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -469,7 +481,7 @@ export default function CollectionsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-              Exporter
+              {t("collections.export")}
             </span>
             <Button
               variant="outline"
@@ -482,7 +494,7 @@ export default function CollectionsPage() {
               ) : (
                 <Download className="mr-1.5 size-3.5" />
               )}
-              {exportingOpenApi ? "Export..." : "OpenAPI"}
+              {exportingOpenApi ? t("collections.exporting") : "OpenAPI"}
             </Button>
           </div>
         </div>

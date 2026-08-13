@@ -23,6 +23,7 @@ import { AuthSection } from "@/components/auth-section";
 import { BodyEditor } from "@/components/body-editor";
 import { RequestPanelUrlBar } from "@/components/request-panel-url-bar";
 import { TestAssertionPanel } from "@/components/test-assertion-panel";
+import { useTranslation } from "react-i18next";
 
 interface RequestPanelProps {
   method: HttpMethod;
@@ -157,6 +158,7 @@ export function RequestPanel({
   formDataKeySuggestions,
   onExport,
 }: RequestPanelProps & { onExport?: () => Promise<void> }) {
+  const { t } = useTranslation();
   // Sync path params when URL changes — auto-add/remove :param patterns
   // Uses a ref to track the last synced URL so we don't loop.
   const lastSyncedUrlRef = useRef(url);
@@ -222,7 +224,7 @@ export function RequestPanel({
     const envVars = environmentVariableNames?.filter(Boolean) ?? [];
     if (envVars.length > 0) {
       groups.push({
-        label: "Variables",
+        label: t("request.variables"),
         items: envVars.map((name) => {
           const wrapped = `{{${name}}}`;
           return {
@@ -238,7 +240,7 @@ export function RequestPanel({
     const chainVars = variableNames?.filter(Boolean) ?? [];
     if (chainVars.length > 0) {
       groups.push({
-        label: "Enchaînement",
+        label: t("request.chaining"),
         items: chainVars.map((name) => {
           const wrapped = `{{${name}}}`;
           return {
@@ -264,19 +266,19 @@ export function RequestPanel({
     }
     if (historyItems.length > 0) {
       groups.push({
-        label: "Historique",
+        label: t("request.history"),
         items: historyItems.slice(0, 20), // cap at 20
       });
     }
 
     return groups;
-  }, [environmentVariableNames, variableNames, historyUrlsProp]);
+  }, [environmentVariableNames, variableNames, historyUrlsProp, t]);
 
   // ── Autocomplete suggestions for KeyValueEditor ──────────────────────────
   const headerKeySuggestions = useMemo((): AutocompleteGroup[] => {
     return [
       {
-        label: "En-têtes courants",
+        label: t("request.commonHeaders"),
         items: COMMON_HEADER_NAMES.map((name) => ({
           id: `hdr-${name}`,
           label: name,
@@ -284,14 +286,14 @@ export function RequestPanel({
         })),
       },
     ];
-  }, []);
+  }, [t]);
 
   const valueVarSuggestions = useMemo((): AutocompleteGroup[] => {
     const vars = environmentVariableNames?.filter(Boolean) ?? [];
     if (vars.length === 0) return [];
     return [
       {
-        label: "Variables",
+        label: t("request.variables"),
         items: vars.map((name) => ({
           id: `vval-${name}`,
           label: `{{${name}}}`,
@@ -299,7 +301,7 @@ export function RequestPanel({
         })),
       },
     ];
-  }, [environmentVariableNames]);
+  }, [environmentVariableNames, t]);
 
   const hasUrl = url.trim().length > 0;
 
@@ -336,10 +338,10 @@ export function RequestPanel({
               size="sm"
               onClick={onExport}
               className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-              title="Export active request"
+              title={t("request.exportTooltip")}
             >
               <Download className="size-3" />
-              Export
+              {t("common.export")}
             </Button>
           </div>
         )}
@@ -352,7 +354,7 @@ export function RequestPanel({
           <AccordionItem value="path-vars" className="border border-border rounded-lg px-4 ">
             <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
               <span className="flex items-center gap-2">
-                Path Variables
+                {t("request.pathVariables")}
                 {(pathParams?.length ?? 0) > 0 && (
                   <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
                     {pathParams?.length ?? 0}
@@ -365,9 +367,9 @@ export function RequestPanel({
                 pairs={pathParams ?? []}
                 onChange={onPathParamsChange}
                 keyPlaceholder=":param"
-                valuePlaceholder="Value"
-                addLabel="Add Path Variable"
-                emptyLabel="No path params detected — use :id in the URL"
+                valuePlaceholder={t("request.kvValue")}
+                addLabel={t("request.addPathVariable")}
+                emptyLabel={t("request.noPathParams")}
                 showToggle
                 valueSuggestions={valueVarSuggestions}
               />
@@ -378,7 +380,7 @@ export function RequestPanel({
           <AccordionItem value="query-params" className="border border-border rounded-lg px-4 ">
             <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
               <span className="flex items-center gap-2">
-                Query Params
+                {t("request.queryParams")}
                 {queryParams.length > 0 && (
                   <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
                     {queryParams.length}
@@ -390,10 +392,10 @@ export function RequestPanel({
               <KeyValueEditor
                 pairs={queryParams}
                 onChange={onQueryParamsChange}
-                keyPlaceholder="Key"
-                valuePlaceholder="Value"
-                addLabel="Add Parameter"
-                emptyLabel="No parameters added yet"
+                keyPlaceholder={t("request.kvKey")}
+                valuePlaceholder={t("request.kvValue")}
+                addLabel={t("request.addParameter")}
+                emptyLabel={t("request.noParams")}
                 showToggle
                 keySuggestions={queryParamKeySuggestions}
                 valueSuggestions={valueVarSuggestions}
@@ -405,7 +407,7 @@ export function RequestPanel({
           <AccordionItem value="headers" className="border border-border rounded-lg px-4 ">
             <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
               <span className="flex items-center gap-2">
-                Headers
+                {t("request.headersLabel")}
                 {headers.length > 0 && (
                   <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
                     {headers.length}
@@ -417,10 +419,10 @@ export function RequestPanel({
               <KeyValueEditor
                 pairs={headers}
                 onChange={onHeadersChange}
-                keyPlaceholder="Key"
-                valuePlaceholder="Value"
-                addLabel="Add Header"
-                emptyLabel="No headers added yet"
+                keyPlaceholder={t("request.kvKey")}
+                valuePlaceholder={t("request.kvValue")}
+                addLabel={t("request.addHeader")}
+                emptyLabel={t("request.noHeaders")}
                 showToggle
                 keySuggestions={headerKeySuggestions}
                 valueSuggestions={valueVarSuggestions}
@@ -449,7 +451,7 @@ export function RequestPanel({
             <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
               <span className="flex items-center gap-2">
                 <FlaskConical className="size-3.5" />
-                Tests
+                {t("request.tests")}
                 {(assertions?.length ?? 0) > 0 && (
                   <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
                     {assertions?.filter((a) => a.enabled).length ?? 0}/{assertions?.length ?? 0}
@@ -478,7 +480,7 @@ export function RequestPanel({
             <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
               <span className="flex items-center gap-2">
                 <FlaskConical className="size-3.5" />
-                Assertions
+                {t("assertion.title")}
                 {(runnerAssertions?.length ?? 0) > 0 && (
                   <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
                     {runnerAssertions?.length ?? 0}

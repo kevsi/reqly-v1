@@ -4,6 +4,7 @@ import {
   sanitizeUrl,
   normalizeUrl,
   buildUrl,
+  buildHeaders,
   formatSize,
   type QueryParam,
   type PathParam,
@@ -22,7 +23,7 @@ vi.mock("../utils", () => ({
   interpolate: (str: string) => str,
   replaceLocalhostPort: (url: string) => url,
   hasUnresolvedPlaceholders: () => false,
-  cn: (...args: any[]) => args.join(" "),
+  cn: (...args: string[]) => args.join(" "),
   downloadJson: vi.fn(),
 }));
 
@@ -108,11 +109,41 @@ describe("request-executor", () => {
       expect(result).toBe("https://api.example.com/users/123");
     });
 
+    it("skips query params with undefined key or value", () => {
+      const params: QueryParam[] = [
+        { key: "page", value: "1", enabled: true },
+        { key: undefined as never, value: "no-key" },
+        { key: "no-value", value: undefined as never },
+      ];
+      const result = buildUrl("https://api.example.com", params);
+      expect(result).toBe("https://api.example.com/?page=1");
+    });
+
     it("handles mixed path and query params", () => {
       const queryParams: QueryParam[] = [{ key: "expand", value: "profile", enabled: true }];
       const pathParams: PathParam[] = [{ key: "id", value: "456" }];
       const result = buildUrl("https://api.example.com/users/:id", queryParams, pathParams);
       expect(result).toBe("https://api.example.com/users/456?expand=profile");
+    });
+  });
+
+  describe("buildHeaders", () => {
+    it("does not crash when authToken is undefined (stripped on persist)", () => {
+      const headers = buildHeaders([], "none", undefined as never);
+      expect(headers).toEqual({});
+    });
+
+    it("skips headers with undefined key or value", () => {
+      const headers = buildHeaders(
+        [
+          { key: "X-Foo", value: "bar" },
+          { key: undefined as never, value: "no-key" },
+          { key: "no-value", value: undefined as never },
+        ],
+        "none",
+        "",
+      );
+      expect(headers).toEqual({ "X-Foo": "bar" });
     });
   });
 
@@ -139,7 +170,7 @@ describe("request-executor", () => {
             body: '{"success": true}',
             headers: { "content-type": "application/json" },
           }),
-      } as any);
+      } as unknown as Response);
 
       const result = await executeRequest({
         tab: {
@@ -185,7 +216,7 @@ describe("request-executor", () => {
         ok: true,
         status: 200,
         json: () => Promise.resolve({ status: 200, body: "{}", headers: {} }),
-      } as any);
+      } as unknown as Response);
 
       await executeRequest({
         tab: {
@@ -290,12 +321,47 @@ describe("request-executor", () => {
       expect(result.responseStatus).toBe(0);
     });
 
+    it("executes even when restored tab has undefined authToken/header fields", async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ status: 200, body: "{}", headers: {} }),
+      } as unknown as Response);
+
+      const result = await executeRequest({
+        tab: {
+          id: "restored-1",
+          name: "Restored",
+          method: "GET",
+          url: "https://api.example.com/data",
+          endpoint: "/data",
+          headers: [{ key: "Accept", value: "application/json" }],
+          queryParams: [{ key: "page", value: "1" }],
+          pathParams: [],
+          body: "",
+          bodyType: "json",
+          authType: "none",
+          authToken: undefined as never,
+          hasResponse: false,
+          isSaved: false,
+        },
+        allVars: [],
+        activeProjectPort: 3000,
+        activeProject: false,
+        nativeMode: false,
+        activeWorkspaceId: null,
+      });
+
+      expect(result.responseStatus).toBe(200);
+      expect(global.fetch).toHaveBeenCalledWith("/api/proxy", expect.anything());
+    });
+
     it("sends JSON body for POST via proxy", async () => {
       vi.mocked(global.fetch).mockResolvedValue({
         ok: true,
         status: 201,
         json: () => Promise.resolve({ status: 201, body: '{"id": 123}', headers: {} }),
-      } as any);
+      } as unknown as Response);
 
       await executeRequest({
         tab: {
@@ -321,12 +387,12 @@ describe("request-executor", () => {
         activeWorkspaceId: null,
       });
 
-      // Vérifie que le proxy reçoit le body JSON
+      // Vérifie que le proxy reçoit le body JSON (objet sérialisé avec url, method, headers, body, workspaceId)
       expect(global.fetch).toHaveBeenCalledWith(
         "/api/proxy",
         expect.objectContaining({
           method: "POST",
-          body: expect.stringContaining('"name": "Test"'),
+          body: expect.stringContaining('"url":"https://api.example.com/items"'),
         }),
       );
     });

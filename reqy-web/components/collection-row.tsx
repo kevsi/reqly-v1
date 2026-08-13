@@ -34,6 +34,7 @@ import { collectionColors, collectionIcons, safeColor } from "@/lib/collection-u
 
 import { DraggableRequestRow } from "@/components/drag-and-drop/draggable-request-row";
 import { collectionDropId, requestId, folderDropId } from "@/hooks/use-request-dnd";
+import { useTranslation } from "react-i18next";
 
 interface CollectionRowProps {
   collection: Collection;
@@ -127,6 +128,7 @@ export function CollectionRow({
   onDeleteFolder,
   onMoveFolder: _onMoveFolder,
 }: CollectionRowProps) {
+  const { t } = useTranslation();
   // ── Droppable for cross-collection moves ──
   const { setNodeRef: dropRef, isOver } = useDroppable({
     id: collectionDropId(collection.id),
@@ -178,10 +180,10 @@ export function CollectionRow({
               {onRenameFolder && (
                 <button
                   type="button"
-                  title="Rename folder"
+                  title={t("collections.row.renameFolder")}
                   onClick={(e) => {
                     e.stopPropagation();
-                    const newName = window.prompt("New folder name:", folder.name);
+                    const newName = window.prompt(t("collections.row.newFolderName"), folder.name);
                     if (newName && newName.trim()) {
                       onRenameFolder(collection.id, folder.id, newName.trim());
                     }
@@ -194,11 +196,11 @@ export function CollectionRow({
               {onDeleteFolder && (
                 <button
                   type="button"
-                  title="Delete folder"
+                  title={t("collections.row.deleteFolder")}
                   onClick={(e) => {
                     e.stopPropagation();
                     onConfirmDelete(
-                      `Delete folder "${folder.name}"? Requests will move to the collection root.`,
+                      t("collections.row.deleteFolderConfirm", { name: folder.name }),
                       () => onDeleteFolder(collection.id, folder.id),
                     );
                   }}
@@ -234,6 +236,7 @@ export function CollectionRow({
     onConfirmDelete,
     onDeleteFolder,
     onRenameFolder,
+    t,
   ]);
 
   return (
@@ -323,45 +326,46 @@ export function CollectionRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem onClick={() => onAddRequest(collection.id)}>
-                <Plus className="mr-2 size-3.5" /> Add request
+                <Plus className="mr-2 size-3.5" /> {t("collections.row.addRequest")}
               </DropdownMenuItem>
               {onAddFolder && (
                 <DropdownMenuItem
                   onClick={() => {
-                    const name = window.prompt("Folder name:");
+                    const name = window.prompt(t("collections.row.folderName"));
                     if (name && name.trim()) {
                       onAddFolder(collection.id, name.trim(), null);
                     }
                   }}
                 >
-                  <Folder className="mr-2 size-3.5" /> Add folder
+                  <Folder className="mr-2 size-3.5" /> {t("collections.row.addFolder")}
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => onRenameStart(collection.id, collection.name)}>
-                <Edit2 className="mr-2 size-3.5" /> Rename
+                <Edit2 className="mr-2 size-3.5" /> {t("collections.row.rename")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onExportCollection(collection)}>
-                <Download className="mr-2 size-3.5" /> Export
+                <Download className="mr-2 size-3.5" /> {t("collections.row.export")}
               </DropdownMenuItem>
               {onDuplicateCollection && (
                 <DropdownMenuItem onClick={() => onDuplicateCollection(collection.id)}>
-                  <Copy className="mr-2 size-3.5" /> Duplicate
+                  <Copy className="mr-2 size-3.5" /> {t("collections.row.duplicate")}
                 </DropdownMenuItem>
               )}
               {onRunCollection && (
                 <DropdownMenuItem onClick={() => onRunCollection(collection)}>
-                  <Play className="mr-2 size-3.5" /> Run all
+                  <Play className="mr-2 size-3.5" /> {t("collections.row.runAll")}
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
                 onClick={() =>
-                  onConfirmDelete(`Delete "${collection.name}"?`, () =>
-                    onDeleteCollection(collection.id),
+                  onConfirmDelete(
+                    t("collections.row.deleteCollection", { name: collection.name }),
+                    () => onDeleteCollection(collection.id),
                   )
                 }
                 className="text-destructive"
               >
-                <Trash2 className="mr-2 size-3.5" /> Delete
+                <Trash2 className="mr-2 size-3.5" /> {t("collections.row.delete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

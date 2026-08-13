@@ -100,7 +100,7 @@ export function ShortcutsRegistrar() {
           ctrl: combo.ctrl,
           shift: combo.shift,
           alt: combo.alt,
-          description: def.description,
+          description: def.descriptionKey,
           allowInInputs: def.id === "formatJson",
           action: () => {
             const { router, toggleSidebar } = actionRef.current;

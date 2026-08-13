@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { LogOut, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/lib/session-store";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function AccountMenu() {
+  const { t } = useTranslation();
   const user = useSessionStore((s) => s.user);
   const status = useSessionStore((s) => s.status);
   const logout = useSessionStore((s) => s.logout);
@@ -25,7 +27,7 @@ export function AccountMenu() {
         href="/login"
         className="flex h-9 items-center rounded-lg border border-border px-3 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground"
       >
-        Se connecter
+        {t("account.signIn")}
       </Link>
     );
   }
@@ -45,7 +47,7 @@ export function AccountMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          aria-label="Compte"
+          aria-label={t("account.ariaLabel")}
           data-testid="account-trigger"
           className="flex size-9 items-center justify-center rounded-full border border-border bg-muted/30 text-sm font-semibold text-foreground transition-all duration-200 hover:border-primary/30 hover:bg-primary/5"
           title={user.email}
@@ -67,7 +69,7 @@ export function AccountMenu() {
           className="cursor-pointer gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           {loggingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-          {loggingOut ? "Déconnexion…" : "Se déconnecter"}
+          {loggingOut ? t("account.signingOut") : t("account.signOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

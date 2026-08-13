@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,29 +20,42 @@ const LABELS: Record<ToolPermission | "default", string> = {
   default: "Défaut",
 };
 
-export function AiPermissionsPopover() {
+interface Props {
+  onClose?: () => void;
+}
+
+export function AiPermissionsPopover({ onClose }: Props) {
+  const { t } = useTranslation();
   const [perms, setPerms] = useState<Record<string, ToolPermission>>(loadPermissions());
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs gap-1 text-muted-foreground"
-          title="Permissions des outils"
-          data-testid="ai-permissions-trigger"
-        >
-          <ShieldCheck className="size-3" />
-          <span className="@max-[20rem]:hidden">Permissions</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 max-h-80 overflow-y-auto">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {onClose && (
+        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <ShieldCheck className="size-3.5 text-primary" />
+            {t("ai.agent.permissions")}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="size-6 [&_svg]:size-3.5 text-muted-foreground"
+            aria-label={t("ai.permissions.closeAria")}
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
+      )}
+      <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
         {REQLY_TOOLS.map((t) => {
           const current: ToolPermission | "default" = perms[t.name] ?? "default";
           return (
-            <div key={t.name} className="flex items-center justify-between gap-2 px-2 py-1.5">
+            <div
+              key={t.name}
+              className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-card/50 px-2.5 py-2 transition-colors hover:border-border/80"
+            >
               <div className="min-w-0">
                 <p className="truncate font-mono text-[11px] text-foreground">{t.name}</p>
                 <p className="truncate text-[10px] text-muted-foreground">{t.description}</p>
@@ -87,7 +101,7 @@ export function AiPermissionsPopover() {
             </div>
           );
         })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </div>
+    </div>
   );
 }

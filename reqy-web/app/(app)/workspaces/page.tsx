@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import {
   Plus,
   Trash2,
@@ -66,6 +67,7 @@ function isLocalWorkspace(ws: Workspace): boolean {
 }
 
 export default function WorkspacesPage() {
+  const { t } = useTranslation();
   const workspaces = useRequestStore((s) => s.workspaces);
   const fetchWorkspacesFromApi = useRequestStore((s) => s.fetchWorkspacesFromApi);
   const router = useRouter();
@@ -250,7 +252,7 @@ export default function WorkspacesPage() {
                           {isLocalWorkspace(ws) && (
                             <span
                               className="text-muted-foreground/60"
-                              title="Local workspace — cannot be shared"
+                              title={t("workspace.localTooltip")}
                             >
                               🔒
                             </span>

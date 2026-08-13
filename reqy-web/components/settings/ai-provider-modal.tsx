@@ -18,6 +18,7 @@ import { STATIC_MODELS, ANTHROPIC_NO_FETCH, fetchModelsByProvider } from "@/lib/
 import type { ModelOption } from "@/lib/provider-models";
 import { useTestConnection } from "@/hooks/use-test-connection";
 import { ModelSearchList } from "@/components/settings/model-search-list";
+import { useTranslation } from "react-i18next";
 
 interface AiProviderModalProps {
   open: boolean;
@@ -58,6 +59,7 @@ export function AiProviderModal({
 
   // -- Test connection --
   const { testLoading, testResult, testConnection, clearTestResult } = useTestConnection();
+  const { t } = useTranslation();
 
   // Reset form when modal opens with different provider
   useEffect(() => {
@@ -81,7 +83,7 @@ export function AiProviderModal({
 
       if (ANTHROPIC_NO_FETCH.has(provider)) {
         result = STATIC_MODELS[provider] ?? [];
-        toast.info("Liste statique utilisée (pas d'endpoint public).");
+        toast.info(t("settings.ai.modal.staticList"));
       } else {
         result = await fetchModelsByProvider({ provider, apiKey, baseUrl, isCustom });
       }
@@ -94,7 +96,7 @@ export function AiProviderModal({
       });
       setModelsFetched(true);
       if (result.length > 0) {
-        toast.success(`${result.length} modèles chargés.`);
+        toast.success(t("settings.ai.modal.modelsLoaded", { count: result.length }));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -108,14 +110,16 @@ export function AiProviderModal({
       }
       setModelsFetched(true);
       toast.warning(
-        `Échec du chargement (${message}).${
-          fallback.length > 0 ? ` Fallback sur ${fallback.length} modèles statiques.` : ""
+        `${t("settings.ai.modal.loadFailed", { message })}${
+          fallback.length > 0
+            ? t("settings.ai.modal.loadFailedFallback", { count: fallback.length })
+            : ""
         }`,
       );
     } finally {
       setLoadingModels(false);
     }
-  }, [provider, apiKey, baseUrl, isCustom, loadingModels]);
+  }, [provider, apiKey, baseUrl, isCustom, loadingModels, t]);
 
   // Auto-fetch models after typing API key (same as existing AISection)
   useEffect(() => {
@@ -130,11 +134,14 @@ export function AiProviderModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, provider, baseUrl]);
 
-  const handleAddModel = useCallback((modelId: string) => {
-    setModels((prev) => [...prev, { id: modelId, label: modelId }]);
-    setSelectedModel(modelId);
-    toast.success(`Modèle "${modelId}" ajouté.`);
-  }, []);
+  const handleAddModel = useCallback(
+    (modelId: string) => {
+      setModels((prev) => [...prev, { id: modelId, label: modelId }]);
+      setSelectedModel(modelId);
+      toast.success(t("settings.ai.modal.modelAdded", { model: modelId }));
+    },
+    [t],
+  );
 
   const handleRemoveModel = useCallback((modelId: string) => {
     setModels((prev) => prev.filter((m) => m.id !== modelId));
@@ -191,8 +198,8 @@ export function AiProviderModal({
             <DialogTitle className="text-lg">{providerInfo.label}</DialogTitle>
             <DialogDescription className="text-sm">
               {isCustom
-                ? "Configurez un fournisseur OpenAI compatible avec votre propre URL de base."
-                : `Configurez votre clé API et choisissez un modèle ${providerInfo.label}.`}
+                ? t("settings.ai.modal.customDesc")
+                : t("settings.ai.modal.configureDesc", { provider: providerInfo.label })}
             </DialogDescription>
           </div>
         </div>
@@ -202,14 +209,16 @@ export function AiProviderModal({
           {/* Base URL - only for custom provider */}
           {isCustom && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">Base URL</label>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">
+                {t("settings.ai.modal.baseUrl")}
+              </label>
               <Input
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 placeholder="https://api.example.com/v1"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                L&apos;URL de base de votre API compatible OpenAI. Ex:{" "}
+                {t("settings.ai.modal.baseUrlHint")}{" "}
                 <code className="text-xs">https://api.g0i.ai/v1</code>
               </p>
             </div>
@@ -217,20 +226,24 @@ export function AiProviderModal({
 
           {/* API Key */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Clé API</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              {t("settings.ai.modal.apiKey")}
+            </label>
             <Input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={
-                provider === "ollama" ? "Non requis (exécution locale)" : "Entrez votre clé API"
+                provider === "ollama"
+                  ? t("settings.ai.modal.notRequired")
+                  : t("settings.ai.modal.enterApiKey")
               }
               disabled={provider === "ollama"}
             />
             <p className="mt-1 text-xs text-muted-foreground">
               {provider === "ollama"
-                ? "Ollama est exécuté localement et ne nécessite pas de clé API."
-                : "La clé est conservée localement et utilisée uniquement par l'assistant IA."}
+                ? t("settings.ai.modal.ollamaLocal")
+                : t("settings.ai.modal.keyStoredLocal")}
             </p>
           </div>
 
@@ -296,7 +309,7 @@ export function AiProviderModal({
                   onClick={onDelete}
                   className="text-muted-foreground hover:text-destructive"
                 >
-                  Supprimer la configuration
+                  {t("settings.ai.modal.deleteConfig")}
                 </Button>
               )}
             </div>
@@ -310,20 +323,20 @@ export function AiProviderModal({
                 {testLoading ? (
                   <>
                     <Loader2 className="mr-1.5 size-3 animate-spin" />
-                    Test…
+                    {t("settings.ai.modal.testing")}
                   </>
                 ) : (
                   <>
                     <RefreshCw className="mr-1.5 size-3" />
-                    Tester
+                    {t("settings.ai.modal.test")}
                   </>
                 )}
               </Button>
               <Button variant="outline" onClick={() => onOpenChange(false)} size="sm">
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button onClick={handleSave} size="sm">
-                Sauvegarder
+                {t("settings.ai.save")}
               </Button>
             </div>
           </div>

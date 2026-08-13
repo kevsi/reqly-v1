@@ -33,6 +33,7 @@ import { ClientLayoutShell } from "@/components/client-layout-shell";
 import { AiShortcutBridge } from "@/src/ai/components/ai-shortcut-bridge";
 import { StoreInitializer } from "@/components/store-initializer";
 import { SessionBootstrap } from "@/components/session-bootstrap";
+import { I18nProvider } from "@/components/i18n-provider";
 
 export default function RootLayout({
   children,
@@ -40,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning>
       <head>
         <Script id="theme-init" strategy="beforeInteractive">
           {`(function(){try{var t=localStorage.getItem("reqly-theme");var v=["light","dark","emerald","ocean","sunset","purple","midnight"];if(!t||!v.includes(t)){t=window.matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"}document.documentElement.classList.add(t);if(t==="midnight"){document.documentElement.classList.add("dark")}var c=t==="dark"||t==="midnight"?"dark":"light";document.documentElement.style.colorScheme=c;var m=document.querySelector("meta[name=theme-color]");if(m){m.content=c==="dark"?"#0d1117":"#ffffff"}}catch(e){}})()`}
@@ -58,7 +59,7 @@ export default function RootLayout({
               <ClientLayoutShell>
                 <StoreInitializer />
                 <SessionBootstrap />
-                {children}
+                <I18nProvider>{children}</I18nProvider>
               </ClientLayoutShell>
             </SidebarProvider>
             <AiShortcutBridge />

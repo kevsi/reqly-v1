@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Copy, RotateCcw, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 
 interface MessageActionsProps {
   messageId: string;
@@ -25,6 +26,7 @@ export function MessageActions({
   isEditing,
   className,
 }: MessageActionsProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -32,15 +34,15 @@ export function MessageActions({
       await navigator.clipboard.writeText(content);
       setCopied(true);
       toast({
-        title: "Message copié",
-        description: "Le contenu a été copié dans le presse-papiers.",
+        title: t("common.messageCopied"),
+        description: t("common.messageCopiedDesc"),
       });
       setTimeout(() => setCopied(false), 2000);
       onCopy?.();
     } catch (_error) {
       toast({
-        title: "Erreur",
-        description: "Impossible de copier le message.",
+        title: t("common.error"),
+        description: t("common.copyFailed"),
         variant: "destructive",
       });
     }
@@ -71,7 +73,7 @@ export function MessageActions({
         <button
           onClick={handleCopy}
           disabled={isEditing}
-          title="Copier le message"
+          title={t("common.copyMessage")}
           className={cn(
             "flex size-7 items-center justify-center rounded-md transition-all",
             "text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -88,7 +90,7 @@ export function MessageActions({
         <button
           onClick={handleEdit}
           disabled={isEditing}
-          title="Éditer le message"
+          title={t("common.editMessage")}
           className={cn(
             "flex size-7 items-center justify-center rounded-md transition-all",
             "text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -105,7 +107,7 @@ export function MessageActions({
         <button
           onClick={handleRetry}
           disabled={isEditing}
-          title="Régénérer la réponse"
+          title={t("common.regenerate")}
           className={cn(
             "flex size-7 items-center justify-center rounded-md transition-all",
             "text-muted-foreground hover:text-foreground hover:bg-muted",

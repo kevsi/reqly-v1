@@ -2,6 +2,7 @@
 
 import { memo, useState } from "react";
 import { Check, Copy, FileText } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +14,7 @@ export const ResponseHeadersTab = memo(function ResponseHeadersTab({
   responseHeaders,
 }: ResponseHeadersTabProps) {
   const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
 
   const handleCopy = async () => {
     try {
@@ -33,9 +35,7 @@ export const ResponseHeadersTab = memo(function ResponseHeadersTab({
         <div className="rounded-full bg-muted/30 p-3 mb-3">
           <FileText className="size-6 text-muted-foreground/30" />
         </div>
-        <p className="text-xs text-muted-foreground/60">
-          Headers will appear after running a request
-        </p>
+        <p className="text-xs text-muted-foreground/60">{t("response.noHeadersYet")}</p>
       </div>
     );
   }
@@ -44,7 +44,7 @@ export const ResponseHeadersTab = memo(function ResponseHeadersTab({
     <div className="p-4 space-y-3 animate-fade-in">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50">
-          {Object.keys(responseHeaders).length} headers
+          {t("response.headersCount", { count: Object.keys(responseHeaders).length })}
         </span>
         <Button
           variant="outline"
@@ -58,12 +58,12 @@ export const ResponseHeadersTab = memo(function ResponseHeadersTab({
           {copied ? (
             <>
               <Check className="size-3" />
-              Copied!
+              {t("common.copied")}
             </>
           ) : (
             <>
               <Copy className="size-3" />
-              Copy
+              {t("common.copy")}
             </>
           )}
         </Button>

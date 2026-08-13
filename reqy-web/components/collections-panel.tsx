@@ -30,6 +30,7 @@ import { SearchFilterBar } from "@/components/collections-search-bar";
 import { SelectionToolbar } from "@/components/collections-selection-toolbar";
 import { CollectionRow } from "@/components/collection-row";
 import { indexRequests, searchIndex, indexSize } from "@/src/ai/cloud-engine/search-index";
+import { useTranslation } from "react-i18next";
 
 export type NewCollectionInput = {
   name?: string;
@@ -100,6 +101,7 @@ export function CollectionsPanel({
   onDeleteFolder,
   onMoveFolder,
 }: CollectionsPanelProps) {
+  const { t } = useTranslation();
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set<string>();
     try {
@@ -230,7 +232,7 @@ export function CollectionsPanel({
         const sourceReq = sourceCol.requests.find((r) => r.id === requestId);
         if (!sourceReq) return;
         const duplicate: Omit<RequestItem, "id" | "createdAt" | "updatedAt"> = {
-          name: `${sourceReq.name} (copy)`,
+          name: `${sourceReq.name}${t("collections.panel.copySuffix")}`,
           method: sourceReq.method,
           url: sourceReq.url,
           endpoint: sourceReq.endpoint,
@@ -298,6 +300,7 @@ export function CollectionsPanel({
       onMoveBetweenCollections,
       onAddRequestToCollection,
       onMoveRequestToFolder,
+      t,
     ],
   );
 
@@ -317,7 +320,7 @@ export function CollectionsPanel({
         requests?: unknown[];
       }) => {
         const colId = onAddCollection({
-          name: colData.name || "Imported Collection",
+          name: colData.name || t("collections.panel.importedCollection"),
           color: colData.color || "emerald",
           icon: colData.icon || "package",
         });
@@ -345,7 +348,7 @@ export function CollectionsPanel({
       if (dataObj.type === "collection" || dataObj.requests) {
         processCollection(dataObj as Parameters<typeof processCollection>[0]);
         toast({
-          title: `Collection importée`,
+          title: t("collections.panel.importedCollection"),
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
       } else if (dataObj.collections && Array.isArray(dataObj.collections)) {
@@ -353,19 +356,19 @@ export function CollectionsPanel({
           processCollection(c as Parameters<typeof processCollection>[0]),
         );
         toast({
-          title: `${dataObj.collections.length} collections importées`,
+          title: t("collections.panel.collectionsImported", { count: dataObj.collections.length }),
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
       } else {
         toast({
-          title: "Format non reconnu",
+          title: t("collections.panel.unknownFormat"),
           variant: "destructive",
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
       }
     } catch {
       toast({
-        title: "Fichier JSON invalide",
+        title: t("collections.panel.invalidJson"),
         variant: "destructive",
         meta: { event: "importExport" },
       } as unknown as Parameters<typeof toast>[0]);
@@ -486,7 +489,7 @@ export function CollectionsPanel({
           defaultName,
         });
         toast({
-          title: `Exporté : ${savedPath}`,
+          title: t("collections.panel.exported", { path: savedPath }),
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
         clearSelection();
@@ -496,7 +499,7 @@ export function CollectionsPanel({
           return;
         }
         toast({
-          title: `Erreur export : ${String(error)}`,
+          title: t("collections.panel.exportError", { error: String(error) }),
           variant: "destructive",
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
@@ -506,7 +509,7 @@ export function CollectionsPanel({
     } else {
       downloadJson(exportData, defaultName);
       toast({
-        title: "Export téléchargé",
+        title: t("collections.panel.downloadComplete"),
         meta: { event: "importExport" },
       } as unknown as Parameters<typeof toast>[0]);
       clearSelection();
@@ -517,14 +520,13 @@ export function CollectionsPanel({
   const bulkDelete = () => {
     const colCount = selectedCollectionIds.size;
     const reqCount = selectedRequestIds.size;
-    const msg = [
-      colCount > 0 && `${colCount} collection(s)`,
-      reqCount > 0 && `${reqCount} requête(s)`,
-    ]
-      .filter(Boolean)
-      .join(" et ");
+    const parts = [
+      colCount > 0 && t("collections.panel.collectionCount", { count: colCount }),
+      reqCount > 0 && t("collections.panel.requestCount", { count: reqCount }),
+    ].filter((p): p is string => Boolean(p));
+    const msg = parts.join(` ${t("collections.panel.and")} `);
 
-    confirmDelete(`Supprimer ${msg} ?`, () => {
+    confirmDelete(t("collections.panel.deleteConfirm", { items: msg }), () => {
       selectedCollectionIds.forEach((id) => onDeleteCollection(id));
       selectedRequestIds.forEach((key) => {
         const [colId, reqId] = key.split("::");
@@ -557,7 +559,7 @@ export function CollectionsPanel({
           defaultName: `${safeName}_collection.json`,
         });
         toast({
-          title: `Sauvegardé : ${savedPath}`,
+          title: t("collections.panel.saved", { path: savedPath }),
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
       } catch (error: unknown) {
@@ -566,7 +568,7 @@ export function CollectionsPanel({
           return;
         }
         toast({
-          title: `Erreur : ${String(error)}`,
+          title: t("collections.panel.error", { error: String(error) }),
           variant: "destructive",
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
@@ -678,10 +680,10 @@ export function CollectionsPanel({
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground tracking-tight leading-none">
-              Collections
+              {t("collections.panel.title")}
             </h3>
             <p className="text-[10px] text-muted-foreground/40 leading-none mt-1">
-              {collections.length} total
+              {t("collections.panel.total", { count: collections.length })}
             </p>
           </div>
         </div>
@@ -699,14 +701,14 @@ export function CollectionsPanel({
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
             className="h-8 sm:h-7 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-            title="Importer JSON"
+            title={t("collections.panel.importJson")}
           >
             {importing ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
               <Import className="size-3.5" />
             )}
-            {importing ? "Import..." : "Import"}
+            {importing ? t("collections.panel.importing") : t("collections.panel.import")}
           </Button>
           <Button
             variant="default"
@@ -716,7 +718,7 @@ export function CollectionsPanel({
             className="h-7 gap-1.5 px-2.5 text-xs font-medium shadow-xs"
           >
             <Plus className="size-3.5" />
-            New
+            {t("collections.panel.new")}
           </Button>
         </div>
       </div>

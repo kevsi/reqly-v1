@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { SdkDownloadButton } from "@/components/sdk-download-button";
 import type { Collection } from "@/hooks/use-request-store";
+import { useTranslation } from "react-i18next";
 
 interface HistoryLikeItem {
   requestId: string;
@@ -28,6 +29,7 @@ export function OpenApiExportModal({
   historyItems,
   onExport,
 }: OpenApiExportModalProps) {
+  const { t } = useTranslation();
   const [inferFromHistory, setInferFromHistory] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -64,15 +66,15 @@ export function OpenApiExportModal({
       <div className="relative z-10 w-full max-w-lg rounded-xl border bg-card p-6 shadow-lg">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-lg font-semibold">Exporter en OpenAPI</h2>
+            <h2 className="text-lg font-semibold">{t("importExport.openapiExport.title")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Génère un fichier OpenAPI 3.0 à partir de vos collections Reqly.
+              {t("importExport.openapiExport.description")}
             </p>
           </div>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="size-4" />
           </button>
@@ -80,12 +82,12 @@ export function OpenApiExportModal({
 
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-            <p className="font-medium">Résumé</p>
+            <p className="font-medium">{t("importExport.openapiExport.summary")}</p>
             <p>
-              <span className="font-semibold">{collections.length}</span> collection
-              {collections.length === 1 ? "" : "s"} ·{" "}
-              <span className="font-semibold">{totalRequests}</span> requête
-              {totalRequests === 1 ? "" : "s"} au total.
+              {t("importExport.openapiExport.summaryLine", {
+                count: collections.length,
+                total: totalRequests,
+              })}
             </p>
           </div>
 
@@ -98,34 +100,34 @@ export function OpenApiExportModal({
             />
             <div className="flex-1">
               <FieldLabel htmlFor="infer-from-history" className="text-xs">
-                Infer schemas from history (merge with generic via allOf)
+                {t("importExport.openapiExport.inferSchemas")}
               </FieldLabel>
               <p className="text-[11px] text-muted-foreground mt-1">
                 {hasInferableHistory
-                  ? "Les schémas de réponse seront enrichis à partir du dernier historique disponible pour chaque requête."
-                  : "Aucun historique disponible. Les schémas resteront génériques."}
+                  ? t("importExport.openapiExport.inferHasHistory")
+                  : t("importExport.openapiExport.inferNoHistory")}
               </p>
             </div>
           </Field>
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={onClose} disabled={isExporting}>
-              Annuler
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleExportClick} disabled={isExporting || collections.length === 0}>
               {isExporting ? (
                 <>
                   <Loader2 className="size-4 mr-2 animate-spin" />
-                  Export en cours...
+                  {t("importExport.common.exporting")}
                 </>
               ) : (
-                "Exporter"
+                t("common.export")
               )}
             </Button>
           </div>
 
           <div className="rounded-lg border border-dashed border-border px-4 py-3 space-y-2">
-            <p className="text-xs font-medium">SDK client</p>
+            <p className="text-xs font-medium">{t("importExport.openapiExport.sdkClient")}</p>
             <SdkDownloadButton
               collections={collections}
               historyItems={historyItems}

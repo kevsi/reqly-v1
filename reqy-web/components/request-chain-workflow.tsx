@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowRight,
   Plus,
@@ -27,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useRequestStore, type RequestItem, type Collection } from "@/hooks/use-request-store";
+import { useRequestStore } from "@/hooks/use-request-store";
 import { toast } from "@/hooks/use-toast";
 
 interface ChainStep {
@@ -48,6 +49,7 @@ interface RequestChainProps {
 }
 
 export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
+  const { t } = useTranslation();
   const { collections, addVariableMapping, variableMappings } = useRequestStore();
   const [chain, setChain] = useState<ChainStep[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -161,16 +163,16 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
     });
 
     toast({
-      title: "Chain saved",
-      description: `${chain.length} steps saved as variable mappings`,
+      title: t("chain.saved"),
+      description: t("chain.savedDesc", { count: chain.length }),
     });
   };
 
   const executeChain = async () => {
     if (chain.length === 0) {
       toast({
-        title: "Empty chain",
-        description: "Add at least one request step",
+        title: t("chain.empty"),
+        description: t("chain.emptyDesc"),
         variant: "destructive",
       });
       return;
@@ -182,13 +184,13 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
         await onExecute(chain);
       }
       toast({
-        title: "Chain executed",
-        description: `${chain.length} requests completed`,
+        title: t("chain.executed"),
+        description: t("chain.executedDesc", { count: chain.length }),
       });
     } catch (error) {
       toast({
-        title: "Execution failed",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: t("chain.executionFailed"),
+        description: error instanceof Error ? error.message : t("chain.unknownError"),
         variant: "destructive",
       });
     } finally {

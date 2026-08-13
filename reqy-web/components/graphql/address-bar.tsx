@@ -4,6 +4,7 @@ import { Send, Square, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AutocompleteInput, type AutocompleteGroup } from "@/components/ui/autocomplete-input";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   endpoint: string;
@@ -15,18 +16,18 @@ interface Props {
   environmentVariableNames?: string[];
 }
 
-function validateGraphqlUrl(rawUrl: string): string | null {
+function validateGraphqlUrl(rawUrl: string, t: (key: string) => string): string | null {
   const trimmed = rawUrl.trim();
   if (!trimmed) {
-    return "URL is required";
+    return t("graphql.address.urlRequired");
   }
   if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-    return "URL must start with http:// or https://";
+    return t("graphql.address.urlMustStartHttp");
   }
   try {
     new URL(trimmed);
   } catch {
-    return "Invalid URL format";
+    return t("graphql.address.invalidUrlFormat");
   }
   return null;
 }
@@ -40,6 +41,7 @@ export function GraphqlAddressBar({
   historyUrls,
   environmentVariableNames,
 }: Props) {
+  const { t } = useTranslation();
   const [urlError, setUrlError] = useState<string | null>(null);
 
   const gqlAutocompleteGroups = useMemo((): AutocompleteGroup[] => {
@@ -49,12 +51,12 @@ export function GraphqlAddressBar({
     const vars = environmentVariableNames?.filter(Boolean) ?? [];
     if (vars.length > 0) {
       groups.push({
-        label: "Variables",
+        label: t("request.variables"),
         items: vars.map((name) => ({
           id: `gql-var-${name}`,
           label: `{{${name}}}`,
           value: `{{${name}}}`,
-          description: "variable",
+          description: t("graphql.address.variableDesc"),
         })),
       });
     }
@@ -69,39 +71,39 @@ export function GraphqlAddressBar({
         id: `gql-url-${u}`,
         label: u,
         value: u,
-        description: "historique",
+        description: t("graphql.address.historyDesc"),
       });
     }
     if (historyItems.length > 0) {
       groups.push({
-        label: "Historique",
+        label: t("request.history"),
         items: historyItems.slice(0, 20),
       });
     }
 
     return groups;
-  }, [environmentVariableNames, historyUrls]);
+  }, [environmentVariableNames, historyUrls, t]);
 
   const handleChange = useCallback(
     (value: string) => {
       onEndpointChange(value);
       if (urlError) {
-        const err = validateGraphqlUrl(value);
+        const err = validateGraphqlUrl(value, t);
         setUrlError(err);
       }
     },
-    [onEndpointChange, urlError],
+    [onEndpointChange, urlError, t],
   );
 
   const handleSend = useCallback(() => {
-    const err = validateGraphqlUrl(endpoint);
+    const err = validateGraphqlUrl(endpoint, t);
     if (err) {
       setUrlError(err);
       return;
     }
     setUrlError(null);
     onSend();
-  }, [endpoint, onSend]);
+  }, [endpoint, onSend, t]);
 
   return (
     <div className="border-b bg-card" data-testid="graphql-address-bar">
@@ -110,7 +112,7 @@ export function GraphqlAddressBar({
         <AutocompleteInput
           value={endpoint}
           onChange={handleChange}
-          placeholder="https://api.example.com/graphql"
+          placeholder={t("graphql.address.placeholder")}
           className="flex-1 font-mono text-sm"
           data-testid="graphql-endpoint-input"
           suggestions={gqlAutocompleteGroups}
@@ -123,7 +125,7 @@ export function GraphqlAddressBar({
             onClick={onStop}
             data-testid="graphql-stop-button"
           >
-            <Square className="w-3 h-3 mr-1" /> Stop
+            <Square className="w-3 h-3 mr-1" /> {t("graphql.address.stop")}
           </Button>
         ) : (
           <Button size="sm" onClick={handleSend} data-testid="graphql-send-button">
@@ -132,7 +134,7 @@ export function GraphqlAddressBar({
             ) : (
               <Send className="w-3 h-3 mr-1" />
             )}
-            Send
+            {t("graphql.address.send")}
           </Button>
         )}
       </div>

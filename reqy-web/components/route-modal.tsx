@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "react-i18next";
 
 const methodConfig: Record<string, { color: string; bg: string }> = {
   GET: { color: "text-success", bg: "bg-success/10" },
@@ -45,6 +46,7 @@ interface RouteModalProps {
 }
 
 export function RouteModal({ project, onClose }: RouteModalProps) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState<string>("all");
   const [authOnly, setAuthOnly] = useState(false);
@@ -64,10 +66,16 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
     setCreatedId(null);
     try {
       const baseUrl = `http://localhost:${project.port ?? 3000}`;
-      const colName = `Collection ${project.framework} · ${project.name}`;
+      const colName = t("routeModal.collectionName", {
+        framework: project.framework,
+        name: project.name,
+      });
       const colId = addCollection({
         name: colName,
-        description: `${project.routes.length} routes détectées dans « ${project.name} »`,
+        description: t("routeModal.collectionDesc", {
+          count: project.routes.length,
+          name: project.name,
+        }),
         color: "emerald",
         icon: "package",
       });
@@ -96,25 +104,36 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
         added.push(`${route.method} ${route.path}`);
       }
       toast({
-        title: `${added.length} requête(s) ajoutée(s) à la collection « ${colName} » (port ${project.port ?? 3000})`,
+        title: t("routeModal.addedToCollection", {
+          count: added.length,
+          name: colName,
+          port: project.port ?? 3000,
+        }),
         meta: { event: "collectionComplete" },
       });
     } catch (err) {
-      toast({ title: `Erreur : ${String(err)}`, variant: "destructive" });
+      toast({ title: t("newProject.error", { error: String(err) }), variant: "destructive" });
       setCreatedId(null);
     } finally {
       setCreating(false);
     }
-  }, [project, addCollection, addRequestToCollection]);
+  }, [project, addCollection, addRequestToCollection, t]);
 
-  const handleCopy = useCallback(async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast({ title: `${label} copié`, description: text, meta: { event: "copy" } });
-    } catch {
-      toast({ title: `Impossible de copier ${label}`, variant: "destructive" });
-    }
-  }, []);
+  const handleCopy = useCallback(
+    async (text: string, label: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast({
+          title: t("routeModal.copied", { label }),
+          description: text,
+          meta: { event: "copy" },
+        });
+      } catch {
+        toast({ title: t("routeModal.copyFailed", { label }), variant: "destructive" });
+      }
+    },
+    [t],
+  );
 
   if (!project) return null;
 
@@ -160,8 +179,8 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                   <div>
                     <h2 className="text-base font-semibold truncate">{project.name}</h2>
                     <p className="text-xs text-muted-foreground">
-                      {project.framework} · {stats.total} routes
-                      {project.port ? ` · Port ${project.port}` : ""}
+                      {project.framework} · {t("routeModal.routesCount", { count: stats.total })}
+                      {project.port ? ` · ${t("routeModal.port")} ${project.port}` : ""}
                     </p>
                   </div>
                 </div>
@@ -176,7 +195,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                   disabled={!filtered.length}
                   className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Copy className="size-3.5" /> Copier
+                  <Copy className="size-3.5" /> {t("routeModal.copy")}
                 </button>
                 <button
                   type="button"
@@ -196,7 +215,11 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                   ) : (
                     <Layers className="size-3.5" />
                   )}
-                  {creating ? "Création…" : createdId ? "Collection créée" : "Collection"}
+                  {creating
+                    ? t("routeModal.creating")
+                    : createdId
+                      ? t("routeModal.collectionCreated")
+                      : t("routeModal.collection")}
                 </button>
                 <button
                   type="button"
@@ -210,7 +233,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
             {/* Stats bar */}
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                <Route className="size-3" /> {stats.total} total
+                <Route className="size-3" /> {stats.total} {t("routeModal.total")}
               </span>
               <span
                 className={cn(
@@ -218,7 +241,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                   stats.high > 0 ? "bg-success/10 text-success" : "bg-muted text-muted-foreground",
                 )}
               >
-                <Shield className="size-3" /> {stats.high} haute confiance
+                <Shield className="size-3" /> {stats.high} {t("routeModal.highConfidence")}
               </span>
               <span
                 className={cn(
@@ -226,7 +249,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                   stats.auth > 0 ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground",
                 )}
               >
-                <Lock className="size-3" /> {stats.auth} protégées
+                <Lock className="size-3" /> {stats.auth} {t("routeModal.protectedRoutes")}
               </span>
               <span
                 className={cn(
@@ -252,7 +275,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Rechercher une route…"
+                  placeholder={t("routeModal.searchPlaceholder")}
                   className="h-8 pl-8 text-sm"
                 />
                 {search && (
@@ -266,10 +289,10 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
               </div>
               <Select value={methodFilter} onValueChange={setMethodFilter}>
                 <SelectTrigger className="h-8 w-[110px] text-xs" size="sm">
-                  <SelectValue placeholder="Méthode" />
+                  <SelectValue placeholder={t("routeModal.method")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="all">{t("routeModal.all")}</SelectItem>
                   <SelectItem value="GET">GET</SelectItem>
                   <SelectItem value="POST">POST</SelectItem>
                   <SelectItem value="PUT">PUT</SelectItem>
@@ -288,7 +311,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                 )}
               >
                 {authOnly ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
-                {authOnly ? "Protégées" : "Toutes"}
+                {authOnly ? t("routeModal.protectedRoutes") : t("routeModal.all")}
               </button>
               <span className="text-xs text-muted-foreground">
                 {filtered.length}/{stats.total}
@@ -301,8 +324,8 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Route className="size-10 text-muted-foreground/30" />
-                <p className="mt-3 text-sm text-muted-foreground">Aucune route trouvée</p>
-                <p className="text-xs text-muted-foreground">Essayez de modifier les filtres</p>
+                <p className="mt-3 text-sm text-muted-foreground">{t("routeModal.noRoutes")}</p>
+                <p className="text-xs text-muted-foreground">{t("routeModal.noRoutesHint")}</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -389,7 +412,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                             handleCopy(route.path, "Route");
                           }}
                           className="shrink-0 rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
-                          title="Copier le chemin"
+                          title={t("routeModal.copyPath")}
                         >
                           <Copy className="size-3" />
                         </button>
@@ -402,7 +425,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                             <div className="space-y-2">
                               <div>
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Chemin
+                                  {t("routeModal.path")}
                                 </span>
                                 <div className="mt-0.5 rounded-lg bg-muted/60 px-2.5 py-1.5 font-mono text-sm break-all">
                                   {route.path}
@@ -411,7 +434,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                               {route.sourceFile && (
                                 <div>
                                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Fichier source
+                                    {t("routeModal.sourceFile")}
                                   </span>
                                   <p className="mt-0.5 text-xs text-muted-foreground break-all">
                                     {route.sourceFile}
@@ -421,7 +444,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                               {route.description && (
                                 <div>
                                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Description
+                                    {t("routeModal.description")}
                                   </span>
                                   <p className="mt-0.5 text-xs text-foreground">
                                     {route.description}
@@ -432,7 +455,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                             <div className="space-y-2">
                               <div>
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Métadonnées
+                                  {t("routeModal.metadata")}
                                 </span>
                                 <div className="mt-0.5 flex flex-wrap gap-1.5">
                                   <span
@@ -449,7 +472,9 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                                       <Unlock className="size-3" />
                                     )}
                                     {route.authType ||
-                                      (route.authRequired ? "protégée" : "publique")}
+                                      (route.authRequired
+                                        ? t("routeModal.protected")
+                                        : t("routeModal.public"))}
                                   </span>
                                   <span
                                     className={cn(
@@ -471,7 +496,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                                           : "bg-muted text-muted-foreground",
                                     )}
                                   >
-                                    <Info className="size-3" /> confiance:{" "}
+                                    <Info className="size-3" /> {t("routeModal.confidence")}:{" "}
                                     {(route.confidence || "LOW").toLowerCase()}
                                   </span>
                                   {route.controller && (
@@ -487,7 +512,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                               {route.middlewareChain && route.middlewareChain.length > 0 && (
                                 <div>
                                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Middleware
+                                    {t("routeModal.middleware")}
                                   </span>
                                   <div className="mt-0.5 flex flex-wrap gap-1">
                                     {route.middlewareChain.map((mw) => (
@@ -504,7 +529,7 @@ export function RouteModal({ project, onClose }: RouteModalProps) {
                               {route.reasonings && route.reasonings.length > 0 && (
                                 <div>
                                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Détection
+                                    {t("routeModal.detection")}
                                   </span>
                                   <ul className="mt-0.5 space-y-0.5">
                                     {route.reasonings.map((r, i) => (

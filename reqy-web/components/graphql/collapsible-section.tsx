@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, X, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   /** Section title shown in the header (e.g. "Variables", "Headers", "Builder") */
@@ -46,6 +47,7 @@ export function CollapsibleSection({
   className,
   children,
 }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div
@@ -77,7 +79,7 @@ export function CollapsibleSection({
             <AlertCircle
               className="w-3.5 h-3.5 text-destructive shrink-0"
               data-testid={`collapsible-error-${title.toLowerCase()}`}
-              aria-label="Invalid input"
+              aria-label={t("graphql.collapsible.invalidInput")}
             />
           )}
           {hint && (
@@ -90,7 +92,7 @@ export function CollapsibleSection({
             variant="ghost"
             className="h-6 w-6 p-0 shrink-0"
             onClick={onClose}
-            aria-label={`Close ${title}`}
+            aria-label={t("graphql.collapsible.closeSection", { title })}
             data-testid={`collapsible-close-${title.toLowerCase()}`}
           >
             <X className="w-3 h-3" />

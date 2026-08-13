@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,40 +43,43 @@ export function RequestChainingDialog({
   onUpdateMapping,
   onRemoveMapping,
 }: RequestChainingDialogProps) {
+  const { t } = useTranslation();
   const [pendingRemoveMappingId, setPendingRemoveMappingId] = useState<string | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-7xl w-[min(98vw,1400px)] h-[86vh] flex flex-col overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 pr-12 border-b border-border">
-          <DialogTitle>Request chaining</DialogTitle>
+          <DialogTitle>{t("chaining.title")}</DialogTitle>
           <DialogDescription className="mt-1 text-sm text-muted-foreground">
-            Inject values from previous responses into future requests using variables.
+            {t("chaining.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground">Mappings</p>
-              <p className="text-sm text-muted-foreground">
-                Use values from a prior response in later requests.
-              </p>
+              <p className="text-sm font-semibold text-foreground">{t("chaining.mappings")}</p>
+              <p className="text-sm text-muted-foreground">{t("chaining.mappingsHint")}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Use paths like <span className="font-mono">data.items[0].token</span>. Only
-                alphanumeric characters, <span className="font-mono">_</span>,{" "}
-                <span className="font-mono">.</span>, <span className="font-mono">-</span> and{" "}
-                <span className="font-mono">[]</span> are allowed.
+                {t("chaining.pathHint", {
+                  path: <span className="font-mono">data.items[0].token</span>,
+                  underscore: <span className="font-mono">_</span>,
+                  dot: <span className="font-mono">.</span>,
+                  dash: <span className="font-mono">-</span>,
+                  brackets: <span className="font-mono">[]</span>,
+                })}
               </p>
             </div>
             <Button size="sm" onClick={onAddMapping}>
-              Add mapping
+              {t("chaining.addMapping")}
             </Button>
           </div>
 
           {variableMappings.length === 0 ? (
             <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
-              No active mappings. Create a mapping and use it with{" "}
-              <span className="font-mono">{"{{token}}"}</span> in URLs, headers, or body.
+              {t("chaining.noActiveMappings", {
+                token: <span className="font-mono">{"{{token}}"}</span>,
+              })}
             </div>
           ) : (
             <div className="space-y-4">
@@ -84,7 +88,7 @@ export function RequestChainingDialog({
                   <div className="grid gap-4 xl:grid-cols-[2fr_1.4fr_1fr] items-end">
                     <div className="min-w-0">
                       <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                        Source request
+                        {t("chaining.sourceRequest")}
                       </p>
                       <Select
                         value={mapping.sourceRequestId}
@@ -93,12 +97,15 @@ export function RequestChainingDialog({
                         }
                       >
                         <SelectTrigger className="h-11 w-full min-w-0">
-                          <SelectValue placeholder="Select request" />
+                          <SelectValue placeholder={t("chaining.selectRequest")} />
                         </SelectTrigger>
                         <SelectContent>
                           {history.map((item) => (
                             <SelectItem key={item.id} value={item.id}>
-                              {item.name || item.endpoint || item.url || "Untitled request"}
+                              {item.name ||
+                                item.endpoint ||
+                                item.url ||
+                                t("chaining.untitledRequest")}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -107,7 +114,7 @@ export function RequestChainingDialog({
 
                     <div className="min-w-0">
                       <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                        Response path
+                        {t("chaining.responsePath")}
                       </p>
                       <Input
                         value={mapping.sourcePath}
@@ -120,14 +127,14 @@ export function RequestChainingDialog({
                       {mapping.sourcePath.trim() &&
                         !isSourcePathSyntaxValid(mapping.sourcePath) && (
                           <p className="mt-2 text-xs text-destructive">
-                            Invalid format: use data.items[0].token or data.user.id.
+                            {t("chaining.invalidPathFormat")}
                           </p>
                         )}
                     </div>
 
                     <div className="min-w-0">
                       <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                        Variable name
+                        {t("chaining.variableName")}
                       </p>
                       <Input
                         value={mapping.name}
@@ -140,7 +147,7 @@ export function RequestChainingDialog({
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_auto] items-center text-sm text-muted-foreground">
                     <div>
-                      Preview:{" "}
+                      {t("chaining.preview")}{" "}
                       <span className="font-mono text-foreground">
                         {(() => {
                           const result = resolveMappingValue(mapping, history);
@@ -157,7 +164,7 @@ export function RequestChainingDialog({
                         className="text-destructive"
                         onClick={() => setPendingRemoveMappingId(mapping.id)}
                       >
-                        Remove
+                        {t("chaining.remove")}
                       </Button>
                     </div>
                   </div>
@@ -169,7 +176,7 @@ export function RequestChainingDialog({
 
         <DialogFooter className="border-t border-border">
           <div className="w-full flex justify-end p-4">
-            <Button onClick={() => onOpenChange(false)}>Close</Button>
+            <Button onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
           </div>
         </DialogFooter>
         <ConfirmDialog
@@ -177,10 +184,10 @@ export function RequestChainingDialog({
           onOpenChange={(open) => {
             if (!open) setPendingRemoveMappingId(null);
           }}
-          title="Supprimer ce mapping ?"
-          description="Cette action est irréversible. Le mapping de variable sera définitivement supprimé."
-          confirmLabel="Supprimer"
-          cancelLabel="Annuler"
+          title={t("chaining.deleteMappingTitle")}
+          description={t("chaining.deleteMappingDesc")}
+          confirmLabel={t("common.delete")}
+          cancelLabel={t("common.cancel")}
           onConfirm={() => {
             if (pendingRemoveMappingId) onRemoveMapping(pendingRemoveMappingId);
             setPendingRemoveMappingId(null);

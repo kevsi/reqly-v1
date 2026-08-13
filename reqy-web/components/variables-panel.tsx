@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Copy, Check, Eye, EyeOff, Braces } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { useRequestStore } from "@/hooks/use-request-store";
 import { interpolate } from "@/lib/utils";
 
 export function VariablesPanel() {
+  const { t } = useTranslation();
   const environments = useRequestStore((s) => s.environments);
   const activeEnvironmentId = useRequestStore((s) => s.activeEnvironmentId);
   const [open, setOpen] = useState(false);
@@ -42,7 +44,9 @@ export function VariablesPanel() {
         )}
       >
         <Braces className="size-3.5" />
-        {vars.length > 0 ? `${vars.length} var` : "Variables"}
+        {vars.length > 0
+          ? t("variables.toggleCount", { count: vars.length })
+          : t("variables.toggleDefault")}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -54,11 +58,11 @@ export function VariablesPanel() {
                 <>
                   <span>{activeEnv.name}</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    — {vars.length} variable{vars.length !== 1 ? "s" : ""}
+                    {t("variables.dialogCount", { count: vars.length })}
                   </span>
                 </>
               ) : (
-                "Variables"
+                t("variables.title")
               )}
             </DialogTitle>
           </DialogHeader>
@@ -70,7 +74,7 @@ export function VariablesPanel() {
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      URL Preview
+                      {t("variables.urlPreview")}
                     </label>
                     <Button
                       variant="ghost"
@@ -79,7 +83,7 @@ export function VariablesPanel() {
                       onClick={() => setShowPreview(!showPreview)}
                     >
                       {showPreview ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                      {showPreview ? "Hide" : "Test"}
+                      {showPreview ? t("variables.hide") : t("variables.test")}
                     </Button>
                   </div>
                   {showPreview && (
@@ -99,7 +103,7 @@ export function VariablesPanel() {
                         )}
                       >
                         <span className="text-[10px] font-medium uppercase tracking-wider block mb-1">
-                          {hasUnresolved ? "⚠ Unresolved" : "✓ Resolved"}
+                          {hasUnresolved ? t("variables.unresolved") : t("variables.resolved")}
                         </span>
                         {resolved}
                       </div>
@@ -110,7 +114,7 @@ export function VariablesPanel() {
                 {/* Variable list */}
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 block">
-                    Available Variables
+                    {t("variables.available")}
                   </label>
 
                   {vars.length === 0 ? (
@@ -118,17 +122,19 @@ export function VariablesPanel() {
                       <div className="rounded-full bg-muted/30 p-4 mb-3">
                         <Braces className="size-8 text-muted-foreground/30" />
                       </div>
-                      <p className="text-sm font-medium text-foreground">No variables defined</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {t("variables.emptyTitle")}
+                      </p>
                       <p className="text-xs text-muted-foreground mt-1 max-w-[260px]">
-                        Add variables in the environment settings to use them in your requests.
+                        {t("variables.emptyDescription")}
                       </p>
                     </div>
                   ) : (
                     <div className="border rounded-lg divide-y overflow-hidden">
                       {/* Header */}
                       <div className="grid grid-cols-[1fr_1fr_auto] gap-3 px-4 py-2 bg-muted/40 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                        <span>Variable</span>
-                        <span>Value</span>
+                        <span>{t("variables.columnVariable")}</span>
+                        <span>{t("variables.columnValue")}</span>
                         <span className="w-7" />
                       </div>
                       {vars.map((v) => (
@@ -142,14 +148,16 @@ export function VariablesPanel() {
                             {"}}"}
                           </code>
                           <code className="text-xs text-muted-foreground truncate">
-                            {v.value || <span className="italic opacity-50">empty</span>}
+                            {v.value || (
+                              <span className="italic opacity-50">{t("variables.emptyValue")}</span>
+                            )}
                           </code>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleCopy(v.key)}
                             className="size-7 p-0 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title={`Copy {{${v.key}}}`}
+                            title={t("variables.copyVarTitle", { key: `{{${v.key}}}` })}
                           >
                             {copiedKey === v.key ? (
                               <Check className="size-3.5 text-success" />
@@ -165,15 +173,15 @@ export function VariablesPanel() {
 
                 {/* Usage hint */}
                 <div className="rounded-lg border bg-muted/50 p-4 text-xs text-muted-foreground space-y-1">
-                  <p className="font-semibold text-foreground">How to use</p>
+                  <p className="font-semibold text-foreground">{t("variables.howToUse")}</p>
                   <p>
-                    Type{" "}
+                    {t("variables.howToUseType")}{" "}
                     <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
                       {"{{KEY}}"}
                     </code>{" "}
-                    in URL, headers, or body to reference a variable.
+                    {t("variables.howToUseRest")}
                   </p>
-                  <p>It will be replaced with the variable value when the request is sent.</p>
+                  <p>{t("variables.howToUseNote")}</p>
                 </div>
               </>
             ) : (
@@ -181,9 +189,11 @@ export function VariablesPanel() {
                 <div className="rounded-full bg-muted/30 p-4 mb-3">
                   <Braces className="size-10 text-muted-foreground/30" />
                 </div>
-                <p className="text-sm font-medium text-foreground">No active environment</p>
+                <p className="text-sm font-medium text-foreground">
+                  {t("variables.noActiveTitle")}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1 max-w-[260px]">
-                  Create an environment and set it active to start using variables in your requests.
+                  {t("variables.noActiveDescription")}
                 </p>
               </div>
             )}

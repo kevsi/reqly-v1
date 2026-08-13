@@ -20,8 +20,10 @@ import { useRequestStore } from "@/hooks/use-request-store";
 import type { SavedProject } from "@/lib/types";
 import { analyzeProject } from "@/lib/project-analyzer";
 import { toast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 
 const MyProjectsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { projects, addProject, deleteProject, updateProject, setSelectedProject, isLoaded } =
     useRequestStore();
   const [selectedProject, setSelectedProjectLocal] = useState<SavedProject | null>(null);
@@ -91,17 +93,21 @@ const MyProjectsPage: React.FC = () => {
           setSelectedProjectLocal(updatedProject);
         }
         toast({
-          title: `Réanalyse terminée`,
-          description: `${updatedProject.routes.length} route(s) mises à jour`,
+          title: t("myProjects.reanalyzeDone"),
+          description: t("myProjects.reanalyzeRoutes", { count: updatedProject.routes.length }),
           meta: { event: "projectReanalyze" },
         });
       } catch (err) {
-        toast({ title: `Échec de la réanalyse`, description: String(err), variant: "destructive" });
+        toast({
+          title: t("myProjects.reanalyzeFailed"),
+          description: String(err),
+          variant: "destructive",
+        });
       } finally {
         setReanalyzingProjectId(null);
       }
     },
-    [projects, selectedProject, updateProject],
+    [projects, selectedProject, updateProject, t],
   );
 
   // Wait for the store to finish loading from localStorage before rendering
@@ -109,7 +115,7 @@ const MyProjectsPage: React.FC = () => {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Chargement des projets…</p>
+        <p className="text-sm text-muted-foreground">{t("myProjects.loading")}</p>
       </div>
     );
   }
@@ -119,10 +125,10 @@ const MyProjectsPage: React.FC = () => {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Mes Projets</h1>
-            <p className="text-sm text-muted-foreground">
-              Gérez vos projets et leurs routes détectées.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {t("myProjects.title")}
+            </h1>
+            <p className="text-sm text-muted-foreground">{t("myProjects.subtitle")}</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -130,13 +136,13 @@ const MyProjectsPage: React.FC = () => {
               onClick={() => setIsGithubModalOpen(true)}
             >
               <Github className="size-4" />
-              Importer GitHub
+              {t("myProjects.importGithub")}
             </button>
             <button
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
               onClick={() => setIsModalOpen(true)}
             >
-              + Nouveau projet
+              + {t("myProjects.newProject")}
             </button>
           </div>
         </div>
@@ -179,20 +185,22 @@ const MyProjectsPage: React.FC = () => {
       >
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer le projet</AlertDialogTitle>
+            <AlertDialogTitle>{t("myProjects.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDeleteProject
-                ? `Voulez-vous vraiment supprimer « ${pendingDeleteProject.name} » ? Cette action est irréversible.`
-                : "Supprimer ce projet ?"}
+                ? t("myProjects.deleteConfirm", { name: pendingDeleteProject.name })
+                : t("myProjects.deleteGeneric")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelDeleteProject}>Annuler</AlertDialogCancel>
+            <AlertDialogCancel onClick={cancelDeleteProject}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteProject}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Supprimer
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

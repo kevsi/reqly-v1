@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import "@/src/i18n";
 
 // jsdom has no IndexedDB. The storage adapter is the storage seam, so swap it
 // for an in-memory implementation in unit tests instead of pulling in

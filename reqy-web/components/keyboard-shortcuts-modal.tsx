@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { X, Keyboard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SHORTCUT_DEFS, comboId, type ShortcutDef } from "@/lib/shortcut-defs";
+import { SHORTCUT_DEFS, type ShortcutDef } from "@/lib/shortcut-defs";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface KeyboardShortcutsModalProps {
   open: boolean;
@@ -13,6 +14,7 @@ interface KeyboardShortcutsModalProps {
 
 export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcutsModalProps) {
   const [isMac, setIsMac] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     setIsMac(navigator.platform.toUpperCase().indexOf("MAC") >= 0);
@@ -21,10 +23,10 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
   // Grouper les raccourcis par catégorie
   const categories = SHORTCUT_DEFS.reduce(
     (acc, shortcut) => {
-      if (!acc[shortcut.category]) {
-        acc[shortcut.category] = [];
+      if (!acc[shortcut.categoryKey]) {
+        acc[shortcut.categoryKey] = [];
       }
-      acc[shortcut.category].push(shortcut);
+      acc[shortcut.categoryKey].push(shortcut);
       return acc;
     },
     {} as Record<string, ShortcutDef[]>,
@@ -56,7 +58,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Keyboard className="size-5 text-primary" />
-            <DialogTitle>Raccourcis Clavier</DialogTitle>
+            <DialogTitle>{t("settings.keyboard.title")}</DialogTitle>
           </div>
         </DialogHeader>
 
@@ -64,7 +66,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
           {Object.entries(categories).map(([category, shortcuts]) => (
             <div key={category}>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                {category}
+                {t(category)}
               </h3>
               <div className="space-y-2">
                 {shortcuts.map((shortcut) => {
@@ -80,7 +82,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
                       key={shortcut.id}
                       className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors"
                     >
-                      <span className="text-sm text-foreground">{shortcut.description}</span>
+                      <span className="text-sm text-foreground">{t(shortcut.descriptionKey)}</span>
                       <div className="flex items-center gap-1">
                         {keyParts.map((part, idx) => (
                           <kbd
@@ -106,7 +108,7 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t text-xs text-muted-foreground">
-          <p>Appuyez sur {isMac ? "⌘" : "Ctrl"}+K pour fermer</p>
+          <p>{t("settings.keyboard.closeHint", { key: isMac ? "⌘" : "Ctrl" })}</p>
           <button
             onClick={() => onOpenChange(false)}
             className="text-muted-foreground hover:text-foreground transition-colors"

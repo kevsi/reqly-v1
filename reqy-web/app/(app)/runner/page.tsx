@@ -62,6 +62,8 @@ import {
 } from "@/lib/test-runner/types";
 import { hashRunReport, verifyRunReport } from "@/lib/run-report/hash";
 import { EnvironmentSelector } from "@/components/environment-selector";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 function formatDuration(ms?: number) {
   if (ms == null) return "\u2014";
@@ -78,17 +80,32 @@ const STATUS_BADGE = (status: number) => {
 
 const STATUS_META: Record<
   AssertionStatus,
-  { label: string; icon: LucideIcon; color: string; dot: string }
+  { labelKey: string; icon: LucideIcon; color: string; dot: string }
 > = {
-  pass: { label: "Passed", icon: CheckCircle2, color: "text-success", dot: "bg-success" },
-  fail: { label: "Failed", icon: XCircle, color: "text-destructive", dot: "bg-destructive" },
+  pass: {
+    labelKey: "runner.status.pass",
+    icon: CheckCircle2,
+    color: "text-success",
+    dot: "bg-success",
+  },
+  fail: {
+    labelKey: "runner.status.fail",
+    icon: XCircle,
+    color: "text-destructive",
+    dot: "bg-destructive",
+  },
   skipped: {
-    label: "Skipped",
+    labelKey: "runner.status.skipped",
     icon: CircleSlash,
     color: "text-muted-foreground",
     dot: "bg-muted-foreground",
   },
-  errored: { label: "Errored", icon: AlertCircle, color: "text-warning", dot: "bg-warning" },
+  errored: {
+    labelKey: "runner.status.errored",
+    icon: AlertCircle,
+    color: "text-warning",
+    dot: "bg-warning",
+  },
 };
 
 const COUNT_KEY: Record<AssertionStatus, "passed" | "failed" | "errored" | "skipped"> = {
@@ -98,32 +115,34 @@ const COUNT_KEY: Record<AssertionStatus, "passed" | "failed" | "errored" | "skip
   skipped: "skipped",
 };
 
-function describeAssertion(a: Assertion): string {
+function describeAssertion(t: TFunction<"translation">, a: Assertion): string {
   switch (a.type) {
     case "status": {
-      if (typeof a.expected === "number") return `Status equals ${a.expected}`;
-      if ("in" in a.expected) return `Status in [${a.expected.in.join(", ")}]`;
-      return `Status not ${a.expected.not}`;
+      if (typeof a.expected === "number")
+        return t("runner.describe.statusEquals", { value: a.expected });
+      if ("in" in a.expected)
+        return t("runner.describe.statusIn", { values: a.expected.in.join(", ") });
+      return t("runner.describe.statusNot", { value: a.expected.not });
     }
     case "responseTime":
-      return `Response time ${a.operator} ${a.valueMs}ms`;
+      return t("runner.describe.responseTime", { operator: a.operator, value: a.valueMs });
     case "jsonPath": {
       const op =
         a.operator === "exists"
-          ? "exists"
+          ? t("runner.describe.exists")
           : a.operator === "notExists"
-            ? "does not exist"
+            ? t("runner.describe.notExists")
             : a.operator === "equals"
-              ? `equals ${JSON.stringify(a.value)}`
+              ? t("runner.describe.equals", { value: JSON.stringify(a.value) })
               : a.operator === "contains"
-                ? `contains ${JSON.stringify(a.value)}`
+                ? t("runner.describe.contains", { value: JSON.stringify(a.value) })
                 : a.operator;
-      return `JSONPath ${a.path} ${op}`;
+      return t("runner.describe.jsonPath", { path: a.path, op });
     }
     case "schema":
-      return "Schema validation";
+      return t("runner.describe.schema");
     default:
-      return "Assertion";
+      return t("runner.describe.assertion");
   }
 }
 
@@ -146,6 +165,7 @@ function RequestResult({
   result: RequestTestResult;
   accordionValue: string;
 }) {
+  const { t } = useTranslation();
   const meta = STATUS_META[result.status];
   const StatusIcon = meta.icon;
   const hasScript = !!(result.scriptOutput?.pre || result.scriptOutput?.post);
@@ -185,7 +205,7 @@ function RequestResult({
         {hasAssertions && (
           <div className="space-y-1.5">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Assertions
+              {t("runner.assertions")}
             </p>
             <div className="divide-y divide-border rounded-lg border border-border bg-muted/20">
               {result.assertionResults.map((ar: AssertionResult, i: number) => (
@@ -196,12 +216,12 @@ function RequestResult({
                     <XCircle className="size-4 text-destructive shrink-0 translate-y-0.5" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground">{describeAssertion(ar.assertion)}</p>
+                    <p className="text-sm text-foreground">{describeAssertion(t, ar.assertion)}</p>
                     {ar.error ? (
                       <p className="font-mono text-xs text-destructive/80 truncate">{ar.error}</p>
                     ) : (
                       <p className="font-mono text-xs text-muted-foreground truncate">
-                        actual: {formatActual(ar.actualValue)}
+                        {t("runner.actual")} {formatActual(ar.actualValue)}
                       </p>
                     )}
                   </div>
@@ -211,15 +231,13 @@ function RequestResult({
           </div>
         )}
         {!hasAssertions && !hasScript && !result.error && (
-          <p className="text-xs text-muted-foreground">
-            No assertions or scripts configured for this request.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("runner.noAssertionsOrScripts")}</p>
         )}
         {hasScript && (
           <div className="mt-3 space-y-2">
             <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <Terminal className="size-3.5" />
-              Script output
+              {t("runner.scriptOutput")}
             </p>
             {result.scriptOutput?.pre && (
               <pre className="overflow-auto rounded-lg border border-border bg-[var(--code-bg)] p-3 font-mono text-xs text-[var(--code-text)]">
@@ -239,6 +257,7 @@ function RequestResult({
 }
 
 export default function RunnerPage() {
+  const { t } = useTranslation();
   const { collections, environmentVariables, activeWorkspaceId } = useRequestStore();
   const [selectedId, setSelectedId] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
@@ -290,7 +309,7 @@ export default function RunnerPage() {
     setDatasetError(null);
     const trimmed = datasetText.trim();
     if (!trimmed) {
-      setDatasetError("Please paste JSON or CSV data, or upload a file.");
+      setDatasetError(t("runner.errorEmpty"));
       return;
     }
     try {
@@ -303,45 +322,48 @@ export default function RunnerPage() {
     try {
       const rows = loadCsvDataset(trimmed);
       if (rows.length === 0) {
-        setDatasetError("No rows found in CSV data.");
+        setDatasetError(t("runner.errorNoRows"));
         return;
       }
       setDatasetRows(rows);
       setDatasetFileName(null);
     } catch (e) {
-      setDatasetError(e instanceof Error ? e.message : "Failed to parse dataset.");
+      setDatasetError(e instanceof Error ? e.message : t("runner.errorParse"));
     }
-  }, [datasetText]);
+  }, [datasetText, t]);
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setDatasetError(null);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      setDatasetText(text);
-      setDatasetFileName(file.name);
-      try {
-        setDatasetRows(loadJsonDataset(text));
-        return;
-      } catch {
-        /* fall through */
-      }
-      try {
-        const rows = loadCsvDataset(text);
-        if (rows.length === 0) {
-          setDatasetError("No rows found in CSV data.");
+  const handleFileUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setDatasetError(null);
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target?.result as string;
+        setDatasetText(text);
+        setDatasetFileName(file.name);
+        try {
+          setDatasetRows(loadJsonDataset(text));
           return;
+        } catch {
+          /* fall through */
         }
-        setDatasetRows(rows);
-      } catch (e) {
-        setDatasetError(e instanceof Error ? e.message : "Failed to parse dataset.");
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  }, []);
+        try {
+          const rows = loadCsvDataset(text);
+          if (rows.length === 0) {
+            setDatasetError(t("runner.errorNoRows"));
+            return;
+          }
+          setDatasetRows(rows);
+        } catch (e) {
+          setDatasetError(e instanceof Error ? e.message : t("runner.errorParse"));
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    },
+    [t],
+  );
 
   const handleClearDataset = useCallback(() => {
     setDatasetText("");
@@ -457,10 +479,14 @@ export default function RunnerPage() {
       ? "from-destructive/15 to-transparent"
       : "from-success/15 to-transparent";
   const verdictText = !report
-    ? "No runs yet"
+    ? t("runner.noRunsYet")
     : hasFailures
-      ? `${summary?.failed ?? 0} failed \u00B7 ${summary?.errored ?? 0} errored`
-      : "All checks passed";
+      ? t("runner.verdictFailed", {
+          failed: summary?.failed ?? 0,
+          errored: summary?.errored ?? 0,
+          count: summary?.failed ?? 0,
+        })
+      : t("runner.verdictPassed");
 
   const segments = summary
     ? [
@@ -482,10 +508,8 @@ export default function RunnerPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Runner</h1>
-            <p className="text-sm text-muted-foreground">
-              Execute an entire collection and verify every assertion in one pass.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{t("runner.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("runner.description")}</p>
           </div>
         </header>
 
@@ -494,12 +518,12 @@ export default function RunnerPage() {
             <div className="flex flex-1 items-center gap-3 min-w-0 flex-wrap">
               <Select value={selectedId} onValueChange={setSelectedId} disabled={isRunning}>
                 <SelectTrigger className="w-full sm:w-64">
-                  <SelectValue placeholder="Select a collection\u2026" />
+                  <SelectValue placeholder={t("runner.selectCollection")} />
                 </SelectTrigger>
                 <SelectContent>
                   {collections.length === 0 && (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                      No collections available
+                      {t("runner.noCollections")}
                     </div>
                   )}
                   {collections.map((c) => (
@@ -515,8 +539,8 @@ export default function RunnerPage() {
               <EnvironmentSelector />
               <span className="shrink-0 text-xs text-muted-foreground">
                 {requestCount > 0
-                  ? `${requestCount} request${requestCount !== 1 ? "s" : ""}`
-                  : "No requests"}
+                  ? t("runner.requestCount", { count: requestCount })
+                  : t("runner.noRequests")}
               </span>
             </div>
 
@@ -524,12 +548,12 @@ export default function RunnerPage() {
               {isRunning ? (
                 <Button variant="outline" disabled className="gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Running\u2026
+                  {t("runner.running")}
                 </Button>
               ) : (
                 <Button onClick={handleRun} disabled={!canRun} className="gap-2">
                   <Play className="size-4" />
-                  Run collection
+                  {t("runner.runCollection")}
                 </Button>
               )}
             </div>
@@ -544,14 +568,16 @@ export default function RunnerPage() {
                   <Database className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <h2 className="text-sm font-medium text-foreground">
-                  Dataset{" "}
-                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  {t("runner.dataset")}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {t("runner.optional")}
+                  </span>
                 </h2>
               </div>
               {datasetRows.length > 0 && (
                 <Badge variant="secondary" className="gap-1.5 text-xs">
                   <Table2 className="size-3" />
-                  {datasetRows.length} row{datasetRows.length !== 1 ? "s" : ""}
+                  {t("runner.rowCount", { count: datasetRows.length })}
                 </Badge>
               )}
             </div>
@@ -559,7 +585,7 @@ export default function RunnerPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
-                    Columns
+                    {t("runner.columns")}
                   </span>
                   {columnNames.map((col) => (
                     <Badge
@@ -574,7 +600,8 @@ export default function RunnerPage() {
                 {datasetFileName && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
                     <HardDrive className="size-3" />
-                    File: <span className="font-medium text-foreground">{datasetFileName}</span>
+                    {t("runner.file")}{" "}
+                    <span className="font-medium text-foreground">{datasetFileName}</span>
                   </p>
                 )}
                 <Button
@@ -585,13 +612,13 @@ export default function RunnerPage() {
                   disabled={isRunning}
                 >
                   <Trash2 className="size-3" />
-                  Clear dataset
+                  {t("runner.clearDataset")}
                 </Button>
               </div>
             ) : (
               <div className="space-y-3">
                 <Textarea
-                  placeholder={`Paste a JSON array of objects or CSV data here\u2026\n\nExample (JSON):\n[{"id":"1","name":"Alice"},{"id":"2","name":"Bob"}]\n\nExample (CSV):\nid,name\n1,Alice\n2,Bob`}
+                  placeholder={t("runner.pasteDataset")}
                   value={datasetText}
                   onChange={(e) => setDatasetText(e.target.value)}
                   className="min-h-24 text-xs font-mono border-dashed focus:border-emerald-500/50"
@@ -606,7 +633,7 @@ export default function RunnerPage() {
                     disabled={isRunning || !datasetText.trim()}
                   >
                     <Upload className="size-3" />
-                    Load dataset
+                    {t("runner.loadDataset")}
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -623,7 +650,7 @@ export default function RunnerPage() {
                     disabled={isRunning}
                   >
                     <FileText className="size-3" />
-                    Upload .json/.csv
+                    {t("runner.uploadFile")}
                   </Button>
                 </div>
                 {datasetError && (
@@ -650,7 +677,7 @@ export default function RunnerPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground text-right">
-              {isRunning ? "Executing requests\u2026" : "Run complete"}
+              {isRunning ? t("runner.executingRequests") : t("runner.runComplete")}
             </p>
           </div>
         )}
@@ -667,12 +694,8 @@ export default function RunnerPage() {
               <EmptyMedia variant="icon">
                 <ListChecks className="size-6" />
               </EmptyMedia>
-              <EmptyTitle>No runs yet</EmptyTitle>
-              <EmptyDescription>
-                Pick a collection above and hit{" "}
-                <span className="font-medium text-foreground">Run collection</span> to execute every
-                request and verify its assertions.
-              </EmptyDescription>
+              <EmptyTitle>{t("runner.noRunsYet")}</EmptyTitle>
+              <EmptyDescription>{t("runner.emptyDescription")}</EmptyDescription>
             </EmptyHeader>
             <Button
               variant="default"
@@ -682,7 +705,7 @@ export default function RunnerPage() {
               className="h-8 gap-1.5 text-xs font-medium shadow-xs"
             >
               <Play className="size-4" />
-              {selected ? "Run collection" : "Select a collection first"}
+              {selected ? t("runner.runCollection") : t("runner.selectCollectionFirst")}
             </Button>
           </Empty>
         )}
@@ -713,7 +736,7 @@ export default function RunnerPage() {
                   {datasetRows.length > 0 && (
                     <Badge variant="secondary" className="text-[11px] gap-1">
                       <FileText className="size-3" />
-                      {datasetRows.length} it
+                      {t("runner.rowCount", { count: datasetRows.length })} it
                     </Badge>
                   )}
                 </div>
@@ -739,7 +762,7 @@ export default function RunnerPage() {
                       <div key={k} className="rounded-lg border border-border bg-muted/20 p-3">
                         <div className="flex items-center gap-1.5">
                           <span className={cn("size-2 rounded-full", m.dot)} />
-                          <span className="text-xs text-muted-foreground">{m.label}</span>
+                          <span className="text-xs text-muted-foreground">{t(m.labelKey)}</span>
                         </div>
                         <p className="mt-1 flex items-center gap-1.5 text-xl font-bold text-foreground">
                           <Icon className={cn("size-4", m.color)} />
@@ -757,7 +780,7 @@ export default function RunnerPage() {
                     onClick={() => exportReport("json")}
                   >
                     <Download className="size-3" />
-                    Export JSON
+                    {t("runner.exportJson")}
                   </Button>
                   <Button
                     variant="outline"
@@ -766,7 +789,7 @@ export default function RunnerPage() {
                     onClick={() => exportReport("junit")}
                   >
                     <FileText className="size-3" />
-                    Export JUnit
+                    {t("runner.exportJUnit")}
                   </Button>
                   {hasFailures && (
                     <Button
@@ -777,14 +800,14 @@ export default function RunnerPage() {
                       disabled={isRunning}
                     >
                       <RotateCcw className="size-3" />
-                      Re-run failed
+                      {t("runner.rerunFailed")}
                     </Button>
                   )}
                 </div>
                 <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                      Integrity Hash
+                      {t("runner.integrityHash")}
                     </span>
                     <code className="font-mono text-xs text-foreground bg-muted rounded px-1.5 py-0.5 break-all">
                       {reportHash}
@@ -799,16 +822,16 @@ export default function RunnerPage() {
                         setIntegrity(verifyRunReport(report, reportHash) ? "valid" : "tampered")
                       }
                     >
-                      Verify integrity
+                      {t("runner.verifyIntegrity")}
                     </Button>
                     {integrity === "valid" && (
                       <span className="flex items-center gap-1 text-xs font-medium text-success">
-                        Report intact
+                        {t("runner.reportIntact")}
                       </span>
                     )}
                     {integrity === "tampered" && (
                       <span className="flex items-center gap-1 text-xs font-medium text-destructive">
-                        Report modified
+                        {t("runner.reportModified")}
                       </span>
                     )}
                   </div>
@@ -821,26 +844,29 @@ export default function RunnerPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <ListChecks className="size-4 text-muted-foreground" />
-                    Requests
+                    {t("runner.requests")}
                     <span className="text-xs font-normal text-muted-foreground">
                       {datasetRows.length > 0
-                        ? `(${datasetRows.length} iteration${datasetRows.length !== 1 ? "s" : ""} \u00D7 ${requestCount} request${requestCount !== 1 ? "s" : ""})`
-                        : `(${results.length})`}
+                        ? t("runner.iterationsLine", {
+                            iterations: datasetRows.length,
+                            requests: requestCount,
+                          })
+                        : t("runner.resultCount", { count: results.length })}
                     </span>
                   </CardTitle>
                   <Tabs value={filterTab} onValueChange={setFilterTab} className="shrink-0">
                     <TabsList className="h-8">
                       <TabsTrigger value="all" className="text-xs px-2.5 h-6">
-                        All
+                        {t("runner.filterAll")}
                       </TabsTrigger>
                       <TabsTrigger value="pass" className="text-xs px-2.5 h-6">
-                        Passed
+                        {t("runner.filterPassed")}
                       </TabsTrigger>
                       <TabsTrigger value="fail" className="text-xs px-2.5 h-6">
-                        Failed
+                        {t("runner.filterFailed")}
                       </TabsTrigger>
                       <TabsTrigger value="errored" className="text-xs px-2.5 h-6">
-                        Errors
+                        {t("runner.filterErrors")}
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
@@ -850,11 +876,13 @@ export default function RunnerPage() {
                 {filteredResults.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-8 text-sm text-muted-foreground">
                     <Search className="size-8 text-muted-foreground/30" />
-                    No{" "}
                     {filterTab !== "all"
-                      ? STATUS_META[filterTab as AssertionStatus]?.label.toLowerCase()
-                      : ""}{" "}
-                    results
+                      ? t("runner.noResultsWithStatus", {
+                          status: t(
+                            STATUS_META[filterTab as AssertionStatus].labelKey,
+                          ).toLowerCase(),
+                        })
+                      : t("runner.noResults")}
                   </div>
                 ) : (
                   <Accordion type="single" collapsible className="w-full">

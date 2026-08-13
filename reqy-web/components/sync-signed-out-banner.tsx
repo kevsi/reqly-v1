@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/lib/session-store";
 
 /**
@@ -13,6 +14,7 @@ import { useSessionStore } from "@/lib/session-store";
  * Renders nothing once the user is authenticated.
  */
 export function SyncSignedOutBanner() {
+  const { t } = useTranslation();
   const status = useSessionStore((s) => s.status);
   if (status === "authenticated") return null;
 
@@ -26,18 +28,16 @@ export function SyncSignedOutBanner() {
           <Cloud className="size-4 text-primary" />
         </div>
         <div>
-          <p className="text-sm font-medium text-foreground">Connecte-toi pour synchroniser</p>
-          <p className="text-xs text-muted-foreground">
-            Tes espaces de travail sont liés à ton compte et synchronisés entre tes appareils.
-          </p>
+          <p className="text-sm font-medium text-foreground">{t("sync.banner.title")}</p>
+          <p className="text-xs text-muted-foreground">{t("sync.banner.description")}</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
         <Button variant="outline" asChild>
-          <Link href="/login">Se connecter</Link>
+          <Link href="/login">{t("sync.banner.signIn")}</Link>
         </Button>
         <Button asChild>
-          <Link href="/signup">Créer un compte</Link>
+          <Link href="/signup">{t("sync.banner.createAccount")}</Link>
         </Button>
       </div>
     </div>

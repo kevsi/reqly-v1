@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, Loader2, Plus, AlertTriangle } from "lucide-react";
 import {
   Card,
@@ -35,6 +36,7 @@ const DRAFTS_NAME = "Drafts";
  * `addRequestToCollection` path (into the Drafts collection).
  */
 export function SimpleRequestBuilder() {
+  const { t } = useTranslation();
   const { sendMessage, buildContext } = useAIEngine();
   const collections = useRequestStore((s) => s.collections);
   const addRequestToCollection = useRequestStore((s) => s.addRequestToCollection);
@@ -48,7 +50,7 @@ export function SimpleRequestBuilder() {
   const handleGenerate = useCallback(async () => {
     const text = description.trim();
     if (!text) {
-      setError("Décris d'abord la requête en langage naturel.");
+      setError(t("simpleMode.describeFirst"));
       return;
     }
     setLoading(true);
@@ -59,15 +61,11 @@ export function SimpleRequestBuilder() {
       const req = await generateRequestFromNL(text, askAI);
       setPreview(req);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "La génération a échoué. Vérifie ton provider IA dans Settings.",
-      );
+      setError(e instanceof Error ? e.message : t("simpleMode.generationFailed"));
     } finally {
       setLoading(false);
     }
-  }, [description, sendMessage, buildContext]);
+  }, [description, sendMessage, buildContext, t]);
 
   const handleCreate = useCallback(() => {
     if (!preview) return;
@@ -76,18 +74,22 @@ export function SimpleRequestBuilder() {
       ? drafts.id
       : addCollection({
           name: DRAFTS_NAME,
-          description: "Brouillons",
+          description: t("simpleMode.draftsDescription"),
           color: "slate",
           icon: "folder",
         });
     addRequestToCollection(targetId, preview);
     toast({
-      title: "Requête créée",
-      description: `${preview.method} ${preview.url} ajoutée à ${DRAFTS_NAME}.`,
+      title: t("simpleMode.requestCreated"),
+      description: t("simpleMode.requestCreatedDesc", {
+        method: preview.method,
+        url: preview.url,
+        collection: DRAFTS_NAME,
+      }),
     });
     setPreview(null);
     setDescription("");
-  }, [preview, collections, addCollection, addRequestToCollection]);
+  }, [preview, collections, addCollection, addRequestToCollection, t]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 overflow-auto p-6">
@@ -96,20 +98,18 @@ export function SimpleRequestBuilder() {
           <Sparkles className="size-5 text-primary" />
         </div>
         <div className="space-y-1">
-          <CardTitle className="text-base">Mode simple — Assistant de requête</CardTitle>
-          <CardDescription>
-            Décris ce que tu veux faire, l&apos;assistant génère la requête.
-          </CardDescription>
+          <CardTitle className="text-base">{t("simpleMode.title")}</CardTitle>
+          <CardDescription>{t("simpleMode.description")}</CardDescription>
         </div>
         <Badge variant="secondary" className="ml-auto">
-          Bêta
+          {t("simpleMode.beta")}
         </Badge>
       </div>
 
       <Card>
         <CardHeader>
           <Label htmlFor="simple-desc" className="text-sm font-medium">
-            Description en langage naturel
+            {t("simpleMode.naturalLanguageDesc")}
           </Label>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -118,16 +118,16 @@ export function SimpleRequestBuilder() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
-            placeholder="Décris la requête en langage naturel, ex : appelle l'API MoMo pour envoyer 1000 FCFA au 07..."
+            placeholder={t("simpleMode.descriptionPlaceholder")}
           />
           <Button onClick={handleGenerate} disabled={loading} className="w-full">
             {loading ? (
               <>
-                <Loader2 className="mr-2 size-4 animate-spin" /> Génération…
+                <Loader2 className="mr-2 size-4 animate-spin" /> {t("simpleMode.generating")}
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 size-4" /> Générer
+                <Sparkles className="mr-2 size-4" /> {t("simpleMode.generate")}
               </>
             )}
           </Button>
@@ -144,7 +144,7 @@ export function SimpleRequestBuilder() {
       {preview && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Aperçu de la requête</CardTitle>
+            <CardTitle className="text-sm">{t("simpleMode.preview")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export function SimpleRequestBuilder() {
             </div>
             {preview.headers && Object.keys(preview.headers).length > 0 && (
               <div>
-                <p className="mb-1 font-medium text-muted-foreground">En-têtes</p>
+                <p className="mb-1 font-medium text-muted-foreground">{t("simpleMode.headers")}</p>
                 <pre className="overflow-auto rounded bg-muted p-2 text-xs">
                   {JSON.stringify(preview.headers, null, 2)}
                 </pre>
@@ -161,7 +161,7 @@ export function SimpleRequestBuilder() {
             )}
             {preview.body ? (
               <div>
-                <p className="mb-1 font-medium text-muted-foreground">Corps</p>
+                <p className="mb-1 font-medium text-muted-foreground">{t("simpleMode.body")}</p>
                 <pre className="overflow-auto rounded bg-muted p-2 text-xs">{preview.body}</pre>
               </div>
             ) : null}
@@ -169,15 +169,13 @@ export function SimpleRequestBuilder() {
           <Separator />
           <CardFooter className="pt-4">
             <Button onClick={handleCreate} className="w-full">
-              <Plus className="mr-2 size-4" /> Créer la requête
+              <Plus className="mr-2 size-4" /> {t("simpleMode.createRequest")}
             </Button>
           </CardFooter>
         </Card>
       )}
 
-      <p className="text-center text-xs text-muted-foreground">
-        Fonctionnalité bêta — vérifie toujours la requête générée avant de l&apos;envoyer.
-      </p>
+      <p className="text-center text-xs text-muted-foreground">{t("simpleMode.footerHint")}</p>
     </div>
   );
 }

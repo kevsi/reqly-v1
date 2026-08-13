@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import i18n from "@/src/i18n";
 import {
   AIContext,
   AIResponse,
@@ -87,11 +88,11 @@ function parseAiConfig(override?: Partial<AIConfig>): AIConfig {
   const ollamaConfig = loadOllamaConfig();
 
   if (!provider) {
-    throw new Error("Configure ton provider IA dans Settings");
+    throw new Error(i18n.t("ai.hooks.configureProvider"));
   }
 
   if (provider !== "ollama" && !apiKey.trim()) {
-    throw new Error("Clé API manquante dans Settings");
+    throw new Error(i18n.t("ai.hooks.missingApiKey"));
   }
 
   return {

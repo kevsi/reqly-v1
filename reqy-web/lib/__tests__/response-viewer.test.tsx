@@ -12,13 +12,13 @@ describe("ResponseViewer", () => {
     const { container } = render(<ResponseViewer />);
     const empty = container.querySelector('[data-testid="graphql-response-empty"]');
     expect(empty).not.toBeNull();
-    expect(container.textContent).toContain("No response yet");
+    expect(container.textContent).toContain("Aucune réponse pour le moment");
   });
 
   it("shows a loading indicator", () => {
     render(<ResponseViewer loading={true} />);
     expect(screen.getByTestId("graphql-response-viewer")).toBeTruthy();
-    expect(screen.getByText("Loading...")).toBeTruthy();
+    expect(screen.getByText("Chargement...")).toBeTruthy();
   });
 
   it("shows the response data when provided", () => {

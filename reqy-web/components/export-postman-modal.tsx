@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Collection } from "@/hooks/use-request-store";
+import { useTranslation } from "react-i18next";
 
 interface ExportPostmanModalProps {
   open: boolean;
@@ -22,6 +23,7 @@ export function ExportPostmanModal({
   onExport,
   isConnected,
 }: ExportPostmanModalProps) {
+  const { t } = useTranslation();
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -57,8 +59,8 @@ export function ExportPostmanModal({
   const handleExportClick = async () => {
     if (!selectedCollectionIds.length) {
       toast({
-        title: "Sélectionnez au moins une collection",
-        description: "Choisissez les collections Reqly à exporter vers Postman.",
+        title: t("importExport.postmanExport.selectAtLeastOne"),
+        description: t("importExport.postmanExport.selectDesc"),
         variant: "destructive",
       });
       return;
@@ -81,10 +83,9 @@ export function ExportPostmanModal({
       <div className="relative z-10 w-full max-w-lg rounded-xl border bg-card p-6 shadow-lg">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-lg font-semibold">Exporter vers Postman</h2>
+            <h2 className="text-lg font-semibold">{t("importExport.postmanExport.title")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Sélectionnez les collections Reqly à exporter, puis confirmez l’exportation vers
-              Postman.
+              {t("importExport.postmanExport.description")}
             </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -95,34 +96,38 @@ export function ExportPostmanModal({
         {!isConnected ? (
           <div className="text-center py-8">
             <p className="text-sm text-muted-foreground mb-4">
-              Postman n'est pas connecté. Connectez-vous dans les paramètres pour activer l'export.
+              {t("importExport.postmanExport.notConnected")}
             </p>
             <Button variant="secondary" onClick={onClose}>
-              Fermer
+              {t("common.close")}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-medium">Collections Reqly</p>
+                <p className="text-sm font-medium">
+                  {t("importExport.postmanExport.collectionsLabel")}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {collections.length} collection{collections.length === 1 ? "" : "s"} disponibles
+                  {t("importExport.postmanExport.available", { count: collections.length })}
                 </p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={selectAll}>
-                  Tout sélectionner
+                  {t("importExport.postmanExport.selectAll")}
                 </Button>
                 <Button variant="outline" size="sm" onClick={clearSelection}>
-                  Tout désélectionner
+                  {t("importExport.postmanExport.deselectAll")}
                 </Button>
               </div>
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto rounded-md border border-border bg-background px-3 py-2">
               {collections.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune collection à exporter.</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("importExport.postmanExport.noCollections")}
+                </p>
               ) : (
                 collections.map((collection) => {
                   const checked = selectedCollectionIds.includes(collection.id);
@@ -138,8 +143,9 @@ export function ExportPostmanModal({
                       <div className="flex-1">
                         <p className="font-medium">{collection.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {collection.requests.length} requête
-                          {collection.requests.length === 1 ? "" : "s"}
+                          {t("importExport.postmanExport.requestsCount", {
+                            count: collection.requests.length,
+                          })}
                         </p>
                       </div>
                     </label>
@@ -149,32 +155,33 @@ export function ExportPostmanModal({
             </div>
 
             <div className="space-y-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-              <p className="font-medium">Confirmation d'exportation</p>
+              <p className="font-medium">{t("importExport.postmanExport.confirmation")}</p>
               <p>
-                Vous êtes sur le point d’exporter{" "}
-                <span className="font-semibold">{selectedCollectionIds.length}</span> collection
-                {selectedCollectionIds.length === 1 ? "" : "s"} vers Postman.
+                {t("importExport.postmanExport.exportingCollections", {
+                  count: selectedCollectionIds.length,
+                })}
               </p>
               <p>
-                Cela inclut <span className="font-semibold">{selectedRequestCount}</span> requête
-                {selectedRequestCount === 1 ? "" : "s"} au total.
+                {t("importExport.postmanExport.exportingRequests", {
+                  count: selectedRequestCount,
+                })}
               </p>
             </div>
 
             <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
               <p>
-                {selectedCollectionIds.length} collection
-                {selectedCollectionIds.length === 1 ? "" : "s"} sélectionnée
-                {selectedCollectionIds.length === 1 ? "" : "s"}.
+                {t("importExport.postmanExport.selectedCollections", {
+                  count: selectedCollectionIds.length,
+                })}
               </p>
               <p>
-                {selectedRequestCount} requête{selectedRequestCount === 1 ? "" : "s"} au total
+                {t("importExport.postmanExport.requestsTotal", { count: selectedRequestCount })}
               </p>
             </div>
 
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={onClose} disabled={isExporting}>
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={handleExportClick}
@@ -183,10 +190,10 @@ export function ExportPostmanModal({
                 {isExporting ? (
                   <>
                     <Loader2 className="size-4 mr-2 animate-spin" />
-                    Export en cours...
+                    {t("importExport.common.exporting")}
                   </>
                 ) : (
-                  "Exporter"
+                  t("common.export")
                 )}
               </Button>
             </div>

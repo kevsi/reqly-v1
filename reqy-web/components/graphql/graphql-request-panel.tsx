@@ -10,6 +10,7 @@ import { VariablesPanel } from "./variables-panel";
 import { HeadersPanel } from "./headers-panel";
 import { CollapsibleSection } from "./collapsible-section";
 import type { GraphqlTab } from "@/lib/types";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   tab: GraphqlTab;
@@ -60,6 +61,7 @@ export function GraphqlRequestPanel({
   schemaOpen,
   running,
 }: Props) {
+  const { t } = useTranslation();
   const history = useRequestStore((s) => s.history);
   const environments = useRequestStore((s) => s.environments);
   const activeEnvironmentId = useRequestStore((s) => s.activeEnvironmentId);
@@ -130,7 +132,7 @@ export function GraphqlRequestPanel({
           <div className="grid grid-cols-2 divide-x divide-border">
             {showVariables && (
               <CollapsibleSection
-                title="Variables"
+                title={t("graphql.panel.variables")}
                 count={variablesCount}
                 error={!variablesValid}
                 onClose={() => setShowVariables(false)}
@@ -147,7 +149,7 @@ export function GraphqlRequestPanel({
             )}
             {showHeaders && (
               <CollapsibleSection
-                title="Headers"
+                title={t("graphql.panel.headers")}
                 count={headersCount}
                 error={!headersValid}
                 onClose={() => setShowHeaders(false)}
@@ -167,7 +169,7 @@ export function GraphqlRequestPanel({
           <>
             {showVariables && (
               <CollapsibleSection
-                title="Variables"
+                title={t("graphql.panel.variables")}
                 count={variablesCount}
                 error={!variablesValid}
                 onClose={() => setShowVariables(false)}
@@ -184,7 +186,7 @@ export function GraphqlRequestPanel({
             )}
             {showHeaders && (
               <CollapsibleSection
-                title="Headers"
+                title={t("graphql.panel.headers")}
                 count={headersCount}
                 error={!headersValid}
                 onClose={() => setShowHeaders(false)}
@@ -203,18 +205,18 @@ export function GraphqlRequestPanel({
 
         {showBuilder && schemaData && (
           <CollapsibleSection
-            title="Visual Builder"
+            title={t("graphql.panel.visualBuilder")}
             onClose={() => setShowBuilder(false)}
             defaultOpen
             bodyMaxHeightClass="max-h-[50vh]"
-            hint="Check fields to build a query"
+            hint={t("graphql.panel.builderHint")}
           >
             <GraphqlQueryBuilder
               schema={schemaData}
               operationType={operationType}
               onOperationTypeChange={setOperationType}
               onQueryChange={(q) => onUpdate({ query: q })}
-              operationName={tab.operationName ?? "Generated"}
+              operationName={tab.operationName ?? t("graphql.panel.generated")}
             />
           </CollapsibleSection>
         )}

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Plus, Trash2, Code } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -59,6 +60,7 @@ export function BodyEditor({
   environmentVariableNames,
   formDataKeySuggestions,
 }: BodyEditorProps) {
+  const { t } = useTranslation();
   const [showRawBody, setShowRawBody] = useState(false);
   const [formPairs, setFormPairs] = useState<Array<{ key: string; value: string }>>(() =>
     parseFormBody(body),
@@ -69,16 +71,16 @@ export function BodyEditor({
     if (vars.length === 0) return [];
     return [
       {
-        label: "Variables",
+        label: t("body.variables"),
         items: vars.map((name) => ({
           id: `fval-${name}`,
           label: `{{${name}}}`,
           value: `{{${name}}}`,
-          description: "variable",
+          description: t("body.variable"),
         })),
       },
     ];
-  }, [environmentVariableNames]);
+  }, [environmentVariableNames, t]);
   const lastBodyRef = useRef(body);
   useEffect(() => {
     if (lastBodyRef.current !== body) {
@@ -124,18 +126,18 @@ export function BodyEditor({
   }, [body, bodyType]);
 
   const bodyTypeLabels: Record<BodyType, string> = {
-    json: "JSON",
-    "form-data": "Form Data",
-    "x-www-form": "x-www-form",
-    raw: "Raw",
-    binary: "Binary",
+    json: t("body.typeJson"),
+    "form-data": t("body.typeFormData"),
+    "x-www-form": t("body.typeFormUrlEncoded"),
+    raw: t("body.typeRaw"),
+    binary: t("body.typeBinary"),
   };
 
   return (
     <AccordionItem value="body" className="border border-border rounded-lg px-4 ">
       <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
         <span className="flex items-center gap-2">
-          Body
+          {t("body.accordion")}
           <span className="text-[10px] font-mono font-normal text-muted-foreground/70">
             — {bodyTypeLabels[bodyType]}
           </span>
@@ -145,14 +147,14 @@ export function BodyEditor({
         <div className="flex items-center gap-3 mb-3">
           <Select value={bodyType} onValueChange={(value) => onBodyTypeChange(value as BodyType)}>
             <SelectTrigger className="w-32 h-9 border-input bg-muted/20 text-xs font-medium transition-all duration-200 hover:border-muted-foreground/30">
-              <SelectValue placeholder="Type" />
+              <SelectValue placeholder={t("body.typePlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="json">JSON</SelectItem>
-              <SelectItem value="form-data">Form Data</SelectItem>
-              <SelectItem value="x-www-form">x-www-form</SelectItem>
-              <SelectItem value="raw">Raw</SelectItem>
-              <SelectItem value="binary">Binary</SelectItem>
+              <SelectItem value="json">{bodyTypeLabels.json}</SelectItem>
+              <SelectItem value="form-data">{bodyTypeLabels["form-data"]}</SelectItem>
+              <SelectItem value="x-www-form">{bodyTypeLabels["x-www-form"]}</SelectItem>
+              <SelectItem value="raw">{bodyTypeLabels.raw}</SelectItem>
+              <SelectItem value="binary">{bodyTypeLabels.binary}</SelectItem>
             </SelectContent>
           </Select>
           {bodyType === "json" && (
@@ -161,10 +163,10 @@ export function BodyEditor({
               size="sm"
               onClick={handleFormatJson}
               className="h-9 gap-1.5 border-input bg-muted/20 text-xs font-medium transition-all duration-200 hover:border-muted-foreground/30"
-              title="Format JSON"
+              title={t("body.formatTitle")}
             >
               <Code className="size-3.5" />
-              Format
+              {t("body.format")}
             </Button>
           )}
           {bodyType === "json" && body.trim() && isValidJson !== null && (
@@ -174,7 +176,7 @@ export function BodyEditor({
                 isValidJson ? "text-success" : "text-destructive",
               )}
             >
-              {isValidJson ? "Valid" : "Invalid"}
+              {isValidJson ? t("body.valid") : t("body.invalid")}
             </span>
           )}
           {(bodyType === "form-data" || bodyType === "x-www-form") && (
@@ -185,7 +187,7 @@ export function BodyEditor({
               className="h-9 gap-1.5 text-xs font-medium transition-all duration-200 text-muted-foreground/70 hover:text-foreground"
             >
               <Code className="size-3.5" />
-              {showRawBody ? "Parsed" : "Raw"}
+              {showRawBody ? t("body.parsed") : t("body.raw")}
             </Button>
           )}
         </div>
@@ -193,7 +195,7 @@ export function BodyEditor({
           <div className="space-y-2">
             {formPairs.length === 0 && body.trim() === "" && (
               <div className="flex flex-col items-center justify-center py-6 text-xs text-muted-foreground/60">
-                <span>No fields added yet</span>
+                <span>{t("body.noFields")}</span>
               </div>
             )}
             {formPairs.map((pair, index) => (
@@ -205,7 +207,7 @@ export function BodyEditor({
                   type="text"
                   value={pair.key}
                   onChange={(value) => updateFormPair(index, "key", value)}
-                  placeholder="Key"
+                  placeholder={t("body.keyPlaceholder")}
                   className="flex-1 h-9 border-input bg-muted/20 text-sm transition-all duration-200 focus:bg-muted/40"
                   suggestions={formDataKeySuggestions}
                   emptyMessage=""
@@ -215,7 +217,7 @@ export function BodyEditor({
                   type="text"
                   value={pair.value}
                   onChange={(value) => updateFormPair(index, "value", value)}
-                  placeholder="Value"
+                  placeholder={t("body.valuePlaceholder")}
                   className="flex-1 h-9 border-input bg-muted/20 text-sm transition-all duration-200 focus:bg-muted/40"
                   suggestions={formValueSuggestions}
                   emptyMessage=""
@@ -236,7 +238,7 @@ export function BodyEditor({
               className="w-full border-dashed border-muted-foreground/20 text-muted-foreground/70 hover:text-foreground hover:border-muted-foreground/40 transition-all duration-200 h-9 text-xs font-medium"
             >
               <Plus className="size-3.5 mr-1" />
-              Add Field
+              {t("body.addField")}
             </Button>
           </div>
         ) : (
@@ -263,8 +265,8 @@ export function BodyEditor({
                 bodyType === "json"
                   ? '{\n  "key": "value"\n}'
                   : bodyType === "binary"
-                    ? "Paste base64-encoded binary data..."
-                    : "Enter request body..."
+                    ? t("body.binaryPlaceholder")
+                    : t("body.bodyPlaceholder")
               }
               data-testid="request-body-textarea"
             />

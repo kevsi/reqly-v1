@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Boxes, Binary, type LucideIcon } from "lucide-react";
 import { useEnabledModuleNav } from "@/hooks/use-modules-store";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 /**
  * Resolves the icon string declared in a module manifest to a Lucide icon.
@@ -37,6 +38,7 @@ export function ModuleNavList({
   collapsed: boolean;
 }) {
   const nav = useEnabledModuleNav();
+  const { t } = useTranslation();
   if (nav.length === 0) return null;
 
   return (
@@ -47,7 +49,7 @@ export function ModuleNavList({
       {!collapsed && (
         <li className="px-3 pt-3 pb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-            Modules
+            {t("sidebar.modules")}
           </span>
         </li>
       )}

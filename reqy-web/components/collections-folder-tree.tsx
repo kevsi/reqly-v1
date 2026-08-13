@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   ChevronRight,
@@ -95,6 +96,7 @@ export function CollectionsFolderTree({
   onReorderFolders,
   confirmDelete,
 }: CollectionsFolderTreeProps) {
+  const { t } = useTranslation();
   const colId = collection.id;
 
   const [expandedFolders, setExpandedFolders] = usePersistedSet(COLLAPSE_KEY, colId);
@@ -568,7 +570,7 @@ export function CollectionsFolderTree({
             className="h-7 gap-1 text-xs font-medium text-muted-foreground/60 hover:text-foreground"
           >
             <FolderPlus className="size-3" />
-            Create folder
+            {t("collections.folder.create")}
           </Button>
         </div>
       )}
@@ -581,7 +583,7 @@ export function CollectionsFolderTree({
             className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/40 hover:text-foreground/70 transition-all duration-150 px-2 py-1 rounded-md hover:bg-accent/30 w-full"
           >
             <FolderPlus className="size-3" />
-            New folder
+            {t("collections.folder.new")}
           </button>
         </div>
       )}
@@ -592,13 +594,13 @@ export function CollectionsFolderTree({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <FolderPlus className="size-4 text-primary" />
-              New folder
+              {t("collections.folder.new")}
             </DialogTitle>
           </DialogHeader>
           <Input
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
-            placeholder="Folder name"
+            placeholder={t("collections.folder.namePlaceholder")}
             autoFocus
             className="text-sm"
             onKeyDown={(e) => {
@@ -613,10 +615,10 @@ export function CollectionsFolderTree({
               onClick={() => setCreateDialogOpen(false)}
               className="text-xs"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button size="sm" onClick={handleConfirmCreate} className="text-xs shadow-xs">
-              Create
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -627,7 +629,9 @@ export function CollectionsFolderTree({
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {movingFolderId ? "Move folder to..." : "Move request to..."}
+              {movingFolderId
+                ? t("collections.folder.moveFolder")
+                : t("collections.folder.moveRequest")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-1 max-h-60 overflow-y-auto px-1">

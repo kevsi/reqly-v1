@@ -1,6 +1,7 @@
 "use client";
 
 import { Bot, UserRound, Copy, Check, RotateCcw, SquarePen, Gauge } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,7 @@ import {
   AssistantStepsRenderer,
   toAssistantSteps,
 } from "@/src/ai/components/assistant-steps-renderer";
-import { AiMarkdown } from "@/src/ai/components/ai-markdown";
+import { ProgressiveMarkdown } from "@/src/ai/components/progressive-markdown";
 import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
 import { formatTokens } from "@/src/ai/agent/usage";
 
@@ -25,6 +26,8 @@ interface AiChatMessageProps {
   onEditConfirm: () => void;
   onEditingTextChange: (text: string) => void;
   onConfirm?: (stepId: string, confirmed: boolean) => void;
+  /** Appelé quand le texte affiché évolue pendant la révélation progressive (auto-scroll). */
+  onTypingUpdate?: () => void;
 }
 
 export function AiChatMessage({
@@ -40,12 +43,30 @@ export function AiChatMessage({
   onEditConfirm,
   onEditingTextChange,
   onConfirm,
+  onTypingUpdate,
 }: AiChatMessageProps) {
+  const { t } = useTranslation();
   const isAssistant = message.role === "assistant";
   const usageLabel = isAssistant && message.usage ? formatTokens(message.usage) : "";
-  const isLive =
+  const hasLiveSteps =
     isAssistant &&
     (message.steps ?? []).some((s) => s.status === "in_progress" || s.status === "pending");
+  // Tool calls terminés, premier chunk de texte pas encore arrivé : c'est la
+  // fenêtre où la bulle restait vide — on affiche un indicateur « typing ».
+  const isAwaitingResponse =
+    isAssistant && message.phase === "awaiting_response" && !message.content;
+  const isToolCalling = isAssistant && message.phase === "tool_calling" && !message.content;
+  // Avatar animé pendant le raisonnement, les tool calls et l'attente de réponse.
+  const isLive = isAssistant && (hasLiveSteps || isAwaitingResponse || isToolCalling);
+  // La bulle affiche l'indicateur « typing » tant que le contenu est vide et
+  // que l'assistant est encore actif (tool calls ou attente de la réponse).
+  const showTypingInBubble =
+    isAssistant && !message.content && (hasLiveSteps || isToolCalling || isAwaitingResponse);
+  // Pas de bulle pour un message assistant terminé sans contenu (mode plan,
+  // erreur déjà visible dans les étapes, etc.) — plus de bulle vide.
+  const hasBubbleContent = isAssistant
+    ? showTypingInBubble || !!message.content
+    : !!message.content;
 
   return (
     <div className="group relative">
@@ -66,11 +87,11 @@ export function AiChatMessage({
 
       {/* Attachment chips (user only) */}
       {message.role === "user" && message.attachments && message.attachments.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap gap-1 pl-9">
+        <div className="mb-1.5 flex flex-wrap justify-end gap-1 pr-8">
           {message.attachments.map((a) => (
             <span
               key={a.id}
-              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary ring-1 ring-primary/15"
+              className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 backdrop-blur-sm"
             >
               {a.type} → {a.label}
             </span>
@@ -88,11 +109,11 @@ export function AiChatMessage({
         {/* Avatar */}
         <div
           className={cn(
-            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ring-1",
+            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ring-1 transition-shadow",
             isAssistant
               ? isLive
-                ? "bg-primary text-primary-foreground ring-primary/40 shadow-[0_0_12px] shadow-primary/40"
-                : "bg-gradient-to-br from-primary/20 to-primary/10 text-primary ring-primary/20"
+                ? "bg-primary text-primary-foreground ring-primary/40 shadow-[0_0_14px_-2px] shadow-primary/50"
+                : "bg-gradient-to-br from-primary/25 to-primary/10 text-primary ring-primary/25"
               : "bg-muted text-muted-foreground ring-border/70",
           )}
           aria-hidden
@@ -112,19 +133,50 @@ export function AiChatMessage({
         </div>
 
         {/* Bulle de message */}
-        <div
-          className={cn(
-            "max-w-[85%] text-sm leading-relaxed",
-            message.role === "user"
-              ? "rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-primary-foreground shadow-[0_2px_8px_-2px] shadow-primary/40"
-              : "rounded-2xl rounded-tl-md border border-border/60 bg-card/80 px-3.5 py-2 text-foreground",
-            isAssistant && !message.content && message.steps && message.steps.length > 0
-              ? "min-h-[2px] py-0.5 border-dashed border-primary/30"
-              : "",
-          )}
-        >
-          {isAssistant ? <AiMarkdown content={message.content} /> : message.content}
-        </div>
+        {hasBubbleContent && (
+          <div
+            className={cn(
+              "max-w-[85%] text-sm leading-relaxed",
+              message.role === "user"
+                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-primary/85 px-3.5 py-2 text-primary-foreground shadow-[0_4px_14px_-4px] shadow-primary/40"
+                : "rounded-2xl rounded-tl-md border border-border/60 bg-card/90 px-3.5 py-2 text-foreground shadow-[0_1px_3px] shadow-black/[0.03]",
+            )}
+          >
+            {isAssistant ? (
+              isAwaitingResponse ? (
+                // Tool calls terminés, premier token pas encore arrivé : points
+                // animés + libellé clair au lieu d'une bulle vide.
+                <span
+                  className="flex items-center gap-2 py-0.5"
+                  aria-label={t("ai.chatMessage.generating")}
+                >
+                  <span className="flex items-center gap-1">
+                    <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:0ms]" />
+                    <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:150ms]" />
+                    <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:300ms]" />
+                  </span>
+                  <span className="text-xs text-muted-foreground/70">
+                    {t("ai.chatMessage.generating")}
+                  </span>
+                </span>
+              ) : showTypingInBubble ? (
+                // Trois petits points animés pendant que l'IA génère sa réponse
+                <span
+                  className="flex items-center gap-1 py-0.5"
+                  aria-label={t("ai.chatMessage.thinking")}
+                >
+                  <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:0ms]" />
+                  <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:150ms]" />
+                  <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:300ms]" />
+                </span>
+              ) : (
+                <ProgressiveMarkdown content={message.content} onTextChange={onTypingUpdate} />
+              )
+            ) : (
+              message.content
+            )}
+          </div>
+        )}
       </div>
 
       {/* Usage badge (assistant only) */}
@@ -142,11 +194,11 @@ export function AiChatMessage({
       <div
         className={cn(
           "mt-1 flex",
-          message.role === "user" ? "justify-end pr-8" : "justify-start pl-8",
+          message.role === "user" ? "justify-end pr-6" : "justify-start pl-6",
           "opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100",
         )}
       >
-        <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/90 p-0.5 shadow-sm backdrop-blur">
+        <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/90 p-0.5 shadow-sm backdrop-blur-md">
           {message.role === "user" ? (
             <Button
               type="button"
@@ -154,7 +206,7 @@ export function AiChatMessage({
               size="icon"
               onClick={() => onEditStart(index, message.content)}
               className="size-6 rounded-full [&_svg]:size-3 text-muted-foreground hover:text-foreground"
-              title="Modifier"
+              title={t("ai.chatMessage.edit")}
             >
               <SquarePen className="size-3" />
             </Button>
@@ -166,7 +218,7 @@ export function AiChatMessage({
                 size="icon"
                 onClick={() => onCopy(message.content, index)}
                 className="size-6 rounded-full [&_svg]:size-3 text-muted-foreground hover:text-foreground"
-                title="Copier la réponse"
+                title={t("ai.chatMessage.copy")}
               >
                 {copiedIndex === index ? (
                   <Check className="size-3 text-success" />
@@ -180,7 +232,7 @@ export function AiChatMessage({
                 size="icon"
                 onClick={onRetry}
                 className="size-6 rounded-full [&_svg]:size-3 text-muted-foreground hover:text-foreground"
-                title="Réessayer"
+                title={t("ai.chatMessage.retry")}
               >
                 <RotateCcw className="size-3" />
               </Button>

@@ -86,7 +86,7 @@ describe("RequestTabBar — request rename", () => {
     const props = baseProps(onRenameTab) as RequestTabBarProps;
     props.contextMenu = { tabId: "t1", x: 0, y: 0 };
     render(<RequestTabBar {...props} />);
-    fireEvent.click(screen.getByText("Rename"));
+    fireEvent.click(screen.getByText("Renommer"));
     const input = screen.getByDisplayValue("Old Name") as HTMLInputElement;
     expect(input).toBeTruthy();
     fireEvent.change(input, { target: { value: "From Menu" } });

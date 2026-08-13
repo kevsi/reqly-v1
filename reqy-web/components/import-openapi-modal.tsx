@@ -30,6 +30,7 @@ import {
   type OpenApiParseSuccess,
   type CollectionImportData,
 } from "@/lib/openapi-import";
+import { useTranslation } from "react-i18next";
 
 interface ImportOpenApiModalProps {
   open: boolean;
@@ -46,6 +47,7 @@ export function ImportOpenApiModal({
   onImport,
   existingCollectionNames,
 }: ImportOpenApiModalProps) {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [dragging, setDragging] = useState(false);
@@ -75,34 +77,37 @@ export function ImportOpenApiModal({
     onClose();
   };
 
-  const processFile = useCallback((file: File) => {
-    setFileName(file.name);
-    setError(null);
+  const processFile = useCallback(
+    (file: File) => {
+      setFileName(file.name);
+      setError(null);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const contents = evt.target?.result as string;
-      if (!contents) {
-        setError("Impossible de lire le fichier.");
-        return;
-      }
-      setRawContents(contents);
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const contents = evt.target?.result as string;
+        if (!contents) {
+          setError(t("importExport.common.readFileError"));
+          return;
+        }
+        setRawContents(contents);
 
-      const result = parseOpenApiSpec(contents, file.name);
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
+        const result = parseOpenApiSpec(contents, file.name);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
 
-      setParseResult(result);
-      setBaseUrlOverride(result.spec.baseUrl || "");
-      setStep("preview");
-    };
-    reader.onerror = () => {
-      setError("Erreur lors de la lecture du fichier.");
-    };
-    reader.readAsText(file);
-  }, []);
+        setParseResult(result);
+        setBaseUrlOverride(result.spec.baseUrl || "");
+        setStep("preview");
+      };
+      reader.onerror = () => {
+        setError(t("importExport.common.readError"));
+      };
+      reader.readAsText(file);
+    },
+    [t],
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -144,7 +149,7 @@ export function ImportOpenApiModal({
           handleClose();
         }, 1500);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Erreur lors de l'import.");
+        setError(err instanceof Error ? err.message : t("importExport.common.importError"));
         setStep("preview");
       }
     }, 100);
@@ -163,11 +168,8 @@ export function ImportOpenApiModal({
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Importer une spécification OpenAPI</DialogTitle>
-            <DialogDescription>
-              Importez un fichier OpenAPI 3.x ou Swagger 2.0 (JSON ou YAML) pour créer
-              automatiquement des collections Reqly.
-            </DialogDescription>
+            <DialogTitle>{t("importExport.openapi.title")}</DialogTitle>
+            <DialogDescription>{t("importExport.openapi.description")}</DialogDescription>
           </DialogHeader>
 
           <div
@@ -198,19 +200,19 @@ export function ImportOpenApiModal({
                 <AlertCircle className="h-10 w-10" />
                 <p className="text-sm font-medium text-center">{error}</p>
                 <Button variant="outline" size="sm" onClick={() => setError(null)}>
-                  Réessayer
+                  {t("common.retry")}
                 </Button>
               </div>
             ) : (
               <>
                 <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
-                <p className="mb-2 text-sm font-medium">Glissez-déposez votre fichier ici</p>
-                <p className="mb-4 text-xs text-muted-foreground">ou</p>
+                <p className="mb-2 text-sm font-medium">{t("importExport.common.dragDrop")}</p>
+                <p className="mb-4 text-xs text-muted-foreground">{t("importExport.common.or")}</p>
                 <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                  Sélectionner un fichier
+                  {t("importExport.common.selectFile")}
                 </Button>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Formats supportés : JSON, YAML — OpenAPI 3.x / Swagger 2.0
+                  {t("importExport.openapi.formats")}
                 </p>
               </>
             )}
@@ -236,7 +238,7 @@ export function ImportOpenApiModal({
             </DialogTitle>
             <DialogDescription>
               {spec.description ||
-                `${totalEndpoints} endpoint${totalEndpoints > 1 ? "s" : ""} détecté${totalEndpoints > 1 ? "s" : ""}`}
+                t("importExport.openapi.endpointsDetected", { count: totalEndpoints })}
             </DialogDescription>
           </DialogHeader>
 
@@ -245,11 +247,15 @@ export function ImportOpenApiModal({
             <div className="mb-4 grid grid-cols-3 gap-3">
               <div className="rounded-lg border bg-card p-3 text-center">
                 <p className="text-2xl font-bold text-primary">{totalEndpoints}</p>
-                <p className="text-xs text-muted-foreground">Endpoints</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("importExport.common.endpoints")}
+                </p>
               </div>
               <div className="rounded-lg border bg-card p-3 text-center">
                 <p className="text-2xl font-bold">{tagGroups.length}</p>
-                <p className="text-xs text-muted-foreground">Collections</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("importExport.common.collections")}
+                </p>
               </div>
               <div className="rounded-lg border bg-card p-3 text-center min-w-0">
                 <p
@@ -258,7 +264,7 @@ export function ImportOpenApiModal({
                 >
                   {spec.baseUrl || "—"}
                 </p>
-                <p className="text-xs text-muted-foreground">Base URL</p>
+                <p className="text-xs text-muted-foreground">{t("importExport.common.baseUrl")}</p>
               </div>
             </div>
 
@@ -269,7 +275,7 @@ export function ImportOpenApiModal({
                 className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Settings2 className="h-3.5 w-3.5" />
-                Options d&apos;import
+                {t("importExport.common.options")}
                 <ChevronRight
                   className={cn("h-3.5 w-3.5 transition-transform", showOptions && "rotate-90")}
                 />
@@ -279,7 +285,7 @@ export function ImportOpenApiModal({
                 <div className="mt-2 rounded-lg border bg-card/50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="group-by-tag" className="text-sm">
-                      Grouper par tag
+                      {t("importExport.common.groupByTag")}
                     </Label>
                     <Switch
                       id="group-by-tag"
@@ -289,7 +295,7 @@ export function ImportOpenApiModal({
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="base-url" className="text-sm">
-                      Override base URL (optionnel)
+                      {t("importExport.common.baseUrlOverride")}
                     </Label>
                     <Input
                       id="base-url"
@@ -304,7 +310,9 @@ export function ImportOpenApiModal({
 
             {/* Tag groups preview */}
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">Aperçu des collections</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">
+                {t("importExport.common.collectionsPreview")}
+              </h4>
               {tagGroups.map((group) => {
                 const color = endpointColors[group.tag.length % endpointColors.length];
                 const isNew = !existingCollectionNames.some(
@@ -320,11 +328,13 @@ export function ImportOpenApiModal({
                           variant={isNew ? "default" : "secondary"}
                           className="text-[10px] px-1.5 py-0"
                         >
-                          {isNew ? "Nouvelle" : "Existe"}
+                          {isNew ? t("importExport.common.new") : t("importExport.common.exists")}
                         </Badge>
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {group.endpoints.length} endpoint{group.endpoints.length > 1 ? "s" : ""}
+                        {t("importExport.openapi.endpointsGroup", {
+                          count: group.endpoints.length,
+                        })}
                       </span>
                     </div>
                     <div className="divide-y">
@@ -345,8 +355,7 @@ export function ImportOpenApiModal({
                       ))}
                       {group.endpoints.length > 5 && (
                         <p className="px-3 py-1.5 text-xs text-muted-foreground">
-                          +{group.endpoints.length - 5} autre
-                          {group.endpoints.length - 5 > 1 ? "s" : ""}
+                          {t("importExport.common.more", { count: group.endpoints.length - 5 })}
                         </p>
                       )}
                     </div>
@@ -358,17 +367,14 @@ export function ImportOpenApiModal({
 
           <DialogFooter className="mt-4 flex items-center justify-between border-t pt-4">
             <Button variant="ghost" onClick={handleBack}>
-              Changer de fichier
+              {t("importExport.common.switchFile")}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleClose}>
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button onClick={handleImport}>
-                Importer{" "}
-                {totalEndpoints > 0
-                  ? `${totalEndpoints} endpoint${totalEndpoints > 1 ? "s" : ""}`
-                  : ""}
+                {t("importExport.openapi.importEndpoints", { count: totalEndpoints })}
               </Button>
             </div>
           </DialogFooter>
@@ -384,12 +390,12 @@ export function ImportOpenApiModal({
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import en cours...</DialogTitle>
+            <DialogTitle>{t("importExport.common.importing")}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="mt-4 text-sm text-muted-foreground">
-              Création des collections et requêtes...
+              {t("importExport.openapi.creating")}
             </p>
           </div>
         </DialogContent>
@@ -404,18 +410,17 @@ export function ImportOpenApiModal({
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import terminé</DialogTitle>
+            <DialogTitle>{t("importExport.common.doneTitle")}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8">
             <CheckCircle2 className="h-8 w-8 text-success" />
             <p className="mt-4 text-sm font-medium">
-              {parseResult?.totalEndpoints || 0} endpoint
-              {parseResult?.totalEndpoints !== 1 ? "s" : ""} importé
-              {parseResult?.totalEndpoints !== 1 ? "s" : ""} avec succès.
+              {t("importExport.openapi.doneSummary", { count: parseResult?.totalEndpoints || 0 })}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              dans {parseResult?.tagGroups.length || 0} collection
-              {parseResult?.tagGroups.length !== 1 ? "s" : ""}
+              {t("importExport.openapi.doneCollections", {
+                count: parseResult?.tagGroups.length || 0,
+              })}
             </p>
           </div>
         </DialogContent>

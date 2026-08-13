@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Play, Loader2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { DiffDialog } from "@/components/diff-dialog";
 import { analyze } from "@/src/ai/local-engine/analyzer";
 import { buildRequestContext } from "@/src/ai/local-engine/context";
@@ -115,6 +116,7 @@ export function ResponsePanel({
   proposeAskAI,
   onApplyCorrection,
 }: ResponsePanelProps) {
+  const { t } = useTranslation();
   function getAutoFormat(): ResponseFormat {
     if (responseData instanceof Blob && responseData.type === "application/pdf") {
       return "pdf";
@@ -319,7 +321,7 @@ export function ResponsePanel({
               value="response"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
-              Response
+              {t("response.tabResponse")}
               {hasResponse && (
                 <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono text-primary">
                   {responseStatus ?? "-"}
@@ -330,7 +332,7 @@ export function ResponsePanel({
               value="headers"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
-              Headers
+              {t("response.tabHeaders")}
               {hasResponse && responseHeaders && (
                 <span className="ml-1.5 rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
                   {Object.keys(responseHeaders).length}
@@ -341,7 +343,7 @@ export function ResponsePanel({
               value="cookies"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
-              Cookies
+              {t("response.tabCookies")}
               {hasResponse && responseCookies && responseCookies.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
                   {responseCookies.length}
@@ -352,13 +354,13 @@ export function ResponsePanel({
               value="code"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
-              Code
+              {t("response.tabCode")}
             </TabsTrigger>
             <TabsTrigger
               value="tests"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
-              Tests
+              {t("response.tabTests")}
               {testResults && testResults.length > 0 && (
                 <span
                   className={cn(
@@ -381,7 +383,7 @@ export function ResponsePanel({
               data-testid="btn-ai-open"
             >
               <Sparkles className="size-3.5" />
-              AI
+              {t("response.ai")}
               {diagnostics.length > 0 && (
                 <span className="ml-1 rounded-full bg-destructive/20 text-destructive px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
                   {diagnostics.length}
@@ -402,7 +404,7 @@ export function ResponsePanel({
               className="px-4 py-1 text-[11px] font-mono text-muted-foreground border-b border-border/50"
               data-testid="response-size"
             >
-              Taille : {formatDataSize(responseByteSize)}
+              {t("response.sizeLabel", { size: formatDataSize(responseByteSize) })}
             </div>
           )}
 
@@ -414,7 +416,9 @@ export function ResponsePanel({
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-1.5">
                       <Loader2 className="size-3.5 animate-spin text-warning" />
-                      <span className="text-xs font-medium text-warning">Loading response...</span>
+                      <span className="text-xs font-medium text-warning">
+                        {t("response.loading")}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -441,9 +445,11 @@ export function ResponsePanel({
                 <div className="rounded-2xl bg-muted/40 border border-border p-5 mb-4">
                   <Play className="size-10 text-muted-foreground/30" />
                 </div>
-                <p className="text-sm font-semibold text-foreground/80">No response yet</p>
+                <p className="text-sm font-semibold text-foreground/80">
+                  {t("response.emptyTitle")}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground/60 max-w-[200px]">
-                  Execute the request to see the response here
+                  {t("response.emptyDescription")}
                 </p>
                 <Button
                   onClick={handleRun}
@@ -451,7 +457,7 @@ export function ResponsePanel({
                   className="mt-4 h-8 gap-1.5 text-xs font-semibold"
                 >
                   <Play className="size-3.5 fill-current" />
-                  Send Request
+                  {t("response.sendRequest")}
                 </Button>
               </div>
             )}

@@ -37,6 +37,7 @@ import { createEnvironmentsMutations } from "@/hooks/store/environments";
 import { createWorkspacesMutations } from "@/hooks/store/workspaces";
 import { createDatasetsMutations } from "@/hooks/store/datasets";
 import { createAiActionsMutations } from "@/hooks/store/ai-actions";
+import { createPreferencesMutations } from "@/hooks/store/preferences";
 import { WORKSPACE_PERSONAL_ID } from "@/hooks/store/types";
 
 // ── Persistence (module-level singleton) ────────────────────────────────
@@ -54,7 +55,8 @@ type MutationMethods = ReturnType<typeof createNotificationsMutations> &
   ReturnType<typeof createEnvironmentsMutations> &
   ReturnType<typeof createWorkspacesMutations> &
   ReturnType<typeof createDatasetsMutations> &
-  ReturnType<typeof createAiActionsMutations>;
+  ReturnType<typeof createAiActionsMutations> &
+  ReturnType<typeof createPreferencesMutations>;
 
 type RequestStoreState = RequestStore & {
   isLoaded: boolean;
@@ -140,6 +142,7 @@ export const requestStore = create<RequestStoreState>()((set, get) => {
     ...createWorkspacesMutations(commit),
     ...createDatasetsMutations(commit),
     ...createAiActionsMutations(commit),
+    ...createPreferencesMutations(commit),
   };
 
   // Init store

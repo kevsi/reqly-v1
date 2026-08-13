@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles, Check, Loader2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   proposeAssertionCorrection,
@@ -55,6 +56,7 @@ export function AssertionCorrection({
   askAI,
   onApply,
 }: AssertionCorrectionProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<CorrectionSuggestion | null>(null);
@@ -105,7 +107,7 @@ export function AssertionCorrection({
           data-testid="propose-correction"
         >
           {loading ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-          Proposer une correction
+          {t("assertion.propose")}
         </Button>
       )}
 
@@ -114,10 +116,11 @@ export function AssertionCorrection({
       {suggestion && (
         <div className="space-y-1">
           <div className="text-[11px] text-muted-foreground">
-            Actuelle : <code className="font-mono">{displayAssertion(current)}</code>
+            {t("assertion.current")} <code className="font-mono">{displayAssertion(current)}</code>
           </div>
           <div className="text-[11px] text-success">
-            Proposée : <code className="font-mono">{displayAssertion(suggestion)}</code>
+            {t("assertion.proposed")}{" "}
+            <code className="font-mono">{displayAssertion(suggestion)}</code>
           </div>
           {rationale && <div className="text-[11px] text-muted-foreground">{rationale}</div>}
           <div className="flex items-center gap-2">
@@ -129,11 +132,11 @@ export function AssertionCorrection({
               data-testid="apply-correction"
             >
               <Check className="size-3" />
-              Appliquer
+              {t("common.apply")}
             </Button>
             <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={reset}>
               <X className="size-3" />
-              Annuler
+              {t("common.cancel")}
             </Button>
           </div>
         </div>

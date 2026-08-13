@@ -1,11 +1,20 @@
 "use client";
 
-import { Search, X, CheckSquare, Square, SlidersHorizontal, ArrowUpDown, Brain } from "lucide-react";
+import {
+  Search,
+  X,
+  CheckSquare,
+  Square,
+  SlidersHorizontal,
+  ArrowUpDown,
+  Brain,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { HttpMethod } from "@/hooks/use-request-store";
 import { methodBadge } from "@/lib/http-method-colors";
+import { useTranslation } from "react-i18next";
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -36,47 +45,52 @@ export function SearchFilterBar({
   semanticSearchEnabled,
   onToggleSemanticSearch,
 }: SearchFilterBarProps) {
+  const { t } = useTranslation();
   return (
     <div className="border-b border-border/60 px-3 py-2 shrink-0 space-y-1.5">
       <div className="flex items-center gap-2">
-         <div className="relative flex-1">
-           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
-           <Input
-             placeholder="Search collections & requests..."
-             value={searchQuery}
-             onChange={(e) => onSearchChange(e.target.value)}
-             className="h-9 pl-9 pr-9 text-sm bg-muted/30 border-border/50 focus-visible:bg-background transition-colors"
-           />
-           {searchQuery && (
-             <button
-               onClick={() => onSearchChange("")}
-               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground transition-colors"
-             >
-               <X className="size-4" />
-             </button>
-           )}
-         </div>
-         <button
-           type="button"
-           onClick={() => onToggleSemanticSearch(!semanticSearchEnabled)}
-           className={cn(
-             "shrink-0 h-9 px-2.5 text-xs font-medium rounded-md border transition-colors flex items-center gap-1.5",
-             semanticSearchEnabled
-               ? "bg-primary/10 text-primary border-primary/30"
-               : "text-muted-foreground/60 border-border/50 hover:text-foreground hover:border-border",
-           )}
-           title="Recherche sémantique IA (nécessite Jina)"
-         >
-           <Brain className="size-3.5" />
-           Sémantique
-         </button>
-         <div className="flex items-center gap-1 shrink-0">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
+          <Input
+            placeholder={t("collections.searchBar.placeholder")}
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="h-9 pl-9 pr-9 text-sm bg-muted/30 border-border/50 focus-visible:bg-background transition-colors"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground transition-colors"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onToggleSemanticSearch(!semanticSearchEnabled)}
+          className={cn(
+            "shrink-0 h-9 px-2.5 text-xs font-medium rounded-md border transition-colors flex items-center gap-1.5",
+            semanticSearchEnabled
+              ? "bg-primary/10 text-primary border-primary/30"
+              : "text-muted-foreground/60 border-border/50 hover:text-foreground hover:border-border",
+          )}
+          title={t("collections.searchBar.semanticTitle")}
+        >
+          <Brain className="size-3.5" />
+          {t("collections.searchBar.semanticLabel")}
+        </button>
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="sm"
             onClick={onToggleSelectAll}
             className={cn("h-9 w-9 p-0", allSelected && "text-primary")}
-            title={allSelected ? "Tout désélectionner" : "Tout sélectionner"}
+            title={
+              allSelected
+                ? t("collections.searchBar.deselectAll")
+                : t("collections.searchBar.selectAll")
+            }
           >
             {allSelected ? <CheckSquare className="size-4.5" /> : <Square className="size-4.5" />}
           </Button>
@@ -88,7 +102,7 @@ export function SearchFilterBar({
               "h-9 w-9 p-0",
               (methodFilter.size > 0 || sortBy !== "name") && "text-primary",
             )}
-            title="Filtres & tri"
+            title={t("collections.searchBar.filtersTitle")}
           >
             <SlidersHorizontal className="size-4.5" />
           </Button>
@@ -125,9 +139,9 @@ export function SearchFilterBar({
               onChange={(e) => onSortChange(e.target.value as typeof sortBy)}
               className="h-7 text-xs bg-transparent border-0 text-muted-foreground/70 hover:text-foreground cursor-pointer outline-none font-medium"
             >
-              <option value="name">Name</option>
-              <option value="updated">Recent</option>
-              <option value="requests">Requests</option>
+              <option value="name">{t("collections.searchBar.sortName")}</option>
+              <option value="updated">{t("collections.searchBar.sortRecent")}</option>
+              <option value="requests">{t("collections.searchBar.sortRequests")}</option>
             </select>
           </div>
         </div>

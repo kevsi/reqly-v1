@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   transform,
   CODEC_MODES,
@@ -72,7 +73,8 @@ function loadHistory(): HistoryEntry[] {
   }
 }
 
-function CopyButton({ value, label = "Copier" }: { value: string; label?: string }) {
+function CopyButton({ value, label }: { value: string; label?: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
     <Button
@@ -85,13 +87,13 @@ function CopyButton({ value, label = "Copier" }: { value: string; label?: string
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         } catch {
-          /* clipboard refusé */
+          /* clipboard refused */
         }
       }}
       disabled={!value}
     >
       {copied ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
-      {copied ? "Copié" : label}
+      {copied ? t("encodeDecode.copied") : (label ?? t("encodeDecode.copy"))}
     </Button>
   );
 }
@@ -100,26 +102,34 @@ function ByteCount({ value }: { value: string }) {
   if (!value) return null;
   return (
     <span className="text-[10px] tabular-nums text-muted-foreground/70">
-      {value.length} car. · {utf8ByteLength(value)} octets
+      {value.length} chars · {utf8ByteLength(value)} bytes
     </span>
   );
 }
 
-function countdownLabel(exp: number, nowMs: number): { label: string; expired: boolean } {
+function countdownLabel(
+  exp: number,
+  nowMs: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): { label: string; expired: boolean } {
   const secondsLeft = exp - Math.floor(nowMs / 1000);
   if (secondsLeft <= 0) {
-    return { label: `Expiré depuis ${Math.abs(secondsLeft)}s`, expired: true };
+    return {
+      label: t("encodeDecode.countdown.expired", { count: Math.abs(secondsLeft) }),
+      expired: true,
+    };
   }
   const m = Math.floor(secondsLeft / 60);
   const h = Math.floor(m / 60);
   const label =
     h > 0 ? `${h}h ${m % 60}min` : m > 0 ? `${m}min ${secondsLeft % 60}s` : `${secondsLeft}s`;
-  return { label: `Expire dans ${label}`, expired: false };
+  return { label: t("encodeDecode.countdown.expireIn", { time: label }), expired: false };
 }
 
 // ── Transformer tab ──────────────────────────────────────────────────────
 
 function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<CodecMode>("b64-encode");
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
@@ -127,18 +137,21 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
 
   const result = useMemo(() => transform(mode, input), [mode, input]);
 
-  const pushHistory = useCallback((input: string, output: string) => {
-    if (!output) return;
-    setHistory((h) => {
-      const next = [{ mode, input, output, at: Date.now() }, ...h].slice(0, MAX_HISTORY);
-      try {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-      } catch {
-        /* storage plein */
-      }
-      return next;
-    });
-  }, [mode]);
+  const pushHistory = useCallback(
+    (input: string, output: string) => {
+      if (!output) return;
+      setHistory((h) => {
+        const next = [{ mode, input, output, at: Date.now() }, ...h].slice(0, MAX_HISTORY);
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+        } catch {
+          /* storage plein */
+        }
+        return next;
+      });
+    },
+    [mode],
+  );
 
   const output = result.ok ? result.output : "";
 
@@ -146,14 +159,14 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
     const res = detect(input);
     if (res.kind === "jwt") {
       onDetectJwt(input.trim());
-      setDetected("JWT détecté → onglet JWT");
+      setDetected(t("encodeDecode.detectedJwt"));
       return;
     }
     if (res.mode) {
       setMode(res.mode);
-      setDetected(`Détecté : ${res.kind}`);
+      setDetected(t("encodeDecode.detectedKind", { kind: res.kind }));
     } else {
-      setDetected(res.kind === "plain" ? "Texte brut — aucun encodage évident." : null);
+      setDetected(res.kind === "plain" ? t("encodeDecode.detectedPlain") : null);
     }
   };
 
@@ -161,7 +174,7 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Opération</Label>
+          <Label className="text-xs text-muted-foreground">{t("encodeDecode.operation")}</Label>
           <Select value={mode} onValueChange={(v) => setMode(v as CodecMode)}>
             <SelectTrigger className="w-60">
               <SelectValue />
@@ -182,10 +195,16 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
           onClick={handleDetect}
           disabled={!input.trim()}
         >
-          <Sparkles className="size-3" /> Détecter automatiquement
+          <Sparkles className="size-3" /> {t("encodeDecode.detect")}
         </Button>
-        <Button size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => pushHistory(input, output)} disabled={!output}>
-          <History className="size-3" /> Enregistrer
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 gap-1.5 text-xs"
+          onClick={() => pushHistory(input, output)}
+          disabled={!output}
+        >
+          <History className="size-3" /> {t("encodeDecode.save")}
         </Button>
         <Button
           size="sm"
@@ -195,7 +214,7 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
             setInput("");
           }}
         >
-          <Eraser className="size-3" /> Vider
+          <Eraser className="size-3" /> {t("encodeDecode.clear")}
         </Button>
       </div>
 
@@ -209,7 +228,7 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Entrée</Label>
+            <Label className="text-xs text-muted-foreground">{t("encodeDecode.input")}</Label>
             <ByteCount value={input} />
           </div>
           <Textarea
@@ -217,20 +236,20 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
             onChange={(e) => setInput(e.target.value)}
             placeholder={
               mode.startsWith("json")
-                ? 'Collez un JSON… ex: {"id":42,"nom":"Kévin"}'
+                ? t("encodeDecode.inputPlaceholderJson")
                 : mode === "json-to-csv"
-                  ? '[{"id":1,"nom":"A"},{"id":2,"nom":"B"}]'
+                  ? t("encodeDecode.inputPlaceholderJsonToCsv")
                   : mode === "csv-to-json"
-                    ? "id,nom\n1,A\n2,B"
-                    : "Collez le texte à transformer…"
+                    ? t("encodeDecode.inputPlaceholderCsvToJson")
+                    : t("encodeDecode.inputPlaceholderDefault")
             }
             className="min-h-40 font-mono text-xs"
-            aria-label="Entrée"
+            aria-label={t("encodeDecode.input")}
           />
         </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Sortie</Label>
+            <Label className="text-xs text-muted-foreground">{t("encodeDecode.output")}</Label>
             <div className="flex items-center gap-2">
               <ByteCount value={output} />
               <CopyButton value={output} />
@@ -239,12 +258,12 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
           <Textarea
             value={result.ok ? result.output : ""}
             readOnly
-            placeholder="La sortie apparaît ici automatiquement…"
+            placeholder={t("encodeDecode.outputPlaceholder")}
             className={cn(
               "min-h-40 font-mono text-xs",
               !result.ok && "border-destructive/50 text-destructive",
             )}
-            aria-label="Sortie"
+            aria-label={t("encodeDecode.output")}
           />
           {!result.ok && (
             <p className="flex items-center gap-1.5 text-xs text-destructive">
@@ -263,7 +282,7 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
             className="gap-1.5 text-xs"
             onClick={() => setInput(output)}
           >
-            <ArrowDownUp className="size-3" /> Utiliser la sortie comme entrée
+            <ArrowDownUp className="size-3" /> {t("encodeDecode.useOutputAsInput")}
           </Button>
         )}
       </div>
@@ -271,7 +290,9 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
       {history.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium text-muted-foreground">Historique récent</Label>
+            <Label className="text-xs font-medium text-muted-foreground">
+              {t("encodeDecode.recentHistory")}
+            </Label>
             <Button
               size="sm"
               variant="ghost"
@@ -281,7 +302,7 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
                 localStorage.removeItem(HISTORY_KEY);
               }}
             >
-              <Trash2 className="size-3" /> Vider
+              <Trash2 className="size-3" /> {t("encodeDecode.clear")}
             </Button>
           </div>
           <div className="space-y-1">
@@ -290,21 +311,23 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
                 key={h.at + "-" + i}
                 className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-xs"
               >
-                <Badge variant="outline" className="font-mono shrink-0">{h.mode}</Badge>
+                <Badge variant="outline" className="font-mono shrink-0">
+                  {h.mode}
+                </Badge>
                 <button
                   className="min-w-0 flex-1 truncate text-left font-mono text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setMode(h.mode);
                     setInput(h.input);
                   }}
-                  title={`Réutiliser : ${h.input}`}
+                  title={t("encodeDecode.reuse", { input: h.input })}
                 >
                   {h.input}
                 </button>
                 <span className="shrink-0 text-muted-foreground/50">
                   {new Date(h.at).toLocaleTimeString()}
                 </span>
-                <CopyButton value={h.output} label="Copier" />
+                <CopyButton value={h.output} />
               </div>
             ))}
           </div>
@@ -317,9 +340,14 @@ function TransformerTab({ onDetectJwt }: { onDetectJwt: (token: string) => void 
 // ── JWT tab ──────────────────────────────────────────────────────────────
 
 function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: string) => void }) {
+  const { t } = useTranslation();
   const [secret, setSecret] = useState("");
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "done">("idle");
-  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; error?: string; alg?: string } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{
+    valid: boolean;
+    error?: string;
+    alg?: string;
+  } | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -342,19 +370,19 @@ function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: st
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">Token JWT</Label>
+        <Label className="text-xs text-muted-foreground">{t("encodeDecode.jwtToken")}</Label>
         <Textarea
           value={token}
           onChange={(e) => onTokenChange(e.target.value)}
           placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.…"
           className="min-h-24 font-mono text-xs"
-          aria-label="Token JWT"
+          aria-label={t("encodeDecode.jwtTokenAria")}
         />
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-48 flex-1 space-y-1">
-          <Label className="text-xs text-muted-foreground">Secret HMAC (vérification)</Label>
+          <Label className="text-xs text-muted-foreground">{t("encodeDecode.hmacSecret")}</Label>
           <Input
             type="password"
             value={secret}
@@ -363,9 +391,9 @@ function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: st
               setVerifyState("idle");
               setVerifyResult(null);
             }}
-            placeholder="Votre secret signé…"
+            placeholder={t("encodeDecode.secretPlaceholder")}
             className="h-8 font-mono text-xs"
-            aria-label="Secret HMAC"
+            aria-label={t("encodeDecode.secretAria")}
           />
         </div>
         <Button
@@ -375,27 +403,27 @@ function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: st
           onClick={handleVerify}
           disabled={!token.trim() || !secret || verifyState === "checking"}
         >
-          {verifyState === "checking" ? "Vérification…" : "Vérifier la signature"}
+          {verifyState === "checking"
+            ? t("encodeDecode.verifying")
+            : t("encodeDecode.verifySignature")}
         </Button>
       </div>
 
       {verifyResult &&
         (verifyResult.valid ? (
           <Badge variant="outline" className="gap-1.5 text-success">
-            <ShieldCheck className="size-3" /> Signature valide
+            <ShieldCheck className="size-3" /> {t("encodeDecode.validSignature")}
             {verifyResult.alg ? ` (${verifyResult.alg})` : ""}
           </Badge>
         ) : (
           <Badge variant="outline" className="gap-1.5 border-destructive/40 text-destructive">
-            <ShieldAlert className="size-3" /> {verifyResult.error ?? "Signature invalide"}
+            <ShieldAlert className="size-3" />{" "}
+            {verifyResult.error ?? t("encodeDecode.invalidSignature")}
           </Badge>
         ))}
 
       {!token.trim() && (
-        <p className="text-xs text-muted-foreground">
-          Collez un JWT pour décoder header et payload. Entrez le secret pour vérifier la signature
-          (HS256/384/512, calcul local).
-        </p>
+        <p className="text-xs text-muted-foreground">{t("encodeDecode.jwtDecodeHint")}</p>
       )}
 
       {token.trim() && !jwt.ok && (
@@ -416,23 +444,25 @@ function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: st
                 variant="outline"
                 className={cn(
                   "gap-1",
-                  countdownLabel(jwt.exp, now).expired
+                  countdownLabel(jwt.exp, now, t).expired
                     ? "border-destructive/40 text-destructive"
                     : "text-success",
                 )}
               >
                 <Clock className="size-3" />
-                {countdownLabel(jwt.exp, now).label}
+                {countdownLabel(jwt.exp, now, t).label}
               </Badge>
             )}
-            <Badge variant="outline">Signature : {jwt.signatureHex?.slice(0, 16)}…</Badge>
+            <Badge variant="outline">
+              {t("encodeDecode.signature", { hex: jwt.signatureHex?.slice(0, 16) ?? "" })}…
+            </Badge>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="border-muted">
               <CardHeader className="pb-1 pt-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">Header</CardTitle>
+                  <CardTitle className="text-sm">{t("encodeDecode.header")}</CardTitle>
                   <CopyButton value={headerText} />
                 </div>
               </CardHeader>
@@ -445,7 +475,7 @@ function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: st
             <Card className="border-muted">
               <CardHeader className="pb-1 pt-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">Payload</CardTitle>
+                  <CardTitle className="text-sm">{t("encodeDecode.payload")}</CardTitle>
                   <CopyButton value={payloadText} />
                 </div>
               </CardHeader>
@@ -465,6 +495,7 @@ function JwtTab({ token, onTokenChange }: { token: string; onTokenChange: (t: st
 // ── Hash tab ─────────────────────────────────────────────────────────────
 
 function HashTab() {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [expected, setExpected] = useState("");
   const [hashes, setHashes] = useState<Record<HashAlgorithm, string>>({
@@ -500,35 +531,33 @@ function HashTab() {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-xs text-muted-foreground">Entrée</Label>
+          <Label className="text-xs text-muted-foreground">{t("encodeDecode.input")}</Label>
           <Button
             size="sm"
             variant="ghost"
             className="h-6 gap-1 text-xs"
             onClick={() => setInput("")}
           >
-            <Eraser className="size-3" /> Vider
+            <Eraser className="size-3" /> {t("encodeDecode.clear")}
           </Button>
         </div>
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Texte à hacher (ou données à signer)…"
+          placeholder={t("encodeDecode.hashInputPlaceholder")}
           className="min-h-28 font-mono text-xs"
-          aria-label="Texte à hacher"
+          aria-label={t("encodeDecode.hashInputAria")}
         />
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">
-          Hash attendu (comparaison) — facultatif
-        </Label>
+        <Label className="text-xs text-muted-foreground">{t("encodeDecode.expectedHash")}</Label>
         <Input
           value={expected}
           onChange={(e) => setExpected(e.target.value)}
-          placeholder="Ex : 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+          placeholder={t("encodeDecode.expectedHashPlaceholder")}
           className="h-8 font-mono text-xs"
-          aria-label="Hash attendu"
+          aria-label={t("encodeDecode.expectedHashAria")}
         />
       </div>
 
@@ -554,8 +583,13 @@ function HashTab() {
                   {value}
                 </code>
                 {matches !== null && (
-                  <span className={cn("shrink-0 text-xs", matches ? "text-success" : "text-destructive")}>
-                    {matches ? "✓ correspond" : "✗ différent"}
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs",
+                      matches ? "text-success" : "text-destructive",
+                    )}
+                  >
+                    {matches ? t("encodeDecode.matches") : t("encodeDecode.different")}
                   </span>
                 )}
                 <CopyButton value={value} />
@@ -578,32 +612,33 @@ interface GeneratorItem {
 }
 
 function GeneratorTab() {
+  const { t } = useTranslation();
   const [values, setValues] = useState<Record<string, string>>({});
 
   const items: GeneratorItem[] = [
-    { id: "uuid", label: "UUID v4", hint: "Identifiant unique", generate: () => uuidv4() },
+    { id: "uuid", label: "UUID v4", hint: t("encodeDecode.genHintUuid"), generate: () => uuidv4() },
     {
       id: "timestamp",
       label: "Timestamp (s)",
-      hint: "Epoch Unix secondes",
+      hint: t("encodeDecode.genHintTimestamp"),
       generate: () => String(Math.floor(Date.now() / 1000)),
     },
     {
       id: "iso",
       label: "Date ISO",
-      hint: "ISO 8601 / UTC",
+      hint: t("encodeDecode.genHintIso"),
       generate: () => new Date().toISOString(),
     },
     {
       id: "hex32",
-      label: "Hex aléatoire (32 o)",
-      hint: "Clé secrète / seed",
+      label: "Random hex (32 B)",
+      hint: t("encodeDecode.genHintHex"),
       generate: () => randomHexBytes(32),
     },
     {
       id: "b64",
-      label: "Base64 aléatoire (24 o)",
-      hint: "Token opaque",
+      label: "Random base64 (24 B)",
+      hint: t("encodeDecode.genHintB64"),
       generate: () => randomBase64(24),
     },
   ];
@@ -616,9 +651,7 @@ function GeneratorTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Générez des valeurs prêtes à copier pour vos tests et payloads.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("encodeDecode.generatorIntro")}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {items.map((item) => (
           <div
@@ -630,8 +663,13 @@ function GeneratorTab() {
                 <p className="text-sm font-medium">{item.label}</p>
                 <p className="text-xs text-muted-foreground">{item.hint}</p>
               </div>
-              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => generate(item.id)}>
-                <Dices className="size-3" /> Générer
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 text-xs"
+                onClick={() => generate(item.id)}
+              >
+                <Dices className="size-3" /> {t("encodeDecode.generate")}
               </Button>
             </div>
             <div className="flex items-center gap-2 rounded-md bg-background px-2 py-1.5">
@@ -650,6 +688,7 @@ function GeneratorTab() {
 // ── File tab ─────────────────────────────────────────────────────────────
 
 function FileTab() {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [mime, setMime] = useState("");
   const [size, setSize] = useState(0);
@@ -699,10 +738,8 @@ function FileTab() {
         )}
       >
         <FileUp className="size-8" />
-        <p className="text-sm font-medium">Glissez-déposez un fichier ou cliquez pour choisir</p>
-        <p className="text-xs text-muted-foreground">
-          Le fichier est converti en Base64 localement — jamais envoyé sur le réseau.
-        </p>
+        <p className="text-sm font-medium">{t("encodeDecode.fileDragDrop")}</p>
+        <p className="text-xs text-muted-foreground">{t("encodeDecode.fileLocalHint")}</p>
         <input
           ref={inputRef}
           type="file"
@@ -719,12 +756,21 @@ function FileTab() {
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline">{name}</Badge>
             <Badge variant="outline">{mime}</Badge>
-            <Badge variant="outline">{(size / 1024).toFixed(2)} Ko</Badge>
-            <Badge variant="outline">Base64 : {(base64.length / 1024).toFixed(2)} Ko</Badge>
+            <Badge variant="outline">
+              {t("encodeDecode.sizeKo", { size: (size / 1024).toFixed(2) })}
+            </Badge>
+            <Badge variant="outline">
+              {t("encodeDecode.base64Size", { size: (base64.length / 1024).toFixed(2) })}
+            </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => navigator.clipboard.writeText(base64).catch(() => {})}>
-              <Copy className="size-3" /> Copier le Base64
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs"
+              onClick={() => navigator.clipboard.writeText(base64).catch(() => {})}
+            >
+              <Copy className="size-3" /> {t("encodeDecode.copyBase64")}
             </Button>
             <Button
               size="sm"
@@ -746,19 +792,21 @@ function FileTab() {
                 }
               }}
             >
-              <Download className="size-3" /> Télécharger le fichier original
+              <Download className="size-3" /> {t("encodeDecode.downloadFile")}
             </Button>
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Base64</Label>
+              <Label className="text-xs text-muted-foreground">
+                {t("encodeDecode.base64Label")}
+              </Label>
               <CopyButton value={base64} />
             </div>
             <Textarea
               value={base64}
               readOnly
               className="min-h-32 font-mono text-xs"
-              aria-label="Base64 du fichier"
+              aria-label={t("encodeDecode.base64Aria")}
             />
           </div>
         </>
@@ -770,6 +818,7 @@ function FileTab() {
 // ── Page ─────────────────────────────────────────────────────────────────
 
 export function EncodeDecodePage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("transform");
   const [jwtToken, setJwtToken] = useState("");
 
@@ -784,30 +833,27 @@ export function EncodeDecodePage() {
         <header>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Binary className="size-6 text-primary" />
-            Encodeur / Décodeur
+            {t("encodeDecode.title")}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Transformez, décryptez des JWT, hachez, convertissez et générez — tout reste local, rien
-            n'est envoyé sur le réseau.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("encodeDecode.subtitle")}</p>
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="transform">
-              <ArrowDownUp className="size-4" /> Transformer
+              <ArrowDownUp className="size-4" /> {t("encodeDecode.tabTransformer")}
             </TabsTrigger>
             <TabsTrigger value="jwt">
-              <KeyRound className="size-4" /> JWT
+              <KeyRound className="size-4" /> {t("encodeDecode.tabJwt")}
             </TabsTrigger>
             <TabsTrigger value="hash">
-              <Fingerprint className="size-4" /> Hachage
+              <Fingerprint className="size-4" /> {t("encodeDecode.tabHash")}
             </TabsTrigger>
             <TabsTrigger value="generate">
-              <Dices className="size-4" /> Générateur
+              <Dices className="size-4" /> {t("encodeDecode.tabGenerator")}
             </TabsTrigger>
             <TabsTrigger value="file">
-              <FileUp className="size-4" /> Fichier
+              <FileUp className="size-4" /> {t("encodeDecode.tabFile")}
             </TabsTrigger>
           </TabsList>
 
@@ -816,7 +862,7 @@ export function EncodeDecodePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Binary className="size-4 text-muted-foreground" />
-                  Base64 · URL · Hex · JSON · HTML · CSV
+                  {t("encodeDecode.transformTitle")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -830,7 +876,7 @@ export function EncodeDecodePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <KeyRound className="size-4 text-muted-foreground" />
-                  Décodeur JWT + vérification HMAC
+                  {t("encodeDecode.jwtTitle")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -844,7 +890,7 @@ export function EncodeDecodePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Fingerprint className="size-4 text-muted-foreground" />
-                  Empreinte SHA + comparaison
+                  {t("encodeDecode.hashTitle")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -858,7 +904,7 @@ export function EncodeDecodePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Dices className="size-4 text-muted-foreground" />
-                  Générateur
+                  {t("encodeDecode.generatorTitle")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -872,7 +918,7 @@ export function EncodeDecodePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <FileUp className="size-4 text-muted-foreground" />
-                  Fichier → Base64
+                  {t("encodeDecode.fileTitle")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -883,11 +929,7 @@ export function EncodeDecodePage() {
         </Tabs>
 
         <Separator />
-        <p className="text-xs text-muted-foreground">
-          Astuce : « Détecter automatiquement » reconnaît un JWT, du JSON, du Base64, une URL
-          encodée ou de l'hex. Le décodage JWT lit header + payload ; la vérification HMAC calcule
-          la signature localement avec votre secret.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("encodeDecode.tip")}</p>
       </div>
     </main>
   );

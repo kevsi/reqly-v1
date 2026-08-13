@@ -20,7 +20,6 @@ const ACTIVE_PAGE_MAP: Record<string, string> = {
   collections: "collections",
   settings: "settings",
   runner: "runner",
-  "ai-insights": "ai-insights",
   documentation: "documentation",
   workspaces: "workspaces",
   graphql: "graphql",
@@ -95,7 +94,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div
           className={cn(
-            "flex flex-1 flex-col overflow-y-auto transition-[margin] duration-200 ease-out main-content relative",
+            "flex flex-1 flex-col overflow-y-auto overflow-x-hidden transition-[margin] duration-200 ease-out main-content relative",
             // Mobile: drawer off-canvas → contenu pleine largeur.
             // Desktop: marge selon l'état replié (force 60px sous 916px).
             isMobile ? "ml-0" : isCollapsed ? "ml-[60px]" : "ml-64",

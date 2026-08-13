@@ -1,7 +1,19 @@
 "use client";
 
-import { useRef, useCallback, type FormEvent, type KeyboardEvent } from "react";
-import { SendHorizontal, Square, X, Folder, Globe, Zap, Paperclip } from "lucide-react";
+import { useRef, useCallback, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  SendHorizontal,
+  Square,
+  X,
+  Folder,
+  Globe,
+  Zap,
+  Paperclip,
+  Check,
+  Loader2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AiContextPicker } from "@/src/ai/components/ai-context-picker";
 import { AiCommandMenu } from "@/src/ai/components/ai-command-menu";
 import type { ContextAttachment, ContextAttachmentType } from "@/src/ai/agent/types";
@@ -35,7 +47,7 @@ export function AiChatInput({
   onSend,
   onStop,
   isLoading = false,
-  placeholder = "Demande à l'assistant… (/ commandes · @ contexte)",
+  placeholder,
   inputRef,
   attachments = [],
   onRemoveAttachment,
@@ -44,8 +56,11 @@ export function AiChatInput({
   onSelectCommand,
   onSelectMention,
 }: AiChatInputProps) {
+  const { t } = useTranslation();
+  const inputPlaceholder = placeholder ?? t("aiChat.placeholder");
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const ref = inputRef ?? internalRef;
+  const [justSent, setJustSent] = useState(false);
 
   // Auto-resize the textarea as content grows (max ~5 lines)
   const handleInput = useCallback(
@@ -58,26 +73,28 @@ export function AiChatInput({
     [onValueChange],
   );
 
+  const triggerSend = useCallback(() => {
+    if (!value.trim() || isLoading) return;
+    onSend();
+    setJustSent(true);
+    setTimeout(() => setJustSent(false), 500);
+    if (ref.current) ref.current.style.height = "auto";
+  }, [value, isLoading, onSend, ref]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter = send, Shift+Enter = newline
     if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
-      if (!value.trim() || isLoading) return;
-      onSend();
-      // Reset height
-      if (ref.current) ref.current.style.height = "auto";
+      triggerSend();
     }
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!value.trim() || isLoading) return;
-    onSend();
-    if (ref.current) ref.current.style.height = "auto";
+    triggerSend();
   };
 
   return (
-    <div className="border-t border-border/60 p-3 shrink-0 bg-background/80">
+    <div className="shrink-0 border-t border-border/60 bg-gradient-to-b from-transparent to-background/80 p-3 pt-2.5 backdrop-blur-sm">
       {/* Attachment chips */}
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1">
@@ -86,7 +103,7 @@ export function AiChatInput({
             return (
               <span
                 key={a.id}
-                className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[10px] text-primary"
+                className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
               >
                 <Icon className="size-2.5" />
                 {a.label}
@@ -94,7 +111,7 @@ export function AiChatInput({
                   type="button"
                   onClick={() => onRemoveAttachment?.(a.id)}
                   className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
-                  aria-label={`Retirer ${a.label}`}
+                  aria-label={t("aiChat.removeAttachment", { label: a.label })}
                 >
                   <X className="size-2.5" />
                 </button>
@@ -115,18 +132,18 @@ export function AiChatInput({
         )}
 
         <div
-          className="flex items-end gap-1.5 rounded-xl border border-input bg-card shadow-xs
-                     transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
+          className="flex items-end gap-1.5 rounded-xl border border-border bg-card/70 shadow-[0_1px_2px] shadow-black/[0.04] backdrop-blur-sm
+                     transition-[color,box-shadow,border-color] focus-within:border-primary/40 focus-within:shadow-[0_0_0_3px] focus-within:shadow-ring/25"
         >
           <textarea
             ref={ref}
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder}
+            placeholder={inputPlaceholder}
             disabled={isLoading}
             rows={1}
-            className="min-h-[36px] max-h-[120px] flex-1 resize-none overflow-y-auto
+            className="min-h-[38px] max-h-[120px] flex-1 resize-none overflow-y-auto
                        bg-transparent px-3 py-2 text-sm leading-snug outline-none
                        placeholder:text-muted-foreground/60
                        disabled:cursor-not-allowed disabled:opacity-50"
@@ -137,8 +154,8 @@ export function AiChatInput({
               <button
                 type="button"
                 onClick={onStop}
-                aria-label="Arrêter la génération"
-                title="Arrêter"
+                aria-label={t("aiChat.stopGenerating")}
+                title={t("aiChat.stop")}
                 className="flex size-7 items-center justify-center rounded-lg border border-destructive/30
                            text-destructive transition-colors hover:bg-destructive/10"
                 data-testid="ai-stop"
@@ -148,15 +165,21 @@ export function AiChatInput({
             ) : (
               <button
                 type="submit"
-                disabled={!value.trim() || isLoading}
-                aria-label="Envoyer"
-                className="flex size-7 items-center justify-center rounded-lg
-                           bg-gradient-to-br from-primary to-primary/80 text-primary-foreground
-                           shadow-sm transition-[transform,opacity] duration-150
-                           hover:brightness-105 active:scale-95
-                           disabled:opacity-35 disabled:pointer-events-none"
+                disabled={(!value.trim() && !justSent) || isLoading}
+                aria-label={t("aiChat.send")}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-lg text-primary-foreground shadow-sm transition-all duration-200",
+                  justSent
+                    ? "bg-success/80 scale-90"
+                    : "bg-primary hover:brightness-110 hover:shadow-[0_2px_10px_-2px] hover:shadow-primary/50 active:scale-95",
+                  "disabled:opacity-35 disabled:pointer-events-none",
+                )}
               >
-                <SendHorizontal className="size-3.5" />
+                {justSent ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <SendHorizontal className="size-3.5" />
+                )}
               </button>
             )}
           </div>
@@ -164,8 +187,15 @@ export function AiChatInput({
       </form>
 
       {/* Hint row */}
-      <p className="mt-1.5 text-center text-[10px] text-muted-foreground/45">
-        Entrée pour envoyer · Shift+Entrée pour aller à la ligne · ⌘I pour fermer
+      <p className="mt-1.5 flex h-3.5 items-center justify-center gap-1.5 text-[10px] text-muted-foreground/45">
+        {isLoading ? (
+          <>
+            <Loader2 className="size-2.5 animate-spin text-primary/50" />
+            <span className="text-primary/60">{t("aiChat.generatingResponse")}</span>
+          </>
+        ) : (
+          t("aiChat.hint")
+        )}
       </p>
     </div>
   );

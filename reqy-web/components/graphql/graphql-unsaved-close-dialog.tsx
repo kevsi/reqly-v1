@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
   AlertDialog,
@@ -9,13 +9,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import type { GraphqlTab } from "@/lib/types"
+} from "@/components/ui/alert-dialog";
+import type { GraphqlTab } from "@/lib/types";
+import { useTranslation } from "react-i18next";
 
 interface GraphqlUnsavedCloseDialogProps {
-  pendingTab: GraphqlTab | null
-  onOpenChange: (open: boolean) => void
-  onDiscard: () => void
+  pendingTab: GraphqlTab | null;
+  onOpenChange: (open: boolean) => void;
+  onDiscard: () => void;
 }
 
 export function GraphqlUnsavedCloseDialog({
@@ -23,25 +24,26 @@ export function GraphqlUnsavedCloseDialog({
   onOpenChange,
   onDiscard,
 }: GraphqlUnsavedCloseDialogProps) {
+  const { t } = useTranslation();
   return (
     <AlertDialog open={!!pendingTab} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+          <AlertDialogTitle>{t("graphql.unsavedDialog.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            You have unsaved changes in &quot;{pendingTab?.name}&quot;. Do you want to discard them?
+            {t("graphql.unsavedDialog.description", { name: pendingTab?.name })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("graphql.unsavedDialog.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={onDiscard}
           >
-            Discard
+            {t("graphql.unsavedDialog.discard")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
+  );
 }

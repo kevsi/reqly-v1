@@ -1,25 +1,30 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
+import i18n from "@/src/i18n";
 import { useSessionStore } from "@/lib/session-store";
 import { SyncSignedOutBanner } from "@/components/sync-signed-out-banner";
 
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear();
   useSessionStore.setState({ user: null, token: null, status: "unauthenticated" });
+  await i18n.changeLanguage("en");
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Restore the default language: i18next is a module singleton, so leaving
+  // it on "en" would leak into every other test that renders translated UI.
+  await i18n.changeLanguage("fr");
 });
 
 describe("SyncSignedOutBanner", () => {
   it("prompts sign-in to sync when not authenticated", () => {
     render(<SyncSignedOutBanner />);
     expect(screen.getByTestId("sync-signed-out")).toBeTruthy();
-    expect(screen.getByText(/connecte-toi pour synchroniser/i)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /se connecter/i }).getAttribute("href")).toBe("/login");
-    expect(screen.getByRole("link", { name: /créer un compte/i }).getAttribute("href")).toBe(
+    expect(screen.getByText(/sign in to sync/i)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /sign in/i }).getAttribute("href")).toBe("/login");
+    expect(screen.getByRole("link", { name: /create an account/i }).getAttribute("href")).toBe(
       "/signup",
     );
   });

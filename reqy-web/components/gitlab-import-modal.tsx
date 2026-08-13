@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFileTypeLabel } from "@/lib/gitlab";
+import { useTranslation } from "react-i18next";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ interface GitLabImportModalProps {
 }
 
 export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModalProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>("projects");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,44 +125,47 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
 
   // ─── Fetch projects ────────────────────────────────────────────────
 
-  const fetchProjects = useCallback(async (searchTerm?: string) => {
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  const fetchProjects = useCallback(
+    async (searchTerm?: string) => {
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-    try {
-      const params = new URLSearchParams({ action: "projects" });
-      if (searchTerm) params.set("search", searchTerm);
+      try {
+        const params = new URLSearchParams({ action: "projects" });
+        if (searchTerm) params.set("search", searchTerm);
 
-      const res = await fetch(`/api/gitlab-api?${params}`, {
-        credentials: "include",
-        signal: controller.signal,
-      });
-      const data = await res.json();
+        const res = await fetch(`/api/gitlab-api?${params}`, {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        const data = await res.json();
 
-      if (!res.ok) {
-        if (res.status === 401) {
-          setError("GitLab n'est pas connecté. Allez dans Settings → Outils connectés.");
-        } else {
-          setError(data.error || "Erreur lors du chargement des projets");
+        if (!res.ok) {
+          if (res.status === 401) {
+            setError(t("importExport.gitlab.notConnected"));
+          } else {
+            setError(data.error || t("importExport.gitlab.projectsLoadError"));
+          }
+          return;
         }
-        return;
-      }
 
-      setProjects(data.projects || []);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError("Erreur réseau. Vérifiez votre connexion.");
-    } finally {
-      if (abortRef.current === controller) {
-        setLoading(false);
-        abortRef.current = null;
+        setProjects(data.projects || []);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setError(t("importExport.gitlab.networkHint"));
+      } finally {
+        if (abortRef.current === controller) {
+          setLoading(false);
+          abortRef.current = null;
+        }
       }
-    }
-  }, []);
+    },
+    [t],
+  );
 
   // ─── Fetch files ──────────────────────────────────────────────────
 
@@ -188,14 +193,14 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
         const data = await res.json();
 
         if (!res.ok) {
-          setError(data.error || "Erreur lors du chargement des fichiers");
+          setError(data.error || t("importExport.gitlab.filesLoadError"));
           return;
         }
 
         setFiles(data.items || []);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setError("Erreur réseau");
+        setError(t("importExport.common.networkError"));
       } finally {
         if (abortRef.current === controller) {
           setFileLoading(false);
@@ -203,7 +208,7 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
         }
       }
     },
-    [selectedProject],
+    [selectedProject, t],
   );
 
   // Load projects when modal opens
@@ -318,7 +323,7 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
     }
 
     if (imported.length === 0) {
-      setError("Aucun fichier valide n'a pu être importé.");
+      setError(t("importExport.gitlab.noValidFile"));
       setStep("files");
       return;
     }
@@ -341,13 +346,15 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitFork className="size-5" />
-            Importer depuis GitLab
+            {t("importExport.gitlab.title")}
           </DialogTitle>
           <DialogDescription>
-            {step === "projects" && "Sélectionnez un projet GitLab pour parcourir ses fichiers."}
+            {step === "projects" && t("importExport.gitlab.projectsHint")}
             {step === "files" &&
               selectedProject &&
-              `Parcourez ${selectedProject.path_with_namespace} et sélectionnez les fichiers à importer.`}
+              t("importExport.gitlab.browseHint", {
+                name: selectedProject.path_with_namespace,
+              })}
           </DialogDescription>
         </DialogHeader>
 
@@ -363,24 +370,26 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
             <>
               <Button variant="ghost" onClick={handleBackToProjects}>
                 <ArrowLeft className="size-4 mr-1" />
-                Projets
+                {t("importExport.gitlab.projects")}
               </Button>
               <Button variant="outline" onClick={handleClose}>
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button onClick={handleImport} disabled={selectedFiles.length === 0}>
-                Importer {selectedFiles.length > 0 && `(${selectedFiles.length})`}
+                {t("common.import")} {selectedFiles.length > 0 && `(${selectedFiles.length})`}
               </Button>
             </>
           )}
           {step === "projects" && (
             <>
               <Button variant="outline" onClick={handleClose}>
-                Annuler
+                {t("common.cancel")}
               </Button>
             </>
           )}
-          {step === "done" && <Button onClick={handleClose}>Terminé</Button>}
+          {step === "done" && (
+            <Button onClick={handleClose}>{t("importExport.gitlab.doneBtn")}</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -395,7 +404,7 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Rechercher un projet..."
+              placeholder={t("importExport.gitlab.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -422,10 +431,8 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
         ) : projects.length === 0 && !error ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
             <GitFork className="size-8 opacity-30" />
-            <p>Aucun projet trouvé.</p>
-            {!search && (
-              <p>Assurez-vous d&apos;avoir des projets GitLab et que GitLab est connecté.</p>
-            )}
+            <p>{t("importExport.gitlab.noProjects")}</p>
+            {!search && <p>{t("importExport.gitlab.connectHint")}</p>}
           </div>
         ) : (
           <ScrollArea className="max-h-[400px] pr-1">
@@ -510,13 +517,9 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
           )}
           {!fileLoading && (
             <span className="ml-auto text-xs">
-              {blobs.length} fichier{blobs.length > 1 ? "s" : ""} importable
-              {blobs.length > 1 ? "s" : ""}
+              {t("importExport.gitlab.filesImportable", { count: blobs.length })}
               {selectedFiles.length > 0 && (
-                <>
-                  {" "}
-                  · {selectedFiles.length} sélectionné{selectedFiles.length > 1 ? "s" : ""}
-                </>
+                <> {t("importExport.gitlab.selectedCount", { count: selectedFiles.length })}</>
               )}
             </span>
           )}
@@ -561,16 +564,14 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
               {blobs.length === 0 && trees.length === 0 && !currentPath && (
                 <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
                   <FileText className="size-8 opacity-30" />
-                  <p>Aucun fichier importable dans ce projet.</p>
-                  <p className="text-xs">
-                    Types supportés : .bru, .json (Postman, OpenAPI), .yaml/.yml (OpenAPI)
-                  </p>
+                  <p>{t("importExport.gitlab.noFiles")}</p>
+                  <p className="text-xs">{t("importExport.gitlab.supportedTypes")}</p>
                 </div>
               )}
 
               {blobs.length === 0 && trees.length === 0 && currentPath && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  Ce dossier est vide.
+                  {t("importExport.gitlab.emptyFolder")}
                 </div>
               )}
 
@@ -635,7 +636,7 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
       <div className="flex flex-col items-center gap-3 py-12">
         <Loader2 className="size-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">
-          Import de {selectedFiles.length} fichier{selectedFiles.length > 1 ? "s" : ""}...
+          {t("importExport.gitlab.importingFiles", { count: selectedFiles.length })}
         </p>
         <div className="w-full max-w-xs">
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -654,10 +655,8 @@ export function GitLabImportModal({ open, onClose, onImport }: GitLabImportModal
         <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
           <CheckCircle2 className="size-6 text-success" />
         </div>
-        <p className="font-medium">Import terminé !</p>
-        <p className="text-sm text-muted-foreground">
-          Les collections ont été ajoutées à votre espace de travail.
-        </p>
+        <p className="font-medium">{t("importExport.common.doneExclaim")}</p>
+        <p className="text-sm text-muted-foreground">{t("importExport.gitlab.doneDesc")}</p>
       </div>
     );
   }

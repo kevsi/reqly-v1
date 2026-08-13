@@ -121,6 +121,7 @@ function migrateWorkspaceIds(store: RequestStore): RequestStore {
 
 export function buildInitialStore(overrides?: Partial<RequestStore>): RequestStore {
   return {
+    language: "fr",
     history: [],
     collections: [],
     environments: defaultEnvironments,
@@ -165,7 +166,9 @@ export async function loadFromStorage(): Promise<RequestStore> {
     const stored = await storageAdapter.load(STORAGE_KEY);
     if (!stored) return await loadFallback();
     const parsed = JSON.parse(stored);
+    const parsedLanguage = parsed.language === "en" ? "en" : "fr";
     return migrateWorkspaceIds({
+      language: parsedLanguage,
       history: parsed.history || [],
       collections: parsed.collections || [],
       environments: parsed.environments || defaultEnvironments,
@@ -198,7 +201,8 @@ export async function loadFromStorage(): Promise<RequestStore> {
 
 // ── Filter sensitive fields before persistence ─────────────────────────
 
-const SENSITIVE_VAR_PATTERN = /key|token|secret|password|passwd|credential|api_key|apikey|auth|jwt|bearer|private/i;
+const SENSITIVE_VAR_PATTERN =
+  /key|token|secret|password|passwd|credential|api_key|apikey|auth|jwt|bearer|private/i;
 
 function sanitizeStore(store: RequestStore): RequestStore {
   return {

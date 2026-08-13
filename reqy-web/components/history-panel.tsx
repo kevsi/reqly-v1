@@ -28,6 +28,8 @@ import {
 import { methodSubtle } from "@/lib/http-method-colors";
 import { getStatusTextClass } from "@/lib/http-status-colors";
 import type { HistoryItem, HttpMethod } from "@/hooks/use-request-store";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 
 interface HistoryPanelProps {
   history: HistoryItem[];
@@ -38,7 +40,7 @@ interface HistoryPanelProps {
   generatingFollowUpId?: string | null;
 }
 
-function formatTimeAgo(timestamp: number): string {
+function formatTimeAgo(t: TFunction, timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;
   const seconds = Math.floor(diff / 1000);
@@ -46,10 +48,10 @@ function formatTimeAgo(timestamp: number): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return "Just now";
+  if (days > 0) return t("history.timeAgo.days", { count: days });
+  if (hours > 0) return t("history.timeAgo.hours", { count: hours });
+  if (minutes > 0) return t("history.timeAgo.minutes", { count: minutes });
+  return t("history.timeAgo.justNow");
 }
 
 export function HistoryPanel({
@@ -60,6 +62,7 @@ export function HistoryPanel({
   onGenerateFollowUp,
   generatingFollowUpId,
 }: HistoryPanelProps) {
+  const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<HttpMethod[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -119,13 +122,13 @@ export function HistoryPanel({
 
       let key: string;
       if (date.toDateString() === today.toDateString()) {
-        key = "Today";
+        key = t("history.groups.today");
       } else if (date.toDateString() === yesterday.toDateString()) {
-        key = "Yesterday";
+        key = t("history.groups.yesterday");
       } else if (date >= startOfWeek) {
-        key = "This Week";
+        key = t("history.groups.thisWeek");
       } else {
-        key = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        key = date.toLocaleDateString(i18n.language, { month: "short", day: "numeric" });
       }
 
       if (!acc[key]) acc[key] = [];
@@ -139,7 +142,7 @@ export function HistoryPanel({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold text-foreground">History</h3>
+        <h3 className="text-sm font-semibold text-foreground">{t("history.title")}</h3>
         <Button
           variant="ghost"
           size="sm"
@@ -147,7 +150,7 @@ export function HistoryPanel({
           className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
-          Clear
+          {t("history.clear")}
         </Button>
       </div>
 
@@ -156,7 +159,7 @@ export function HistoryPanel({
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search name, URL, method, status..."
+            placeholder={t("history.searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-8 pl-8 text-sm"
@@ -190,7 +193,7 @@ export function HistoryPanel({
             { label: "2xx", value: "2xx" },
             { label: "4xx", value: "4xx" },
             { label: "5xx", value: "5xx" },
-            { label: "Errors", value: "error" },
+            { label: t("history.errors"), value: "error" },
           ].map((f) => (
             <button
               key={f.value}
@@ -216,7 +219,7 @@ export function HistoryPanel({
               }}
               className="h-6 rounded px-2 text-[10px] font-medium text-muted-foreground hover:text-destructive transition-colors"
             >
-              Clear
+              {t("history.clearFilters")}
             </button>
           )}
         </div>
@@ -283,7 +286,7 @@ export function HistoryPanel({
                         {item.responseStatus || "-"}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {formatTimeAgo(item.executedAt)}
+                        {formatTimeAgo(t, item.executedAt)}
                       </span>
                     </div>
                   </button>
@@ -295,7 +298,7 @@ export function HistoryPanel({
                         onClick={() => onGenerateFollowUp(item)}
                         disabled={generatingFollowUpId === item.id}
                         className="size-6 p-0"
-                        title="Générer une requête de suivi (IA)"
+                        title={t("history.aiFollowUp")}
                       >
                         {generatingFollowUpId === item.id ? (
                           <Loader2 className="size-3 animate-spin" />
@@ -309,7 +312,7 @@ export function HistoryPanel({
                       size="sm"
                       onClick={() => onSelectRequest(item)}
                       className="size-6 p-0"
-                      title="Replay request"
+                      title={t("history.replay")}
                     >
                       <RotateCcw className="size-3" />
                     </Button>
@@ -318,7 +321,7 @@ export function HistoryPanel({
                       size="sm"
                       onClick={() => setPendingRemoveId(item.id)}
                       className="size-6 p-0 text-muted-foreground hover:text-destructive"
-                      title="Remove from history"
+                      title={t("history.remove")}
                     >
                       <Trash2 className="size-3" />
                     </Button>
@@ -337,7 +340,7 @@ export function HistoryPanel({
               onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
               className="h-8 gap-1.5 text-xs font-medium"
             >
-              Load more ({filteredHistory.length - visibleCount} remaining)
+              {t("history.loadMore", { count: filteredHistory.length - visibleCount })}
             </Button>
           </div>
         )}
@@ -348,16 +351,14 @@ export function HistoryPanel({
               <Clock className="size-8 text-muted-foreground/30" />
             </div>
             <p className="text-sm font-medium text-foreground">
-              {searchQuery ? "No matching requests" : "No history yet"}
+              {searchQuery ? t("history.noMatching") : t("history.empty")}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {searchQuery
-                ? "Try a different search or clear filters"
-                : "Run a request to see it here"}
+              {searchQuery ? t("history.noMatchingHint") : t("history.emptyHint")}
             </p>
             {!searchQuery && (
               <p className="text-xs text-muted-foreground/60 mt-2 max-w-[220px]">
-                Requests you execute will appear here for quick replay
+                {t("history.emptySubHint")}
               </p>
             )}
           </div>
@@ -367,14 +368,12 @@ export function HistoryPanel({
       <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Clear all history?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. All request history will be permanently removed.
-            </DialogDescription>
+            <DialogTitle>{t("history.clearTitle")}</DialogTitle>
+            <DialogDescription>{t("history.clearDescription")}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setShowClearConfirm(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="default"
@@ -385,7 +384,7 @@ export function HistoryPanel({
                 setShowClearConfirm(false);
               }}
             >
-              Clear
+              {t("history.clearConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -396,10 +395,10 @@ export function HistoryPanel({
         onOpenChange={(open) => {
           if (!open) setPendingRemoveId(null);
         }}
-        title="Supprimer cette entrée de l'historique ?"
-        description="Cette action est irréversible. Cette entrée d'historique sera définitivement supprimée."
-        confirmLabel="Supprimer"
-        cancelLabel="Annuler"
+        title={t("history.deleteTitle")}
+        description={t("history.deleteDescription")}
+        confirmLabel={t("history.deleteConfirm")}
+        cancelLabel={t("common.cancel")}
         onConfirm={() => {
           if (pendingRemoveId) onRemoveItem(pendingRemoveId);
           setPendingRemoveId(null);

@@ -13,6 +13,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { postmanImportResponseSchema } from "@/lib/import-schemas";
 import { PostmanIcon } from "@/components/icons/postman";
+import { useTranslation } from "react-i18next";
 
 interface ImportPostmanModalProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function ImportPostmanModal({
   onImport,
   isConnected,
 }: ImportPostmanModalProps) {
+  const { t } = useTranslation();
   const [collections, setCollections] = useState<PostmanCollection[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string>("");
   const [isImporting, setIsImporting] = useState(false);
@@ -43,7 +45,7 @@ export function ImportPostmanModal({
 
   const fetchCollections = useCallback(async () => {
     if (!isConnected) {
-      setCollectionsError("Postman non connecté");
+      setCollectionsError(t("importExport.postman.notConnectedShort"));
       return;
     }
 
@@ -53,7 +55,7 @@ export function ImportPostmanModal({
       const response = await fetch("/api/postman-auth/collections", { credentials: "include" });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        setCollectionsError(error.message || "Impossible de charger les collections Postman");
+        setCollectionsError(error.message || t("importExport.postman.loadError"));
         setCollections([]);
         return;
       }
@@ -61,12 +63,12 @@ export function ImportPostmanModal({
       const data = await response.json();
       setCollections(data.collections || []);
     } catch {
-      setCollectionsError("Impossible de charger les collections Postman");
+      setCollectionsError(t("importExport.postman.loadError"));
       setCollections([]);
     } finally {
       setCollectionsLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, t]);
 
   useEffect(() => {
     if (!open || !isConnected) return;
@@ -77,15 +79,15 @@ export function ImportPostmanModal({
   const handleImport = async () => {
     if (!selectedCollectionId) {
       toast({
-        title: "Sélectionner une collection",
-        description: "Choisissez une collection Postman à importer",
+        title: t("importExport.postman.selectCollectionToast"),
+        description: t("importExport.postman.selectCollectionDesc"),
         variant: "destructive",
       });
       return;
     }
 
     setIsImporting(true);
-    setImportStatus("Import de la collection...");
+    setImportStatus(t("importExport.postman.importingCollection"));
 
     try {
       const response = await fetch("/api/postman-import", {
@@ -99,13 +101,13 @@ export function ImportPostmanModal({
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || "Erreur lors de l'import de la collection");
+        throw new Error(error.message || t("importExport.postman.importError"));
       }
 
       const data = await response.json();
       const validated = postmanImportResponseSchema.safeParse(data);
       if (!validated.success) {
-        throw new Error("Réponse Postman invalide");
+        throw new Error(t("importExport.postman.invalidResponse"));
       }
 
       onImport({
@@ -115,8 +117,12 @@ export function ImportPostmanModal({
       });
 
       toast({
-        title: `Collection "${data.name || "Postman Collection"}" importée`,
-        description: `${(data.routes || []).length} routes importées`,
+        title: t("importExport.postman.importedTitle", {
+          name: data.name || "Postman Collection",
+        }),
+        description: t("importExport.postman.routesImported", {
+          count: (data.routes || []).length,
+        }),
         meta: { event: "importExport" },
       });
       onClose();
@@ -124,8 +130,8 @@ export function ImportPostmanModal({
       setImportStatus(null);
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Erreur lors de l'import",
+        title: t("common.error"),
+        description: err instanceof Error ? err.message : t("importExport.common.importError"),
         variant: "destructive",
         meta: { event: "importExport" },
       });
@@ -143,7 +149,7 @@ export function ImportPostmanModal({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <PostmanIcon className="size-10 rounded-full bg-white p-1" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">Importer depuis Postman</h2>
+            <h2 className="text-lg font-semibold">{t("importExport.postman.importTitle")}</h2>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="size-4" />
@@ -153,16 +159,18 @@ export function ImportPostmanModal({
         {!isConnected ? (
           <div className="text-center py-8">
             <p className="text-sm text-muted-foreground mb-4">
-              Postman n'est pas connecté. Connectez-vous dans les paramètres d'abord.
+              {t("importExport.postman.notConnectedLong")}
             </p>
             <Button onClick={onClose} variant="secondary">
-              Fermer
+              {t("common.close")}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Sélectionner une collection</label>
+              <label className="text-sm font-medium mb-2 block">
+                {t("importExport.postman.selectCollectionToast")}
+              </label>
               {collectionsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="size-5 animate-spin text-muted-foreground" />
@@ -170,18 +178,22 @@ export function ImportPostmanModal({
               ) : collectionsError ? (
                 <p className="text-sm text-destructive">{collectionsError}</p>
               ) : collections.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune collection trouvée</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("importExport.postman.noCollections")}
+                </p>
               ) : (
                 <Select value={selectedCollectionId} onValueChange={setSelectedCollectionId}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choisir une collection..." />
+                    <SelectValue placeholder={t("importExport.postman.choosePlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {collections.map((col) => (
                       <SelectItem key={col.id} value={col.id}>
                         <div>
                           <p className="font-medium">{col.name}</p>
-                          <p className="text-xs text-muted-foreground">{col.items} éléments</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t("importExport.postman.itemsCount", { count: col.items })}
+                          </p>
                         </div>
                       </SelectItem>
                     ))}
@@ -205,10 +217,10 @@ export function ImportPostmanModal({
                 {isImporting ? (
                   <>
                     <Loader2 className="size-4 mr-2 animate-spin" />
-                    Import en cours...
+                    {t("importExport.common.importing")}
                   </>
                 ) : (
-                  "Importer"
+                  t("common.import")
                 )}
               </Button>
               <Button
@@ -217,7 +229,7 @@ export function ImportPostmanModal({
                 className="flex-1"
                 disabled={isImporting}
               >
-                Annuler
+                {t("common.cancel")}
               </Button>
             </div>
           </div>

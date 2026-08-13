@@ -13,13 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 const SUGGESTIONS = [
-  "Give me the first 5 countries with their code and capital",
-  "Fetch the current user with their last 3 orders",
-  "List all products under $50, sorted by price",
-  "Get a user by ID with their posts and comments",
-];
+  "graphql.aiDialog.suggestion1",
+  "graphql.aiDialog.suggestion2",
+  "graphql.aiDialog.suggestion3",
+  "graphql.aiDialog.suggestion4",
+] as const;
 
 interface Props {
   open: boolean;
@@ -38,6 +39,7 @@ export function GraphqlAIDialog({
   error = null,
   hasSchema = false,
 }: Props) {
+  const { t } = useTranslation();
   const [description, setDescription] = useState("");
 
   // Reset on close.
@@ -59,13 +61,13 @@ export function GraphqlAIDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            Générer une query GraphQL
+            {t("graphql.aiDialog.title")}
           </DialogTitle>
           <DialogDescription>
-            Décris en français (ou anglais) les données que tu veux récupérer.
+            {t("graphql.aiDialog.description")}
             {!hasSchema && (
               <span className="block mt-1 text-warning">
-                Aucun schéma chargé — lance d&apos;abord Refresh Schema pour de meilleurs résultats.
+                {t("graphql.aiDialog.noSchemaWarning")}
               </span>
             )}
           </DialogDescription>
@@ -75,7 +77,7 @@ export function GraphqlAIDialog({
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder='Ex: "Liste tous les pays avec leur code, capitale et continent"'
+            placeholder={t("graphql.aiDialog.placeholder")}
             className="min-h-28 text-sm"
             autoFocus
             onKeyDown={(e) => {
@@ -93,7 +95,7 @@ export function GraphqlAIDialog({
               <button
                 key={s}
                 type="button"
-                onClick={() => setDescription(s)}
+                onClick={() => setDescription(t(s))}
                 disabled={loading}
                 className={cn(
                   "text-[10px] px-2 py-1 rounded border border-border bg-background",
@@ -102,7 +104,7 @@ export function GraphqlAIDialog({
                 )}
                 data-testid={`graphql-ai-suggestion-${s.slice(0, 20)}`}
               >
-                {s}
+                {t(s)}
               </button>
             ))}
           </div>
@@ -117,10 +119,7 @@ export function GraphqlAIDialog({
             </div>
           )}
 
-          <p className="text-[10px] text-muted-foreground">
-            Astuce : ⌘/Ctrl+Entrée pour générer. Configure ton provider dans Settings si ce
-            n&apos;est pas déjà fait.
-          </p>
+          <p className="text-[10px] text-muted-foreground">{t("graphql.aiDialog.tip")}</p>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
@@ -130,16 +129,16 @@ export function GraphqlAIDialog({
             disabled={loading}
             data-testid="graphql-ai-cancel"
           >
-            Annuler
+            {t("graphql.aiDialog.cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit} data-testid="graphql-ai-submit">
             {loading ? (
               <>
-                <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Génération…
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t("graphql.aiDialog.generating")}
               </>
             ) : (
               <>
-                <Sparkles className="w-3 h-3 mr-1" /> Générer
+                <Sparkles className="w-3 h-3 mr-1" /> {t("graphql.aiDialog.generate")}
               </>
             )}
           </Button>

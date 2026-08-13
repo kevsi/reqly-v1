@@ -4,6 +4,7 @@ import { Save, Play, Square, Copy, Sparkles, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GraphqlTab } from "@/lib/types";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   activeTab: GraphqlTab;
@@ -34,6 +35,7 @@ export function GraphqlActiveToolbar({
   aiLoading,
   aiError,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex items-center gap-2 border-b bg-muted/20 px-3 py-2 flex-wrap"
@@ -43,16 +45,18 @@ export function GraphqlActiveToolbar({
         value={activeTab.name}
         onChange={(e) => onNameChange(e.target.value)}
         className="h-7 w-48 text-xs bg-background"
-        placeholder="Request name..."
+        placeholder={t("graphql.activeToolbar.requestName")}
         data-testid="graphql-tab-name-input"
       />
       {activeTab.saved === false && activeTab.dirty && (
-        <span className="text-[10px] text-warning font-medium">Unsaved</span>
+        <span className="text-[10px] text-warning font-medium">
+          {t("graphql.activeToolbar.unsaved")}
+        </span>
       )}
       <div className="flex-1" />
       {onLoadFromCollection && (
         <Button size="sm" variant="ghost" onClick={onLoadFromCollection}>
-          <GitBranch className="w-3 h-3 mr-1" /> Load
+          <GitBranch className="w-3 h-3 mr-1" /> {t("graphql.activeToolbar.load")}
         </Button>
       )}
       <Button
@@ -62,7 +66,8 @@ export function GraphqlActiveToolbar({
         disabled={aiLoading}
         data-testid="graphql-ai-button"
       >
-        <Sparkles className="w-3 h-3 mr-1" /> {aiLoading ? "Thinking…" : "AI"}
+        <Sparkles className="w-3 h-3 mr-1" />{" "}
+        {aiLoading ? t("graphql.activeToolbar.thinking") : t("graphql.activeToolbar.ai")}
       </Button>
       {onAiFix && (
         <Button
@@ -71,9 +76,9 @@ export function GraphqlActiveToolbar({
           onClick={onAiFix}
           disabled={aiLoading || !activeTab.response?.errors?.length}
           data-testid="graphql-ai-fix"
-          title="Auto-fix query from the last server-side error"
+          title={t("graphql.activeToolbar.aiFixTitle")}
         >
-          <Sparkles className="w-3 h-3 mr-1" /> Fix
+          <Sparkles className="w-3 h-3 mr-1" /> {t("graphql.activeToolbar.fix")}
         </Button>
       )}
       {aiError && (
@@ -82,18 +87,18 @@ export function GraphqlActiveToolbar({
         </span>
       )}
       <Button size="sm" variant="ghost" onClick={onExport} data-testid="graphql-export-button">
-        <Copy className="w-3 h-3 mr-1" /> Export
+        <Copy className="w-3 h-3 mr-1" /> {t("graphql.activeToolbar.export")}
       </Button>
       <Button size="sm" variant="outline" onClick={onSave} data-testid="graphql-save-button">
-        <Save className="w-3 h-3 mr-1" /> Save
+        <Save className="w-3 h-3 mr-1" /> {t("graphql.activeToolbar.save")}
       </Button>
       {running ? (
         <Button size="sm" variant="destructive" onClick={onStop} data-testid="graphql-stop-button">
-          <Square className="w-3 h-3 mr-1" /> Stop
+          <Square className="w-3 h-3 mr-1" /> {t("graphql.activeToolbar.stop")}
         </Button>
       ) : (
         <Button size="sm" onClick={onRun} data-testid="graphql-send-button">
-          <Play className="w-3 h-3 mr-1" /> Send
+          <Play className="w-3 h-3 mr-1" /> {t("graphql.activeToolbar.send")}
         </Button>
       )}
     </div>

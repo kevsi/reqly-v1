@@ -24,6 +24,7 @@ import { persistence } from "@/lib/persistence";
 import { saveAIProvider, saveApiKey, saveAiBaseUrl, saveAiModel } from "@/lib/config";
 import { AiProviderCard, PROVIDER_INFOS, type ProviderInfo } from "./ai-provider-card";
 import { AiProviderModal } from "./ai-provider-modal";
+import { useTranslation } from "react-i18next";
 
 interface AISectionProps {
   provider: AIProvider;
@@ -72,6 +73,7 @@ export default function AISection({
   // --- Modal state ---
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProviderInfo, setSelectedProviderInfo] = useState<ProviderInfo | null>(null);
+  const { t } = useTranslation();
 
   // Track which providers are configured (have an API key saved)
   const [configuredProviders, setConfiguredProviders] = useState<Set<AIProvider>>(() => {
@@ -157,11 +159,8 @@ export default function AISection({
               <Sparkles className="size-5 text-primary" />
             </div>
             <div className="space-y-1">
-              <CardTitle className="text-base">Assistant IA</CardTitle>
-              <CardDescription>
-                Choisissez votre fournisseur d&apos;IA. Cliquez sur une carte pour configurer la clé
-                API et le modèle.
-              </CardDescription>
+              <CardTitle className="text-base">{t("settings.ai.title")}</CardTitle>
+              <CardDescription>{t("settings.ai.description")}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -169,7 +168,9 @@ export default function AISection({
         <CardContent className="space-y-6">
           {/* Provider cards grid - 3 per row */}
           <div>
-            <label className="mb-3 block text-sm font-medium text-foreground">Fournisseur IA</label>
+            <label className="mb-3 block text-sm font-medium text-foreground">
+              {t("settings.ai.provider")}
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {visibleProviders.map((info) => (
                 <AiProviderCard
@@ -186,13 +187,8 @@ export default function AISection({
           {/* Auto-apply toggle */}
           <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">
-                Autoriser l&apos;IA à appliquer automatiquement les changements
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Lorsque activé, les actions IA marquées <em>autoApply: true</em> pourront être
-                appliquées automatiquement.
-              </p>
+              <p className="text-sm font-medium text-foreground">{t("settings.ai.autoApply")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.ai.autoApplyDesc")}</p>
             </div>
             <Switch
               checked={!!aiAutoApply}
@@ -218,10 +214,8 @@ export default function AISection({
           {/* Mode simple toggle */}
           <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">Mode simple</p>
-              <p className="text-xs text-muted-foreground">
-                Remplace l&apos;éditeur de requête brut par un assistant en langage naturel (bêta).
-              </p>
+              <p className="text-sm font-medium text-foreground">{t("settings.ai.simpleMode")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.ai.simpleModeDesc")}</p>
             </div>
             <Switch checked={!!simpleMode} onCheckedChange={(v) => setSimpleMode?.(Boolean(v))} />
           </div>
@@ -230,15 +224,12 @@ export default function AISection({
           <Dialog open={showAiConfirm} onOpenChange={setShowAiConfirm}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Confirmer l&apos;exécution automatique par l&apos;IA</DialogTitle>
-                <DialogDescription>
-                  Autoriser l&apos;IA à appliquer et exécuter des actions automatiquement peut
-                  envoyer des requêtes réseau depuis votre interface.
-                </DialogDescription>
+                <DialogTitle>{t("settings.ai.confirmTitle")}</DialogTitle>
+                <DialogDescription>{t("settings.ai.confirmDesc")}</DialogDescription>
               </DialogHeader>
               <div className="mt-4 flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setShowAiConfirm(false)}>
-                  Annuler
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   onClick={() => {
@@ -251,7 +242,7 @@ export default function AISection({
                     setShowAiConfirm(false);
                   }}
                 >
-                  Confirmer et activer
+                  {t("settings.ai.confirmAndEnable")}
                 </Button>
               </div>
             </DialogContent>
@@ -260,9 +251,9 @@ export default function AISection({
 
         <CardFooter className="border-t pt-5">
           <div className="flex items-center gap-3">
-            <Button onClick={onSaveConfig}>Sauvegarder</Button>
+            <Button onClick={onSaveConfig}>{t("settings.ai.save")}</Button>
             <span className="text-sm text-muted-foreground">
-              Fournisseur actif :{" "}
+              {t("settings.ai.activeProvider")}{" "}
               {aiProviders.find((ap) => ap.value === provider)?.label ?? provider}
             </span>
           </div>

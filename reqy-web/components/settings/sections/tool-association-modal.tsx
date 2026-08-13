@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ComponentType, type FormEvent, type SVGProps } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -21,15 +22,15 @@ import { invoke } from "@tauri-apps/api/core";
 export interface Tool {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   logoEmoji?: string;
   logo?: ComponentType<SVGProps<SVGSVGElement>>;
-  scopes: string[];
+  scopes?: string[];
   oauthUrl?: string;
   apiKey?: {
     endpoint: string;
     placeholder: string;
-    instructions: string;
+    instructions?: string;
   };
 }
 
@@ -42,6 +43,7 @@ interface ToolAssociationModalProps {
 }
 
 function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,8 +61,8 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
     if (!isValid) {
       setError(
         tool.id === "jina"
-          ? "La clé doit commencer par jina_"
-          : "La clé doit commencer par PMAK-",
+          ? t("settings.integrations.apiKeyError.jina")
+          : t("settings.integrations.apiKeyError.postman"),
       );
       return;
     }
@@ -74,13 +76,16 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Clé rejetée par le serveur");
+        setError(data.error ?? t("settings.integrations.apiKeyRejected"));
         return;
       }
-      toast({ title: "Connecté", description: `Outil ${tool.name} associé avec succès.` });
+      toast({
+        title: t("common.connected"),
+        description: t("settings.integrations.associated", { name: tool.name }),
+      });
       onSuccess();
     } catch {
-      setError("Erreur réseau, réessayez");
+      setError(t("settings.integrations.networkError"));
     } finally {
       setLoading(false);
     }
@@ -89,12 +94,14 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-        <p className="mb-1 font-medium">Comment obtenir votre clé :</p>
-        <p className="text-muted-foreground">{config.instructions}</p>
+        <p className="mb-1 font-medium">{t("settings.integrations.howToGetKey")}</p>
+        <p className="text-muted-foreground">
+          {t(`settings.integrations.${tool.id}.instructions`)}
+        </p>
       </div>
       <div className="space-y-1.5">
         <Field>
-          <FieldLabel htmlFor="api-key">Clé API</FieldLabel>
+          <FieldLabel htmlFor="api-key">{t("settings.integrations.apiKeyLabel")}</FieldLabel>
           <div className="flex items-center gap-2">
             <Input
               id="api-key"
@@ -114,7 +121,7 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
               variant="ghost"
               size="sm"
               onClick={() => setShow((s) => !s)}
-              aria-label={show ? "Masquer" : "Afficher"}
+              aria-label={show ? t("settings.integrations.hide") : t("settings.integrations.show")}
             >
               {show ? "🙈" : "👁"}
             </Button>
@@ -124,7 +131,9 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
       </div>
       <DialogFooter>
         <Button type="submit" disabled={!isValid || loading}>
-          {loading ? "Validation…" : "Valider et connecter"}
+          {loading
+            ? t("settings.integrations.validating")
+            : t("settings.integrations.validateAndConnect")}
         </Button>
       </DialogFooter>
     </form>
@@ -140,11 +149,14 @@ function OAuthFlow({
   onOpenChange: (v: boolean) => void;
   onConnected?: () => void;
 }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [deviceInit, setDeviceInit] = useState<DeviceFlowInit | null>(null);
   const tauri = isTauriAvailable();
-  const { start, waitForToken } = useOAuthConnect(tauri && isOAuthTool(tool.id) ? tool.id : "github");
+  const { start, waitForToken } = useOAuthConnect(
+    tauri && isOAuthTool(tool.id) ? tool.id : "github",
+  );
   const native = tauri && isOAuthTool(tool.id);
   async function handleAssociate() {
     if (native) {
@@ -156,12 +168,15 @@ function OAuthFlow({
           url: init.verification_uri_complete ?? init.verification_uri,
         });
         await waitForToken(init);
-        toast({ title: "Connecté", description: `Outil ${tool.name} associé avec succès.` });
+        toast({
+          title: t("common.connected"),
+          description: t("settings.integrations.associated", { name: tool.name }),
+        });
         onOpenChange(false);
         onConnected?.();
       } catch (err) {
         toast({
-          title: "Connexion impossible",
+          title: t("settings.integrations.connectionFailed"),
           description: err instanceof Error ? err.message : String(err),
         });
         setLoading(false);
@@ -170,7 +185,10 @@ function OAuthFlow({
     }
 
     if (!tool.oauthUrl) {
-      toast({ title: "Bientôt disponible", description: `${tool.name} sera bientôt disponible.` });
+      toast({
+        title: t("settings.integrations.soonTitle"),
+        description: t("settings.integrations.soonDesc", { name: tool.name }),
+      });
       onOpenChange(false);
       return;
     }
@@ -180,44 +198,48 @@ function OAuthFlow({
 
   return (
     <>
-      {tool.scopes.length > 0 && (
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-          <p className="mb-2 font-medium">Autorisations demandées :</p>
-          <ul className="space-y-1 text-muted-foreground">
-            {tool.scopes.map((s) => (
-              <li key={s} className="flex gap-2">
-                <span aria-hidden="true">•</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {(() => {
+        const scopes = t(`settings.integrations.${tool.id}.scopes`, { returnObjects: true });
+        const list = Array.isArray(scopes) ? scopes : [];
+        return list.length ? (
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+            <p className="mb-2 font-medium">{t("settings.integrations.requestedScopes")}</p>
+            <ul className="space-y-1 text-muted-foreground">
+              {list.map((s) => (
+                <li key={s} className="flex gap-2">
+                  <span aria-hidden="true">•</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null;
+      })()}
       {deviceInit && (
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <p className="mb-2 font-medium">
-            Saisissez ce code sur {new URL(deviceInit.verification_uri).host} :
+            {t("settings.integrations.enterCode", {
+              host: new URL(deviceInit.verification_uri).host,
+            })}
           </p>
           <p className="mb-2 text-center font-mono text-2xl tracking-[0.3em]">
             {deviceInit.user_code}
           </p>
-          <p className="text-muted-foreground">
-            Le navigateur s'est ouvert. Autorisez la connexion, puis attendez que Reqly confirme.
-          </p>
+          <p className="text-muted-foreground">{t("settings.integrations.browserOpened")}</p>
         </div>
       )}
       <DialogFooter>
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
-          Annuler
+          {t("common.cancel")}
         </Button>
         <Button onClick={handleAssociate} disabled={loading}>
           {loading
             ? native
               ? deviceInit
-                ? "En attente d'autorisation…"
-                : "Connexion en cours…"
-              : "Redirection…"
-            : `Associer ${tool.name} →`}
+                ? t("settings.integrations.waitingAuth")
+                : t("settings.integrations.connecting")
+              : t("settings.integrations.redirecting")
+            : `${t("settings.integrations.associateName", { name: tool.name })} →`}
         </Button>
       </DialogFooter>
     </>
@@ -225,6 +247,7 @@ function OAuthFlow({
 }
 
 function DisconnectView({ tool, onDisconnected }: { tool: Tool; onDisconnected: () => void }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const tauri = isTauriAvailable();
@@ -251,10 +274,13 @@ function DisconnectView({ tool, onDisconnected }: { tool: Tool; onDisconnected: 
         const res = await fetch(endpoint, { method: "DELETE", credentials: "include" });
         if (!res.ok) throw new Error();
       }
-      toast({ title: "Déconnecté", description: `${tool.name} a été déconnecté.` });
+      toast({
+        title: t("settings.integrations.disconnectedToast"),
+        description: t("settings.integrations.disconnectedDesc", { name: tool.name }),
+      });
       onDisconnected();
     } catch {
-      toast({ title: "Erreur", description: "Impossible de se déconnecter, réessayez." });
+      toast({ title: t("common.error"), description: t("settings.integrations.disconnectFailed") });
     } finally {
       setLoading(false);
     }
@@ -263,14 +289,16 @@ function DisconnectView({ tool, onDisconnected }: { tool: Tool; onDisconnected: 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Vous êtes actuellement connecté à <strong>{tool.name}</strong>.
+        {t("settings.integrations.currentlyConnected", { name: tool.name })}
       </p>
       <DialogFooter>
         <Button variant="outline" onClick={() => onDisconnected()}>
-          Fermer
+          {t("common.close")}
         </Button>
         <Button variant="destructive" onClick={handleDisconnect} disabled={loading}>
-          {loading ? "Déconnexion…" : "Se déconnecter"}
+          {loading
+            ? t("settings.integrations.disconnecting")
+            : t("settings.integrations.disconnect")}
         </Button>
       </DialogFooter>
     </div>
@@ -284,6 +312,7 @@ export function ToolAssociationModal({
   onConnected,
   connected,
 }: ToolAssociationModalProps) {
+  const { t } = useTranslation();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -302,8 +331,14 @@ export function ToolAssociationModal({
                   </span>
                 )}
                 <div>
-                  <DialogTitle>{connected ? tool.name : `Associer ${tool.name}`}</DialogTitle>
-                  <DialogDescription>{tool.description}</DialogDescription>
+                  <DialogTitle>
+                    {connected
+                      ? tool.name
+                      : t("settings.integrations.associateName", { name: tool.name })}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {t(`settings.integrations.${tool.id}.description`)}
+                  </DialogDescription>
                 </div>
               </div>
             </DialogHeader>

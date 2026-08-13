@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import {
   Globe,
   Plus,
@@ -54,6 +55,7 @@ export function GitRemoteBar({
   onClone,
   onLsRemote,
 }: RemoteBarProps) {
+  const { t } = useTranslation();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [forcePushDialog, setForcePushDialog] = useState<{ remote: string; branch: string } | null>(
@@ -133,7 +135,7 @@ export function GitRemoteBar({
                 size="sm"
                 className="size-6 p-0"
                 onClick={() => onFetch(r.name)}
-                title="Fetch"
+                title={t("git.fetch")}
               >
                 <Download className="size-3" />
               </Button>
@@ -142,7 +144,7 @@ export function GitRemoteBar({
                 size="sm"
                 className="size-6 p-0"
                 onClick={() => onPull(r.name, currentBranch)}
-                title="Pull"
+                title={t("git.pull")}
               >
                 <Cloud className="size-3" />
               </Button>
@@ -151,7 +153,7 @@ export function GitRemoteBar({
                 size="sm"
                 className="size-6 p-0"
                 onClick={() => onPush(r.name, currentBranch)}
-                title="Push"
+                title={t("git.push")}
               >
                 <Upload className="size-3" />
               </Button>
@@ -160,7 +162,7 @@ export function GitRemoteBar({
                 size="sm"
                 className="size-6 p-0 text-warning/60 hover:text-warning"
                 onClick={() => setForcePushDialog({ remote: r.name, branch: currentBranch })}
-                title="Force Push — overwrite remote history"
+                title={t("git.forcePushTooltip")}
               >
                 <AlertTriangle className="size-2.5" />
               </Button>
@@ -169,7 +171,7 @@ export function GitRemoteBar({
                 size="sm"
                 className="size-6 p-0 text-destructive/60"
                 onClick={() => onRemove(r.name)}
-                title="Remove"
+                title={t("git.remove")}
               >
                 <Trash2 className="size-3" />
               </Button>
@@ -417,20 +419,24 @@ export function GitRemoteBar({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sm text-destructive">
               <AlertTriangle className="size-4" />
-              Force push?
+              {t("git.forcePushTitle")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              This will <strong>overwrite remote history</strong> for branch{" "}
-              <code className="text-xs bg-muted px-1 rounded">
-                {forcePushDialog?.branch ?? "?"}
-              </code>{" "}
-              on{" "}
-              <code className="text-xs bg-muted px-1 rounded">
-                {forcePushDialog?.remote ?? "?"}
-              </code>
-              .
+              <Trans
+                i18nKey="git.forcePushDesc"
+                t={t}
+                values={{
+                  branch: forcePushDialog?.branch ?? "?",
+                  remote: forcePushDialog?.remote ?? "?",
+                }}
+                components={[
+                  <strong key="strong" />,
+                  <code key="code-branch" className="text-xs bg-muted px-1 rounded" />,
+                  <code key="code-remote" className="text-xs bg-muted px-1 rounded" />,
+                ]}
+              />
             </p>
             <p className="text-xs text-destructive/80 leading-relaxed">
               Other collaborators will need to rebase their work. This is irreversible—proceed only

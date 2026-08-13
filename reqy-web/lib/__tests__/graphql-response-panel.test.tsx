@@ -20,9 +20,9 @@ const defaultProps = {
 describe("GraphqlResponsePanel", () => {
   it("renders all three tabs", () => {
     const { container } = render(<GraphqlResponsePanel {...defaultProps} />);
-    expect(container.textContent).toContain("Response");
+    expect(container.textContent).toContain("Réponse");
     expect(container.textContent).toContain("Code");
-    expect(container.textContent).toContain("Schema Diff");
+    expect(container.textContent).toContain("Diff de schéma");
   });
 
   it("switches to Code tab on click", () => {
@@ -39,8 +39,8 @@ describe("GraphqlResponsePanel", () => {
     fireEvent.click(diffTab);
     // Schema diff shows a message when no schema is available
     expect(
-      container.textContent?.toLowerCase().includes("schema") ||
-        container.textContent?.toLowerCase().includes("no schema"),
+      container.textContent?.toLowerCase().includes("schéma") ||
+        container.textContent?.toLowerCase().includes("snapshot"),
     ).toBe(true);
   });
 });

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Check, ChevronsUpDown, Plus, Settings2, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useRequestStore, type EnvironmentVariable } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
@@ -40,6 +41,7 @@ const envColors: Record<string, string> = {
 };
 
 export function EnvironmentSelector() {
+  const { t } = useTranslation();
   // Data slices (atomic selectors) — the dropdown re-renders only when the
   // environment list or the active id actually changes, not on every
   // unrelated store mutation.
@@ -63,7 +65,7 @@ export function EnvironmentSelector() {
 
   const handleCreateNew = () => {
     const newId = addEnvironment({
-      name: "New Environment",
+      name: t("env.new"),
       color: "slate",
       variables: [{ key: "BASE_URL", value: "http://localhost:3000", enabled: true }],
     });
@@ -78,7 +80,7 @@ export function EnvironmentSelector() {
           <Button
             variant="outline"
             size="sm"
-            aria-label="Select environment"
+            aria-label={t("env.selectorAria")}
             className="h-8 gap-2 border-dashed font-normal"
           >
             <div
@@ -89,13 +91,13 @@ export function EnvironmentSelector() {
                   : "bg-muted-foreground",
               )}
             />
-            {activeEnv ? activeEnv.name : "No Environment"}
+            {activeEnv ? activeEnv.name : t("env.noEnvironment")}
             <ChevronsUpDown className="size-3 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[200px]">
           <DropdownMenuLabel className="text-xs text-muted-foreground">
-            Environments
+            {t("env.label")}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {environments.map((env) => (
@@ -114,11 +116,11 @@ export function EnvironmentSelector() {
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setIsManageOpen(true)} className="gap-2">
             <Settings2 className="size-3.5" />
-            Manage Environments
+            {t("env.manage")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleCreateNew} className="gap-2">
             <Plus className="size-3.5" />
-            New Environment
+            {t("env.new")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -141,6 +143,7 @@ function ManageEnvironmentsDialog({
   onOpenChange: (open: boolean) => void;
   initialEditingId: string | null;
 }) {
+  const { t } = useTranslation();
   const environments = useRequestStore((s) => s.environments);
   const { addEnvironment, updateEnvironment, deleteEnvironment } = useRequestStore(
     useShallow((s) => ({
@@ -174,16 +177,16 @@ function ManageEnvironmentsDialog({
     if (otherKeys.size === 0) return [];
     return [
       {
-        label: "Clés des autres environnements",
+        label: t("env.otherEnvKeys"),
         items: Array.from(otherKeys).map((key) => ({
           id: `ekey-${key}`,
           label: key,
           value: key,
-          description: "clé",
+          description: t("env.key"),
         })),
       },
     ];
-  }, [environments, selectedId]);
+  }, [environments, selectedId, t]);
 
   const envValSuggestions = useMemo((): AutocompleteGroup[] => {
     if (!selectedEnv) return [];
@@ -195,11 +198,11 @@ function ManageEnvironmentsDialog({
       id: `eval-${key}`,
       label: `{{${key}}}`,
       value: `{{${key}}}`,
-      description: "variable",
+      description: t("env.variable"),
     }));
     if (items.length === 0) return [];
-    return [{ label: "Variables", items }];
-  }, [selectedEnv]);
+    return [{ label: t("env.variables"), items }];
+  }, [selectedEnv, t]);
 
   const handleAddVar = () => {
     if (!selectedEnv) return;
@@ -225,18 +228,18 @@ function ManageEnvironmentsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl h-[82vh] p-0 gap-0 flex overflow-hidden">
-        <DialogTitle className="sr-only">Manage Environments</DialogTitle>
+        <DialogTitle className="sr-only">{t("env.manage")}</DialogTitle>
         {/* Left Sidebar */}
         <div className="w-1/3 border-r bg-muted/20 flex flex-col">
           <div className="p-4 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Environments</h3>
+            <h3 className="font-semibold text-sm">{t("env.label")}</h3>
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6"
               onClick={() => {
                 const newId = addEnvironment({
-                  name: "New Environment",
+                  name: t("env.new"),
                   color: "slate",
                   variables: [],
                 });
@@ -292,14 +295,14 @@ function ManageEnvironmentsDialog({
               <div className="flex-1 overflow-y-auto p-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium">Variables</h4>
+                    <h4 className="text-sm font-medium">{t("env.variables")}</h4>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleAddVar}
                       className="h-7 text-xs"
                     >
-                      <Plus className="size-3 mr-1" /> Add Variable
+                      <Plus className="size-3 mr-1" /> {t("env.addVariable")}
                     </Button>
                   </div>
 
@@ -312,7 +315,7 @@ function ManageEnvironmentsDialog({
                     </div>
                     {selectedEnv.variables.length === 0 ? (
                       <div className="p-8 text-center text-sm text-muted-foreground">
-                        No variables defined.
+                        {t("env.noVariables")}
                       </div>
                     ) : (
                       selectedEnv.variables.map((v, i) => (
@@ -359,7 +362,7 @@ function ManageEnvironmentsDialog({
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              Select an environment
+              {t("env.selectOne")}
             </div>
           )}
         </div>
@@ -368,14 +371,17 @@ function ManageEnvironmentsDialog({
       <AlertDialog open={!!envToDelete} onOpenChange={(open) => !open && setEnvToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer l'environnement</AlertDialogTitle>
+            <AlertDialogTitle>{t("env.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Voulez-vous vraiment supprimer "{environments.find((e) => e.id === envToDelete)?.name}
-              " ? Cette action est irréversible.
+              {t("env.deleteConfirm", {
+                name: environments.find((e) => e.id === envToDelete)?.name,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setEnvToDelete(null)}>Annuler</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setEnvToDelete(null)}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
@@ -386,7 +392,7 @@ function ManageEnvironmentsDialog({
                 setEnvToDelete(null);
               }}
             >
-              Supprimer
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

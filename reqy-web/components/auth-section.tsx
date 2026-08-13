@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Text } from "@/components/ui/text";
 import type { AuthType } from "@/lib/request-executor";
@@ -24,35 +25,36 @@ interface AuthSectionProps {
   environmentVariableNames?: string[];
 }
 
-const authTypeLabels: Record<AuthType, string> = {
-  none: "No Auth",
-  bearer: "Bearer Token",
-  basic: "Basic Auth",
-  "api-key": "API Key",
-  oauth2: "OAuth 2.0",
-};
-
 export function AuthSection({
   authType,
   authToken,
   onAuthChange,
   environmentVariableNames,
 }: AuthSectionProps) {
+  const { t } = useTranslation();
+  const authTypeLabels: Record<AuthType, string> = {
+    none: t("auth.typeNone"),
+    bearer: t("auth.typeBearer"),
+    basic: t("auth.typeBasic"),
+    "api-key": t("auth.typeApiKey"),
+    oauth2: t("auth.typeOauth2"),
+  };
+
   const authVarSuggestions = useMemo((): AutocompleteGroup[] => {
     const vars = environmentVariableNames?.filter(Boolean) ?? [];
     if (vars.length === 0) return [];
     return [
       {
-        label: "Variables",
+        label: t("auth.variables"),
         items: vars.map((name) => ({
           id: `var-${name}`,
           label: `{{${name}}}`,
           value: `{{${name}}}`,
-          description: "variable",
+          description: t("auth.variable"),
         })),
       },
     ];
-  }, [environmentVariableNames]);
+  }, [environmentVariableNames, t]);
 
   // Basic Auth: split the stored base64 token back into username/password for display.
   // We store "base64(username:password)" in authToken, same as before — the fields
@@ -109,7 +111,7 @@ export function AuthSection({
     <AccordionItem value="auth" className="border border-border rounded-lg px-4 ">
       <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
         <span className="flex items-center gap-2">
-          Auth
+          {t("auth.accordion")}
           {authType !== "none" && (
             <span className="text-[10px] font-mono font-normal text-muted-foreground/70">
               — {authTypeLabels[authType]}
@@ -121,21 +123,21 @@ export function AuthSection({
         <div className="space-y-4">
           <div className="space-y-2">
             <Text variant="label" asChild>
-              <label>Authentication Type</label>
+              <label>{t("auth.typeLabel")}</label>
             </Text>
             <Select
               value={authType}
               onValueChange={(value) => onAuthChange(value as AuthType, authToken)}
             >
               <SelectTrigger className="w-full h-10 border-input bg-muted/20 text-sm transition-all duration-200 hover:border-muted-foreground/30">
-                <SelectValue placeholder="Select auth type" />
+                <SelectValue placeholder={t("auth.typePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No Auth</SelectItem>
-                <SelectItem value="bearer">Bearer Token</SelectItem>
-                <SelectItem value="basic">Basic Auth</SelectItem>
-                <SelectItem value="api-key">API Key</SelectItem>
-                <SelectItem value="oauth2">OAuth 2.0</SelectItem>
+                <SelectItem value="none">{authTypeLabels.none}</SelectItem>
+                <SelectItem value="bearer">{authTypeLabels.bearer}</SelectItem>
+                <SelectItem value="basic">{authTypeLabels.basic}</SelectItem>
+                <SelectItem value="api-key">{authTypeLabels["api-key"]}</SelectItem>
+                <SelectItem value="oauth2">{authTypeLabels.oauth2}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -147,27 +149,27 @@ export function AuthSection({
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <Text variant="label" asChild>
-                      <label>Username</label>
+                      <label>{t("auth.username")}</label>
                     </Text>
                     <Input
                       type="text"
                       value={basicUsername}
                       onChange={(e) => handleBasicChange(e.target.value, basicPassword)}
-                      placeholder="username"
+                      placeholder={t("auth.usernamePlaceholder")}
                       className="h-10 bg-muted/20 border-input font-mono text-sm transition-all duration-200 focus:bg-muted/40"
                       autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
                     <Text variant="label" asChild>
-                      <label>Password</label>
+                      <label>{t("auth.password")}</label>
                     </Text>
                     <div className="relative">
                       <Input
                         type="password"
                         value={basicPassword}
                         onChange={(e) => handleBasicChange(basicUsername, e.target.value)}
-                        placeholder="password"
+                        placeholder={t("auth.passwordPlaceholder")}
                         className="h-10 bg-muted/20 border-input pr-10 font-mono text-sm transition-all duration-200 focus:bg-muted/40"
                         autoComplete="current-password"
                       />
@@ -189,10 +191,10 @@ export function AuthSection({
                   <Text variant="label" asChild>
                     <label>
                       {authType === "bearer"
-                        ? "Bearer Token"
+                        ? t("auth.bearerToken")
                         : authType === "api-key"
-                          ? "API Key"
-                          : "OAuth2 Token"}
+                          ? t("auth.apiKey")
+                          : t("auth.oauth2Token")}
                     </label>
                   </Text>
                   <div className="relative">
@@ -209,7 +211,7 @@ export function AuthSection({
                       }
                       className="h-10 bg-muted/20 border-input pr-10 font-mono text-sm transition-all duration-200 focus:bg-muted/40"
                       suggestions={authVarSuggestions}
-                      emptyMessage="Aucune variable"
+                      emptyMessage={t("auth.noVariables")}
                     />
                     {authToken && (
                       <button
@@ -230,9 +232,7 @@ export function AuthSection({
             <div className="flex items-start gap-3">
               <div className="size-2 mt-1 rounded-full bg-muted-foreground/30 shrink-0" />
               <div>
-                <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                  Authorization header will be automatically attached to every request.
-                </p>
+                <p className="text-xs text-muted-foreground/80 leading-relaxed">{t("auth.info")}</p>
                 {authType !== "none" && authToken && (
                   <div className="mt-2 rounded-md bg-code-bg px-3 py-2 font-mono text-[11px] leading-relaxed">
                     <span className="text-muted-foreground/50">{"> "}</span>

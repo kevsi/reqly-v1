@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Trash2, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Assertion } from "@/lib/test-runner/types";
 import { createJsonKeyDownHandler } from "@/lib/json-textarea-utils";
 
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function AssertionEditor({ assertions, onChange }: Props) {
+  const { t } = useTranslation();
   const add = () => onChange([...assertions, { type: "status", expected: 200 }]);
   const remove = (i: number) => onChange(assertions.filter((_, idx) => idx !== i));
   const update = (i: number, a: Assertion) => {
@@ -29,13 +31,13 @@ export function AssertionEditor({ assertions, onChange }: Props) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">Assertions</h4>
+        <h4 className="text-sm font-medium">{t("assertion.title")}</h4>
         <Button type="button" size="sm" variant="outline" onClick={add}>
-          <Plus className="w-3 h-3 mr-1" /> Add
+          <Plus className="w-3 h-3 mr-1" /> {t("common.add")}
         </Button>
       </div>
       {assertions.length === 0 && (
-        <p className="text-xs text-muted-foreground">No assertions yet</p>
+        <p className="text-xs text-muted-foreground">{t("assertion.empty")}</p>
       )}
       {assertions.map((a, i) => (
         <div key={i} className="flex items-center gap-2 p-2 border rounded">
@@ -47,10 +49,10 @@ export function AssertionEditor({ assertions, onChange }: Props) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="status">Status</SelectItem>
-              <SelectItem value="responseTime">Time</SelectItem>
-              <SelectItem value="jsonPath">JSON Path</SelectItem>
-              <SelectItem value="schema">Schema</SelectItem>
+              <SelectItem value="status">{t("assertion.typeStatus")}</SelectItem>
+              <SelectItem value="responseTime">{t("assertion.typeTime")}</SelectItem>
+              <SelectItem value="jsonPath">{t("assertion.typeJsonPath")}</SelectItem>
+              <SelectItem value="schema">{t("assertion.typeSchema")}</SelectItem>
             </SelectContent>
           </Select>
           <AssertionFields assertion={a} onChange={(next) => update(i, next)} />
@@ -83,6 +85,7 @@ function AssertionFields({
   assertion: Assertion;
   onChange: (a: Assertion) => void;
 }) {
+  const { t } = useTranslation();
   if (assertion.type === "status") {
     return (
       <Input
@@ -116,7 +119,7 @@ function AssertionFields({
           onChange={(e) => onChange({ ...assertion, valueMs: Number(e.target.value) })}
           className="w-24"
         />
-        <span className="text-xs text-muted-foreground">ms</span>
+        <span className="text-xs text-muted-foreground">{t("assertion.ms")}</span>
       </div>
     );
   }
@@ -142,15 +145,15 @@ function AssertionFields({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="equals">equals</SelectItem>
-            <SelectItem value="contains">contains</SelectItem>
-            <SelectItem value="exists">exists</SelectItem>
-            <SelectItem value="notExists">not exists</SelectItem>
+            <SelectItem value="equals">{t("assertion.opEquals")}</SelectItem>
+            <SelectItem value="contains">{t("assertion.opContains")}</SelectItem>
+            <SelectItem value="exists">{t("assertion.opExists")}</SelectItem>
+            <SelectItem value="notExists">{t("assertion.opNotExists")}</SelectItem>
           </SelectContent>
         </Select>
         {assertion.operator !== "exists" && assertion.operator !== "notExists" && (
           <Input
-            placeholder="expected"
+            placeholder={t("assertion.expectedPlaceholder")}
             value={String(assertion.value ?? "")}
             onChange={(e) => onChange({ ...assertion, value: e.target.value })}
             className="w-32"

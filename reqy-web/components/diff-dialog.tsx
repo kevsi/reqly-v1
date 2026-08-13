@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { GitCompare, ArrowLeftRight, LayoutPanelLeft, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getStatusBadgeClass } from "@/lib/http-status-colors";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ export function DiffDialog({
   currentResponse,
   currentResponseStatus,
 }: DiffDialogProps) {
+  const { t } = useTranslation();
   const historyWithResponses = history.filter(
     (item) => item.responseBody && item.responseBody !== currentResponse,
   );
@@ -66,7 +68,7 @@ export function DiffDialog({
       ? [
           {
             id: "__current__",
-            label: "Current response",
+            label: t("diff.currentResponse"),
             status: currentResponseStatus,
             responseBody: currentResponse,
             time: null,
@@ -151,9 +153,9 @@ export function DiffDialog({
                 <GitCompare className="size-4 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-base font-semibold">Response Diff</DialogTitle>
+                <DialogTitle className="text-base font-semibold">{t("diff.title")}</DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Compare two API responses side by side
+                  {t("diff.description")}
                 </DialogDescription>
               </div>
             </div>
@@ -165,10 +167,10 @@ export function DiffDialog({
               onValueChange={(value) => value && setViewMode(value as "unified" | "split")}
             >
               <ToggleGroupItem value="unified" className="gap-1.5">
-                <Search className="size-3" /> Unified
+                <Search className="size-3" /> {t("diff.unified")}
               </ToggleGroupItem>
               <ToggleGroupItem value="split" className="gap-1.5">
-                <LayoutPanelLeft className="size-3" /> Split
+                <LayoutPanelLeft className="size-3" /> {t("diff.split")}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -182,7 +184,7 @@ export function DiffDialog({
               <span className="flex size-5 items-center justify-center rounded-full bg-destructive/15 text-[10px] font-bold text-destructive">
                 L
               </span>
-              <span className="text-xs font-medium text-muted-foreground">Base</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("diff.base")}</span>
               {leftMeta?.status != null && (
                 <Badge
                   variant="outline"
@@ -202,7 +204,7 @@ export function DiffDialog({
             </div>
             <Select value={leftId} onValueChange={setLeftId}>
               <SelectTrigger className="h-8 text-xs border-destructive/20 focus:ring-destructive/20 bg-destructive/5">
-                <SelectValue placeholder="Select base response..." />
+                <SelectValue placeholder={t("diff.basePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
                 {leftOptions.map((opt) => (
@@ -231,7 +233,7 @@ export function DiffDialog({
           <button
             onClick={handleSwap}
             className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-            title="Swap sides"
+            title={t("diff.swapTitle")}
           >
             <ArrowLeftRight className="size-3.5" />
           </button>
@@ -242,7 +244,7 @@ export function DiffDialog({
               <span className="flex size-5 items-center justify-center rounded-full bg-success/15 text-[10px] font-bold text-success">
                 R
               </span>
-              <span className="text-xs font-medium text-muted-foreground">Compare</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("diff.compare")}</span>
               {rightMeta?.status != null && (
                 <Badge
                   variant="outline"
@@ -262,7 +264,7 @@ export function DiffDialog({
             </div>
             <Select value={rightId} onValueChange={setRightId}>
               <SelectTrigger className="h-8 text-xs border-success/20 focus:ring-success/20 bg-success/5">
-                <SelectValue placeholder="Select response to compare..." />
+                <SelectValue placeholder={t("diff.comparePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
                 {rightOptions.map((opt) => (
@@ -294,8 +296,8 @@ export function DiffDialog({
             <DiffViewer
               left={leftContent}
               right={rightContent}
-              leftLabel={leftMeta?.label ?? "Left"}
-              rightLabel={rightMeta?.label ?? "Right"}
+              leftLabel={leftMeta?.label ?? t("diff.leftLabel")}
+              rightLabel={rightMeta?.label ?? t("diff.rightLabel")}
               leftStatus={leftMeta?.status ?? undefined}
               rightStatus={rightMeta?.status ?? undefined}
               viewMode={viewMode}
@@ -310,12 +312,9 @@ export function DiffDialog({
                 <GitCompare className="size-7 text-muted-foreground/40" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground/80">
-                  Select two responses to compare
-                </p>
+                <p className="text-sm font-semibold text-foreground/80">{t("diff.emptyTitle")}</p>
                 <p className="mt-1 text-xs text-muted-foreground/60 max-w-[260px]">
-                  Choose a base and a comparison response from the dropdowns above to visualize the
-                  diff.
+                  {t("diff.emptyDescription")}
                 </p>
               </div>
             </div>

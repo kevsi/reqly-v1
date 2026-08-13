@@ -3,6 +3,7 @@ import { RefreshCw, BookOpen, Loader2, ListTree, Braces, KeyRound } from "lucide
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PrettifyButton } from "./prettify-button";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   onIntrospect: () => void;
@@ -44,6 +45,7 @@ export function GraphqlToolbar({
   headersCount = 0,
   headersError = false,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex items-center gap-1.5 p-2 border-b bg-muted/20 flex-wrap"
@@ -62,7 +64,7 @@ export function GraphqlToolbar({
         ) : (
           <RefreshCw className="w-3.5 h-3.5 mr-1" />
         )}
-        Refresh Schema
+        {t("graphql.toolbar.refreshSchema")}
       </Button>
       <Button
         variant={schemaOpen ? "default" : "outline"}
@@ -72,7 +74,8 @@ export function GraphqlToolbar({
         data-testid="graphql-toggle-schema"
       >
         <BookOpen className="w-3.5 h-3.5 mr-1" />
-        {schemaOpen ? "Hide" : "Show"} Schema
+        {schemaOpen ? t("graphql.toolbar.hide") : t("graphql.toolbar.show")}{" "}
+        {t("graphql.toolbar.schema")}
       </Button>
       {onToggleBuilder && (
         <Button
@@ -82,10 +85,15 @@ export function GraphqlToolbar({
           disabled={!builderAvailable}
           className={cn("h-8 text-xs", !builderAvailable && "opacity-50")}
           data-testid="graphql-toggle-builder"
-          title={builderAvailable ? "Toggle visual query builder" : "Run Refresh Schema first"}
+          title={
+            builderAvailable
+              ? t("graphql.toolbar.toggleBuilderTitle")
+              : t("graphql.toolbar.refreshSchemaFirst")
+          }
         >
           <ListTree className="w-3.5 h-3.5 mr-1" />
-          {showBuilder ? "Hide" : "Show"} Builder
+          {showBuilder ? t("graphql.toolbar.hide") : t("graphql.toolbar.show")}{" "}
+          {t("graphql.toolbar.builder")}
         </Button>
       )}
 
@@ -102,10 +110,14 @@ export function GraphqlToolbar({
             variablesError && "border-destructive/50 text-destructive",
           )}
           data-testid="graphql-toggle-variables"
-          title={variablesError ? "Variables JSON is invalid" : "Toggle variables panel"}
+          title={
+            variablesError
+              ? t("graphql.toolbar.variablesJsonInvalid")
+              : t("graphql.toolbar.toggleVariables")
+          }
         >
           <Braces className="w-3.5 h-3.5" />
-          Variables
+          {t("graphql.toolbar.variables")}
           {variablesCount > 0 && (
             <span
               className={cn(
@@ -128,10 +140,14 @@ export function GraphqlToolbar({
             headersError && "border-destructive/50 text-destructive",
           )}
           data-testid="graphql-toggle-headers"
-          title={headersError ? "Headers JSON is invalid" : "Toggle headers panel"}
+          title={
+            headersError
+              ? t("graphql.toolbar.headersJsonInvalid")
+              : t("graphql.toolbar.toggleHeaders")
+          }
         >
           <KeyRound className="w-3.5 h-3.5" />
-          Headers
+          {t("graphql.toolbar.headers")}
           {headersCount > 0 && (
             <span
               className={cn(

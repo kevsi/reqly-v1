@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronLeft,
   ChevronRight,
@@ -79,6 +80,7 @@ export function RequestTabBar({
   onOpenHistory,
   onRenameTab,
 }: RequestTabBarProps) {
+  const { t } = useTranslation();
   const hasActiveTab = tabs.some((t) => t.id === activeTabId);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -109,7 +111,7 @@ export function RequestTabBar({
             type="button"
             onClick={() => onScroll("left")}
             className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
-            title="Scroll left"
+            title={t("runner.tabs.scrollLeft")}
           >
             <ChevronLeft className="size-3.5" />
           </button>
@@ -164,7 +166,7 @@ export function RequestTabBar({
               ) : (
                 <span
                   onDoubleClick={() => startEdit(tab)}
-                  title="Double-click to rename"
+                  title={t("runner.tabs.renameHint")}
                   className="max-w-[200px] cursor-pointer truncate text-sm font-medium"
                 >
                   {tab.name}
@@ -172,7 +174,7 @@ export function RequestTabBar({
               )}
               {!tab.isSaved && (
                 <span
-                  title="Unsaved — Ctrl+S to save"
+                  title={t("runner.tabs.unsavedHint")}
                   className="size-1.5 rounded-full bg-warning/80 shrink-0"
                 />
               )}
@@ -198,7 +200,7 @@ export function RequestTabBar({
             type="button"
             onClick={() => onScroll("right")}
             className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
-            title="Scroll right"
+            title={t("runner.tabs.scrollRight")}
           >
             <ChevronRight className="size-3.5" />
           </button>
@@ -211,7 +213,7 @@ export function RequestTabBar({
             onClick={onOpenCollections}
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
-            title="Collections"
+            title={t("runner.tabs.collections")}
             data-testid="tabbar-collections"
           >
             <Folder className="size-3.5" />
@@ -222,7 +224,7 @@ export function RequestTabBar({
             onClick={onDuplicateActive}
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
-            title="Duplicate request"
+            title={t("runner.tabs.duplicate")}
             data-testid="tabbar-duplicate"
           >
             <Copy className="size-3.5" />
@@ -233,7 +235,7 @@ export function RequestTabBar({
             onClick={onSaveActive}
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
-            title="Save (Ctrl+S)"
+            title={t("runner.tabs.saveShortcut")}
             data-testid="tabbar-save"
           >
             <Save className="size-3.5" />
@@ -244,7 +246,7 @@ export function RequestTabBar({
             onClick={onOpenHistory}
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
-            title="Request history"
+            title={t("runner.tabs.history")}
             data-testid="tabbar-history"
           >
             <Clock className="size-3.5" />
@@ -257,7 +259,7 @@ export function RequestTabBar({
                 variant="ghost"
                 size="icon"
                 className="size-7 text-muted-foreground/40 hover:text-foreground transition-all duration-200"
-                title="All tabs"
+                title={t("runner.tabs.allTabs")}
               >
                 <List className="size-3.5" />
               </Button>
@@ -285,7 +287,7 @@ export function RequestTabBar({
             size="icon"
             onClick={onAddTab}
             className="size-7 text-muted-foreground/50 hover:text-foreground transition-all duration-200"
-            title="New tab"
+            title={t("runner.tabs.newTab")}
             data-testid="tabbar-add-tab"
           >
             <Plus className="size-4" />
@@ -307,7 +309,7 @@ export function RequestTabBar({
             }}
           >
             <Save className="size-3.5" />
-            Save
+            {t("runner.tabs.save")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -318,7 +320,7 @@ export function RequestTabBar({
             }}
           >
             <Copy className="size-3.5" />
-            Duplicate
+            {t("runner.tabs.duplicateShort")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -329,7 +331,7 @@ export function RequestTabBar({
             }}
           >
             <Pencil className="size-3.5" />
-            Rename
+            {t("runner.tabs.rename")}
           </button>
           <div className="my-1 border-t border-border" />
           <button
@@ -340,7 +342,7 @@ export function RequestTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close
+            {t("runner.tabs.close")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -350,7 +352,7 @@ export function RequestTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close Others
+            {t("runner.tabs.closeOthers")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -360,7 +362,7 @@ export function RequestTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close to the Right
+            {t("runner.tabs.closeToRight")}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
@@ -370,7 +372,7 @@ export function RequestTabBar({
             }}
           >
             <X className="size-3.5" />
-            Close All
+            {t("runner.tabs.closeAll")}
           </button>
           <div className="my-1 border-t border-border" />
           <button
@@ -381,7 +383,7 @@ export function RequestTabBar({
             }}
           >
             <Save className="size-3.5" />
-            Save All
+            {t("runner.tabs.saveAll")}
           </button>
         </div>
       )}

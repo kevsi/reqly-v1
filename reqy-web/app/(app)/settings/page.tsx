@@ -17,6 +17,7 @@ import { proxyAuthHeaders } from "@/lib/proxy-auth";
 
 import { useRequestStore } from "@/hooks/use-request-store";
 import { persistence } from "@/lib/persistence";
+import { useTranslation } from "react-i18next";
 import {
   AIProvider,
   loadAIProvider,
@@ -70,6 +71,7 @@ const SECTION_KEYS: SectionKey[] = [
 ];
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const {
     systemNotificationPermission,
     requestSystemNotificationPermission,
@@ -137,7 +139,7 @@ export default function SettingsPage() {
     const authError = params.get("github_auth_error");
     if (authError) {
       toast({
-        title: "Erreur de connexion GitHub",
+        title: t("settings.github.connectError"),
         description: authError,
         variant: "destructive",
       });
@@ -145,7 +147,7 @@ export default function SettingsPage() {
       url.searchParams.delete("github_auth_error");
       window.history.replaceState(null, "", url.toString());
     }
-  }, []);
+  }, [t]);
 
   const [activeSection, setActiveSection] = useState<SectionKey>(() => {
     if (typeof window !== "undefined") {
@@ -218,11 +220,11 @@ export default function SettingsPage() {
   // Auto-dismiss save status + toast notification
   useEffect(() => {
     if (saveStatus) {
-      toast({ title: "Succès", description: saveStatus });
+      toast({ title: t("settings.saveSuccess"), description: saveStatus });
       const timer = window.setTimeout(() => setSaveStatus(null), 3000);
       return () => window.clearTimeout(timer);
     }
-  }, [saveStatus]);
+  }, [saveStatus, t]);
 
   // AI handlers
   const handleProviderChange = useCallback((value: AIProvider) => {
@@ -252,8 +254,8 @@ export default function SettingsPage() {
     setOllamaHost(savedConfig.host || "127.0.0.1");
     setOllamaPort(savedConfig.port?.toString() || "11434");
     setOllamaModel(savedConfig.model || "llama2");
-    setSaveStatus(`Configuration enregistrée pour ${provider.toUpperCase()}`);
-  }, [provider, apiKey, aiBaseUrl, aiModel, ollamaHost, ollamaPort, ollamaModel]);
+    setSaveStatus(t("settings.configSavedFor", { provider: provider.toUpperCase() }));
+  }, [provider, apiKey, aiBaseUrl, aiModel, ollamaHost, ollamaPort, ollamaModel, t]);
 
   // GitHub handlers
   const fetchGithubStatus = useCallback(async () => {
@@ -322,8 +324,8 @@ export default function SettingsPage() {
         await requestSystemNotificationPermission();
       } catch {
         toast({
-          title: "Erreur",
-          description: "Impossible de demander la permission.",
+          title: t("settings.permissionErrorTitle"),
+          description: t("settings.permissionErrorDesc"),
           variant: "destructive",
         });
         return;
@@ -335,7 +337,7 @@ export default function SettingsPage() {
     } catch {
       /* ignore */
     }
-  }, [pushEnabled, requestSystemNotificationPermission]);
+  }, [pushEnabled, requestSystemNotificationPermission, t]);
 
   const toggleSystemPushEnabled = useCallback(() => {
     setSystemPushEnabled((prev) => {
@@ -354,12 +356,12 @@ export default function SettingsPage() {
       await requestSystemNotificationPermission();
     } catch {
       toast({
-        title: "Erreur",
-        description: "Impossible de demander la permission.",
+        title: t("settings.permissionErrorTitle"),
+        description: t("settings.permissionErrorDesc"),
         variant: "destructive",
       });
     }
-  }, [requestSystemNotificationPermission]);
+  }, [requestSystemNotificationPermission, t]);
 
   const toggleNotifyEvent = useCallback(
     (key: string) => {
@@ -376,11 +378,11 @@ export default function SettingsPage() {
 
   const handleTestPush = useCallback(() => {
     try {
-      toast({ title: "Test de notification (toast)", meta: { event: "importExport" } });
+      toast({ title: t("settings.testNotification"), meta: { event: "importExport" } });
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [t]);
 
   // Profile handlers moved into ProfileSection (self-contained)
 
@@ -444,18 +446,16 @@ export default function SettingsPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connexion GitHub</DialogTitle>
-            <DialogDescription>
-              Une nouvelle fenêtre GitHub s'ouvre pour l'authentification.
-            </DialogDescription>
+            <DialogTitle>{t("settings.github.title")}</DialogTitle>
+            <DialogDescription>{t("settings.github.description")}</DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex items-center gap-3 text-sm text-foreground">
             <Loader2 className="size-5 animate-spin text-primary" />
-            <p>Patientez pendant la redirection vers GitHub...</p>
+            <p>{t("settings.github.waiting")}</p>
           </div>
           <div className="mt-6 flex justify-end">
             <Button variant="secondary" onClick={() => setGithubConnectDialogOpen(false)}>
-              J'ai terminé
+              {t("settings.github.done")}
             </Button>
           </div>
         </DialogContent>

@@ -35,16 +35,22 @@ export function useAiSidebarHistory(messages: ChatMessage[], model?: string | nu
     if (!currentSessionId || messages.length === 0) return;
 
     const build = (list: ConversationSession[]): ConversationSession[] => {
+      // `phase` est un état transitoire de rendu (tool_calling / awaiting_response /
+      // streaming / done) : on ne le persiste pas, sinon une session rechargée
+      // afficherait un indicateur « typing » bloqué sur un message terminé.
+      const persistableMessages = messages.map(({ phase: _phase, ...rest }) => rest);
       const existing = list.find((s) => s.id === currentSessionId);
       const totalUsage = mergeUsages(
-        messages.filter((m) => m.role === "assistant").map((m) => m.usage ?? emptyUsage()),
+        persistableMessages
+          .filter((m) => m.role === "assistant")
+          .map((m) => m.usage ?? emptyUsage()),
       );
       if (existing) {
         return list.map((s) =>
           s.id === currentSessionId
             ? {
                 ...s,
-                messages,
+                messages: persistableMessages,
                 totalUsage,
                 model: s.model ?? model ?? undefined,
                 updatedAt: new Date().toISOString(),
@@ -53,13 +59,14 @@ export function useAiSidebarHistory(messages: ChatMessage[], model?: string | nu
         );
       }
       const title =
-        messages.find((m) => m.role === "user")?.content.slice(0, 50) || "Nouvelle conversation";
+        persistableMessages.find((m) => m.role === "user")?.content.slice(0, 50) ||
+        "Nouvelle conversation";
       return [
         ...list,
         {
           id: currentSessionId,
           title: title.length > 40 ? title.slice(0, 37) + "..." : title,
-          messages,
+          messages: persistableMessages,
           totalUsage,
           model: model ?? undefined,
           createdAt: new Date().toISOString(),

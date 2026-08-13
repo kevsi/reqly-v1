@@ -7,6 +7,7 @@
  * if one exists. No-op visually while the request is in-flight.
  */
 import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export interface RatingButtonsProps {
 }
 
 export function RatingButtons({ diagnosticId, className }: RatingButtonsProps) {
+  const { t } = useTranslation();
   const [override, setOverride] = useState<{ id: string; value: Rating | null } | null>(null);
   const rating = override?.id === diagnosticId ? override.value : getRating(diagnosticId);
 
@@ -38,9 +40,9 @@ export function RatingButtons({ diagnosticId, className }: RatingButtonsProps) {
         type="button"
         variant="ghost"
         onClick={() => handleClick("up")}
-        aria-label="Diagnostic utile"
+        aria-label={t("ai.rating.helpfulAria")}
         aria-pressed={rating === "up"}
-        title="Ce diagnostic m'a aidé"
+        title={t("ai.rating.helpfulTitle")}
         className={cn(
           "size-6 rounded [&_svg]:size-3",
           rating === "up"
@@ -54,9 +56,9 @@ export function RatingButtons({ diagnosticId, className }: RatingButtonsProps) {
         type="button"
         variant="ghost"
         onClick={() => handleClick("down")}
-        aria-label="Diagnostic inutile"
+        aria-label={t("ai.rating.unhelpfulAria")}
         aria-pressed={rating === "down"}
-        title="Ce diagnostic n'est pas pertinent"
+        title={t("ai.rating.unhelpfulTitle")}
         className={cn(
           "size-6 rounded [&_svg]:size-3",
           rating === "down"

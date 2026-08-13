@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -30,14 +31,19 @@ interface KeyValueEditorProps {
 export function KeyValueEditor({
   pairs,
   onChange,
-  keyPlaceholder = "Key",
-  valuePlaceholder = "Value",
-  addLabel = "Add",
-  emptyLabel = "No items added yet",
+  keyPlaceholder,
+  valuePlaceholder,
+  addLabel,
+  emptyLabel,
   showToggle = false,
   keySuggestions,
   valueSuggestions,
 }: KeyValueEditorProps) {
+  const { t } = useTranslation();
+  const resolvedKeyPlaceholder = keyPlaceholder ?? t("request.kvKey");
+  const resolvedValuePlaceholder = valuePlaceholder ?? t("request.kvValue");
+  const resolvedAddLabel = addLabel ?? t("common.add");
+  const resolvedEmptyLabel = emptyLabel ?? t("request.noParams");
   const add = () => onChange([...pairs, { key: "", value: "", enabled: true }]);
 
   const remove = (index: number) => {
@@ -59,10 +65,8 @@ export function KeyValueEditor({
           <div className="flex size-8 items-center justify-center rounded-full bg-muted/50">
             <Plus className="size-4 text-muted-foreground/40" />
           </div>
-          <span className="text-xs font-medium text-muted-foreground/60">{emptyLabel}</span>
-          <span className="text-[11px] text-muted-foreground/40">
-            Click below to add your first entry
-          </span>
+          <span className="text-xs font-medium text-muted-foreground/60">{resolvedEmptyLabel}</span>
+          <span className="text-[11px] text-muted-foreground/40">{t("common.addEntryHint")}</span>
         </div>
       ) : (
         <div className="space-y-2">
@@ -78,7 +82,7 @@ export function KeyValueEditor({
                 <Switch
                   checked={pair.enabled !== false}
                   onCheckedChange={(checked) => toggle(index, checked)}
-                  aria-label={pair.enabled !== false ? "Disable" : "Enable"}
+                  aria-label={pair.enabled !== false ? t("common.disable") : t("common.enable")}
                   className="shrink-0"
                 />
               )}
@@ -86,7 +90,7 @@ export function KeyValueEditor({
                 type="text"
                 value={pair.key}
                 onChange={(value) => update(index, "key", value)}
-                placeholder={keyPlaceholder}
+                placeholder={resolvedKeyPlaceholder}
                 className="flex-1 h-9 border-input bg-muted/20 text-sm transition-all duration-200 focus:bg-muted/40"
                 suggestions={keySuggestions}
                 emptyMessage=""
@@ -96,7 +100,7 @@ export function KeyValueEditor({
                 type="text"
                 value={pair.value}
                 onChange={(value) => update(index, "value", value)}
-                placeholder={valuePlaceholder}
+                placeholder={resolvedValuePlaceholder}
                 className="flex-1 h-9 border-input bg-muted/20 text-sm transition-all duration-200 focus:bg-muted/40"
                 suggestions={valueSuggestions}
                 emptyMessage=""
@@ -123,7 +127,7 @@ export function KeyValueEditor({
         className="mt-3 w-full border-dashed border-muted-foreground/20 text-muted-foreground/70 hover:text-foreground hover:border-muted-foreground/40 transition-all duration-200 h-9 text-xs font-medium"
       >
         <Plus className="size-3.5 mr-1" />
-        {addLabel}
+        {resolvedAddLabel}
       </Button>
     </div>
   );

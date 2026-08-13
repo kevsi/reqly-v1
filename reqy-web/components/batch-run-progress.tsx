@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Loader2, CheckCircle2, XCircle, Play, StopCircle, AlertCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { methodBadge } from "@/lib/http-method-colors";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export function BatchRunProgress({
   onClose,
   onRunRequest,
 }: BatchRunProgressProps) {
+  const { t } = useTranslation();
   const [runStates, setRunStates] = useState<RequestRunState[]>(() =>
     collection.requests.map((r) => ({ request: r, status: "pending" as RequestStatus })),
   );
@@ -159,7 +161,7 @@ export function BatchRunProgress({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Play className="size-4 text-primary" />
-            Send collection: {collection.name}
+            {t("batch.sendCollection", { name: collection.name })}
           </DialogTitle>
         </DialogHeader>
 
@@ -180,7 +182,7 @@ export function BatchRunProgress({
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-3">
               <span className="text-muted-foreground">
-                {completed}/{total} requests
+                {t("batch.requestsCount", { completed, total })}
               </span>
               {successCount > 0 && (
                 <span className="flex items-center gap-1 text-success">
@@ -205,12 +207,12 @@ export function BatchRunProgress({
                   className="h-7 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                 >
                   <StopCircle className="size-3.5" />
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               )}
               {!isRunning && completed > 0 && (
                 <Button variant="ghost" size="sm" onClick={handleClose} className="h-7 text-xs">
-                  Close
+                  {t("common.close")}
                 </Button>
               )}
             </div>
@@ -264,7 +266,7 @@ export function BatchRunProgress({
               {/* Time / status / assertions */}
               <div className="flex flex-col items-end gap-1 min-w-0 shrink-0">
                 {state.status === "running" && (
-                  <span className="text-xs text-primary animate-pulse">Sending...</span>
+                  <span className="text-xs text-primary animate-pulse">{t("batch.sending")}</span>
                 )}
                 {state.status === "success" && state.timeMs !== undefined && (
                   <span className="text-xs text-success tabular-nums">
@@ -276,7 +278,7 @@ export function BatchRunProgress({
                     className="text-xs text-destructive truncate max-w-[150px]"
                     title={state.error}
                   >
-                    {state.error || "Error"}
+                    {state.error || t("batch.error")}
                   </span>
                 )}
                 {state.status === "pending" && (
@@ -291,8 +293,14 @@ export function BatchRunProgress({
                         title={
                           ar.error ??
                           (ar.passed
-                            ? "Passed"
-                            : `Expected ${JSON.stringify((ar.assertion as { expected?: unknown }).expected ?? (ar.assertion as { value?: unknown }).value)} got ${JSON.stringify(ar.actualValue)}`)
+                            ? t("batch.passed")
+                            : t("batch.expectedGot", {
+                                expected: JSON.stringify(
+                                  (ar.assertion as { expected?: unknown }).expected ??
+                                    (ar.assertion as { value?: unknown }).value,
+                                ),
+                                got: JSON.stringify(ar.actualValue),
+                              }))
                         }
                         className={cn(
                           "inline-flex items-center rounded px-1 py-0.5 text-[9px] font-mono font-medium leading-none",
@@ -324,14 +332,15 @@ export function BatchRunProgress({
             {errorCount === 0 ? (
               <>
                 <CheckCircle2 className="size-4" />
-                All {total} request{total > 1 ? "s" : ""} completed successfully
-                {cancelled ? " (cancelled)" : ""}
+                {t("batch.allCompleted", { total })}
+                {cancelled ? t("batch.cancelled") : ""}
               </>
             ) : (
               <>
                 <AlertCircle className="size-4" />
-                {successCount}/{total} successful{errorCount > 0 ? `, ${errorCount} failed` : ""}
-                {cancelled ? " (cancelled)" : ""}
+                {t("batch.summary", { successCount, total })}
+                {errorCount > 0 ? t("batch.summaryFailed", { errorCount }) : ""}
+                {cancelled ? t("batch.cancelled") : ""}
               </>
             )}
           </div>

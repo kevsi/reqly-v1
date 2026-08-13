@@ -32,6 +32,7 @@ import {
   List,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 function formatTimestamp(ts: number): string {
   const d = new Date(ts);
@@ -88,6 +89,7 @@ function EventItem({ event }: { event: SSEEvent }) {
 }
 
 export function SSEPanel() {
+  const { t } = useTranslation();
   const { status, events, connect, disconnect, clearEvents } = useSSE();
   const [url, setUrl] = useState("https://localhost:3000/sse");
   const [showOptions, setShowOptions] = useState(false);
@@ -108,20 +110,20 @@ export function SSEPanel() {
     if (vars.length === 0) return [];
     return [
       {
-        label: "Variables",
+        label: t("request.variables"),
         items: vars.map((name) => ({
           id: `sse-val-${name}`,
           label: `{{${name}}}`,
           value: `{{${name}}}`,
-          description: "variable",
+          description: t("sse.variableDesc"),
         })),
       },
     ];
-  }, [envVarNames]);
+  }, [envVarNames, t]);
   const sseHeaderKeySuggestions = useMemo(
     (): AutocompleteGroup[] => [
       {
-        label: "En-têtes courants",
+        label: t("request.commonHeaders"),
         items: [
           "Accept",
           "Authorization",
@@ -137,11 +139,11 @@ export function SSEPanel() {
           id: `sse-hdr-${name}`,
           label: name,
           value: name,
-          description: "en-tête",
+          description: t("sse.headerDesc"),
         })),
       },
     ],
-    [],
+    [t],
   );
 
   // URL autocomplete: history URLs + env vars
@@ -153,7 +155,7 @@ export function SSEPanel() {
     // Environment variables
     if (envVarNames.length > 0) {
       groups.push({
-        label: "Variables",
+        label: t("request.variables"),
         items: envVarNames.map((name) => ({
           id: `sse-url-var-${name}`,
           label: `{{${name}}}`,
@@ -170,10 +172,10 @@ export function SSEPanel() {
       urlItems.push({ id: `sse-uh-${u}`, label: u, value: u });
     }
     if (urlItems.length > 0) {
-      groups.push({ label: "Historique", items: urlItems.slice(0, 20) });
+      groups.push({ label: t("request.history"), items: urlItems.slice(0, 20) });
     }
     return groups;
-  }, [envVarNames, sseHistoryUrls]);
+  }, [envVarNames, sseHistoryUrls, t]);
 
   // Custom headers
   const [headers, setHeaders] = useState<KeyValuePair[]>([]);
@@ -207,27 +209,27 @@ export function SSEPanel() {
   const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> =
     {
       idle: {
-        label: "Idle",
+        label: t("sse.statusIdle"),
         className: "bg-muted text-muted-foreground",
         icon: <Activity />,
       },
       connecting: {
-        label: "Connecting",
+        label: t("sse.statusConnecting"),
         className: "bg-warning/10 text-warning border-warning/20",
         icon: <Loader2 className="animate-spin" />,
       },
       open: {
-        label: "Open",
+        label: t("sse.statusOpen"),
         className: "bg-success/10 text-success border-success/20",
         icon: <Wifi />,
       },
       closed: {
-        label: "Closed",
+        label: t("sse.statusClosed"),
         className: "bg-muted text-muted-foreground",
         icon: <WifiOff />,
       },
       error: {
-        label: "Error",
+        label: t("sse.statusError"),
         className: "bg-destructive/10 text-destructive border-destructive/20",
         icon: <WifiOff />,
       },
@@ -250,7 +252,7 @@ export function SSEPanel() {
               SSE
             </h3>
             <p className="text-[10px] text-muted-foreground/40 leading-none mt-1">
-              Monitor Server-Sent Events streams
+              {t("sse.monitor")}
             </p>
           </div>
         </div>
@@ -280,7 +282,7 @@ export function SSEPanel() {
               disabled={status === "open" || status === "connecting"}
               className="font-mono text-sm h-9"
               suggestions={sseUrlAutocompleteGroups}
-              emptyMessage="Aucun résultat"
+              emptyMessage={t("request.noResults")}
             />
           </div>
 
@@ -294,7 +296,7 @@ export function SSEPanel() {
               className="shrink-0 border-red-200/40 text-red-600 transition-all duration-150 hover:scale-105 hover:border-red-300/60 hover:bg-red-50 hover:text-red-700 hover:shadow-sm active:scale-95 dark:border-red-800/30 dark:text-red-400 dark:hover:bg-red-950/50"
             >
               <WifiOff className="size-4" />
-              Disconnect
+              {t("sse.disconnect")}
             </Button>
           ) : (
             <Button
@@ -305,7 +307,7 @@ export function SSEPanel() {
               className="shrink-0 bg-emerald-600 text-white transition-all duration-150 hover:scale-105 hover:bg-emerald-700 hover:shadow-sm active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500"
             >
               <Wifi className="size-4" />
-              Connect
+              {t("sse.connect")}
             </Button>
           )}
         </div>
@@ -328,7 +330,7 @@ export function SSEPanel() {
           ) : (
             <ChevronRight className="size-3.5 shrink-0" />
           )}
-          Options
+          {t("sse.options")}
           {(headers.length > 0 || authType !== "none" || eventFilter || maxEvents !== 500) && (
             <span className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground/40">
               {headers.length > 0 && <FileText className="size-3" />}
@@ -345,15 +347,15 @@ export function SSEPanel() {
             {/* Custom Headers */}
             <div className="space-y-1.5">
               <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                Custom Headers
+                {t("sse.customHeaders")}
               </Label>
               <KeyValueEditor
                 pairs={headers}
                 onChange={setHeaders}
-                keyPlaceholder="Header name"
-                valuePlaceholder="Header value"
-                addLabel="Add header"
-                emptyLabel="No custom headers"
+                keyPlaceholder={t("sse.headerNamePlaceholder")}
+                valuePlaceholder={t("sse.headerValuePlaceholder")}
+                addLabel={t("sse.addHeader")}
+                emptyLabel={t("sse.noCustomHeaders")}
                 showToggle
                 keySuggestions={sseHeaderKeySuggestions}
                 valueSuggestions={sseValueVarSuggestions}
@@ -366,7 +368,7 @@ export function SSEPanel() {
             {/* Auth */}
             <div className="space-y-1.5">
               <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                Authentication
+                {t("sse.authentication")}
               </Label>
               <div className="flex items-start gap-2">
                 <div className="w-40 shrink-0">
@@ -375,12 +377,12 @@ export function SSEPanel() {
                     onValueChange={(value) => setAuthType(value as SSEAuthType)}
                   >
                     <SelectTrigger className="h-9 border-input bg-muted/20 text-xs transition-all duration-200 hover:border-muted-foreground/30">
-                      <SelectValue placeholder="Auth type" />
+                      <SelectValue placeholder={t("sse.authTypePlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No Auth</SelectItem>
-                      <SelectItem value="bearer">Bearer Token</SelectItem>
-                      <SelectItem value="basic">Basic Auth</SelectItem>
+                      <SelectItem value="none">{t("sse.noAuth")}</SelectItem>
+                      <SelectItem value="bearer">{t("sse.bearerToken")}</SelectItem>
+                      <SelectItem value="basic">{t("sse.basicAuth")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -396,7 +398,7 @@ export function SSEPanel() {
                     }
                     className="flex-1 h-9 border-input bg-muted/20 font-mono text-xs transition-all duration-200 focus:bg-muted/40"
                     suggestions={sseValueVarSuggestions}
-                    emptyMessage="Aucune variable"
+                    emptyMessage={t("sse.noVariable")}
                   />
                 )}
               </div>
@@ -409,23 +411,21 @@ export function SSEPanel() {
             <div className="flex items-start gap-3">
               <div className="flex-1 space-y-1.5">
                 <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  Event Filter
+                  {t("sse.eventFilter")}
                 </Label>
                 <Input
                   type="text"
                   value={eventFilter}
                   onChange={(e) => setEventFilter(e.target.value)}
-                  placeholder='Filter by event type (e.g. "update")'
+                  placeholder={t("sse.eventFilterPlaceholder")}
                   disabled={isConnected}
                   className="h-9 border-input bg-muted/20 text-xs transition-all duration-200 focus:bg-muted/40"
                 />
-                <p className="text-[10px] text-muted-foreground/40">
-                  Leave empty to receive all events
-                </p>
+                <p className="text-[10px] text-muted-foreground/40">{t("sse.eventFilterHint")}</p>
               </div>
               <div className="w-32 shrink-0 space-y-1.5">
                 <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  Max Events
+                  {t("sse.maxEvents")}
                 </Label>
                 <Input
                   type="number"
@@ -449,7 +449,7 @@ export function SSEPanel() {
       <div className="flex flex-1 min-h-0 flex-col px-3 pb-3">
         <div className="flex items-center justify-between mb-2 shrink-0">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
-            Events
+            {t("sse.events")}
             {events.length > 0 && (
               <span className="ml-1.5 font-mono text-muted-foreground/30">({events.length})</span>
             )}
@@ -462,7 +462,7 @@ export function SSEPanel() {
               className="h-6 gap-1 text-[10px] font-medium text-muted-foreground/50 hover:text-destructive transition-colors duration-200"
             >
               <Trash2 className="size-3" />
-              Clear
+              {t("sse.clear")}
             </Button>
           )}
         </div>
@@ -472,9 +472,9 @@ export function SSEPanel() {
             {events.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-xs text-muted-foreground/50">
                 <Activity className="size-8 mb-2 text-muted-foreground/20" />
-                <span>No events yet</span>
+                <span>{t("sse.noEvents")}</span>
                 <span className="text-[10px] text-muted-foreground/30 mt-1">
-                  Connect to an SSE endpoint to start receiving events
+                  {t("sse.noEventsHint")}
                 </span>
               </div>
             )}

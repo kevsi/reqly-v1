@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Save,
   GitCompare,
@@ -57,26 +58,29 @@ function parseResponseBody(body: string | undefined): unknown | undefined {
 
 // ── Relative date formatting ────────────────────────────────────────────
 
-function relativeDate(ms: number): string {
+function relativeDate(
+  ms: number,
+  t: (key: string, opts?: Record<string, number>) => string,
+): string {
   if (!ms) return "";
   const diff = Date.now() - ms;
   const sec = Math.floor(diff / 1000);
-  if (sec < 60) return "à l'instant";
+  if (sec < 60) return t("snapshots.dateJustNow");
   const min = Math.floor(sec / 60);
-  if (min < 60) return `il y a ${min} min`;
+  if (min < 60) return t("snapshots.dateMinutes", { count: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `il y a ${hr}h`;
+  if (hr < 24) return t("snapshots.dateHours", { count: hr });
   const days = Math.floor(hr / 24);
-  if (days < 7) return `il y a ${days}j`;
+  if (days < 7) return t("snapshots.dateDays", { count: days });
   const weeks = Math.floor(days / 7);
-  if (weeks < 5) return `il y a ${weeks} sem`;
+  if (weeks < 5) return t("snapshots.dateWeeks", { count: weeks });
   const months = Math.floor(days / 30);
-  return `il y a ${months} mois`;
+  return t("snapshots.dateMonths", { count: months });
 }
 
-function formatDate(ms: number): string {
+function formatDate(ms: number, language: string): string {
   if (!ms) return "—";
-  return new Date(ms).toLocaleDateString("fr-FR", {
+  return new Date(ms).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -114,13 +118,6 @@ const changeIcon: Record<string, React.ReactNode> = {
   "type-changed:null": <Ban className="size-3" />,
 };
 
-const changeLabel: Record<string, string> = {
-  added: "Ajout",
-  removed: "Retiré",
-  "type-changed": "Type modifié",
-  "type-changed:null": "Nullable",
-};
-
 // ── Component ────────────────────────────────────────────────────────────
 
 interface RestSnapshotModalProps {
@@ -138,6 +135,7 @@ export function RestSnapshotModal({
   responseStatus,
   responseHeaders,
 }: RestSnapshotModalProps) {
+  const { t, i18n } = useTranslation();
   // ── State ────────────────────────────────────────────────────────────
   const [snapshotNames, setSnapshotNames] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
@@ -280,6 +278,21 @@ export function RestSnapshotModal({
 
   // ── Render helpers ───────────────────────────────────────────────────
 
+  const changeLabel = (kind: string): string => {
+    switch (kind) {
+      case "added":
+        return t("snapshots.kindAdded");
+      case "removed":
+        return t("snapshots.kindRemoved");
+      case "type-changed":
+        return t("snapshots.kindTypeChanged");
+      case "type-changed:null":
+        return t("snapshots.kindNullable");
+      default:
+        return kind;
+    }
+  };
+
   const renderDetailCard = () => {
     if (!selectedEntry) return null;
     const e = selectedEntry;
@@ -296,15 +309,17 @@ export function RestSnapshotModal({
           )}
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarClock className="size-3" />
-            <span title={formatDate(e.updatedAt)}>{relativeDate(e.updatedAt)}</span>
+            <span title={formatDate(e.updatedAt, i18n.language)}>
+              {relativeDate(e.updatedAt, t)}
+            </span>
           </div>
           {e.createdAt !== e.updatedAt && (
             <span className="text-[10px] text-muted-foreground/50">
-              (créé {relativeDate(e.createdAt)})
+              {t("snapshots.created", { date: relativeDate(e.createdAt, t) })}
             </span>
           )}
           <span className="ml-auto text-[10px] text-muted-foreground/40">
-            {formatDate(e.updatedAt)}
+            {formatDate(e.updatedAt, i18n.language)}
           </span>
         </div>
 
@@ -321,7 +336,9 @@ export function RestSnapshotModal({
               ))}
             {Object.keys(e.responseHeaders).length > 10 && (
               <div className="text-[10px] text-muted-foreground/40 pt-0.5">
-                … et {Object.keys(e.responseHeaders).length - 10} autres
+                {t("snapshots.more", {
+                  count: Object.keys(e.responseHeaders).length - 10,
+                })}
               </div>
             )}
           </div>
@@ -341,18 +358,18 @@ export function RestSnapshotModal({
             >
               {copyOk ? (
                 <>
-                  <Check className="size-3" /> Copié
+                  <Check className="size-3" /> {t("snapshots.copied")}
                 </>
               ) : (
                 <>
-                  <Copy className="size-3" /> Copier
+                  <Copy className="size-3" /> {t("common.copy")}
                 </>
               )}
             </button>
             <pre className="text-[11px] font-mono leading-relaxed text-foreground/70 p-3 overflow-x-auto max-h-36 overflow-y-auto whitespace-pre-wrap break-all">
               {e.responseBody.slice(0, 2000)}
               {e.responseBody.length > 2000 && (
-                <span className="text-muted-foreground/40"> … (tronqué)</span>
+                <span className="text-muted-foreground/40">{t("snapshots.truncated")}</span>
               )}
             </pre>
           </div>
@@ -368,14 +385,14 @@ export function RestSnapshotModal({
             disabled={!isJson}
           >
             <GitCompare className="size-3" />
-            Comparer
+            {t("snapshots.compare")}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
             onClick={() => handleDelete(selectedName)}
-            title="Supprimer"
+            title={t("common.delete")}
           >
             <Trash2 className="size-3.5" />
           </Button>
@@ -393,7 +410,7 @@ export function RestSnapshotModal({
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/40">
           <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
             <Layers className="size-3.5" />
-            Diff
+            {t("snapshots.diff")}
             <ArrowRight className="size-3 text-muted-foreground/40" />
             <span className="font-mono text-primary text-[11px]">« {diff.name} »</span>
           </span>
@@ -410,14 +427,14 @@ export function RestSnapshotModal({
             <div className="flex size-7 items-center justify-center rounded-md bg-emerald-500/10">
               <Check className="size-3.5" />
             </div>
-            <span>Aucun changement — les schémas sont identiques</span>
+            <span>{t("snapshots.noChangesIdentical")}</span>
           </div>
         ) : (
           <>
             {/* Summary badge */}
             <div className="px-3 pt-2 pb-1">
               <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                {diff.changes.length} changement{diff.changes.length > 1 ? "s" : ""}
+                {t("snapshots.changesCount", { count: diff.changes.length })}
               </Badge>
             </div>
             {/* Changes list */}
@@ -434,9 +451,10 @@ export function RestSnapshotModal({
                   <div className="min-w-0 flex-1">
                     <span className="font-mono text-[11px] break-all">{c.path}</span>
                     <span className="text-muted-foreground ml-1">
-                      {c.kind === "added" && `→ ${c.to}`}
-                      {c.kind === "removed" && `← ${c.from}`}
-                      {c.kind.startsWith("type-changed") && `${c.from} → ${c.to}`}
+                      {c.kind === "added" && t("snapshots.changedAdded", { value: c.to })}
+                      {c.kind === "removed" && t("snapshots.changedRemoved", { value: c.from })}
+                      {c.kind.startsWith("type-changed") &&
+                        t("snapshots.changedType", { from: c.from, to: c.to })}
                     </span>
                   </div>
                   <Badge
@@ -450,7 +468,7 @@ export function RestSnapshotModal({
                           : "border-amber-200/30 text-amber-600 dark:text-amber-400",
                     )}
                   >
-                    {changeLabel[c.kind] || c.kind}
+                    {changeLabel(c.kind)}
                   </Badge>
                 </div>
               ))}
@@ -473,7 +491,7 @@ export function RestSnapshotModal({
             </div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-base font-semibold flex items-center gap-2">
-                Snapshots
+                {t("snapshots.title")}
                 {snapshotNames.length > 0 && (
                   <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-normal">
                     {snapshotNames.length}
@@ -481,7 +499,7 @@ export function RestSnapshotModal({
                 )}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Sauvegardez, comparez et explorez des schémas de réponse JSON
+                {t("snapshots.description")}
               </DialogDescription>
             </div>
           </div>
@@ -493,9 +511,9 @@ export function RestSnapshotModal({
             <div className="rounded-2xl bg-muted/20 p-5 mb-3 ring-1 ring-border/40">
               <Camera className="size-8 text-muted-foreground/20" />
             </div>
-            <p className="text-sm font-medium text-foreground/80">Aucune réponse</p>
+            <p className="text-sm font-medium text-foreground/80">{t("snapshots.noResponse")}</p>
             <p className="text-xs text-muted-foreground/60 mt-1 max-w-[280px]">
-              Envoyez une requête pour capturer un snapshot de sa réponse JSON
+              {t("snapshots.noResponseDesc")}
             </p>
           </div>
         ) : (
@@ -507,7 +525,7 @@ export function RestSnapshotModal({
                 {!isJson && (
                   <div className="flex items-center gap-2 rounded-lg border border-amber-200/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
                     <AlertTriangle className="size-3.5 shrink-0" />
-                    Les snapshots ne fonctionnent qu'avec des réponses JSON
+                    {t("snapshots.jsonOnlyWarning")}
                   </div>
                 )}
 
@@ -518,7 +536,7 @@ export function RestSnapshotModal({
                       <div className="flex size-6 items-center justify-center rounded-md bg-emerald-500/10">
                         <Plus className="size-3 text-emerald-600 dark:text-emerald-400" />
                       </div>
-                      <h3 className="text-sm font-semibold">Nouveau</h3>
+                      <h3 className="text-sm font-semibold">{t("snapshots.newTitle")}</h3>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Input
@@ -527,7 +545,7 @@ export function RestSnapshotModal({
                           setNewName(e.target.value);
                           setPendingOverwrite(null);
                         }}
-                        placeholder="Nom du snapshot…"
+                        placeholder={t("snapshots.namePlaceholder")}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleSave();
                           if (e.key === "Escape") handleCancelOverwrite();
@@ -543,7 +561,7 @@ export function RestSnapshotModal({
                             className="h-8 px-2 text-xs"
                             onClick={handleCancelOverwrite}
                           >
-                            Annuler
+                            {t("common.cancel")}
                           </Button>
                         )}
                         <Button
@@ -557,13 +575,13 @@ export function RestSnapshotModal({
                           data-testid="rest-snapshot-save"
                         >
                           <Save className="size-3" />
-                          {pendingOverwrite ? "Écraser" : "Sauver"}
+                          {pendingOverwrite ? t("snapshots.overwrite") : t("snapshots.save")}
                         </Button>
                       </div>
                     </div>
                     {pendingOverwrite && (
                       <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                        « {pendingOverwrite} » existe. Cliquez Écraser pour confirmer.
+                        {t("snapshots.overwriteExists", { name: pendingOverwrite })}
                       </p>
                     )}
                   </div>
@@ -577,7 +595,7 @@ export function RestSnapshotModal({
                         <History className="size-3 text-violet-600 dark:text-violet-400" />
                       </div>
                       <h3 className="text-sm font-semibold">
-                        Enregistrés
+                        {t("snapshots.savedTitle")}
                         <Badge variant="secondary" className="ml-2 text-[9px] h-3.5 px-1">
                           {snapshotNames.length}
                         </Badge>
@@ -643,7 +661,7 @@ export function RestSnapshotModal({
                                       e.stopPropagation();
                                       startRename(name);
                                     }}
-                                    title="Renommer"
+                                    title={t("snapshots.renameTitle")}
                                   >
                                     <PencilLine className="size-2.5 text-muted-foreground/70" />
                                   </Button>
@@ -655,7 +673,7 @@ export function RestSnapshotModal({
                                       e.stopPropagation();
                                       handleDelete(name);
                                     }}
-                                    title="Supprimer"
+                                    title={t("common.delete")}
                                   >
                                     <Trash2 className="size-2.5" />
                                   </Button>
@@ -673,9 +691,11 @@ export function RestSnapshotModal({
                 {isJson && snapshotNames.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
                     <FileJson className="size-6 text-muted-foreground/20 mb-2" />
-                    <p className="text-xs font-medium text-foreground/60">Aucun snapshot</p>
+                    <p className="text-xs font-medium text-foreground/60">
+                      {t("snapshots.noSnapshot")}
+                    </p>
                     <p className="text-[10px] text-muted-foreground/40 mt-0.5">
-                      Donnez un nom et sauvegardez
+                      {t("snapshots.noSnapshotHint")}
                     </p>
                   </div>
                 )}
@@ -696,13 +716,13 @@ export function RestSnapshotModal({
                     </div>
                     <p className="text-sm font-medium text-foreground/60">
                       {snapshotNames.length > 0
-                        ? "Sélectionnez un snapshot"
-                        : "Créez votre premier snapshot"}
+                        ? t("snapshots.selectSnapshot")
+                        : t("snapshots.createFirstSnapshot")}
                     </p>
                     <p className="text-xs text-muted-foreground/40 mt-1 max-w-[260px]">
                       {snapshotNames.length > 0
-                        ? "Cliquez sur un snapshot à gauche pour voir son détail"
-                        : "Sauvegardez la réponse actuelle pour la comparer plus tard"}
+                        ? t("snapshots.selectSnapshotHint")
+                        : t("snapshots.saveToCompareHint")}
                     </p>
                   </div>
                 )}

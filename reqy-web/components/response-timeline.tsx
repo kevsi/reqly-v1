@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 
@@ -22,15 +23,16 @@ const COLORS = {
   transfer: "bg-success/70",
 };
 
-const LABELS = {
-  dns: "DNS",
-  connect: "Connect",
-  ttfb: "TTFB",
-  transfer: "Transfer",
-};
-
 export const ResponseTimeline = memo(function ResponseTimeline({ timings }: ResponseTimelineProps) {
+  const { t } = useTranslation();
   const { dnsMs = 0, connectMs = 0, ttfbMs = 0, totalMs } = timings;
+
+  const LABELS = {
+    dns: t("response.timelineDns"),
+    connect: t("response.timelineConnect"),
+    ttfb: t("response.timelineTtfb"),
+    transfer: t("response.timelineTransfer"),
+  };
 
   // Transfer is what remains after DNS, Connect, and TTFB
   // Note: TTFB includes connection time + waiting for first byte
@@ -107,7 +109,7 @@ export const ResponseTimeline = memo(function ResponseTimeline({ timings }: Resp
 
           {/* Total */}
           <div className="flex items-center gap-1 text-[10px] font-mono text-foreground/70">
-            <span>Total</span>
+            <span>{t("response.timelineTotal")}</span>
             <span className="tabular-nums">{totalMs}</span>
             <span className="text-muted-foreground/70">ms</span>
           </div>

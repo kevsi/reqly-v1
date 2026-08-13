@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { getStatusBadgeClass, getStatusTextClass } from "@/lib/http-status-colors";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
   onExport,
   onDiff,
 }: ResponseStatusBarProps) {
+  const { t } = useTranslation();
   // ── Animated gauge fill ────────────────────────────────────────
   const targetGaugeWidth = Math.min((responseTime ?? 0) / 10, 100);
   const [gaugeFillWidth, setGaugeFillWidth] = useState(0);
@@ -85,7 +87,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
         {isLoading ? (
           <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-1.5">
             <Loader2 className="size-3.5 animate-spin text-warning" />
-            <span className="text-xs font-semibold text-warning">Sending request...</span>
+            <span className="text-xs font-semibold text-warning">{t("response.sending")}</span>
           </div>
         ) : hasResponse ? (
           <div className="flex items-center gap-3">
@@ -135,7 +137,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground/70 italic">Awaiting request...</span>
+          <span className="text-xs text-muted-foreground/70 italic">{t("response.awaiting")}</span>
         )}
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -154,7 +156,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
               ) : (
                 <Play className="size-3.5 fill-current" />
               )}
-              {isLoading ? "Running..." : "Send"}
+              {isLoading ? t("response.running") : t("response.send")}
               <ChevronDown className="size-3 text-muted-foreground/60" />
             </Button>
           </DropdownMenuTrigger>
@@ -165,7 +167,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
               className="cursor-pointer text-xs gap-2"
             >
               <Play className="size-3.5" />
-              Send & Save
+              {t("response.sendAndSave")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={onRunAndDownload}
@@ -173,7 +175,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
               className="cursor-pointer text-xs gap-2"
             >
               <Download className="size-3.5" />
-              Send & Download
+              {t("response.sendAndDownload")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -185,7 +187,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
           disabled={!hasResponse}
         >
           <Download className="size-3.5" />
-          Export
+          {t("response.export")}
         </Button>
         {onDiff && (
           <Button
@@ -196,7 +198,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
             className="h-8 gap-1.5 text-xs font-medium transition-all duration-200"
           >
             <GitCompare className="size-3.5" />
-            Diff
+            {t("response.diff")}
           </Button>
         )}
       </div>

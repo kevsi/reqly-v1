@@ -35,9 +35,11 @@ import {
 import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions";
 import type { TestResult } from "@/lib/types";
 import { formatDataSize } from "@/lib/network/format";
+import { useTranslation } from "react-i18next";
 
 /** Parse a response body string into JSON; returns undefined when not JSON. */
 export function RequestTabsManager() {
+  const { t } = useTranslation();
   const tabState = useRequestTabsState();
   const updateRequestById = useRequestStore((s) => s.updateRequestById);
 
@@ -221,7 +223,7 @@ export function RequestTabsManager() {
     if (keys.length === 0) return [];
     return [
       {
-        label: "Clés récentes",
+        label: t("request.recentKeys"),
         items: keys.slice(0, 30).map((key) => ({
           id: `fdk-${key}`,
           label: key,
@@ -229,7 +231,7 @@ export function RequestTabsManager() {
         })),
       },
     ];
-  }, [history]);
+  }, [history, t]);
 
   // Recent query param keys from history (for autocomplete)
   const queryParamKeySuggestions = useMemo((): AutocompleteGroup[] => {
@@ -247,7 +249,7 @@ export function RequestTabsManager() {
     if (keys.length === 0) return [];
     return [
       {
-        label: "Clés récentes",
+        label: t("request.recentKeys"),
         items: keys.slice(0, 30).map((key) => ({
           id: `qpk-${key}`,
           label: key,
@@ -255,7 +257,7 @@ export function RequestTabsManager() {
         })),
       },
     ];
-  }, [history]);
+  }, [history, t]);
 
   // ── AI "Proposer une correction" on a failed assertion (Task 5) ───────────
   // The AI is only ever asked to *suggest* a corrected assertion. Applying it
@@ -277,16 +279,16 @@ export function RequestTabsManager() {
       const assertions = activeTab.runnerAssertions ?? [];
       const original = assertions[index];
       if (index < 0 || !original) {
-        toast({ title: "Assertion introuvable", variant: "destructive" });
+        toast({ title: t("runner.assertionNotFound"), variant: "destructive" });
         return;
       }
       const corrected = suggestionToAssertion(suggestion, original);
       updateTab(activeTab.id, {
         runnerAssertions: assertions.map((a, i) => (i === index ? corrected : a)),
       } as Parameters<typeof updateTab>[1]);
-      toast({ title: "Assertion corrigée" });
+      toast({ title: t("runner.assertionCorrected") });
     },
-    [activeTab, updateTab],
+    [activeTab, updateTab, t],
   );
 
   useEffect(() => {
@@ -398,7 +400,7 @@ export function RequestTabsManager() {
           <div className="rounded-lg border border-border/30 bg-muted/10 px-3 py-2">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
-                Run Logs
+                {t("runner.runLogs")}
               </span>
             </div>
             <div className="space-y-0.5 max-h-[80px] overflow-y-auto scrollbar-discreet">
@@ -447,9 +449,7 @@ export function RequestTabsManager() {
                   fallback={
                     <div className="flex flex-col items-center justify-center p-8 text-center">
                       <AlertTriangle className="size-6 text-destructive mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Request editor crashed. Retry or reload.
-                      </p>
+                      <p className="text-sm text-muted-foreground">{t("error.requestCrashed")}</p>
                     </div>
                   }
                 >
@@ -510,7 +510,7 @@ export function RequestTabsManager() {
                     className="px-4 py-1 text-[11px] font-mono text-muted-foreground border-t border-border/50 bg-card/40"
                     data-testid="request-size"
                   >
-                    Taille : {formatDataSize(requestByteSize)}
+                    {t("request.sizeLabel", { size: formatDataSize(requestByteSize) })}
                   </div>
                 )}
               </div>
@@ -537,7 +537,7 @@ export function RequestTabsManager() {
                       <div className="flex flex-col items-center justify-center p-8 text-center">
                         <AlertTriangle className="size-6 text-destructive mb-2" />
                         <p className="text-sm text-muted-foreground">
-                          Response panel crashed. Send the request again to retry.
+                          {t("error.responseCrashed")}
                         </p>
                       </div>
                     }
@@ -611,7 +611,7 @@ export function RequestTabsManager() {
                     disabled={!activeTab.responseBody}
                   >
                     <Camera className="size-3.5" />
-                    Snapshots
+                    {t("response.snapshots")}
                   </Button>
                   <RestSnapshotModal
                     open={snapshotModalOpen}
@@ -682,7 +682,7 @@ export function RequestTabsManager() {
       <Drawer open={historyOpen} onOpenChange={setHistoryOpen} direction="right">
         <DrawerContent className="max-w-xl p-0">
           <DrawerHeader>
-            <DrawerTitle>Request History</DrawerTitle>
+            <DrawerTitle>{t("request.history")}</DrawerTitle>
           </DrawerHeader>
           <div className="h-[80vh] overflow-hidden">
             <HistoryPanel

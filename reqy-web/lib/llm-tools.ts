@@ -197,6 +197,19 @@ import { requestStore } from "@/hooks/use-request-store";
 import type { Collection, RequestItem } from "@/hooks/request-types";
 import type { HttpMethod } from "@/lib/types";
 import { runSubAgent, assertDelegationAllowed } from "@/src/ai/agent/subagent";
+import { runCollection } from "@/lib/test-runner/runner";
+import type { RunnerContext, RequestResponse } from "@/lib/test-runner/types";
+import { parseOpenApiSpec, convertToCollections } from "@/lib/openapi-import";
+import { parseBrunoCollection, convertBrunoToCollections } from "@/lib/bruno-import";
+import { searchIndex } from "@/src/ai/cloud-engine/search-index";
+import {
+  decodeJwt,
+  explainHeader,
+  annotateJson,
+  summarizeAnnotated,
+} from "@/src/ai/cloud-engine/explain";
+import { proposeAssertionCorrection } from "@/src/ai/cloud-engine/actions/propose-correction";
+import { generateOpenApiSpec } from "@/lib/openapi-export";
 import {
   loadAIProvider,
   loadApiKey,
@@ -664,6 +677,961 @@ async function handleUpdateEnvironmentVariable(args: Record<string, unknown>): P
   };
 }
 
+// ─── Handlers supplémentaires ──────────────────────────────────────────────
+
+async function handleRunCollection(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  if (!collectionName) {
+    return {
+      callId: "",
+      name: "run_collection",
+      content: "",
+      error: "Le nom de la collection est requis.",
+    };
+  }
+
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) {
+    return {
+      callId: "",
+      name: "run_collection",
+      content: "",
+      error: `Collection "${collectionName}" introuvable.`,
+    };
+  }
+
+  const store = requestStore.getState();
+  const collection = store.collections.find((c) => c.id === collectionId);
+  if (!collection) {
+    return {
+      callId: "",
+      name: "run_collection",
+      content: "",
+      error: `Collection "${collectionName}" introuvable.`,
+    };
+  }
+
+  if (collection.requests.length === 0) {
+    return {
+      callId: "",
+      name: "run_collection",
+      content: `Collection "${collectionName}" est vide.`,
+      error: "Aucune requête à exécuter.",
+    };
+  }
+
+  const executor = async (req: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body?: unknown;
+  }): Promise<RequestResponse> => {
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+      const proxyRes = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: req.url,
+          method: req.method,
+          headers: req.headers,
+          body: req.body,
+        }),
+        signal: controller.signal,
+      });
+      const proxyResult = await proxyRes.json();
+      const text = proxyResult.body ?? "";
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = text;
+      }
+      return {
+        statusCode: proxyResult.status ?? proxyRes.status,
+        responseTimeMs: Date.now() - started,
+        body: parsed,
+        headers: proxyResult.headers || {},
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  try {
+    const ctx: RunnerContext = {
+      environment: store.environmentVariables ?? {},
+      iterationData: {},
+      iterationIndex: 0,
+      log: () => {},
+    };
+    const report = await runCollection(collection, ctx, {
+      executor,
+      perRequestTimeoutMs: 30000,
+      scriptTimeoutMs: 5000,
+      disableScripts: true,
+    });
+
+    const lines = report.results.map((r) => {
+      const status =
+        r.status === "pass" ? "✓" : r.status === "fail" ? "✗" : r.status === "errored" ? "!" : "○";
+      const code = r.statusCode ? ` (${r.statusCode})` : "";
+      const time = r.responseTimeMs ? ` ${r.responseTimeMs}ms` : "";
+      return `${status} ${r.requestName}${code}${time}`;
+    });
+
+    const summary =
+      `Collection "${collectionName}" : ${report.summary.passed}/${report.summary.total} passées en ${report.totalDurationMs}ms\n` +
+      lines.join("\n");
+    return { callId: "", name: "run_collection", content: summary };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "run_collection",
+      content: "",
+      error: e instanceof Error ? e.message : "Erreur lors de l'exécution de la collection.",
+    };
+  }
+}
+
+async function handleImportCollection(args: Record<string, unknown>): Promise<ToolResult> {
+  const format = typeof args.format === "string" ? args.format.trim().toLowerCase() : "";
+  const content = typeof args.content === "string" ? args.content.trim() : "";
+  const collectionName =
+    typeof args.collection_name === "string" ? args.collection_name.trim() : "";
+
+  if (!format || !content) {
+    return {
+      callId: "",
+      name: "import_collection",
+      content: "",
+      error: "Les champs format et content sont requis.",
+    };
+  }
+
+  const store = requestStore.getState();
+  const wsId = store.activeWorkspaceId ?? "ws-personal";
+
+  try {
+    if (format === "openapi") {
+      const parsed = parseOpenApiSpec(content);
+      if (!parsed.success) {
+        return { callId: "", name: "import_collection", content: "", error: parsed.error };
+      }
+      const collections = convertToCollections(parsed, {
+        collectionName: collectionName || parsed.spec.title,
+        groupByTag: false,
+        baseUrlOverride: undefined,
+      });
+      for (const col of collections) {
+        requestStore.getState().addCollection({
+          name: col.name,
+          description: col.description ?? "",
+          color: col.color ?? "emerald",
+          icon: col.icon ?? "package",
+          workspaceId: wsId,
+          requests: col.requests.map((r) => ({
+            ...r,
+            id: `req-${crypto.randomUUID()}`,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            method: r.method as HttpMethod,
+          })),
+          folders: [],
+        });
+      }
+      return {
+        callId: "",
+        name: "import_collection",
+        content: `${collections.length} collection(s) importée(s) depuis OpenAPI.`,
+      };
+    }
+
+    if (format === "bruno") {
+      const parsed = parseBrunoCollection(content);
+      if (!parsed.success) {
+        return { callId: "", name: "import_collection", content: "", error: parsed.error };
+      }
+      const collections = convertBrunoToCollections(parsed);
+      for (const col of collections) {
+        requestStore.getState().addCollection({
+          name: col.name,
+          description: "",
+          color: col.color ?? "emerald",
+          icon: col.icon ?? "package",
+          workspaceId: wsId,
+          requests: col.requests.map((r) => ({
+            ...r,
+            id: `req-${crypto.randomUUID()}`,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            method: r.method as HttpMethod,
+          })),
+          folders: [],
+        });
+      }
+      return {
+        callId: "",
+        name: "import_collection",
+        content: `${collections.length} collection(s) importée(s) depuis Bruno.`,
+      };
+    }
+
+    return {
+      callId: "",
+      name: "import_collection",
+      content: "",
+      error: `Format "${format}" non supporté. Utilisez "openapi" ou "bruno".`,
+    };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "import_collection",
+      content: "",
+      error: e instanceof Error ? e.message : "Erreur lors de l'import.",
+    };
+  }
+}
+
+async function handleSearchRequests(args: Record<string, unknown>): Promise<ToolResult> {
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  const topK = typeof args.top_k === "number" ? Math.min(args.top_k, 20) : 5;
+
+  if (!query) {
+    return {
+      callId: "",
+      name: "search_requests",
+      content: "",
+      error: "Le champ query est requis.",
+    };
+  }
+
+  if (typeof window === "undefined") {
+    return {
+      callId: "",
+      name: "search_requests",
+      content: "",
+      error: "La recherche sémantique n'est disponible que dans le navigateur.",
+    };
+  }
+
+  try {
+    const results = await searchIndex(query, topK);
+    if (results.length === 0) {
+      return { callId: "", name: "search_requests", content: "Aucun résultat trouvé." };
+    }
+    const lines = results.map((r, i) => {
+      const item = r.item;
+      return `${i + 1}. [${item.method}] ${item.name} (${item.collectionName}) — ${item.url}\n   ${item.text.slice(0, 120)}`;
+    });
+    return { callId: "", name: "search_requests", content: lines.join("\n") };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "search_requests",
+      content: "",
+      error: e instanceof Error ? e.message : "Erreur lors de la recherche.",
+    };
+  }
+}
+
+async function handleSwitchWorkspace(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+
+  if (!name && !id) {
+    return {
+      callId: "",
+      name: "switch_workspace",
+      content: "",
+      error: "Le nom ou l'id du workspace est requis.",
+    };
+  }
+
+  const store = requestStore.getState();
+  let targetId = id;
+
+  if (!targetId && name) {
+    const workspace = store.workspaces.find((w) => w.name.toLowerCase() === name.toLowerCase());
+    if (!workspace) {
+      return {
+        callId: "",
+        name: "switch_workspace",
+        content: "",
+        error: `Workspace "${name}" introuvable.`,
+      };
+    }
+    targetId = workspace.id;
+  }
+
+  if (!targetId) {
+    return { callId: "", name: "switch_workspace", content: "", error: "Workspace introuvable." };
+  }
+
+  store.setActiveWorkspace?.(targetId);
+  const workspace = store.workspaces.find((w) => w.id === targetId);
+  return {
+    callId: "",
+    name: "switch_workspace",
+    content: `Workspace activé : "${workspace?.name ?? targetId}".`,
+  };
+}
+
+async function handleListWorkspaces(_args: Record<string, unknown>): Promise<ToolResult> {
+  const store = requestStore.getState();
+  const workspaces = store.workspaces.map((w) => ({
+    id: w.id,
+    name: w.name,
+    description: w.description,
+    active: w.id === store.activeWorkspaceId,
+  }));
+  return {
+    callId: "",
+    name: "list_workspaces",
+    content: JSON.stringify({ workspaces, count: workspaces.length }),
+  };
+}
+
+async function handleGetCurrentWorkspace(_args: Record<string, unknown>): Promise<ToolResult> {
+  const store = requestStore.getState();
+  const ws = store.workspaces.find((w) => w.id === store.activeWorkspaceId);
+  if (!ws) {
+    return {
+      callId: "",
+      name: "get_current_workspace",
+      content: "",
+      error: "Aucun workspace actif.",
+    };
+  }
+  return {
+    callId: "",
+    name: "get_current_workspace",
+    content: JSON.stringify({
+      id: ws.id,
+      name: ws.name,
+      description: ws.description,
+      color: ws.color,
+      icon: ws.icon,
+      createdAt: ws.createdAt,
+      updatedAt: ws.updatedAt,
+    }),
+  };
+}
+
+async function handleGetWorkspace(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+
+  const store = requestStore.getState();
+  const ws = store.workspaces.find((w) =>
+    id ? w.id === id : w.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!ws) {
+    return {
+      callId: "",
+      name: "get_workspace",
+      content: "",
+      error: `Workspace "${name || id}" introuvable.`,
+    };
+  }
+
+  const collections = store.collections.filter((c) => c.workspaceId === ws.id);
+  const totalRequests = collections.reduce((sum, c) => sum + c.requests.length, 0);
+  const lastActivity = collections.reduce((max, c) => Math.max(max, c.updatedAt), ws.updatedAt);
+
+  return {
+    callId: "",
+    name: "get_workspace",
+    content: JSON.stringify({
+      id: ws.id,
+      name: ws.name,
+      description: ws.description,
+      color: ws.color,
+      icon: ws.icon,
+      collections_count: collections.length,
+      requests_count: totalRequests,
+      last_activity: lastActivity,
+      created_at: ws.createdAt,
+      updated_at: ws.updatedAt,
+    }),
+  };
+}
+
+async function handleSearchWorkspaces(args: Record<string, unknown>): Promise<ToolResult> {
+  const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
+
+  const store = requestStore.getState();
+  let workspaces = store.workspaces;
+
+  if (query) {
+    workspaces = workspaces.filter(
+      (w) =>
+        w.name.toLowerCase().includes(query) ||
+        (w.description && w.description.toLowerCase().includes(query)),
+    );
+  }
+
+  const results = workspaces.map((w) => ({
+    id: w.id,
+    name: w.name,
+    description: w.description,
+    active: w.id === store.activeWorkspaceId,
+  }));
+
+  return {
+    callId: "",
+    name: "search_workspaces",
+    content: JSON.stringify({ workspaces: results, count: results.length }),
+  };
+}
+
+async function handleDuplicateWorkspace(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+
+  if (!name && !id) {
+    return {
+      callId: "",
+      name: "duplicate_workspace",
+      content: "",
+      error: "Le nom ou l'id du workspace est requis.",
+    };
+  }
+
+  const store = requestStore.getState();
+  const source = store.workspaces.find((w) =>
+    id ? w.id === id : w.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!source) {
+    return {
+      callId: "",
+      name: "duplicate_workspace",
+      content: "",
+      error: `Workspace "${name || id}" introuvable.`,
+    };
+  }
+
+  const newId = store.duplicateWorkspace?.(source.id);
+  if (!newId) {
+    return {
+      callId: "",
+      name: "duplicate_workspace",
+      content: "",
+      error: "Échec de la duplication.",
+    };
+  }
+
+  const newWs = store.workspaces.find((w) => w.id === newId);
+  return {
+    callId: "",
+    name: "duplicate_workspace",
+    content: `Workspace dupliqué : "${newWs?.name ?? newId}".`,
+  };
+}
+
+async function handleArchiveWorkspace(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+
+  if (!name && !id) {
+    return {
+      callId: "",
+      name: "archive_workspace",
+      content: "",
+      error: "Le nom ou l'id du workspace est requis.",
+    };
+  }
+
+  const store = requestStore.getState();
+  const ws = store.workspaces.find((w) =>
+    id ? w.id === id : w.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!ws) {
+    return {
+      callId: "",
+      name: "archive_workspace",
+      content: "",
+      error: `Workspace "${name || id}" introuvable.`,
+    };
+  }
+
+  store.archiveWorkspace?.(ws.id);
+  return { callId: "", name: "archive_workspace", content: `Workspace "${ws.name}" archivé.` };
+}
+
+async function handleUnarchiveWorkspace(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+
+  if (!name && !id) {
+    return {
+      callId: "",
+      name: "unarchive_workspace",
+      content: "",
+      error: "Le nom ou l'id du workspace est requis.",
+    };
+  }
+
+  const store = requestStore.getState();
+  const ws = store.workspaces.find((w) =>
+    id ? w.id === id : w.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!ws) {
+    return {
+      callId: "",
+      name: "unarchive_workspace",
+      content: "",
+      error: `Workspace "${name || id}" introuvable.`,
+    };
+  }
+
+  store.unarchiveWorkspace?.(ws.id);
+  return { callId: "", name: "unarchive_workspace", content: `Workspace "${ws.name}" désarchivé.` };
+}
+
+async function handleGetWorkspaceStats(_args: Record<string, unknown>): Promise<ToolResult> {
+  const store = requestStore.getState();
+  const wsId = store.activeWorkspaceId;
+  if (!wsId) {
+    return {
+      callId: "",
+      name: "get_workspace_stats",
+      content: "",
+      error: "Aucun workspace actif.",
+    };
+  }
+
+  const collections = store.collections.filter((c) => c.workspaceId === wsId);
+  const totalRequests = collections.reduce((sum, c) => sum + c.requests.length, 0);
+  const totalFolders = collections.reduce((sum, c) => sum + (c.folders?.length ?? 0), 0);
+
+  const historyInWs = store.history.filter((h) => {
+    const req = store.collections.flatMap((c) => c.requests).find((r) => r.id === h.id);
+    return req?.id !== undefined;
+  });
+
+  const successCount = historyInWs.filter(
+    (h) => (h.responseStatus ?? 0) >= 200 && (h.responseStatus ?? 0) < 300,
+  ).length;
+  const successRate =
+    historyInWs.length > 0 ? Math.round((successCount / historyInWs.length) * 100) : 0;
+
+  return {
+    callId: "",
+    name: "get_workspace_stats",
+    content: JSON.stringify({
+      workspace_id: wsId,
+      collections: collections.length,
+      folders: totalFolders,
+      requests: totalRequests,
+      history_entries: historyInWs.length,
+      success_rate: successRate,
+    }),
+  };
+}
+
+async function handleClearWorkspaceCache(_args: Record<string, unknown>): Promise<ToolResult> {
+  const store = requestStore.getState();
+  const wsId = store.activeWorkspaceId;
+  if (!wsId) {
+    return {
+      callId: "",
+      name: "clear_workspace_cache",
+      content: "",
+      error: "Aucun workspace actif.",
+    };
+  }
+
+  const wsCols = store.collections.filter((c) => c.workspaceId === wsId);
+  const wsReqIds = new Set(wsCols.flatMap((c) => c.requests.map((r) => r.id)));
+
+  const clearedHistory = store.history.filter((h) => !wsReqIds.has(h.id));
+  const removedCount = store.history.length - clearedHistory.length;
+
+  store.clearHistory?.();
+
+  return {
+    callId: "",
+    name: "clear_workspace_cache",
+    content: `Cache vidé : ${removedCount} entrée(s) d'historique supprimée(s) pour le workspace actif.`,
+  };
+}
+
+async function handleExplainResponse(args: Record<string, unknown>): Promise<ToolResult> {
+  const type = typeof args.type === "string" ? args.type.trim().toLowerCase() : "";
+  const value = typeof args.value === "string" ? args.value.trim() : "";
+
+  if (!type || !value) {
+    return {
+      callId: "",
+      name: "explain_response",
+      content: "",
+      error: "Les champs type et value sont requis.",
+    };
+  }
+
+  try {
+    if (type === "jwt") {
+      const decoded = decodeJwt(value);
+      if (!decoded) {
+        return { callId: "", name: "explain_response", content: "", error: "Token JWT invalide." };
+      }
+      const expInfo = decoded.expiresAt
+        ? ` (expiré: ${decoded.expired ? "oui" : "non"}, expires: ${decoded.expiresAt})`
+        : "";
+      return {
+        callId: "",
+        name: "explain_response",
+        content: `JWT décodé${expInfo}\nHeader: ${JSON.stringify(decoded.header, null, 2)}\nPayload: ${JSON.stringify(decoded.payload, null, 2)}`,
+      };
+    }
+
+    if (type === "header") {
+      const headerName = typeof args.header_name === "string" ? args.header_name.trim() : value;
+      const headerValue = typeof args.header_value === "string" ? args.header_value.trim() : "";
+      const explanation = explainHeader(headerName, headerValue || value);
+      return {
+        callId: "",
+        name: "explain_response",
+        content: `${headerName}: ${explanation.description}\n${explanation.warnings.length > 0 ? "Avertissements: " + explanation.warnings.join(", ") : ""}`,
+      };
+    }
+
+    if (type === "json") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        return { callId: "", name: "explain_response", content: "", error: "JSON invalide." };
+      }
+      const annotated = annotateJson(parsed);
+      const summary = summarizeAnnotated(annotated);
+      return {
+        callId: "",
+        name: "explain_response",
+        content: `Structure: ${summary}\n${JSON.stringify(annotated, null, 2).slice(0, 3000)}`,
+      };
+    }
+
+    return {
+      callId: "",
+      name: "explain_response",
+      content: "",
+      error: `Type "${type}" non supporté. Utilisez "jwt", "header" ou "json".`,
+    };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "explain_response",
+      content: "",
+      error: e instanceof Error ? e.message : "Erreur lors de l'explication.",
+    };
+  }
+}
+
+async function handleProposeAssertionFix(args: Record<string, unknown>): Promise<ToolResult> {
+  const assertionType = typeof args.assertion_type === "string" ? args.assertion_type.trim() : "";
+  const target = typeof args.target === "string" ? args.target.trim() : "";
+  const actualValue = typeof args.actual_value === "string" ? args.actual_value.trim() : "";
+  const expectedValue = typeof args.expected_value === "string" ? args.expected_value.trim() : "";
+
+  if (!assertionType || !target) {
+    return {
+      callId: "",
+      name: "propose_assertion_fix",
+      content: "",
+      error: "Les champs assertion_type et target sont requis.",
+    };
+  }
+
+  try {
+    const input: import("@/src/ai/cloud-engine/actions/propose-correction").ProposeCorrectionInput =
+      {
+        assertion: {
+          type: assertionType,
+          target,
+          value: expectedValue || undefined,
+        },
+        response: {
+          status: actualValue
+            ? Number(JSON.parse(actualValue).status ?? JSON.parse(actualValue))
+            : undefined,
+          body: actualValue ? JSON.parse(actualValue) : undefined,
+        },
+        endpoint: target,
+      };
+
+    const result = await proposeAssertionCorrection(input);
+
+    if (!result.suggestion) {
+      return {
+        callId: "",
+        name: "propose_assertion_fix",
+        content: "Aucune correction suggérée.",
+        error: "La correction n'a pas pu être générée.",
+      };
+    }
+
+    const suggestion = result.suggestion;
+    return {
+      callId: "",
+      name: "propose_assertion_fix",
+      content:
+        `Correction suggérée pour ${assertionType} sur "${target}":\n` +
+        `Type: ${suggestion.type ?? assertionType}\n` +
+        (suggestion.expr ? `Expression: ${suggestion.expr}\n` : "") +
+        (suggestion.value !== undefined ? `Valeur: ${JSON.stringify(suggestion.value)}\n` : "") +
+        `Rationale: ${result.rationale}`,
+    };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "propose_assertion_fix",
+      content: "",
+      error: e instanceof Error ? e.message : "Erreur lors de la proposition de correction.",
+    };
+  }
+}
+
+async function handleExportCollection(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  if (!name) {
+    return {
+      callId: "",
+      name: "export_collection",
+      content: "",
+      error: "Le nom de la collection est requis.",
+    };
+  }
+
+  const collectionId = findCollectionIdByName(name);
+  if (!collectionId) {
+    return {
+      callId: "",
+      name: "export_collection",
+      content: "",
+      error: `Collection "${name}" introuvable.`,
+    };
+  }
+
+  const store = requestStore.getState();
+  const collection = store.collections.find((c) => c.id === collectionId);
+  if (!collection) {
+    return {
+      callId: "",
+      name: "export_collection",
+      content: "",
+      error: `Collection "${name}" introuvable.`,
+    };
+  }
+
+  try {
+    const spec = generateOpenApiSpec([collection]);
+    return { callId: "", name: "export_collection", content: JSON.stringify(spec, null, 2) };
+  } catch (e) {
+    return {
+      callId: "",
+      name: "export_collection",
+      content: "",
+      error: e instanceof Error ? e.message : "Erreur lors de l'export.",
+    };
+  }
+}
+
+async function handleDuplicateCollection(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  if (!name) {
+    return {
+      callId: "",
+      name: "duplicate_collection",
+      content: "",
+      error: "Le nom de la collection est requis.",
+    };
+  }
+
+  const collectionId = findCollectionIdByName(name);
+  if (!collectionId) {
+    return {
+      callId: "",
+      name: "duplicate_collection",
+      content: "",
+      error: `Collection "${name}" introuvable.`,
+    };
+  }
+
+  requestStore.getState().duplicateCollection(collectionId);
+  return { callId: "", name: "duplicate_collection", content: `Collection "${name}" dupliquée.` };
+}
+
+async function handleDeleteRequest(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const requestName = typeof args.request === "string" ? args.request.trim() : "";
+
+  if (!collectionName || !requestName) {
+    return {
+      callId: "",
+      name: "delete_request",
+      content: "",
+      error: "Les champs collection et request sont requis.",
+    };
+  }
+
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) {
+    return {
+      callId: "",
+      name: "delete_request",
+      content: "",
+      error: `Collection "${collectionName}" introuvable.`,
+    };
+  }
+
+  const store = requestStore.getState();
+  const collection = store.collections.find((c) => c.id === collectionId);
+  if (!collection) {
+    return {
+      callId: "",
+      name: "delete_request",
+      content: "",
+      error: `Collection "${collectionName}" introuvable.`,
+    };
+  }
+
+  const request = collection.requests.find(
+    (r) => r.name.toLowerCase() === requestName.toLowerCase(),
+  );
+  if (!request) {
+    return {
+      callId: "",
+      name: "delete_request",
+      content: "",
+      error: `Requête "${requestName}" introuvable dans "${collectionName}".`,
+    };
+  }
+
+  requestStore.getState().removeRequestFromCollection(collectionId, request.id);
+  return {
+    callId: "",
+    name: "delete_request",
+    content: `Requête "${requestName}" supprimée de "${collectionName}".`,
+  };
+}
+
+async function handleMoveRequest(args: Record<string, unknown>): Promise<ToolResult> {
+  const sourceCollection =
+    typeof args.source_collection === "string" ? args.source_collection.trim() : "";
+  const targetCollection =
+    typeof args.target_collection === "string" ? args.target_collection.trim() : "";
+  const requestName = typeof args.request === "string" ? args.request.trim() : "";
+
+  if (!sourceCollection || !targetCollection || !requestName) {
+    return {
+      callId: "",
+      name: "move_request",
+      content: "",
+      error: "Les champs source_collection, target_collection et request sont requis.",
+    };
+  }
+
+  const sourceId = findCollectionIdByName(sourceCollection);
+  const targetId = findCollectionIdByName(targetCollection);
+  if (!sourceId || !targetId) {
+    return {
+      callId: "",
+      name: "move_request",
+      content: "",
+      error: "Collection source ou cible introuvable.",
+    };
+  }
+
+  const store = requestStore.getState();
+  const sourceCol = store.collections.find((c) => c.id === sourceId);
+  if (!sourceCol) {
+    return {
+      callId: "",
+      name: "move_request",
+      content: "",
+      error: `Collection source "${sourceCollection}" introuvable.`,
+    };
+  }
+
+  const request = sourceCol.requests.find(
+    (r) => r.name.toLowerCase() === requestName.toLowerCase(),
+  );
+  if (!request) {
+    return {
+      callId: "",
+      name: "move_request",
+      content: "",
+      error: `Requête "${requestName}" introuvable dans "${sourceCollection}".`,
+    };
+  }
+
+  requestStore.getState().moveRequestBetweenCollections(sourceId, targetId, request.id);
+  return {
+    callId: "",
+    name: "move_request",
+    content: `Requête "${requestName}" déplacée de "${sourceCollection}" vers "${targetCollection}".`,
+  };
+}
+
+async function handleCreateFolder(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const folderName = typeof args.name === "string" ? args.name.trim() : "";
+
+  if (!collectionName || !folderName) {
+    return {
+      callId: "",
+      name: "create_folder",
+      content: "",
+      error: "Les champs collection et name sont requis.",
+    };
+  }
+
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) {
+    return {
+      callId: "",
+      name: "create_folder",
+      content: "",
+      error: `Collection "${collectionName}" introuvable.`,
+    };
+  }
+
+  const store = requestStore.getState();
+  const collection = store.collections.find((c) => c.id === collectionId);
+  if (!collection) {
+    return {
+      callId: "",
+      name: "create_folder",
+      content: "",
+      error: `Collection "${collectionName}" introuvable.`,
+    };
+  }
+
+  const newFolder = {
+    id: `folder-${crypto.randomUUID()}`,
+    name: folderName,
+    parentId: null,
+    collectionId,
+    order: (collection.folders?.length ?? 0) * 1000,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  requestStore.getState().updateCollection(collectionId, {
+    folders: [...(collection.folders ?? []), newFolder],
+  });
+
+  return {
+    callId: "",
+    name: "create_folder",
+    content: `Dossier "${folderName}" créé dans "${collectionName}".`,
+  };
+}
+
 // ─── Helpers globaux ───────────────────────────────────────────────────────
 
 export function getToolByName(name: string): ReqlyTool | undefined {
@@ -825,5 +1793,237 @@ export const REQLY_TOOLS: ReqlyTool[] = [
       },
     },
     handler: handleDelegate,
+  },
+  {
+    name: "run_collection",
+    description:
+      "Exécute toutes les requêtes d'une collection et retourne un rapport détaillé (statut, temps de réponse, erreurs). Les assertions sont évaluées automatiquement.",
+    parameters: {
+      collection: {
+        type: "string",
+        description: "Nom de la collection à exécuter.",
+        required: true,
+      },
+    },
+    handler: handleRunCollection,
+  },
+  {
+    name: "import_collection",
+    description:
+      "Importe une collection depuis un fichier OpenAPI, Bruno ou Postman. Spécifiez le format et le contenu du fichier.",
+    parameters: {
+      format: {
+        type: "string",
+        description: "Format du fichier : openapi, bruno ou postman.",
+        required: true,
+        enum: ["openapi", "bruno", "postman"],
+      },
+      content: {
+        type: "string",
+        description: "Contenu brut du fichier à importer.",
+        required: true,
+      },
+      collection_name: {
+        type: "string",
+        description: "Nom optionnel pour la collection importée.",
+      },
+    },
+    handler: handleImportCollection,
+  },
+  {
+    name: "search_requests",
+    description:
+      "Recherche sémantique dans les requêtes indexées. Retourne les requêtes les plus pertinentes avec leur score.",
+    parameters: {
+      query: {
+        type: "string",
+        description: "Requête de recherche en langage naturel.",
+        required: true,
+      },
+      top_k: {
+        type: "number",
+        description: "Nombre de résultats à retourner (défaut: 5, max: 20).",
+      },
+    },
+    handler: handleSearchRequests,
+  },
+  {
+    name: "switch_workspace",
+    description: "Bascule vers un workspace existant par nom ou identifiant.",
+    parameters: {
+      name: { type: "string", description: "Nom du workspace." },
+      id: { type: "string", description: "Identifiant du workspace." },
+    },
+    handler: handleSwitchWorkspace,
+  },
+  {
+    name: "list_workspaces",
+    description: "Liste tous les workspaces disponibles et indique le workspace actif.",
+    parameters: {},
+    handler: handleListWorkspaces,
+  },
+  {
+    name: "get_current_workspace",
+    description: "Retourne les détails du workspace actif (nom, description, couleur, icône).",
+    parameters: {},
+    handler: handleGetCurrentWorkspace,
+  },
+  {
+    name: "get_workspace",
+    description:
+      "Retourne les détails d'un workspace : nb collections, nb requêtes, dernière activité.",
+    parameters: {
+      name: { type: "string", description: "Nom du workspace." },
+      id: { type: "string", description: "Identifiant du workspace." },
+    },
+    handler: handleGetWorkspace,
+  },
+  {
+    name: "search_workspaces",
+    description: "Recherche des workspaces par nom ou description.",
+    parameters: {
+      query: { type: "string", description: "Requête de recherche.", required: true },
+    },
+    handler: handleSearchWorkspaces,
+  },
+  {
+    name: "duplicate_workspace",
+    description: "Duplique un workspace entier (collections, requêtes, environnements).",
+    parameters: {
+      name: { type: "string", description: "Nom du workspace à dupliquer." },
+      id: { type: "string", description: "Identifiant du workspace à dupliquer." },
+    },
+    handler: handleDuplicateWorkspace,
+  },
+  {
+    name: "archive_workspace",
+    description: "Archive un workspace (le masque de la liste active sans le supprimer).",
+    parameters: {
+      name: { type: "string", description: "Nom du workspace." },
+      id: { type: "string", description: "Identifiant du workspace." },
+    },
+    handler: handleArchiveWorkspace,
+  },
+  {
+    name: "unarchive_workspace",
+    description: "Désarchive un workspace précédemment archivé.",
+    parameters: {
+      name: { type: "string", description: "Nom du workspace." },
+      id: { type: "string", description: "Identifiant du workspace." },
+    },
+    handler: handleUnarchiveWorkspace,
+  },
+  {
+    name: "get_workspace_stats",
+    description:
+      "Retourne les statistiques du workspace actif : nb collections, requêtes, taux de succès.",
+    parameters: {},
+    handler: handleGetWorkspaceStats,
+  },
+  {
+    name: "clear_workspace_cache",
+    description:
+      "Vide l'historique et le cache du workspace actif (ne supprime pas les collections).",
+    parameters: {},
+    handler: handleClearWorkspaceCache,
+  },
+  {
+    name: "explain_response",
+    description:
+      "Explique un élément de réponse HTTP : décode un JWT, explique un header, ou annote une structure JSON.",
+    parameters: {
+      type: {
+        type: "string",
+        description: "Type d'élément à expliquer : jwt, header ou json.",
+        required: true,
+        enum: ["jwt", "header", "json"],
+      },
+      value: {
+        type: "string",
+        description: "Valeur à analyser (token JWT, header, ou JSON brut).",
+        required: true,
+      },
+      header_name: {
+        type: "string",
+        description: "Nom du header (si type=header et value contient seulement la valeur).",
+      },
+      header_value: {
+        type: "string",
+        description: "Valeur du header (si type=header et value contient seulement le nom).",
+      },
+    },
+    handler: handleExplainResponse,
+  },
+  {
+    name: "propose_assertion_fix",
+    description:
+      "Propose une correction pour une assertion échouée (statut, temps de réponse, jsonPath). Retourne une suggestion sans modifier l'assertion.",
+    parameters: {
+      assertion_type: {
+        type: "string",
+        description: "Type d'assertion : status, responseTime ou jsonPath.",
+        required: true,
+      },
+      target: {
+        type: "string",
+        description: "Cible de l'assertion (ex: status, responseTime, ou chemin jsonPath).",
+        required: true,
+      },
+      expected_value: { type: "string", description: "Valeur attendue de l'assertion." },
+      actual_value: { type: "string", description: "Valeur réelle observée (JSON brut)." },
+    },
+    handler: handleProposeAssertionFix,
+  },
+  {
+    name: "export_collection",
+    description: "Exporte une collection au format OpenAPI 3.0 (JSON).",
+    parameters: {
+      name: { type: "string", description: "Nom de la collection à exporter.", required: true },
+    },
+    handler: handleExportCollection,
+  },
+  {
+    name: "duplicate_collection",
+    description: "Duplique une collection existante (y compris ses requêtes et dossiers).",
+    parameters: {
+      name: { type: "string", description: "Nom de la collection à dupliquer.", required: true },
+    },
+    handler: handleDuplicateCollection,
+  },
+  {
+    name: "delete_request",
+    description: "Supprime une requête d'une collection.",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      request: { type: "string", description: "Nom de la requête à supprimer.", required: true },
+    },
+    handler: handleDeleteRequest,
+  },
+  {
+    name: "move_request",
+    description: "Déplace une requête d'une collection vers une autre.",
+    parameters: {
+      source_collection: {
+        type: "string",
+        description: "Nom de la collection source.",
+        required: true,
+      },
+      target_collection: {
+        type: "string",
+        description: "Nom de la collection cible.",
+        required: true,
+      },
+      request: { type: "string", description: "Nom de la requête à déplacer.", required: true },
+    },
+    handler: handleMoveRequest,
+  },
+  {
+    name: "create_folder",
+    description: "Crée un dossier dans une collection pour organiser les requêtes.",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      name: { type: "string", description: "Nom du dossier à créer.", required: true },
+    },
+    handler: handleCreateFolder,
   },
 ];

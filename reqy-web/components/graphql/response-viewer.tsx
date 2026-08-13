@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Copy, Check, AlertCircle, CheckCircle2, AlertTriangle, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   data?: unknown;
@@ -43,6 +44,7 @@ function statusLabel(code: number): string {
 }
 
 export function ResponseViewer({ data, errors, error, status, timeMs, loading }: Props) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const text: string = error
@@ -51,7 +53,7 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
         try {
           return JSON.stringify({ data: data ?? null, errors: errors ?? null }, null, 2);
         } catch {
-          return "Unable to serialize response";
+          return t("graphql.responseViewer.unableToSerialize");
         }
       })();
 
@@ -81,8 +83,8 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
         data-testid="graphql-response-empty"
       >
         <Play className="w-10 h-10 mb-3 opacity-30" />
-        <p className="text-sm font-medium">No response yet</p>
-        <p className="text-xs mt-1 opacity-60">Run a query to see the response here</p>
+        <p className="text-sm font-medium">{t("graphql.responseViewer.noResponse")}</p>
+        <p className="text-xs mt-1 opacity-60">{t("graphql.responseViewer.runQueryToSee")}</p>
       </div>
     );
   }
@@ -107,7 +109,7 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
               <span>
                 {status}
                 {statusLabel(status) && <> {statusLabel(status)}</>}
-                {isGraphQLError && <> · GQL Error</>}
+                {isGraphQLError && <> · {t("graphql.responseViewer.gqlError")}</>}
               </span>
             </Badge>
           )}
@@ -122,12 +124,12 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
               <AlertTriangle className="w-3 h-3" />
               {graphqlErrors.length === 1
                 ? graphqlErrors[0]?.message
-                : `${graphqlErrors.length} GraphQL errors`}
+                : t("graphql.responseViewer.graphqlErrors", { count: graphqlErrors.length })}
             </span>
           )}
           {!error && graphqlErrors.length === 0 && data !== undefined && (
             <span className="text-success flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> OK
+              <CheckCircle2 className="w-3 h-3" /> {t("graphql.responseViewer.ok")}
             </span>
           )}
         </div>
@@ -138,14 +140,14 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
           data-testid="graphql-response-copy"
         >
           {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("graphql.responseViewer.copied") : t("graphql.responseViewer.copy")}
         </button>
       </div>
       <pre
         className="text-xs font-mono overflow-auto max-h-96 p-3 bg-muted/30 whitespace-pre-wrap"
         data-testid="graphql-response-data"
       >
-        {loading ? "Loading..." : text}
+        {loading ? t("graphql.responseViewer.loading") : text}
       </pre>
     </div>
   );

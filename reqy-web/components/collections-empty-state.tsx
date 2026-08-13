@@ -9,6 +9,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { useTranslation } from "react-i18next";
 
 interface EmptyStateProps {
   searchQuery: string;
@@ -16,6 +17,7 @@ interface EmptyStateProps {
 }
 
 export function CollectionsEmptyState({ searchQuery, onCreateCollection }: EmptyStateProps) {
+  const { t } = useTranslation();
   return (
     <Empty className="animate-fade-in">
       <EmptyHeader>
@@ -23,12 +25,14 @@ export function CollectionsEmptyState({ searchQuery, onCreateCollection }: Empty
           <Package />
         </EmptyMedia>
         <EmptyTitle>
-          {searchQuery ? "No collections match your search" : "No collections yet"}
+          {searchQuery
+            ? t("collections.empty.noMatchTitle")
+            : t("collections.empty.noCollectionsTitle")}
         </EmptyTitle>
         <EmptyDescription>
           {searchQuery
-            ? "Try a different search term or clear the filter"
-            : "Create a collection to organize your API requests"}
+            ? t("collections.empty.noMatchDescription")
+            : t("collections.empty.noCollectionsDescription")}
         </EmptyDescription>
       </EmptyHeader>
       {!searchQuery && (
@@ -40,7 +44,7 @@ export function CollectionsEmptyState({ searchQuery, onCreateCollection }: Empty
           className="h-8 gap-1.5 text-xs font-medium shadow-xs"
         >
           <Plus />
-          Create Collection
+          {t("collections.empty.createCollection")}
         </Button>
       )}
     </Empty>

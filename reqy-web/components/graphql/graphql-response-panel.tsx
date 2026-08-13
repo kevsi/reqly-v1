@@ -1,30 +1,27 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { ResponseViewer } from "./response-viewer"
-import { SubscriptionViewer } from "./subscription-viewer"
-import { GraphqlCodeGenerator } from "./graphql-code-generator"
-import { GraphqlSchemaDiff } from "./graphql-schema-diff"
-import { cn } from "@/lib/utils"
-import type {
-  GraphQLExecuteResult,
-  GraphQLRequest,
-  GraphqlSubscriptionMessage,
-} from "@/lib/types"
+import { useState } from "react";
+import { ResponseViewer } from "./response-viewer";
+import { SubscriptionViewer } from "./subscription-viewer";
+import { GraphqlCodeGenerator } from "./graphql-code-generator";
+import { GraphqlSchemaDiff } from "./graphql-schema-diff";
+import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import type { GraphQLExecuteResult, GraphQLRequest, GraphqlSubscriptionMessage } from "@/lib/types";
 
 interface Props {
-  response?: GraphQLExecuteResult
-  error?: string | null
-  subscriptionMessages?: GraphqlSubscriptionMessage[]
-  loading?: boolean
-  onStop: () => void
-  request: GraphQLRequest
-  schema?: unknown
-  endpoint?: string
-  operationName?: string
+  response?: GraphQLExecuteResult;
+  error?: string | null;
+  subscriptionMessages?: GraphqlSubscriptionMessage[];
+  loading?: boolean;
+  onStop: () => void;
+  request: GraphQLRequest;
+  schema?: unknown;
+  endpoint?: string;
+  operationName?: string;
 }
 
-type Tab = "response" | "code" | "diff"
+type Tab = "response" | "code" | "diff";
 
 export function GraphqlResponsePanel({
   response,
@@ -37,21 +34,18 @@ export function GraphqlResponsePanel({
   endpoint,
   operationName,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("response")
-  const hasSubscription =
-    subscriptionMessages !== undefined && subscriptionMessages.length > 0
+  const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<Tab>("response");
+  const hasSubscription = subscriptionMessages !== undefined && subscriptionMessages.length > 0;
 
   const tabs: Array<{ id: Tab; label: string }> = [
-    { id: "response", label: "Response" },
-    { id: "code", label: "Code" },
-    { id: "diff", label: "Schema Diff" },
-  ]
+    { id: "response", label: t("graphql.responsePanel.response") },
+    { id: "code", label: t("graphql.responsePanel.code") },
+    { id: "diff", label: t("graphql.responsePanel.schemaDiff") },
+  ];
 
   return (
-    <div
-      className="flex flex-col h-full bg-card"
-      data-testid="graphql-response-panel"
-    >
+    <div className="flex flex-col h-full bg-card" data-testid="graphql-response-panel">
       <div className="flex items-center gap-1 border-b px-3 py-1.5 bg-muted/20">
         {tabs.map((t) => (
           <button
@@ -72,10 +66,7 @@ export function GraphqlResponsePanel({
       <div className="flex-1 overflow-auto">
         {activeTab === "response" &&
           (hasSubscription ? (
-            <SubscriptionViewer
-              messages={subscriptionMessages}
-              onStop={onStop}
-            />
+            <SubscriptionViewer messages={subscriptionMessages} onStop={onStop} />
           ) : (
             <ResponseViewer
               data={response?.data}
@@ -89,13 +80,11 @@ export function GraphqlResponsePanel({
         {activeTab === "code" && (
           <GraphqlCodeGenerator
             request={request}
-            operationName={operationName ?? "Generated"}
+            operationName={operationName ?? t("graphql.panel.generated")}
           />
         )}
-        {activeTab === "diff" && (
-          <GraphqlSchemaDiff schema={schema ?? null} endpoint={endpoint} />
-        )}
+        {activeTab === "diff" && <GraphqlSchemaDiff schema={schema ?? null} endpoint={endpoint} />}
       </div>
     </div>
-  )
+  );
 }

@@ -154,14 +154,14 @@ export const buildUrl = (url: string, queryParams: QueryParam[], pathParams?: Pa
     queryParams.forEach((param) => {
       // Skip disabled params (enabled === false explicitly), or empty key/value
       if (param.enabled === false) return;
-      if (!param.key.trim() || !param.value.trim()) return;
+      if (!param.key?.trim() || !param.value?.trim()) return;
       // Use append instead of set so duplicate param keys are preserved
       finalUrl.searchParams.append(param.key.trim(), param.value.trim());
     });
     return finalUrl.toString();
   } catch {
     const params = queryParams
-      .filter((param) => param.enabled !== false && param.key.trim() && param.value.trim())
+      .filter((param) => param.enabled !== false && param.key?.trim() && param.value?.trim())
       .map(
         (param) =>
           `${encodeURIComponent(param.key.trim())}=${encodeURIComponent(param.value.trim())}`,
@@ -171,16 +171,16 @@ export const buildUrl = (url: string, queryParams: QueryParam[], pathParams?: Pa
   }
 };
 
-export const buildHeaders = (headers: Header[], authType: AuthType, authToken: string) => {
+export const buildHeaders = (headers: Header[], authType: AuthType, authToken?: string) => {
   const headerEntries: Array<[string, string]> = [];
   headers.forEach((header) => {
     // Skip disabled headers (enabled === false explicitly), or empty key/value
     if (header.enabled === false) return;
-    if (!header.key.trim() || !header.value.trim()) return;
+    if (!header.key?.trim() || !header.value?.trim()) return;
     headerEntries.push([header.key.trim(), header.value.trim()]);
   });
 
-  const token = authToken.trim();
+  const token = (authToken ?? "").trim();
   if (token && authType !== "none") {
     if (authType === "bearer" || authType === "oauth2") {
       headerEntries.push(["Authorization", `Bearer ${token}`]);

@@ -5,8 +5,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAccent, HEX_REGEX } from "@/hooks/use-accent";
+import { useTranslation } from "react-i18next";
 
 export function AccentPicker() {
+  const { t } = useTranslation();
   const { accent, setAccent, presets } = useAccent();
   const [input, setInput] = useState(accent ?? "#");
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +16,7 @@ export function AccentPicker() {
   function applyCustom(e: FormEvent) {
     e.preventDefault();
     if (!HEX_REGEX.test(input)) {
-      setError("Format hex invalide (ex: #8B5CF6)");
+      setError(t("settings.apparence.accentError"));
       return;
     }
     setError(null);
@@ -24,10 +26,8 @@ export function AccentPicker() {
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-medium">Couleur d'accent</h3>
-        <p className="text-xs text-muted-foreground">
-          Personnalisez la couleur primaire de l'interface.
-        </p>
+        <h3 className="text-sm font-medium">{t("settings.apparence.accent")}</h3>
+        <p className="text-xs text-muted-foreground">{t("settings.apparence.accentDescription")}</p>
       </div>
       <div className="flex items-center gap-2">
         {presets.map((p) => {
@@ -71,11 +71,11 @@ export function AccentPicker() {
           />
         </div>
         <Button type="submit" size="sm" variant="outline">
-          Appliquer
+          {t("common.apply")}
         </Button>
         {accent && (
           <Button type="button" size="sm" variant="ghost" onClick={() => setAccent(null)}>
-            Réinitialiser
+            {t("settings.apparence.accentReset")}
           </Button>
         )}
       </form>

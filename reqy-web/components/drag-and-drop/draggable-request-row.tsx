@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { methodBadge } from "@/lib/http-method-colors";
 import type { RequestItem } from "@/lib/types";
 import { requestId } from "@/hooks/use-request-dnd";
+import { useTranslation } from "react-i18next";
 
 interface DraggableRequestRowProps {
   request: RequestItem;
@@ -26,6 +27,7 @@ export function DraggableRequestRow({
   onSend,
   onRemove,
 }: DraggableRequestRowProps) {
+  const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: requestId(request.id),
     data: {
@@ -56,7 +58,7 @@ export function DraggableRequestRow({
         {...attributes}
         {...listeners}
         tabIndex={0}
-        aria-label={`Drag ${request.name}`}
+        aria-label={t("collections.row.dragLabel", { name: request.name })}
         data-testid={`drag-handle-${request.id}`}
       >
         <GripVertical className="size-3" />
@@ -92,7 +94,7 @@ export function DraggableRequestRow({
         <button
           className="shrink-0 size-5 flex items-center justify-center rounded text-success/50 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-success hover:bg-success/10"
           onClick={onSend}
-          title="Load & send"
+          title={t("collections.row.loadAndSend")}
         >
           <PlayIcon />
         </button>
@@ -102,7 +104,7 @@ export function DraggableRequestRow({
       <button
         className="shrink-0 size-5 flex items-center justify-center rounded text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-destructive hover:bg-destructive/10"
         onClick={onRemove}
-        title="Remove request"
+        title={t("collections.row.removeRequest")}
       >
         <TrashIcon />
       </button>

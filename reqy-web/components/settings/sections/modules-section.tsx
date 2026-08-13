@@ -3,7 +3,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import type { ModuleKind } from "@/lib/modules/types";
 import {
   useAvailableModules,
   installModule,
@@ -11,26 +10,19 @@ import {
   setModuleEnabled,
   type AvailableModuleView,
 } from "@/hooks/use-modules-store";
-
-const KIND_LABEL: Record<ModuleKind, string> = {
-  feature: "Fonctionnalité",
-  content: "Contenu",
-  integration: "Intégration",
-};
+import { useTranslation } from "react-i18next";
 
 export function ModulesSection() {
   const modules = useAvailableModules();
+  const { t } = useTranslation();
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">Modules</h2>
-        <p className="text-sm text-muted-foreground">
-          Installez et activez des modules optionnels. Les modules ne font pas partie du cœur
-          générique de l'application et sont désactivés par défaut.
-        </p>
+        <h2 className="text-2xl font-semibold">{t("settings.modules.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("settings.modules.description")}</p>
       </div>
       {modules.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucun module disponible.</p>
+        <p className="text-sm text-muted-foreground">{t("settings.modules.empty")}</p>
       ) : (
         <div className="space-y-3">
           {modules.map((m) => (
@@ -43,6 +35,7 @@ export function ModulesSection() {
 }
 
 function ModuleCard({ module }: { module: AvailableModuleView }) {
+  const { t } = useTranslation();
   return (
     <Card>
       <CardContent className="flex items-start justify-between gap-4 pt-6">
@@ -50,7 +43,7 @@ function ModuleCard({ module }: { module: AvailableModuleView }) {
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium">{module.name}</p>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {KIND_LABEL[module.kind]}
+              {t(`settings.modules.kinds.${module.kind}`)}
             </span>
             <span className="text-xs text-muted-foreground">v{module.version}</span>
           </div>
@@ -58,7 +51,9 @@ function ModuleCard({ module }: { module: AvailableModuleView }) {
             <p className="text-xs text-muted-foreground">{module.description}</p>
           ) : null}
           {module.author ? (
-            <p className="text-xs text-muted-foreground/70">Par {module.author}</p>
+            <p className="text-xs text-muted-foreground/70">
+              {t("settings.modules.byAuthor", { author: module.author })}
+            </p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -68,17 +63,17 @@ function ModuleCard({ module }: { module: AvailableModuleView }) {
                 <Switch
                   checked={module.enabled}
                   onCheckedChange={(v) => setModuleEnabled(module.id, v)}
-                  aria-label={`Activer ${module.name}`}
+                  aria-label={t("settings.modules.enableAria", { name: module.name })}
                 />
-                {module.enabled ? "Activé" : "Désactivé"}
+                {module.enabled ? t("settings.modules.enabled") : t("settings.modules.disabled")}
               </label>
               <Button size="sm" variant="outline" onClick={() => uninstallModule(module.id)}>
-                Désinstaller
+                {t("settings.modules.uninstall")}
               </Button>
             </>
           ) : (
             <Button size="sm" variant="default" onClick={() => installModule(module.id)}>
-              Installer
+              {t("settings.modules.install")}
             </Button>
           )}
         </div>

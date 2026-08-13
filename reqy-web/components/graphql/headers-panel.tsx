@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import { JsonTextarea } from "@/components/json-textarea";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   value: string;
@@ -26,6 +27,7 @@ export function HeadersPanel({
   hideHeader = false,
   className,
 }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
   let error: string | null = null;
   if (value.trim() && value.trim() !== "{}") {
@@ -47,7 +49,7 @@ export function HeadersPanel({
           onClick={() => setOpen(!open)}
         >
           {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          Headers
+          {t("graphql.headersPanel.title")}
           {error && <AlertCircle className="w-3 h-3 text-destructive ml-1" />}
         </button>
       )}
@@ -56,7 +58,7 @@ export function HeadersPanel({
           <JsonTextarea
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder='{ "Authorization": "Bearer token" }'
+            placeholder={t("graphql.headersPanel.placeholder")}
             className="text-xs min-h-20"
             data-testid="graphql-headers-textarea"
           />

@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 
 interface Collection {
   id: string;
@@ -38,6 +39,7 @@ export function PostmanManageModal({
   onGoToSettings,
 }: PostmanManageModalProps) {
   useToast();
+  const { t } = useTranslation();
 
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,20 +60,20 @@ export function PostmanManageModal({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.message ?? "Erreur de chargement");
+        setError(data.message ?? t("importExport.common.loadError"));
         return;
       }
       setCollections(data.collections ?? []);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      setError("Erreur réseau");
+      setError(t("importExport.common.networkError"));
     } finally {
       if (abortRef.current === controller) {
         setLoading(false);
         abortRef.current = null;
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (open && isConnected && !fetchedForOpenRef.current) {
@@ -92,7 +94,7 @@ export function PostmanManageModal({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-3">
-            <span>Importer depuis Postman</span>
+            <span>{t("importExport.postman.importTitle")}</span>
             {userEmail && (
               <span className="truncate text-xs font-normal text-muted-foreground">
                 {userEmail}
@@ -101,22 +103,20 @@ export function PostmanManageModal({
           </DialogTitle>
           <DialogDescription>
             {!isConnected
-              ? "Postman n'est pas connecté."
+              ? t("importExport.postman.notConnectedShort")
               : collections.length > 0
-                ? `${collections.length} collection${collections.length > 1 ? "s" : ""} trouvée${collections.length > 1 ? "s" : ""} dans votre compte Postman.`
-                : "Chargement des collections…"}
+                ? t("importExport.postman.collectionCount", { count: collections.length })
+                : t("importExport.postman.loadingCollections")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-[200px]">
           {!isConnected ? (
             <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
-              <p className="mb-3 text-warning">
-                Connectez-vous à Postman dans les paramètres pour importer vos collections.
-              </p>
+              <p className="mb-3 text-warning">{t("importExport.postman.connectForImport")}</p>
               {onGoToSettings && (
                 <Button size="sm" variant="outline" onClick={onGoToSettings}>
-                  Aller aux paramètres
+                  {t("importExport.postman.goToSettings")}
                 </Button>
               )}
             </div>
@@ -130,12 +130,12 @@ export function PostmanManageModal({
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
               <p className="text-destructive">{error}</p>
               <Button size="sm" variant="outline" className="mt-2" onClick={fetchCollections}>
-                Réessayer
+                {t("common.retry")}
               </Button>
             </div>
           ) : collections.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Aucune collection dans votre compte Postman.
+              {t("importExport.postman.noCollectionsAccount")}
             </p>
           ) : (
             <div className="max-h-[400px] space-y-2 overflow-y-auto pr-1">
@@ -144,7 +144,7 @@ export function PostmanManageModal({
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="truncate text-sm font-medium">{col.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
-                      ┬À {col.requests} requ├¬te{col.requests > 1 ? "s" : ""}
+                      · {t("importExport.postmanExport.requestsCount", { count: col.requests })}
                     </span>
                   </div>
                   <Button
@@ -153,7 +153,7 @@ export function PostmanManageModal({
                     className="shrink-0"
                     onClick={() => onSelectCollection(col)}
                   >
-                    Importer
+                    {t("common.import")}
                   </Button>
                 </Card>
               ))}
@@ -163,7 +163,7 @@ export function PostmanManageModal({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Fermer
+            {t("common.close")}
           </Button>
         </DialogFooter>
       </DialogContent>

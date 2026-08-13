@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { useRequestExecutionCore } from "../use-request-execution-core";
 import { useRequestStore } from "../use-request-store";
 import type { RequestTabsState } from "../use-request-tabs-state";
+import type { RequestItem } from "@/lib/types";
 import * as requestExecutor from "@/lib/request-executor";
 import * as testRunnerScripts from "@/lib/test-runner/scripts";
 
@@ -51,7 +52,9 @@ describe("useRequestExecutionCore", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useRequestStore).mockReturnValue(mockStore as any);
+    vi.mocked(useRequestStore).mockReturnValue(
+      mockStore as unknown as ReturnType<typeof useRequestStore>,
+    );
     vi.mocked(requestExecutor.executeRequest).mockResolvedValue({
       status: 200,
       statusText: "OK",
@@ -61,7 +64,7 @@ describe("useRequestExecutionCore", () => {
       responseSize: "15 B",
       responseStatus: 200,
       timings: { dns: 10, tcp: 20, tls: 30, ttfb: 50, download: 13 },
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof requestExecutor.executeRequest>>);
     vi.mocked(testRunnerScripts.runScript).mockResolvedValue({
       error: null,
       consoleLines: [],
@@ -78,7 +81,7 @@ describe("useRequestExecutionCore", () => {
       headers: { "Content-Type": "application/json" },
       queryParams: [],
       body: "",
-    } as any);
+    } as unknown as RequestItem);
 
     expect(tab.url).toBe("http://localhost:8080/api");
     expect(tab.method).toBe("GET");

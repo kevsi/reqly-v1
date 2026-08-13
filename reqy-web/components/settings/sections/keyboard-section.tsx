@@ -8,33 +8,32 @@ import { Badge } from "@/components/ui/badge";
 import { RotateCcw, RotateCcwIcon, Pencil, Check, X } from "lucide-react";
 import { useShortcuts } from "@/hooks/use-shortcuts";
 import { SHORTCUT_DEFS, type KeyCombo } from "@/lib/shortcut-defs";
+import { useTranslation } from "react-i18next";
 
 export function KeyboardSection() {
   const { custom, getKeys, setCustom, reset, resetAll } = useShortcuts();
+  const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Group by category
   const byCategory = new Map<string, typeof SHORTCUT_DEFS>();
   for (const def of SHORTCUT_DEFS) {
-    const list = byCategory.get(def.category) ?? [];
+    const list = byCategory.get(def.categoryKey) ?? [];
     list.push(def);
-    byCategory.set(def.category, list);
+    byCategory.set(def.categoryKey, list);
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Raccourcis clavier</h2>
-          <p className="text-sm text-muted-foreground">
-            Cliquez sur un raccourci pour le modifier. Les touches ⌘ correspondent à Ctrl sur
-            Windows/Linux ou Cmd sur Mac.
-          </p>
+          <h2 className="text-2xl font-semibold">{t("settings.keyboard.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("settings.keyboard.description")}</p>
         </div>
         {Object.keys(custom).length > 0 && (
           <Button variant="ghost" size="sm" onClick={resetAll} className="gap-2">
             <RotateCcw className="size-3.5" />
-            Réinitialiser tout
+            {t("settings.keyboard.resetAll")}
           </Button>
         )}
       </div>
@@ -44,7 +43,7 @@ export function KeyboardSection() {
           {Array.from(byCategory.entries()).map(([category, defs]) => (
             <div key={category}>
               <h3 className="mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                {category}
+                {t(category)}
               </h3>
               <div className="space-y-2">
                 {defs.map((def) => {
@@ -55,7 +54,7 @@ export function KeyboardSection() {
                       key={def.id}
                       className="group flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 px-4 py-2.5"
                     >
-                      <span className="text-sm">{def.description}</span>
+                      <span className="text-sm">{t(def.descriptionKey)}</span>
                       <div className="flex items-center gap-2">
                         {isEditing ? (
                           <KeyRecorder
@@ -73,7 +72,7 @@ export function KeyboardSection() {
                               type="button"
                               onClick={() => setEditingId(def.id)}
                               className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              aria-label="Modifier le raccourci"
+                              aria-label={t("settings.keyboard.editShortcut")}
                             >
                               <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
                             </button>
@@ -82,7 +81,7 @@ export function KeyboardSection() {
                                 type="button"
                                 onClick={() => reset(def.id)}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                aria-label="Réinitialiser ce raccourci"
+                                aria-label={t("settings.keyboard.resetShortcut")}
                               >
                                 <RotateCcwIcon className="size-3.5 text-muted-foreground hover:text-foreground" />
                               </button>
@@ -146,6 +145,7 @@ function KeyRecorder({
   const [recording, setRecording] = useState(false);
   const [current, setCurrent] = useState<KeyCombo>(initialKeys);
   const ref = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -223,7 +223,9 @@ function KeyRecorder({
             </span>
           ))
         ) : (
-          <span className="text-muted-foreground text-xs px-1">Appuyez sur une touche...</span>
+          <span className="text-muted-foreground text-xs px-1">
+            {t("settings.keyboard.pressKey")}
+          </span>
         )}
       </div>
       <button
@@ -234,7 +236,7 @@ function KeyRecorder({
           }
         }}
         className="text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300"
-        aria-label="Confirmer"
+        aria-label={t("common.confirm")}
       >
         <Check className="size-4" />
       </button>
@@ -242,7 +244,7 @@ function KeyRecorder({
         type="button"
         onClick={onCancel}
         className="text-muted-foreground hover:text-foreground"
-        aria-label="Annuler"
+        aria-label={t("common.cancel")}
       >
         <X className="size-4" />
       </button>

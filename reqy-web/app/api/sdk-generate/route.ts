@@ -128,7 +128,7 @@ export async function POST(req: Request) {
         "Cache-Control": "no-store",
       },
     });
-  } catch (err) {
+  } catch (_err) {
     return Response.json({ error: "SDK generation failed" }, { status: 500 });
   } finally {
     clearTimeout(timeout);

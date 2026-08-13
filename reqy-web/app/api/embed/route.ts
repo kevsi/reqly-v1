@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       .map((item) => item.embedding);
 
     return NextResponse.json({ model, embeddings, usage: data.usage });
-  } catch (err) {
+  } catch (_err) {
     return NextResponse.json({ error: "Embedding request failed" }, { status: 502 });
   }
 }

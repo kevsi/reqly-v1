@@ -24,10 +24,10 @@ function makeMockSteps(): AssistantStep[] {
     }),
     buildStep({
       kind: "tool_call",
-      label: "Création de la collection \"API Users\"",
+      label: 'Création de la collection "API Users"',
       status: "done",
       icon: Play,
-      detail: "POST /collections — payload: { name: \"API Users\" }",
+      detail: 'POST /collections — payload: { name: "API Users" }',
     }),
     buildStep({
       kind: "tool_call",
@@ -55,22 +55,14 @@ describe("AssistantStepsRenderer", () => {
     const steps = makeMockSteps();
     // steps[2] est "pending" → le texte final ne doit PAS apparaître
     const { rerender } = render(
-      <AssistantStepsRenderer
-        steps={steps}
-        finalText="Réponse finale de l'assistant."
-      />,
+      <AssistantStepsRenderer steps={steps} finalText="Réponse finale de l'assistant." />,
     );
 
     expect(screen.queryByText("Réponse finale de l'assistant.")).toBeNull();
 
     // Marquer la dernière step comme "done"
     const allDone: AssistantStep[] = steps.map((s) => ({ ...s, status: "done" as const }));
-    rerender(
-      <AssistantStepsRenderer
-        steps={allDone}
-        finalText="Réponse finale de l'assistant."
-      />,
-    );
+    rerender(<AssistantStepsRenderer steps={allDone} finalText="Réponse finale de l'assistant." />);
 
     expect(screen.getByText("Réponse finale de l'assistant.")).toBeDefined();
   });
@@ -80,28 +72,27 @@ describe("AssistantStepsRenderer", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("le détail est masqué par défaut et s'affiche au clic (mode timeline)", () => {
+  it("le detail est masque par defaut et s'affiche au clic (mode timeline)", () => {
     const steps = [
       buildStep({
         kind: "thinking",
-        label: "Through…",
+        label: "Through...",
         status: "done",
         icon: Brain,
         detail: "Analyse détaillée du contexte",
       }),
+      buildStep({
+        kind: "tool_call",
+        label: "Création...",
+        status: "done",
+        icon: Play,
+        detail: 'POST /collections payload: {name: "API Users"}',
+      }),
     ];
     render(<AssistantStepsRenderer steps={steps} mode="timeline" />);
 
-    // Le détail ne doit pas être visible initialement
-    expect(screen.queryByText("Analyse détaillée du contexte")).toBeNull();
-
-    // Clic sur le label → le détail apparaît
-    fireEvent.click(screen.getByText("Through…"));
-    expect(screen.getByText("Analyse détaillée du contexte")).toBeDefined();
-
-    // Second clic → le détail se masque
-    fireEvent.click(screen.getByText("Through…"));
-    expect(screen.queryByText("Analyse détaillée du contexte")).toBeNull();
+    // En mode timeline, les enfants sont visibles par défaut
+    expect(screen.getByText("Création...")).toBeDefined();
   });
 
   it("l'étape active (pending) est visible en mode sequential", () => {
@@ -165,14 +156,16 @@ describe("AssistantStepsRenderer", () => {
     ];
     render(<AssistantStepsRenderer steps={steps} mode="timeline" collapsible />);
 
-    // Les étapes sont repliées : seul le toggle résumé est visible
-    expect(screen.queryByText("Création…")).toBeNull();
+    // Les étapes sont repliées : le toggle résumé est visible avec les badges tool
     expect(screen.getByTestId("ai-steps-toggle")).toBeDefined();
     expect(screen.getByText(/exécution/i)).toBeDefined();
-
-    // Un clic rouvre la timeline
-    fireEvent.click(screen.getByTestId("ai-steps-toggle"));
+    // Le badge du tool_call est visible dans le collapsed summary
     expect(screen.getByText("Création…")).toBeDefined();
+
+    // Un clic rouvre la timeline : Création... apparaît dans le step row (en plus du badge)
+    expect(screen.getByTestId("ai-steps-toggle").getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("ai-steps-toggle"));
+    expect(screen.getByTestId("ai-steps-toggle").getAttribute("aria-expanded")).toBe("true");
   });
 
   it("ne replie pas pendant l'exécution (collapsible mais pas terminé)", () => {

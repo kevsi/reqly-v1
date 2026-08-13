@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 export interface SubscriptionMessageView {
   id: number;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function SubscriptionViewer({ messages, onStop }: Props) {
+  const { t } = useTranslation();
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,19 +28,23 @@ export function SubscriptionViewer({ messages, onStop }: Props) {
   return (
     <div className="border-t bg-card" data-testid="graphql-subscription-viewer">
       <div className="flex items-center justify-between p-2 border-b">
-        <span className="text-xs font-medium">Live Subscription ({messages.length} messages)</span>
+        <span className="text-xs font-medium">
+          {t("graphql.subscriptionViewer.liveSubscription", { count: messages.length })}
+        </span>
         <Button
           size="sm"
           variant="destructive"
           onClick={onStop}
           data-testid="graphql-subscription-stop"
         >
-          <Square className="w-3 h-3 mr-1" /> Stop
+          <Square className="w-3 h-3 mr-1" /> {t("graphql.subscriptionViewer.stop")}
         </Button>
       </div>
       <div className="overflow-auto max-h-96 p-2 space-y-2">
         {messages.length === 0 && (
-          <p className="text-xs text-muted-foreground p-2">Waiting for messages...</p>
+          <p className="text-xs text-muted-foreground p-2">
+            {t("graphql.subscriptionViewer.waitingForMessages")}
+          </p>
         )}
         {messages.map((m) => (
           <div

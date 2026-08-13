@@ -7,17 +7,19 @@ import { Text } from "@/components/ui/text";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useTranslation } from "react-i18next";
 
 const TOOLS = [
-  { href: "/graphql/", label: "GraphQL", icon: Code2, color: "text-purple-500" },
-  { href: "/sdks/", label: "SDKs", icon: Package, color: "text-orange-500" },
-  { href: "/sse/", label: "SSE", icon: Radio, color: "text-amber-500" },
-  { href: "/git/", label: "Git", icon: GitBranch, color: "text-rose-500" },
+  { href: "/graphql/", labelKey: "sidebar.nav.graphql", icon: Code2, color: "text-purple-500" },
+  { href: "/sdks/", labelKey: "sidebar.nav.sdks", icon: Package, color: "text-orange-500" },
+  { href: "/sse/", labelKey: "sidebar.nav.sse", icon: Radio, color: "text-amber-500" },
+  { href: "/git/", labelKey: "sidebar.nav.git", icon: GitBranch, color: "text-rose-500" },
 ];
 
 export function ToolsSection() {
   const pathname = usePathname();
   const { isCollapsed } = useSidebar();
+  const { t } = useTranslation();
 
   return (
     <div
@@ -26,26 +28,27 @@ export function ToolsSection() {
     >
       {!isCollapsed && (
         <Text variant="label" className="px-3 py-1">
-          Tools
+          {t("sidebar.tools")}
         </Text>
       )}
       <nav className={cn("flex flex-col", isCollapsed ? "gap-1" : "gap-0.5")}>
         {TOOLS.map(
           ({
             href,
-            label,
+            labelKey,
             icon: Icon,
             color,
             badge,
           }: {
             href: string;
-            label: string;
+            labelKey: string;
             icon: React.ForwardRefExoticComponent<
               Omit<React.SVGProps<SVGSVGElement>, "ref"> & React.RefAttributes<SVGSVGElement>
             >;
             color: string;
             badge?: string;
           }) => {
+            const label = t(labelKey);
             const active = pathname?.startsWith(href) ?? false;
             const linkContent = (
               <Link

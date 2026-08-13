@@ -16,6 +16,7 @@ import {
   Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTranslation } from "react-i18next";
 
 const CHART_MARGIN = { top: 10, right: 10, left: -10, bottom: 0 } as const;
 
@@ -100,6 +101,7 @@ export default function ChartsContent({
   methodData: MethodDataPoint[];
   statusData: StatusDataPoint[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-6">
       {/* Row: Volume + Error Rate side by side */}
@@ -108,7 +110,7 @@ export default function ChartsContent({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span className="size-2 rounded-full bg-success inline-block" />
-              Request Volume — 7 days
+              {t("dashboard.requestVolume")}
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[180px] sm:h-[220px] pt-0">
@@ -127,7 +129,7 @@ export default function ChartsContent({
                 <Area
                   type="monotone"
                   dataKey="requests"
-                  name="Requests"
+                  name={t("dashboard.requests")}
                   stroke="#22c55e"
                   strokeWidth={2}
                   fill="url(#requestsGradient)"
@@ -143,7 +145,7 @@ export default function ChartsContent({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span className="size-2 rounded-full bg-orange-500 inline-block" />
-              Error Rate — 7 days
+              {t("dashboard.errorRate")}
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[180px] sm:h-[220px] pt-0">
@@ -167,7 +169,7 @@ export default function ChartsContent({
                 <Area
                   type="monotone"
                   dataKey="errorRate"
-                  name="Error rate"
+                  name={t("dashboard.errorRateName")}
                   stroke="#f97316"
                   strokeWidth={2}
                   fill="url(#errorGradient)"
@@ -186,7 +188,7 @@ export default function ChartsContent({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span className="size-2 rounded-full bg-violet-500 inline-block" />
-              Avg Response Time (ms)
+              {t("dashboard.avgResponseTimeMs")}
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[200px] pt-0">
@@ -196,7 +198,12 @@ export default function ChartsContent({
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} />
                 <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 11 }} unit="ms" />
                 <Tooltip cursor={false} content={<CustomTooltip />} />
-                <Bar dataKey="avgTime" name="Avg time" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="avgTime"
+                  name={t("dashboard.avgTime")}
+                  fill="#8b5cf6"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -206,12 +213,14 @@ export default function ChartsContent({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span className="size-2 rounded-full bg-blue-500 inline-block" />
-              HTTP Methods
+              {t("dashboard.httpMethods")}
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[160px] sm:h-[200px] pt-0 flex items-center">
             {methodData.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center w-full">No data yet</p>
+              <p className="text-xs text-muted-foreground text-center w-full">
+                {t("dashboard.noData")}
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -245,12 +254,14 @@ export default function ChartsContent({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span className="size-2 rounded-full bg-sky-500 inline-block" />
-              Status Codes
+              {t("dashboard.statusCodes")}
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[160px] sm:h-[200px] pt-0 flex items-center">
             {statusData.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center w-full">No data yet</p>
+              <p className="text-xs text-muted-foreground text-center w-full">
+                {t("dashboard.noData")}
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -267,7 +278,7 @@ export default function ChartsContent({
                     width={32}
                   />
                   <Tooltip cursor={false} content={<PieTooltip />} />
-                  <Bar dataKey="count" name="Requests" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="count" name={t("dashboard.requests")} radius={[0, 4, 4, 0]}>
                     {statusData.map((entry) => (
                       <Cell key={entry.range} fill={entry.color} />
                     ))}

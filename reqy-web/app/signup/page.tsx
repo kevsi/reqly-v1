@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/lib/session-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { Loader2, AlertCircle, Mail, ArrowLeft, CheckCircle2, KeyRound } from "l
 type Step = "form" | "verify";
 
 export default function SignupPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const signup = useSessionStore((s) => s.signup);
@@ -64,7 +66,7 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) {
-      setError("Le mot de passe doit contenir au moins 8 caractères.");
+      setError(t("authPage.signup.passwordTooShort"));
       return;
     }
     setLoading(true);
@@ -73,7 +75,7 @@ export default function SignupPage() {
       setStep("verify");
       startCountdown();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Échec de l'inscription");
+      setError(err instanceof Error ? err.message : t("authPage.signup.failed"));
     } finally {
       setLoading(false);
     }
@@ -119,7 +121,7 @@ export default function SignupPage() {
   async function handleVerify() {
     const fullCode = code.join("");
     if (fullCode.length !== 6) {
-      setError("Veuillez entrer le code à 6 chiffres.");
+      setError(t("authPage.verify.codeRequired"));
       return;
     }
     setError(null);
@@ -130,7 +132,7 @@ export default function SignupPage() {
       // Redirect after a brief success animation
       setTimeout(() => router.push("/"), 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Code incorrect");
+      setError(err instanceof Error ? err.message : t("authPage.verify.codeInvalid"));
       // Clear code inputs on error
       setCode(["", "", "", "", "", ""]);
       codeInputs.current[0]?.focus();
@@ -146,7 +148,7 @@ export default function SignupPage() {
       await resendCode(email.trim());
       startCountdown();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de renvoyer le code");
+      setError(err instanceof Error ? err.message : t("authPage.verify.resendFailed"));
     }
   }
 
@@ -161,8 +163,10 @@ export default function SignupPage() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
                 <CheckCircle2 className="h-7 w-7 text-emerald-500" />
               </div>
-              <h1 className="mb-1 text-xl font-semibold tracking-tight">Compte vérifié !</h1>
-              <p className="text-sm text-muted-foreground">Redirection vers l&apos;application…</p>
+              <h1 className="mb-1 text-xl font-semibold tracking-tight">
+                {t("authPage.verify.verifiedTitle")}
+              </h1>
+              <p className="text-sm text-muted-foreground">{t("authPage.verify.redirecting")}</p>
               <div className="mt-6 flex justify-center">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
@@ -180,10 +184,10 @@ export default function SignupPage() {
               <KeyRound className="h-6 w-6 text-primary" />
             </div>
 
-            <h1 className="mb-1 text-xl font-semibold tracking-tight">Vérifiez votre email</h1>
-            <p className="mb-1 text-sm text-muted-foreground">
-              Un code à 6 chiffres a été envoyé à
-            </p>
+            <h1 className="mb-1 text-xl font-semibold tracking-tight">
+              {t("authPage.verify.title")}
+            </h1>
+            <p className="mb-1 text-sm text-muted-foreground">{t("authPage.verify.codeSentTo")}</p>
             <p className="mb-6 text-sm font-medium text-foreground">{email}</p>
 
             {/* Code inputs */}
@@ -210,7 +214,7 @@ export default function SignupPage() {
                     focus:border-primary focus:ring-1 focus:ring-primary
                     ${loading ? "opacity-50 pointer-events-none" : ""}
                   `}
-                  aria-label={`Chiffre ${i + 1}`}
+                  aria-label={t("authPage.verify.digitAria", { count: i + 1 })}
                   disabled={loading}
                 />
               ))}
@@ -234,17 +238,17 @@ export default function SignupPage() {
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Vérification…
+                  {t("authPage.verify.submitting")}
                 </span>
               ) : (
-                "Vérifier mon compte"
+                t("authPage.verify.submit")
               )}
             </Button>
 
             <div className="mt-5 flex flex-col items-center gap-2 text-sm text-muted-foreground">
               {countdown > 0 ? (
                 <p className="text-xs text-muted-foreground/70">
-                  Renvoyer le code dans{" "}
+                  {t("authPage.verify.resendIn")}{" "}
                   <span className="font-mono font-medium text-foreground/60">{countdown}s</span>
                 </p>
               ) : (
@@ -253,7 +257,7 @@ export default function SignupPage() {
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
                 >
                   <Mail className="size-3.5" />
-                  Renvoyer le code
+                  {t("authPage.verify.resend")}
                 </button>
               )}
             </div>
@@ -264,7 +268,7 @@ export default function SignupPage() {
                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="size-3" />
-                Retour à la connexion
+                {t("authPage.verify.backToLogin")}
               </Link>
             </div>
           </div>
@@ -287,27 +291,27 @@ export default function SignupPage() {
             <span className="text-sm font-semibold">Reqly</span>
           </div>
 
-          <h1 className="mb-1 text-xl font-semibold tracking-tight">Créer un compte</h1>
-          <p className="mb-6 text-sm text-muted-foreground">
-            Reqly synchronise vos collections, environnements et dossiers entre vos appareils.
-          </p>
+          <h1 className="mb-1 text-xl font-semibold tracking-tight">
+            {t("authPage.signup.title")}
+          </h1>
+          <p className="mb-6 text-sm text-muted-foreground">{t("authPage.signup.description")}</p>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="signup-name">Nom (optionnel)</Label>
+              <Label htmlFor="signup-name">{t("authPage.signup.name")}</Label>
               <Input
                 id="signup-name"
                 type="text"
                 autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Votre nom"
+                placeholder={t("authPage.signup.namePlaceholder")}
                 autoFocus
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="signup-email">Email</Label>
+              <Label htmlFor="signup-email">{t("authPage.email")}</Label>
               <Input
                 id="signup-email"
                 type="email"
@@ -315,14 +319,16 @@ export default function SignupPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="vous@exemple.com"
+                placeholder={t("authPage.emailPlaceholder")}
               />
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="signup-password">Mot de passe</Label>
-                <span className="text-[10px] text-muted-foreground/60">8 caractères min.</span>
+                <Label htmlFor="signup-password">{t("authPage.password")}</Label>
+                <span className="text-[10px] text-muted-foreground/60">
+                  {t("authPage.signup.passwordHint")}
+                </span>
               </div>
               <Input
                 id="signup-password"
@@ -348,10 +354,10 @@ export default function SignupPage() {
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Création du compte…
+                  {t("authPage.signup.submitting")}
                 </span>
               ) : (
-                "Créer mon compte"
+                t("authPage.signup.submit")
               )}
             </Button>
           </form>
@@ -361,17 +367,17 @@ export default function SignupPage() {
               <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">ou</span>
+              <span className="bg-card px-2 text-muted-foreground">{t("authPage.or")}</span>
             </div>
           </div>
 
           <p className="text-center text-sm text-muted-foreground">
-            Déjà un compte ?{" "}
+            {t("authPage.signup.hasAccount")}{" "}
             <Link
               href="/login"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              Se connecter
+              {t("authPage.signup.signIn")}
             </Link>
           </p>
         </div>

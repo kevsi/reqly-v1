@@ -11,6 +11,7 @@ import { useRequestStore, getGlobalStore, moduleLevelCommit } from "@/hooks/use-
 import { isTauriAvailable } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import type { Collection } from "@/hooks/request-types";
+import { useTranslation } from "react-i18next";
 
 const DEFAULT_MCP_PORT = 3311;
 
@@ -39,6 +40,7 @@ function normalizeColor(color: string | undefined): string {
 }
 
 export default function McpSection() {
+  const { t } = useTranslation();
   const isTauri = isTauriAvailable();
   const { status, loading, start, stop, loadBundleCollections } = useMcpServer();
   const store = useRequestStore();
@@ -70,7 +72,7 @@ export default function McpSection() {
           ? err
           : err instanceof Error
             ? err.message
-            : "Échec du démarrage du serveur MCP";
+            : t("settings.mcp.startError");
       setError(msg);
     }
   };
@@ -187,11 +189,8 @@ export default function McpSection() {
             <Server className="size-5 text-primary" />
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-base">Serveur MCP</CardTitle>
-            <CardDescription>
-              Exposez vos collections aux agents IA (OpenCode, Claude Code, Cursor, etc.) via le
-              protocole MCP.
-            </CardDescription>
+            <CardTitle className="text-base">{t("settings.mcp.title")}</CardTitle>
+            <CardDescription>{t("settings.mcp.description")}</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -210,7 +209,9 @@ export default function McpSection() {
                   )}
                 />
                 <span className="text-sm font-medium">
-                  {status.running ? `Serveur actif sur le port ${status.port}` : "Serveur arrêté"}
+                  {status.running
+                    ? t("settings.mcp.running", { port: status.port })
+                    : t("settings.mcp.stopped")}
                 </span>
                 {status.running && status.pid && (
                   <span className="text-xs text-muted-foreground">(PID: {status.pid})</span>
@@ -219,16 +220,11 @@ export default function McpSection() {
 
               {status.running && (
                 <p className="text-xs text-muted-foreground">
-                  Vos collections sont exposées. Connectez votre agent IA à l&apos;URL ci-dessous.
+                  {t("settings.mcp.collectionsExposed")}
                 </p>
               )}
 
-              {!isTauri && (
-                <p className="text-xs text-warning">
-                  Le contrôle du serveur MCP est uniquement disponible dans l&apos;application
-                  desktop (Tauri).
-                </p>
-              )}
+              {!isTauri && <p className="text-xs text-warning">{t("settings.mcp.desktopOnly")}</p>}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -241,7 +237,7 @@ export default function McpSection() {
                   className="gap-2"
                 >
                   <RefreshCw className={cn("size-4", syncing && "animate-spin")} />
-                  Sync MCP
+                  {t("settings.mcp.sync")}
                 </Button>
               )}
               {isTauri && (
@@ -259,17 +255,13 @@ export default function McpSection() {
                   ) : (
                     <Play className="size-4" />
                   )}
-                  {status.running ? "Arrêter" : "Démarrer"}
+                  {status.running ? t("settings.mcp.stop") : t("settings.mcp.start")}
                 </Button>
               )}
             </div>
           </div>
 
-          {syncSuccess && (
-            <p className="text-xs text-success mt-3">
-              Collections synchronisées depuis le bundle MCP
-            </p>
-          )}
+          {syncSuccess && <p className="text-xs text-success mt-3">{t("settings.mcp.synced")}</p>}
 
           {error && <p className="text-xs text-destructive mt-3">{error}</p>}
         </div>
@@ -278,7 +270,7 @@ export default function McpSection() {
         {!status.running && isTauri && (
           <div className="flex items-center gap-3">
             <Label htmlFor="mcp-port" className="text-sm shrink-0">
-              Port :
+              {t("settings.mcp.port")}
             </Label>
             <Input
               id="mcp-port"
@@ -297,7 +289,7 @@ export default function McpSection() {
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
               <Terminal className="size-4 text-muted-foreground" />
-              URL de connexion
+              {t("settings.mcp.connectionUrl")}
             </h4>
             <div className="rounded-lg border border-border bg-muted/50 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -309,7 +301,7 @@ export default function McpSection() {
                   size="icon"
                   className="size-7 shrink-0"
                   onClick={handleCopyUrl}
-                  title="Copier l'URL"
+                  title={t("settings.mcp.copyUrl")}
                 >
                   {copySuccess ? (
                     <Check className="size-3.5 text-success" />
@@ -328,7 +320,7 @@ export default function McpSection() {
             <div className="flex items-start gap-2">
               <Check className="size-4 text-success mt-0.5 shrink-0" />
               <div className="text-xs text-success space-y-1">
-                <p className="font-medium">Configuration OpenCode :</p>
+                <p className="font-medium">{t("settings.mcp.opencodeConfig")}</p>
                 <code className="block bg-success/10 rounded px-2 py-1 text-[11px]">
                   {`"mcpServers": {\n  "reqly": {\n    "url": "${serverUrl}"\n  }\n}`}
                 </code>

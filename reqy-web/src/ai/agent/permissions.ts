@@ -15,9 +15,32 @@ const SIDE_EFFECT_TOOLS = new Set([
   "create_environment",
   "update_environment_variable",
   "delegate",
+  "run_collection",
+  "import_collection",
+  "switch_workspace",
+  "duplicate_collection",
+  "delete_request",
+  "move_request",
+  "create_folder",
+  "duplicate_workspace",
+  "archive_workspace",
+  "unarchive_workspace",
+  "clear_workspace_cache",
 ]);
 
-const READ_ONLY_TOOLS = new Set(["list_collections", "get_request_context"]);
+const READ_ONLY_TOOLS = new Set([
+  "list_collections",
+  "get_request_context",
+  "search_requests",
+  "explain_response",
+  "propose_assertion_fix",
+  "export_collection",
+  "list_workspaces",
+  "get_current_workspace",
+  "get_workspace",
+  "search_workspaces",
+  "get_workspace_stats",
+]);
 
 export function isSideEffectTool(name: string): boolean {
   return SIDE_EFFECT_TOOLS.has(name);

@@ -30,7 +30,7 @@ export function generateRequestTabId(): string {
 export function headersArrayToRecord(headers: Header[]): Record<string, string> {
   return Object.fromEntries(
     headers
-      .filter((header) => header.key.trim() && header.value.trim())
+      .filter((header) => header.key?.trim() && header.value?.trim())
       .map((header) => [header.key.trim(), header.value.trim()]),
   );
 }

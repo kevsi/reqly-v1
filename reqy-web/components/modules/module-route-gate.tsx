@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useIsModuleEnabled } from "@/hooks/use-modules-store";
@@ -16,6 +17,7 @@ import { getModuleById } from "@/lib/modules/registry";
  * Modules settings page — so a disabled module is never silently reachable.
  */
 export function ModuleRouteGate({ moduleId, children }: { moduleId: string; children: ReactNode }) {
+  const { t } = useTranslation();
   const enabled = useIsModuleEnabled(moduleId);
   const manifest = getModuleById(moduleId);
 
@@ -27,15 +29,12 @@ export function ModuleRouteGate({ moduleId, children }: { moduleId: string; chil
         <CardContent className="space-y-4 pt-6">
           <div>
             <h1 className="text-xl font-semibold text-foreground">
-              Module {manifest?.name ?? moduleId}
+              {t("settings.modules.routeTitle", { name: manifest?.name ?? moduleId })}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Ce module n&apos;est pas activé. Activez-le depuis les Paramètres &gt; Modules pour
-              l&apos;utiliser.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("settings.modules.notEnabled")}</p>
           </div>
           <Button asChild>
-            <Link href="/settings/modules">Activer le module</Link>
+            <Link href="/settings/modules">{t("settings.modules.enableCta")}</Link>
           </Button>
         </CardContent>
       </Card>

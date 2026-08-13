@@ -32,6 +32,7 @@ import { useRequestStore } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
 import { useRouter } from "next/navigation";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
+import { useTranslation } from "react-i18next";
 
 interface ApiHeaderProps {
   /** Ouvre le drawer de navigation sur mobile. */
@@ -39,6 +40,7 @@ interface ApiHeaderProps {
 }
 
 export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
+  const { t } = useTranslation();
   // Data slices: subscribe only to what we render. Each atomic selector returns
   // the same reference unless that slice actually changes, so the header does
   // NOT re-render on unrelated mutations (e.g. editing a request body).
@@ -90,7 +92,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
           <button
             type="button"
             onClick={onOpenMobileSidebar}
-            aria-label="Ouvrir le menu de navigation"
+            aria-label={t("header.openMenu")}
             className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground md:hidden"
           >
             <Menu className="size-5" />
@@ -106,14 +108,14 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
       <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         <button
           onClick={() => setSearchOpen(true)}
-          aria-label="Search"
+          aria-label={t("header.search")}
           className="group/search relative transition-all duration-200 hover:scale-[1.02]"
-          title="Search (Ctrl+K)"
+          title={t("header.searchTitle")}
         >
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none transition-colors group-hover/search:text-muted-foreground hidden @min-[40rem]:block" />
           <div className="hidden h-9 w-56 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20 @min-[40rem]:flex lg:w-80">
             <span className="flex-1 text-left text-muted-foreground/70">
-              Search APIs, endpoints...
+              {t("header.searchPlaceholder")}
             </span>
             <kbd className="hidden @min-[40rem]:inline-flex h-5 select-none items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 font-mono text-[10px] font-medium text-muted-foreground/70">
               <Command className="size-3" />K
@@ -126,10 +128,10 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
         </button>
 
         <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
-          <CommandInput placeholder="Search open tabs, history, pages..." />
+          <CommandInput placeholder={t("header.searchCommandPlaceholder")} />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            <CommandGroup heading="Tools">
+            <CommandEmpty>{t("header.searchNoResults")}</CommandEmpty>
+            <CommandGroup heading={t("sidebar.tools")}>
               <CommandItem
                 onSelect={() => {
                   setSearchOpen(false);
@@ -137,7 +139,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                 }}
               >
                 <Radio className="mr-2 size-4" />
-                <span>Open SSE Panel</span>
+                <span>{t("header.openSSE")}</span>
               </CommandItem>
 
               <CommandItem
@@ -147,7 +149,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                 }}
               >
                 <Braces className="mr-2 size-4" />
-                <span>Open GraphQL Playground</span>
+                <span>{t("header.openGraphql")}</span>
               </CommandItem>
               <CommandItem
                 onSelect={() => {
@@ -156,10 +158,10 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                 }}
               >
                 <GitBranch className="mr-2 size-4" />
-                <span>Open Git Panel</span>
+                <span>{t("header.openGit")}</span>
               </CommandItem>
             </CommandGroup>
-            <CommandGroup heading="History">
+            <CommandGroup heading={t("header.history")}>
               {history.slice(0, 10).map((item) => (
                 <CommandItem key={item.id} onSelect={() => setSearchOpen(false)}>
                   <Clock className="mr-2 size-4" />
@@ -187,12 +189,12 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                aria-label="Notifications"
+                aria-label={t("header.notifications")}
                 className="group/notif relative flex size-9 items-center justify-center rounded-lg text-muted-foreground/70 transition-all duration-200 hover:bg-accent hover:text-foreground border border-transparent hover:border-border"
                 title={
                   notifications && notifications.some((n) => !n.read)
-                    ? "Unread notifications"
-                    : "Notifications"
+                    ? t("header.unreadNotifications")
+                    : t("header.notifications")
                 }
               >
                 <Bell className="size-5" />
@@ -206,10 +208,12 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[320px] animate-scale-in">
               <DropdownMenuLabel className="flex items-center justify-between px-4 py-2">
-                <Text variant="label">Notifications</Text>
+                <Text variant="label">{t("header.notifications")}</Text>
                 {notifications && notifications.length > 0 && (
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                    {notifications.filter((n) => !n.read).length} new
+                    {t("header.newNotifications", {
+                      count: notifications.filter((n) => !n.read).length,
+                    })}
                   </span>
                 )}
               </DropdownMenuLabel>
@@ -226,22 +230,21 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                       }
                     }}
                   >
-                    Enable system notifications
+                    {t("header.enableSystemNotifications")}
                   </button>
                 </div>
               )}
               {systemNotificationPermission === "denied" && (
                 <div className="border-b border-border p-3">
                   <p className="text-xs text-muted-foreground">
-                    Notifications are blocked in your browser. Re-enable them via the lock icon next
-                    to the URL (Notifications → Allow).
+                    {t("header.notificationsBlocked")}
                   </p>
                 </div>
               )}
               {!notifications || notifications.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 p-6 text-sm text-muted-foreground">
                   <Bell className="size-8 text-muted-foreground/30" />
-                  <span>No notifications yet</span>
+                  <span>{t("header.noNotifications")}</span>
                 </div>
               ) : (
                 <div className="max-h-[280px] overflow-y-auto">
@@ -272,7 +275,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                               setPendingRemoveNotifId(n.id);
                             }}
                             className="shrink-0 rounded-md p-0.5 text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-foreground transition-all duration-200"
-                            title="Supprimer"
+                            title={t("common.delete")}
                           >
                             <X className="size-3.5" />
                           </button>
@@ -294,7 +297,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                   className="w-full rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground"
                   onClick={() => setShowClearNotifConfirm(true)}
                 >
-                  Clear all notifications
+                  {t("header.clearAllNotifications")}
                 </button>
               </div>
             </DropdownMenuContent>
@@ -306,10 +309,10 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
         onOpenChange={(open) => {
           if (!open) setPendingRemoveNotifId(null);
         }}
-        title="Supprimer cette notification ?"
-        description="Cette notification sera définitivement supprimée."
-        confirmLabel="Supprimer"
-        cancelLabel="Annuler"
+        title={t("header.deleteNotificationTitle")}
+        description={t("header.deleteNotificationDescription")}
+        confirmLabel={t("header.deleteNotification")}
+        cancelLabel={t("common.cancel")}
         onConfirm={() => {
           if (pendingRemoveNotifId) removeNotification(pendingRemoveNotifId);
           setPendingRemoveNotifId(null);
@@ -319,10 +322,10 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
       <ConfirmDialog
         open={showClearNotifConfirm}
         onOpenChange={setShowClearNotifConfirm}
-        title="Effacer toutes les notifications ?"
-        description="Toutes les notifications seront définitivement supprimées. Cette action est irréversible."
-        confirmLabel="Tout effacer"
-        cancelLabel="Annuler"
+        title={t("header.clearNotificationsTitle")}
+        description={t("header.clearNotificationsDescription")}
+        confirmLabel={t("header.clearAllConfirm")}
+        cancelLabel={t("common.cancel")}
         onConfirm={() => {
           clearNotifications();
           setShowClearNotifConfirm(false);
@@ -336,6 +339,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
  *  so the header doesn't re-render when the sidebar opens/closes. */
 function AiSidebarToggle() {
   const { aiSidebarOpen, setAiSidebarOpen } = useAiSidebar();
+  const { t } = useTranslation();
   return (
     <button
       onClick={() => setAiSidebarOpen(!aiSidebarOpen)}
@@ -345,7 +349,7 @@ function AiSidebarToggle() {
           ? "border-primary/40 bg-primary/10 text-primary shadow-[0_0_12px_-4px_hsl(var(--primary))]"
           : "border-transparent text-muted-foreground/70 hover:bg-accent hover:text-foreground hover:border-border",
       )}
-      title={aiSidebarOpen ? "Fermer l'assistant IA" : "Ouvrir l'assistant IA (Cmd+I)"}
+      title={aiSidebarOpen ? t("header.toggleAiSidebarClose") : t("header.toggleAiSidebarOpen")}
     >
       <Sparkles className="size-4" />
     </button>

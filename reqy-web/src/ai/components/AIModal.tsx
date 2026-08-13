@@ -9,6 +9,7 @@
  * Replaces the previous multi-tab AI layout (Chat + ReqlyAI).
  */
 import { useMemo, useState, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Bot, Loader2, Sparkles, Clipboard, FileText, Lightbulb, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,7 @@ const TABS: Array<{ id: AiTab; label: string; icon: typeof Sparkles; desc: strin
 ];
 
 export function AIModal(props: AIModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<AiTab>("analyse");
   const [userPrompt, setUserPrompt] = useState("");
   const [llmOutput, setLlmOutput] = useState("");
@@ -592,12 +594,12 @@ export function AIModal(props: AIModalProps) {
       if (!diag.fix) return;
       if (handlePatch) {
         handlePatch(diag.fix.applyFix());
-        toast.success("Fix appliqué", { description: diag.title });
+        toast.success(t("ai.modal.fixApplied"), { description: diag.title });
       } else {
-        toast.info("Aucune cible de patch disponible pour cette requête.");
+        toast.info(t("ai.modal.noPatchTarget"));
       }
     },
-    [handlePatch],
+    [handlePatch, t],
   );
 
   const isLocalTab = activeTab === "analyse" || activeTab === "explain";
@@ -826,6 +828,7 @@ function ExplainTab({
   responseBody?: string;
   authHeader?: [string, string];
 }) {
+  const { t } = useTranslation();
   // JWT decode (if any)
   const jwtInfo = useMemo(() => {
     if (!authHeader) return null;
@@ -854,10 +857,10 @@ function ExplainTab({
         <div className="rounded-lg border border-border bg-card p-3 space-y-1">
           <p className="text-xs font-semibold flex items-center gap-1.5">
             <Lightbulb className="size-3 text-warning" />
-            JWT détecté dans Authorization
+            {t("ai.modal.jwtDetected")}
             {jwtInfo.expired && (
               <span className="ml-auto text-[10px] font-bold uppercase rounded bg-destructive/20 text-destructive px-1.5 py-0.5">
-                expiré
+                {t("ai.modal.expired")}
               </span>
             )}
           </p>
@@ -872,7 +875,7 @@ function ExplainTab({
       )}
 
       <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <p className="text-xs font-semibold">Headers de réponse</p>
+        <p className="text-xs font-semibold">{t("ai.modal.responseHeaders")}</p>
         {responseHeaders && Object.keys(responseHeaders).length > 0 ? (
           <div className="space-y-1">
             {Object.entries(responseHeaders).map(([k, v]) => {
@@ -899,13 +902,13 @@ function ExplainTab({
             })}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground italic">Aucun header</p>
+          <p className="text-xs text-muted-foreground italic">{t("ai.modal.noHeaders")}</p>
         )}
       </div>
 
       {jsonAnnotation?.ok && jsonAnnotation.tree && (
         <div className="rounded-lg border border-border bg-card p-3 space-y-1">
-          <p className="text-xs font-semibold">Structure JSON</p>
+          <p className="text-xs font-semibold">{t("ai.modal.jsonStructure")}</p>
           <p className="text-[10px] font-mono text-muted-foreground">{jsonAnnotation.summary}</p>
         </div>
       )}

@@ -17,8 +17,10 @@ import { CollectionsModal } from "@/components/collections-modal";
 import { RequestSaveDialog } from "@/components/request-save-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTranslation } from "react-i18next";
 
 export function GraphqlTabsManager() {
+  const { t } = useTranslation();
   const {
     tabs,
     activeTabId,
@@ -107,18 +109,18 @@ export function GraphqlTabsManager() {
     if (saveCollectionId !== "none") {
       addRequestToCollection(saveCollectionId, payload);
       toast({
-        title: "Saved to collection",
+        title: t("graphql.tabs.savedToCollection"),
         description: payload.name,
       });
     } else {
       toast({
-        title: "Draft saved",
-        description: "Open a collection to persist this request.",
+        title: t("graphql.tabs.draftSaved"),
+        description: t("graphql.tabs.draftSavedDesc"),
       });
     }
     updateTab(activeTab.id, { saved: true, dirty: false, name: payload.name });
     setSaveOpen(false);
-  }, [saveName, activeTab, saveCollectionId, addRequestToCollection, updateTab]);
+  }, [saveName, activeTab, saveCollectionId, addRequestToCollection, updateTab, t]);
 
   const handleExport = useCallback(() => {
     const blob = new Blob(
@@ -167,13 +169,13 @@ export function GraphqlTabsManager() {
   const handleAiFix = useCallback(async () => {
     const errMsg =
       (activeTab.response?.errors && activeTab.response.errors[0]?.message) ||
-      "Unknown GraphQL error";
+      t("graphql.tabs.unknownError");
     await fixGraphqlError({
       query: activeTab.query,
       errorMessage: errMsg,
       applyQuery: (q) => updateTab(activeTab.id, { query: q }),
     });
-  }, [activeTab, updateTab, fixGraphqlError]);
+  }, [activeTab, updateTab, fixGraphqlError, t]);
 
   const handleSelectFromCollection = useCallback(
     (req: import("@/lib/types").RequestItem) => {
@@ -186,17 +188,17 @@ export function GraphqlTabsManager() {
           headers: JSON.stringify(req.headers ?? {}),
           operationName: req.graphql.operationName,
         });
-        toast({ title: "Loaded", description: req.name });
+        toast({ title: t("graphql.tabs.loaded"), description: req.name });
       } else {
         toast({
-          title: "Not a GraphQL request",
-          description: "Pick a request saved as GraphQL.",
+          title: t("graphql.tabs.notGraphql"),
+          description: t("graphql.tabs.notGraphqlDesc"),
           variant: "destructive",
         });
       }
       setCollectionsOpen(false);
     },
-    [loadGraphqlRequest],
+    [loadGraphqlRequest, t],
   );
 
   const variablesForRequest = (() => {
@@ -249,11 +251,7 @@ export function GraphqlTabsManager() {
         direction={isMobile ? "vertical" : "horizontal"}
         className="flex-1 min-h-0"
       >
-        <ResizablePanel
-          defaultSize={55}
-          minSize={25}
-          className="min-w-0 min-h-0 overflow-hidden"
-        >
+        <ResizablePanel defaultSize={55} minSize={25} className="min-w-0 min-h-0 overflow-hidden">
           <GraphqlRequestPanel
             tab={activeTab}
             onUpdate={(patch) => updateTab(activeTab.id, patch)}
@@ -267,11 +265,7 @@ export function GraphqlTabsManager() {
           />
         </ResizablePanel>
         <ResizableHandle withHandle className="bg-border max-md:hidden" />
-        <ResizablePanel
-          defaultSize={45}
-          minSize={25}
-          className="min-w-0 min-h-0 overflow-hidden"
-        >
+        <ResizablePanel defaultSize={45} minSize={25} className="min-w-0 min-h-0 overflow-hidden">
           <GraphqlResponsePanel
             response={activeTab.response}
             error={activeTab.response?.errors?.[0]?.message}
@@ -303,7 +297,7 @@ export function GraphqlTabsManager() {
         onSelectRequest={handleSelectFromCollection}
         onAddCollection={(data) =>
           addCollection({
-            name: data?.name ?? "New Collection",
+            name: data?.name ?? t("graphql.tabs.newCollection"),
             color: data?.color ?? "emerald",
             icon: data?.icon ?? "package",
           })

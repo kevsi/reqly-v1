@@ -6,6 +6,7 @@ import { graphql } from "cm6-graphql";
 import { autocompletion } from "@codemirror/autocomplete";
 import { buildClientSchema, type GraphQLSchema } from "graphql";
 import { useTheme } from "@/components/theme-provider";
+import { useTranslation } from "react-i18next";
 
 /**
  * Convert an introspection result (raw JSON from `__schema`) to a
@@ -45,6 +46,7 @@ function GraphqlQueryEditorBody({
   readOnly,
 }: GraphqlQueryEditorBodyProps) {
   const { theme: appTheme } = useTheme();
+  const { t } = useTranslation();
   const cmTheme = appTheme === "dark" || appTheme === "midnight" ? "dark" : "light";
 
   const extensions = useMemo(() => {
@@ -87,9 +89,7 @@ function GraphqlQueryEditorBody({
         extensions={extensions}
         onChange={handleChange}
         theme={cmTheme}
-        placeholder={
-          placeholder ?? "# Write your GraphQL query here\nquery GetUsers {\n  users { id name }\n}"
-        }
+        placeholder={placeholder ?? t("graphql.queryEditor.placeholder")}
         readOnly={readOnly}
         basicSetup={{
           lineNumbers: true,

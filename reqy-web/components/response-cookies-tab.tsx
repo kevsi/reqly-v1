@@ -5,6 +5,7 @@ import { Cookie, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { TauriCookie } from "@/lib/tauri";
+import { useTranslation } from "react-i18next";
 
 interface ResponseCookiesTabProps {
   responseCookies?: TauriCookie[];
@@ -13,6 +14,7 @@ interface ResponseCookiesTabProps {
 export const ResponseCookiesTab = memo(function ResponseCookiesTab({
   responseCookies,
 }: ResponseCookiesTabProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -32,9 +34,7 @@ export const ResponseCookiesTab = memo(function ResponseCookiesTab({
         <div className="rounded-full bg-muted/30 p-3 mb-3">
           <Cookie className="size-6 text-muted-foreground/30" />
         </div>
-        <p className="text-xs text-muted-foreground/60">
-          Aucun cookie reçu (pas d'en-tête Set-Cookie)
-        </p>
+        <p className="text-xs text-muted-foreground/60">{t("response.noCookies")}</p>
       </div>
     );
   }
@@ -43,7 +43,7 @@ export const ResponseCookiesTab = memo(function ResponseCookiesTab({
     <div className="p-4 space-y-3 animate-fade-in">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/50">
-          {responseCookies.length} cookie{responseCookies.length > 1 ? "s" : ""}
+          {t("response.cookieCount", { count: responseCookies.length })}
         </span>
         <Button
           variant="outline"
@@ -57,12 +57,12 @@ export const ResponseCookiesTab = memo(function ResponseCookiesTab({
           {copied ? (
             <>
               <Check className="size-3" />
-              Copié !
+              {t("common.copied")}
             </>
           ) : (
             <>
               <Copy className="size-3" />
-              Copier
+              {t("common.copy")}
             </>
           )}
         </Button>

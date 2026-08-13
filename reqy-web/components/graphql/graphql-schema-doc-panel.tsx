@@ -4,12 +4,14 @@ import { useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { X, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 interface SchemaDocPanelProps {
   schema: unknown;
   onClose: () => void;
 }
 
 export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
@@ -47,20 +49,20 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
       <div className="border-l bg-background w-80 flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <span className="text-xs font-semibold uppercase tracking-wider">
-            Schema Documentation
+            {t("graphql.schemaDoc.title")}
           </span>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground"
-            aria-label="Close schema docs"
+            aria-label={t("graphql.schemaDoc.closeAria")}
           >
             <X className="size-4" />
           </button>
         </div>
         <div className="flex-1 flex items-center justify-center p-4 text-sm text-muted-foreground">
           <div className="text-center space-y-2">
-            <p>No schema loaded.</p>
-            <p className="text-xs">Click &quot;Refresh Schema&quot; to introspect the endpoint.</p>
+            <p>{t("graphql.schemaDoc.noSchemaLoaded")}</p>
+            <p className="text-xs">{t("graphql.schemaDoc.clickRefreshSchema")}</p>
           </div>
         </div>
       </div>
@@ -74,11 +76,13 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
     <div className="border-l bg-background w-80 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
-        <span className="text-xs font-semibold uppercase tracking-wider">Schema Documentation</span>
+        <span className="text-xs font-semibold uppercase tracking-wider">
+          {t("graphql.schemaDoc.title")}
+        </span>
         <button
           onClick={onClose}
           className="text-muted-foreground hover:text-foreground"
-          aria-label="Close schema docs"
+          aria-label={t("graphql.schemaDoc.closeAria")}
         >
           <X className="size-4" />
         </button>
@@ -94,7 +98,7 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
               setSearch(e.target.value);
               setSelectedType(null);
             }}
-            placeholder="Search types..."
+            placeholder={t("graphql.schemaDoc.searchPlaceholder")}
             className="h-8 pl-7 text-xs"
           />
         </div>
@@ -109,16 +113,16 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
               onClick={() => setSelectedType(null)}
               className="text-xs text-muted-foreground hover:text-foreground mb-3 flex items-center gap-1"
             >
-              ← Back to types
+              ← {t("graphql.schemaDoc.backToTypes")}
             </button>
             <div className="text-sm font-bold text-primary mb-2">{selectedTypeObj.name}</div>
             <p className="text-[11px] text-muted-foreground mb-3">
-              {selectedTypeObj.description || "No description"}
+              {selectedTypeObj.description || t("graphql.schemaDoc.noDescription")}
             </p>
             {"getFields" in selectedTypeObj && (
               <div className="space-y-2">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
-                  Fields
+                  {t("graphql.schemaDoc.fields")}
                 </div>
                 {Object.values(selectedTypeObj.getFields()).map((field) => (
                   <div key={field.name} className="text-xs border-l-2 border-border pl-2 py-0.5">
@@ -136,7 +140,7 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
                     )}
                     {field.args.length > 0 && (
                       <div className="mt-1 text-[10px] text-muted-foreground">
-                        <span className="font-medium">Arguments:</span>{" "}
+                        <span className="font-medium">{t("graphql.schemaDoc.arguments")}:</span>{" "}
                         {field.args.map((a: { name: string }) => a.name).join(", ")}
                       </div>
                     )}
@@ -163,7 +167,7 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
             ))}
             {filteredTypes.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-4">
-                No types match "{search}"
+                {t("graphql.schemaDoc.noTypesMatch", { search })}
               </p>
             )}
           </div>

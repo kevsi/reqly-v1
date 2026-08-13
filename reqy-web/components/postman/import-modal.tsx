@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
+import { useTranslation } from "react-i18next";
 
 interface ExtractedFolder {
   id: string;
@@ -63,6 +64,7 @@ export function PostmanImportModal({
   collectionName,
   onImported,
 }: PostmanImportModalProps) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [requests, setRequests] = useState<ExtractedRequest[]>([]);
   const [folders, setFolders] = useState<ExtractedFolder[]>([]);
@@ -101,7 +103,7 @@ export function PostmanImportModal({
       .then((data) => {
         if (cancelled) return;
         if (!data.requests) {
-          setError(data.message ?? "Réponse invalide");
+          setError(data.message ?? t("importExport.postman.invalidResponse"));
           return;
         }
         // Store ALL requests ÔÇö preview only shows PREVIEW_LIMIT of them.
@@ -110,7 +112,7 @@ export function PostmanImportModal({
         setCollectionIdReturned(data.collectionId ?? collectionId);
       })
       .catch(() => {
-        if (!cancelled) setError("Erreur réseau");
+        if (!cancelled) setError(t("importExport.common.networkError"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -118,7 +120,7 @@ export function PostmanImportModal({
     return () => {
       cancelled = true;
     };
-  }, [open, collectionId]);
+  }, [open, collectionId, t]);
 
   function handleConfirm() {
     if (requests.length === 0 || saving) return;
@@ -159,18 +161,20 @@ export function PostmanImportModal({
       }
 
       toast({
-        title: "Importé",
-        description: `${requests.length} route${requests.length > 1 ? "s" : ""} ajoutée${requests.length > 1 ? "s" : ""} à votre bibliothèque${
-          folders.length > 0 ? ` (${folders.length} dossier${folders.length > 1 ? "s" : ""})` : ""
-        }.`,
+        title: t("importExport.postman.imported"),
+        description:
+          t("importExport.postman.routesAdded", { count: requests.length }) +
+          (folders.length > 0
+            ? t("importExport.postman.foldersCount", { count: folders.length })
+            : ""),
         meta: { event: "importExport" },
       });
       onImported?.(newCollectionId);
       onOpenChange(false);
     } catch (e) {
       toast({
-        title: "Erreur",
-        description: e instanceof Error ? e.message : "Import échoué",
+        title: t("common.error"),
+        description: e instanceof Error ? e.message : t("importExport.common.importFailed"),
         variant: "destructive",
         meta: { event: "importExport" },
       });
@@ -186,19 +190,20 @@ export function PostmanImportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Importer "{collectionName}"</DialogTitle>
+          <DialogTitle>
+            {t("importExport.postman.importTitleWithName", { name: collectionName })}
+          </DialogTitle>
           <DialogDescription>
             {loading
-              ? "Chargement de l'aperçu…"
+              ? t("importExport.postman.loadingPreview")
               : error
                 ? error
                 : requests.length > 0
-                  ? `${requests.length} route${requests.length > 1 ? "s" : ""}${
-                      folders.length > 0
-                        ? ` dans ${folders.length} dossier${folders.length > 1 ? "s" : ""}`
-                        : ""
-                    } (aperçu des ${PREVIEW_LIMIT} premières).`
-                  : "Aucune route à importer."}
+                  ? t("importExport.postman.previewCount", {
+                      count: requests.length,
+                      preview: PREVIEW_LIMIT,
+                    })
+                  : t("importExport.postman.noRoutesToImport")}
           </DialogDescription>
         </DialogHeader>
 
@@ -223,12 +228,12 @@ export function PostmanImportModal({
             ))}
             {hiddenCount > 0 && (
               <p className="pt-1 text-center text-xs text-muted-foreground">
-                …et {hiddenCount} autre{hiddenCount > 1 ? "s" : ""} route
-                {hiddenCount > 1 ? "s" : ""}
+                {t("importExport.postman.andMore", { count: hiddenCount })}
               </p>
             )}
             <p className="pt-1 text-center text-xs text-muted-foreground">
-              Collection Postman ID: <span className="font-mono">{collectionIdReturned}</span>
+              {t("importExport.postman.collectionId")}{" "}
+              <span className="font-mono">{collectionIdReturned}</span>
             </p>
           </div>
         ) : null}
@@ -237,12 +242,13 @@ export function PostmanImportModal({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-            Annuler
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleConfirm} disabled={loading || saving || requests.length === 0}>
             {saving
-              ? "Importation…"
-              : `Confirmer l'import${requests.length > 0 ? ` (${requests.length})` : ""}`}
+              ? t("importExport.postman.importingShort")
+              : t("importExport.postman.confirmImport") +
+                (requests.length > 0 ? ` (${requests.length})` : "")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -37,8 +37,8 @@ export function extractPathParamNames(url: string): string[] {
 export function applyPathParams(url: string, params?: PathParam[] | null): string {
   const paramMap = new Map<string, string>();
   for (const p of params ?? []) {
-    if (p.enabled !== false && p.key.trim()) {
-      paramMap.set(p.key.trim(), p.value.trim());
+    if (p.enabled !== false && p.key?.trim()) {
+      paramMap.set(p.key.trim(), (p.value ?? "").trim());
     }
   }
   return url.replace(PATH_PARAM_REGEX, (match, name) => {

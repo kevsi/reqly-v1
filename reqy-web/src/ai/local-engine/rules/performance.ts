@@ -1,4 +1,5 @@
 import type { Rule } from "@/src/ai/types";
+import i18n from "@/src/i18n";
 
 export const performanceRules: Rule[] = [
   {
@@ -9,8 +10,10 @@ export const performanceRules: Rule[] = [
     build: (ctx) => ({
       severity: "warning",
       category: "performance",
-      title: "Réponse lente (> 5s)",
-      explanation: `La requête a pris ${ctx.response?.duration}ms.`,
+      title: i18n.t("ai.diag.performance.timeout.warning.title"),
+      explanation: i18n.t("ai.diag.performance.timeout.warning.explanation", {
+        ms: ctx.response?.duration,
+      }),
       confidence: "probable",
     }),
   },
@@ -22,8 +25,10 @@ export const performanceRules: Rule[] = [
     build: (ctx) => ({
       severity: "error",
       category: "performance",
-      title: "Réponse très lente (> 10s)",
-      explanation: `La requête a pris ${ctx.response?.duration}ms.`,
+      title: i18n.t("ai.diag.performance.timeout.critical.title"),
+      explanation: i18n.t("ai.diag.performance.timeout.critical.explanation", {
+        ms: ctx.response?.duration,
+      }),
       confidence: "certain",
     }),
   },
@@ -41,8 +46,10 @@ export const performanceRules: Rule[] = [
       return {
         severity: "warning",
         category: "performance",
-        title: `Rate limit (retry après ${ra ?? "?"})`,
-        explanation: `Le serveur demande d'attendre ${ra ?? "?"}s.`,
+        title: i18n.t("ai.diag.performance.429.with_retry_after.title", { value: ra ?? "?" }),
+        explanation: i18n.t("ai.diag.performance.429.with_retry_after.explanation", {
+          value: ra ?? "?",
+        }),
         confidence: "certain",
       };
     },
@@ -57,8 +64,8 @@ export const performanceRules: Rule[] = [
     build: () => ({
       severity: "warning",
       category: "performance",
-      title: "Rate limit atteint",
-      explanation: "Trop de requêtes. Réduisez la fréquence.",
+      title: i18n.t("ai.diag.performance.429.generic.title"),
+      explanation: i18n.t("ai.diag.performance.429.generic.explanation"),
       confidence: "certain",
     }),
   },
@@ -70,8 +77,10 @@ export const performanceRules: Rule[] = [
     build: (ctx) => ({
       severity: "info",
       category: "performance",
-      title: "Réponse volumineuse (> 1 Mo)",
-      explanation: `Taille ${Math.round((ctx.response?.size ?? 0) / 1024)} Ko.`,
+      title: i18n.t("ai.diag.performance.body.large.title"),
+      explanation: i18n.t("ai.diag.performance.body.large.explanation", {
+        kb: Math.round((ctx.response?.size ?? 0) / 1024),
+      }),
       confidence: "certain",
     }),
   },

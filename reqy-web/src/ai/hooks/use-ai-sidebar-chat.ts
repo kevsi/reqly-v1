@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useRequestStore } from "@/hooks/use-request-store";
+import i18n from "@/src/i18n";
 import { streamLLM } from "@/src/ai/cloud-engine/llm";
 import { buildRequestContext } from "@/src/ai/local-engine/context";
 import {
@@ -20,7 +21,7 @@ import {
   type ToolCall,
 } from "@/lib/llm-tools";
 import type { ProcessStep } from "@/src/ai/components/assistant-steps-renderer";
-import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
+import type { ChatMessage, ChatMessagePhase } from "@/src/ai/components/ai-sidebar-types";
 import { getPermission } from "@/src/ai/agent/permissions";
 import { loadRules, buildRulesSystemPrompt } from "@/src/ai/agent/rules";
 import { attachmentsToPrompt } from "@/src/ai/agent/context-picker";
@@ -41,7 +42,7 @@ function buildStepState(
   if (tc.name === "execute_request") {
     return {
       type: "execute",
-      label: result.error ? "Requête — Erreur" : "Requête HTTP",
+      label: result.error ? i18n.t("ai.hooks.requestErrorLabel") : i18n.t("ai.hooks.requestLabel"),
       status: result.error ? ("error" as const) : ("done" as const),
       detail: result.error ? result.error : result.content,
     };
@@ -132,7 +133,7 @@ export function useAiSidebarChat() {
           callId: tc.callId,
           name: tc.name,
           content: "",
-          error: "Outil refusé par la politique de permissions.",
+          error: i18n.t("ai.hooks.toolDenied"),
         };
       }
       if (perm === "ask" && !confirmed) {
@@ -140,7 +141,7 @@ export function useAiSidebarChat() {
           callId: tc.callId,
           name: tc.name,
           content: "",
-          error: "Confirmation requise par la politique de permissions.",
+          error: i18n.t("ai.hooks.confirmRequired"),
           requireConfirmation: true,
         };
       }
@@ -187,7 +188,28 @@ export function useAiSidebarChat() {
           if (last && last.role === "assistant") {
             copy[copy.length - 1] = { ...last, steps: [...steps] };
           } else {
-            copy.push({ role: "assistant", content: "", steps: [...steps] });
+            copy.push({
+              role: "assistant",
+              content: "",
+              steps: [...steps],
+              phase: last?.role === "user" ? "tool_calling" : "streaming",
+            });
+          }
+          return copy;
+        });
+      };
+
+      // Met à jour la phase du message assistant courant (tool_calling /
+      // awaiting_response / streaming / done) sans toucher au contenu ni aux
+      // étapes. La bulle de message utilise cette phase pour afficher un
+      // indicateur « typing » au lieu d'une bulle vide entre la fin des tool
+      // calls et l'arrivée du premier token de texte.
+      const setPhase = (phase: ChatMessagePhase) => {
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === "assistant") {
+            copy[copy.length - 1] = { ...last, phase };
           }
           return copy;
         });
@@ -214,7 +236,10 @@ export function useAiSidebarChat() {
 
       const finishThrough = () => {
         for (const s of steps) {
-          if (s.type === "through" && s.status === "in_progress") s.status = "done";
+          if (s.type === "through" && s.status === "in_progress") {
+            s.status = "done";
+            s.label = i18n.t("ai.hooks.analysisDone");
+          }
         }
         syncSteps();
       };
@@ -263,7 +288,8 @@ export function useAiSidebarChat() {
         const attachmentsPrompt = attachmentsToPrompt(effectiveAttachments);
 
         const systemPrompt = [
-          `Tu es un agent intégré à Reqly, dans l'esprit de Claude Code. Tu peux créer des collections, des requêtes, des environnements, et exécuter des requêtes directement.`,
+          `Tu es ReqlyAI, un assistant API spécialisé et agent intégré à Reqly. Tu aides les développeurs à diagnostiquer des erreurs HTTP, comprendre des réponses, et améliorer leurs requêtes. Tu réponds en français, de façon concise et actionnable. Quand tu suggères un fix, donne le code exact prêt à coller.`,
+          `Dans l'esprit de Claude Code, tu peux créer des collections, des requêtes, des environnements, et exécuter des requêtes directement.`,
           `Page: ${pathname}`,
           rulesPrompt || "Règles actives : aucune.",
           agentModeRef.current === "plan"
@@ -385,6 +411,7 @@ export function useAiSidebarChat() {
                       ...last,
                       content: fullText,
                       steps: [...steps],
+                      phase: "streaming",
                     };
                   }
                   return copy;
@@ -398,13 +425,14 @@ export function useAiSidebarChat() {
                     arguments: c.arguments,
                   })),
                 );
+                setPhase("tool_calling");
               }
             }
           } catch (e: unknown) {
             if (didTimeout) {
               steps.push({
                 type: "error",
-                label: "Aucune réponse du modèle (timeout).",
+                label: i18n.t("ai.hooks.noModelResponse"),
                 status: "error",
               });
               syncSteps();
@@ -469,7 +497,7 @@ export function useAiSidebarChat() {
                 setPendingPlan({ planText: fullText, toolCalls: planCalls });
                 steps.push({
                   type: "pause",
-                  label: `⏸ Mode plan — ${textCalls.length} action(s) proposée(s)`,
+                  label: i18n.t("ai.hooks.planModeCount", { count: textCalls.length }),
                   status: "done",
                 });
                 syncSteps();
@@ -501,7 +529,7 @@ export function useAiSidebarChat() {
             });
             steps.push({
               type: "pause",
-              label: `⏸ Mode plan — ${toolCallsThisTurn.length} action(s) proposée(s)`,
+              label: i18n.t("ai.hooks.planModeCount", { count: toolCallsThisTurn.length }),
               status: "done",
             });
             syncSteps();
@@ -549,7 +577,19 @@ export function useAiSidebarChat() {
                 setSessionUsage((prev) => addUsage(prev, toolUsage));
               }
               results.push(result);
-              steps[steps.length - calls.length + i] = buildStepState(tc, result);
+              if (result.requireConfirmation) {
+                // En attente de confirmation (permission « ask ») : l'outil n'a
+                // PAS échoué — il attend l'accord de l'utilisateur. Ne pas le
+                // marquer en erreur, sinon tous les outils suivants de la file
+                // s'affichent « ❌ » alors qu'ils attendent simplement leur tour.
+                steps[steps.length - calls.length + i] = {
+                  type: "create",
+                  label: `⚠ ${tc.name} — confirmation requise`,
+                  status: "awaiting_confirmation",
+                };
+              } else {
+                steps[steps.length - calls.length + i] = buildStepState(tc, result);
+              }
             } catch (e: unknown) {
               results.push({
                 callId: tc.callId,
@@ -607,6 +647,18 @@ export function useAiSidebarChat() {
                 label: `${targetTc.name} — annulé`,
                 status: "error",
               };
+              // Les outils suivants de la file attendaient aussi une confirmation :
+              // les marquer annulés aussi, sinon ils restent affichés « en attente »
+              // sans boutons alors que le flux est arrêté.
+              for (let j = confirmIdx + 1; j < results.length; j++) {
+                if (results[j].requireConfirmation) {
+                  steps[steps.length - calls.length + j] = {
+                    type: "error",
+                    label: `${calls[j].name} — annulé`,
+                    status: "error",
+                  };
+                }
+              }
               syncSteps();
               return;
             }
@@ -639,6 +691,11 @@ export function useAiSidebarChat() {
             return;
           }
 
+          // Les tool calls sont terminés : passer en attente de la réponse
+          // texte du tour suivant. L'UI affiche alors l'indicateur « typing »
+          // à la place de la bulle vide, que le provider stream ou non.
+          setPhase("awaiting_response");
+
           // Continue loop
           await runTurn();
         };
@@ -655,6 +712,15 @@ export function useAiSidebarChat() {
             true, // pre-approved
             options.reasoningContent,
           );
+          // Resolve the "Exécution du plan approuvé…" wrapper so it doesn't
+          // keep spinning after the individual tool steps are done.
+          for (const s of steps) {
+            if (s.type === "execute" && s.status === "in_progress") {
+              s.status = "done";
+              s.label = "Plan exécuté";
+            }
+          }
+          syncSteps();
         } else {
           await runTurn();
         }
@@ -671,12 +737,14 @@ export function useAiSidebarChat() {
               ...last,
               content: fullText,
               steps: [...steps],
+              phase: "done",
             };
           } else {
             copy.push({
               role: "assistant",
               content: fullText,
               steps: [...steps],
+              phase: "done",
             });
           }
           return copy;
@@ -692,6 +760,7 @@ export function useAiSidebarChat() {
                 ...last,
                 content: "⏹ Génération arrêtée.",
                 steps: [...steps],
+                phase: "done",
               };
             }
             return copy;
@@ -713,9 +782,14 @@ export function useAiSidebarChat() {
             const copy = [...prev];
             const last = copy[copy.length - 1];
             if (last && last.role === "assistant") {
-              copy[copy.length - 1] = { ...last, content: "", steps: [...steps] };
+              copy[copy.length - 1] = {
+                ...last,
+                content: "",
+                steps: [...steps],
+                phase: "done",
+              };
             } else {
-              copy.push({ role: "assistant", content: "", steps: [...steps] });
+              copy.push({ role: "assistant", content: "", steps: [...steps], phase: "done" });
             }
             return copy;
           });
@@ -930,6 +1004,7 @@ export function useAiSidebarChat() {
     messagesEndRef,
     inputRef,
     setNewSessionHandler,
+    scrollToBottom,
     // Actions
     setError,
     setIsLoading,

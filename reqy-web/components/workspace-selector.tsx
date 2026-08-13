@@ -2,6 +2,7 @@
 
 import { workspaceFetch } from "@/lib/workspace-api";
 import { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Text } from "@/components/ui/text";
 import {
   Plus,
@@ -63,6 +64,7 @@ function isLocalWorkspace(ws: Workspace): boolean {
 }
 
 export function WorkspaceSelector() {
+  const { t } = useTranslation();
   // Atomic selectors — re-render only when the workspaces list or the active
   // workspace id actually changes, not on unrelated mutations.
   const workspaces = useRequestStore((s) => s.workspaces);
@@ -173,7 +175,7 @@ export function WorkspaceSelector() {
   const handleDeleteWorkspace = useCallback(
     async (w: Workspace, e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!window.confirm(`Delete "${w.name}"? This cannot be undone.`)) return;
+      if (!window.confirm(t("workspace.deleteConfirm", { name: w.name }))) return;
 
       setDeletingId(w.id);
       if (w.ownerId) {
@@ -194,7 +196,7 @@ export function WorkspaceSelector() {
       deleteWorkspace(w.id);
       setDeletingId(null);
     },
-    [deleteWorkspace, fetchWorkspacesFromApi],
+    [deleteWorkspace, fetchWorkspacesFromApi, t],
   );
 
   const openRename = useCallback((w: Workspace) => {
@@ -210,8 +212,10 @@ export function WorkspaceSelector() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            aria-label={`Workspace : ${activeWorkspace?.name ?? "Workspace"}`}
-            title={activeWorkspace?.name ?? "Workspace"}
+            aria-label={t("workspace.selectAria", {
+              name: activeWorkspace?.name ?? t("workspace.workspace"),
+            })}
+            title={activeWorkspace?.name ?? t("workspace.workspace")}
             className="group/ws flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 text-sm font-medium text-foreground transition-all duration-200 hover:border-border hover:bg-accent/50"
           >
             <div
@@ -225,13 +229,13 @@ export function WorkspaceSelector() {
               <IconComponent className="size-3.5 text-white" />
             </div>
             <span className="max-w-[140px] truncate @max-[26rem]:hidden">
-              {activeWorkspace?.name ?? "Workspace"}
+              {activeWorkspace?.name ?? t("workspace.workspace")}
             </span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[240px] animate-scale-in">
           <DropdownMenuLabel className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <Text variant="label">Workspaces</Text>
+            <Text variant="label">{t("workspace.workspaces")}</Text>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {workspaces.map((w) => {
@@ -267,7 +271,7 @@ export function WorkspaceSelector() {
                     "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-all hover:bg-accent hover:text-foreground",
                     hoveredWsId === w.id ? "opacity-100" : "opacity-0",
                   )}
-                  title="Renommer"
+                  title={t("workspace.renameTooltip")}
                 >
                   <Pencil className="size-3.5" />
                 </button>
@@ -282,7 +286,7 @@ export function WorkspaceSelector() {
                       hoveredWsId === w.id || deletingId === w.id ? "opacity-100" : "opacity-0",
                     )}
                     disabled={deletingId === w.id}
-                    title="Supprimer"
+                    title={t("workspace.deleteTooltip")}
                   >
                     {deletingId === w.id ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -302,7 +306,7 @@ export function WorkspaceSelector() {
             <div className="flex size-6 shrink-0 items-center justify-center rounded-md border border-dashed border-border">
               <Plus className="size-3.5" />
             </div>
-            <span>Nouveau workspace</span>
+            <span>{t("workspace.newWorkspace")}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -310,16 +314,16 @@ export function WorkspaceSelector() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Créer un workspace</DialogTitle>
+            <DialogTitle>{t("workspace.createTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="ws-name">Nom</Label>
+              <Label htmlFor="ws-name">{t("workspace.nameLabel")}</Label>
               <Input
                 id="ws-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Mon workspace"
+                placeholder={t("workspace.namePlaceholder")}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 autoFocus
               />
@@ -327,16 +331,16 @@ export function WorkspaceSelector() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>
-              Annuler
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleCreate} disabled={!newName.trim() || createLoading}>
               {createLoading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Création…
+                  {t("workspace.creating")}
                 </span>
               ) : (
-                "Créer"
+                t("workspace.create")
               )}
             </Button>
           </DialogFooter>
@@ -352,11 +356,11 @@ export function WorkspaceSelector() {
       >
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Renommer le workspace</DialogTitle>
+            <DialogTitle>{t("workspace.renameTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="ws-rename">Nom</Label>
+              <Label htmlFor="ws-rename">{t("workspace.nameLabel")}</Label>
               <Input
                 id="ws-rename"
                 value={newName}
@@ -375,16 +379,16 @@ export function WorkspaceSelector() {
               }}
               disabled={renameLoading}
             >
-              Annuler
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleRename} disabled={!newName.trim() || renameLoading}>
               {renameLoading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Renommage…
+                  {t("workspace.renaming")}
                 </span>
               ) : (
-                "Renommer"
+                t("workspace.rename")
               )}
             </Button>
           </DialogFooter>

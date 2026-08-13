@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { buildQueryFromSelections, type SelectionNode } from "@/lib/graphql/query-builder";
 import { typeLabel, type SchemaFieldType } from "@/lib/graphql/format";
+import { useTranslation } from "react-i18next";
 
 interface SchemaField {
   name: string;
@@ -114,6 +115,7 @@ export function GraphqlQueryBuilder({
   onQueryChange,
   operationName = "GeneratedQuery",
 }: Props) {
+  const { t } = useTranslation();
   const [selections, setSelections] = useState<TreeSelections>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -182,7 +184,8 @@ export function GraphqlQueryBuilder({
         className="border-b bg-muted/10 p-3 text-sm text-muted-foreground"
         data-testid="graphql-query-builder"
       >
-        No schema loaded. Click <span className="font-medium">Refresh Schema</span> first.
+        No schema loaded. Click{" "}
+        <span className="font-medium">{t("graphql.toolbar.refreshSchema")}</span> first.
       </div>
     );
   }
@@ -193,8 +196,7 @@ export function GraphqlQueryBuilder({
         className="border-b bg-muted/10 p-3 text-sm text-muted-foreground"
         data-testid="graphql-query-builder"
       >
-        This schema has no <span className="font-medium">{operationType}</span> root type. Switch
-        operation type above.
+        {t("graphql.builder.noRootType", { operationType })}
       </div>
     );
   }
@@ -229,8 +231,8 @@ export function GraphqlQueryBuilder({
                 data-testid={`graphql-builder-op-${op}`}
                 title={
                   isAvailable
-                    ? `Build a ${op} (root type: ${opTypeNameForBtn})`
-                    : `No ${op} root type in this schema`
+                    ? t("graphql.builder.buildOp", { op, root: opTypeNameForBtn })
+                    : t("graphql.builder.noOpRoot", { op })
                 }
               >
                 {op}
@@ -247,7 +249,7 @@ export function GraphqlQueryBuilder({
             onClick={clear}
             data-testid="graphql-builder-clear"
           >
-            <X className="w-3 h-3 mr-1" /> Clear
+            <X className="w-3 h-3 mr-1" /> {t("graphql.builder.clear")}
           </Button>
           <Button
             size="sm"
@@ -257,22 +259,19 @@ export function GraphqlQueryBuilder({
             disabled={!hasSelections}
             data-testid="graphql-builder-generate"
           >
-            <Plus className="w-3 h-3 mr-1" /> Generate
+            <Plus className="w-3 h-3 mr-1" /> {t("graphql.builder.generate")}
           </Button>
         </div>
       </div>
 
       {operationType === "mutation" && (
         <div className="px-3 py-1.5 text-xs bg-warning/10 text-warning border-b border-warning/20">
-          ⚠️ Building a <span className="font-medium">mutation</span>. The generated query will
-          start with the <code className="font-mono">mutation</code> keyword.
+          {t("graphql.builder.mutationWarning")}
         </div>
       )}
       {operationType === "subscription" && (
         <div className="px-3 py-1.5 text-xs bg-primary/10 text-primary border-b border-primary/20">
-          🔔 Building a <span className="font-medium">subscription</span>. Requires a WebSocket
-          transport — Reqly will auto-switch to <code className="font-mono">graphql-ws</code> on
-          Send.
+          {t("graphql.builder.subscriptionInfo")}
         </div>
       )}
 
@@ -310,9 +309,12 @@ function FieldTree({
   onToggleExpand,
   onSetArg,
 }: FieldTreeProps) {
+  const { t } = useTranslation();
   const type = getType(schema, typeName);
   if (!type?.fields) {
-    return <div className="text-sm text-muted-foreground px-1 py-2">No fields for this type.</div>;
+    return (
+      <div className="text-sm text-muted-foreground px-1 py-2">{t("graphql.builder.noFields")}</div>
+    );
   }
   return (
     <div className="space-y-1">
@@ -355,6 +357,7 @@ function FieldRow({
   onSetArg: (typeName: string, fieldName: string, argName: string, value: string) => void;
   depth: number;
 }): React.ReactNode {
+  const { t } = useTranslation();
   const expandKey = `${parentTypeName}.${field.name}`;
   const isExpanded = expanded.has(expandKey);
   const isSelected = selections[parentTypeName]?.fields.has(field.name) ?? false;
@@ -382,7 +385,7 @@ function FieldRow({
             onClick={() => onToggleExpand(expandKey)}
             className="text-muted-foreground hover:text-foreground w-4 h-4 inline-flex items-center justify-center shrink-0"
             data-testid={`graphql-builder-expand-${field.name}`}
-            aria-label={isExpanded ? "Collapse" : "Expand"}
+            aria-label={isExpanded ? t("graphql.builder.collapse") : t("graphql.builder.expand")}
           >
             {isExpanded ? (
               <ChevronDown className="w-3.5 h-3.5" />
@@ -404,7 +407,7 @@ function FieldRow({
         <span className="text-xs text-muted-foreground font-mono">{typeLabel(field.type)}</span>
         {field.args && field.args.length > 0 && (
           <span className="text-xs text-muted-foreground italic shrink-0">
-            ({field.args.length} arg{field.args.length > 1 ? "s" : ""})
+            ({field.args.length} {t("graphql.builder.args", { count: field.args.length })})
           </span>
         )}
         {field.description && (
@@ -414,7 +417,7 @@ function FieldRow({
         )}
         {isComposite && subSelectedCount > 0 && (
           <span className="text-xs text-success ml-auto shrink-0">
-            ({subSelectedCount} selected)
+            ({subSelectedCount} {t("graphql.builder.selected", { count: subSelectedCount })})
           </span>
         )}
       </div>

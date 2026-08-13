@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { ChevronDown, ChevronRight, AlertCircle, Braces } from "lucide-react";
 import { JsonTextarea } from "@/components/json-textarea";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   value: string;
@@ -29,6 +30,7 @@ export function VariablesPanel({
   className,
   environmentVariableNames,
 }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -79,7 +81,7 @@ export function VariablesPanel({
           onClick={() => setOpen(!open)}
         >
           {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          Variables
+          {t("graphql.variablesPanel.title")}
           {error && <AlertCircle className="w-3 h-3 text-destructive ml-1" />}
         </button>
       )}
@@ -90,7 +92,7 @@ export function VariablesPanel({
             <div className="flex items-center gap-1.5 pb-1">
               <Braces className="size-3 text-muted-foreground/50 shrink-0" />
               <select
-                aria-label="Insert environment variable"
+                aria-label={t("graphql.variablesPanel.insertEnvVar")}
                 className="h-7 rounded-md border border-input/50 bg-muted/30 px-1.5 text-[10px] font-mono text-muted-foreground cursor-pointer outline-none hover:border-muted-foreground/30 appearance-none flex-1"
                 value=""
                 onChange={(e) => {
@@ -99,7 +101,7 @@ export function VariablesPanel({
                 }}
               >
                 <option value="" disabled>
-                  Insert variable...
+                  {t("graphql.variablesPanel.insertVariable")}
                 </option>
                 {envVars.map((name) => (
                   <option key={name} value={name}>{`{{${name}}}`}</option>
@@ -111,7 +113,7 @@ export function VariablesPanel({
             ref={textareaRef}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder='{ "id": 1 }'
+            placeholder={t("graphql.variablesPanel.placeholder")}
             className="text-xs min-h-24"
             data-testid="graphql-variables-textarea"
           />

@@ -70,3 +70,8 @@ packages/shared/dist/
 
 # OS artifacts
 *.deb
+
+# Agent/tooling internal state
+.opencode/
+reqy-web/vitest-output.txt
+tmp_test.txt

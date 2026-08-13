@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { methodBg, methodDot } from "@/lib/http-method-colors";
 import { toast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import type { BodyType, AuthType, QueryParam, Header } from "@/lib/request-executor";
 
 export interface RequestPanelUrlBarProps {
@@ -60,6 +61,7 @@ export function RequestPanelUrlBar({
   urlAutocompleteGroups,
   hasUrl,
 }: RequestPanelUrlBarProps) {
+  const { t } = useTranslation();
   const [exportFormat, setExportFormat] = useState<"curl" | "fetch">("curl");
   const [exportCopied, setExportCopied] = useState(false);
   const [curlImportOpen, setCurlImportOpen] = useState(false);
@@ -190,7 +192,7 @@ ${bodyPart}})
             placeholder="https://api.example.com/endpoint"
             className="text-xs h-7 py-0 px-2"
             suggestions={urlAutocompleteGroups}
-            emptyMessage="Aucun résultat"
+            emptyMessage={t("request.noResults")}
           />
         </div>
 
@@ -204,7 +206,7 @@ ${bodyPart}})
               setCurlImportOpen(!curlImportOpen);
               setCurlInput("");
             }}
-            title="Coller une commande cURL"
+            title={t("request.curlPaste")}
           >
             <Terminal className="size-3.5" />
           </Button>
@@ -212,7 +214,7 @@ ${bodyPart}})
             <div className="absolute right-0 top-full mt-1 z-50 w-[calc(100vw-2rem)] max-w-[420px] rounded-lg border border-border bg-popover shadow-xl animate-in fade-in-0 zoom-in-95">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/40">
                 <span className="text-xs font-semibold text-muted-foreground">
-                  Coller une commande cURL
+                  {t("request.curlPaste")}
                 </span>
                 <button
                   onClick={() => setCurlImportOpen(false)}
@@ -236,7 +238,7 @@ ${bodyPart}})
                     className="h-7 text-xs"
                     onClick={() => setCurlImportOpen(false)}
                   >
-                    Annuler
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     size="sm"
@@ -248,8 +250,8 @@ ${bodyPart}})
                         const parsed = parseCurlCommand(curlInput);
                         if (!parsed) {
                           toast({
-                            title: "Impossible de parser la commande",
-                            description: "Vérifiez le format de la commande cURL",
+                            title: t("request.curlParseFailed"),
+                            description: t("request.curlParseFailedHint"),
                             variant: "destructive",
                           });
                           return;
@@ -275,12 +277,12 @@ ${bodyPart}})
                           );
                         setCurlImportOpen(false);
                         toast({
-                          title: "cURL importé",
+                          title: t("request.curlImported"),
                           description: `${parsed.method} ${parsed.url.slice(0, 60)}…`,
                         });
                       } catch (err) {
                         toast({
-                          title: "Erreur d'import",
+                          title: t("request.curlImportFailed"),
                           description: String(err),
                           variant: "destructive",
                         });
@@ -288,7 +290,7 @@ ${bodyPart}})
                     }}
                   >
                     <Terminal className="size-3" />
-                    Importer
+                    {t("request.curlImport")}
                   </Button>
                 </div>
               </div>
@@ -342,7 +344,7 @@ ${bodyPart}})
             methodBg[method],
             "text-white hover:opacity-85",
           )}
-          title={!hasUrl ? "URL required to send" : "Send request"}
+          title={!hasUrl ? t("request.urlRequired") : t("request.send")}
         >
           {isLoading ? (
             <Loader2 className="size-3.5 animate-spin fill-current" />
@@ -390,11 +392,11 @@ ${bodyPart}})
           >
             <SelectTrigger className="h-8 w-auto gap-2 border-input bg-muted/30 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-muted-foreground/30">
               <Code className="size-3.5" />
-              <SelectValue placeholder="Export" />
+              <SelectValue placeholder={t("request.exportPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="curl">cURL</SelectItem>
-              <SelectItem value="fetch">Fetch</SelectItem>
+              <SelectItem value="curl">{t("request.exportCurl")}</SelectItem>
+              <SelectItem value="fetch">{t("request.exportFetch")}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -408,12 +410,13 @@ ${bodyPart}})
             {exportCopied ? (
               <>
                 <Check className="size-3.5" />
-                Copied!
+                {t("common.copied")}
               </>
             ) : (
               <>
                 <Copy className="size-3.5" />
-                Copy {exportFormat === "curl" ? "cURL" : "Fetch"}
+                {t("common.copy")}{" "}
+                {exportFormat === "curl" ? t("request.exportCurl") : t("request.exportFetch")}
               </>
             )}
           </Button>

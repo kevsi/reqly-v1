@@ -21,19 +21,19 @@ import { ModuleNavList } from "@/components/modules/module-nav-list";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { AiAssistantModal } from "@/components/ai-assistant-modal";
 
-const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard/", key: "dashboard" },
-  { icon: Zap, label: "API Endpoints", href: "/", key: "api-endpoints" },
-  { icon: Folder, label: "Collections", href: "/collections/", key: "collections" },
-  { icon: FolderCode, label: "Projects", href: "/my-projects/", key: "projects" },
-  { icon: FolderKanban, label: "Workspaces", href: "/workspaces/", key: "workspaces" },
-  { icon: Play, label: "Runner", href: "/runner/", key: "runner" },
-  { icon: Radio, label: "Capture", href: "/capture/", key: "capture" },
-
-  { icon: Sparkles, label: "AI Assistant", href: "/ai-insights/", key: "ai-insights" },
-  { icon: Settings, label: "Settings", href: "/settings/", key: "settings" },
+const NAV_ITEMS = [
+  { icon: LayoutDashboard, key: "sidebar.nav.dashboard", href: "/dashboard/", id: "dashboard" },
+  { icon: Zap, key: "sidebar.nav.apiEndpoints", href: "/", id: "api-endpoints" },
+  { icon: Folder, key: "sidebar.nav.collections", href: "/collections/", id: "collections" },
+  { icon: FolderCode, key: "sidebar.nav.projects", href: "/my-projects/", id: "projects" },
+  { icon: FolderKanban, key: "sidebar.nav.workspaces", href: "/workspaces/", id: "workspaces" },
+  { icon: Play, key: "sidebar.nav.runner", href: "/runner/", id: "runner" },
+  { icon: Radio, key: "sidebar.nav.capture", href: "/capture/", id: "capture" },
+  { icon: Settings, key: "sidebar.nav.settings", href: "/settings/", id: "settings" },
 ];
 
 interface ApiSidebarProps {
@@ -53,6 +53,8 @@ export function ApiSidebar({
   onMobileClose,
 }: ApiSidebarProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const { t } = useTranslation();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const isMobile = useIsMobile(768);
   // Sur mobile, le drawer est TOUJOURS en pleine largeur avec les libellés,
@@ -70,7 +72,7 @@ export function ApiSidebar({
 
   return (
     <aside
-      aria-label="Main navigation"
+      aria-label={t("sidebar.ariaLabel")}
       aria-hidden={isMobile && !mobileOpen}
       className={cn(
         "group/sidebar fixed inset-y-0 left-0 z-30 flex h-screen flex-col border-r bg-sidebar transition-[width,transform,visibility] duration-200 ease-out will-change-auto",
@@ -119,8 +121,9 @@ export function ApiSidebar({
         )}
       >
         <ul className="space-y-0.5">
-          {navItems.map((item) => {
-            const isActive = item.key === activePage;
+          {NAV_ITEMS.map((item) => {
+            const label = t(item.key);
+            const isActive = item.id === activePage;
             const linkContent = (
               <>
                 <item.icon
@@ -131,7 +134,7 @@ export function ApiSidebar({
                     !isActive && "group-hover/nav-item:text-foreground",
                   )}
                 />
-                {expanded && <span className="truncate">{item.label}</span>}
+                {expanded && <span className="truncate">{label}</span>}
                 {isActive && (
                   <span
                     className={cn(
@@ -152,7 +155,7 @@ export function ApiSidebar({
                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
             );
             return (
-              <li key={item.label} className="relative">
+              <li key={item.id} className="relative">
                 {isActive && (
                   <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary shadow-sm shadow-primary/50" />
                 )}
@@ -164,7 +167,7 @@ export function ApiSidebar({
                       </Link>
                     </TooltipTrigger>
                     <TooltipContent side="right" sideOffset={8}>
-                      {item.label}
+                      {label}
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -182,11 +185,14 @@ export function ApiSidebar({
 
       {/* AI Assistant */}
       <div className={cn("py-2", expanded ? "px-3" : "px-2")}>
-        <Link
-          href="/ai-insights"
-          onClick={handleNavClick}
+        <button
+          type="button"
+          onClick={() => {
+            setAiModalOpen(true);
+            handleNavClick();
+          }}
           className={cn(
-            "group/ai relative flex items-center rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-accent/30 px-3 py-2.5 text-sm font-medium text-foreground transition-colors duration-200 hover:from-primary/15 hover:via-primary/10 hover:to-accent/50",
+            "group/ai relative flex w-full items-center rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-accent/30 px-3 py-2.5 text-sm font-medium text-foreground transition-colors duration-200 hover:from-primary/15 hover:via-primary/10 hover:to-accent/50",
             expanded ? "gap-3" : "justify-center px-2",
           )}
         >
@@ -195,19 +201,19 @@ export function ApiSidebar({
           </div>
           {expanded && (
             <>
-              <span className="font-medium">Ask Monu AI</span>
+              <span className="font-medium">{t("sidebar.aiAssist")}</span>
               <span className="ml-auto flex size-2 rounded-full bg-success shadow-sm shadow-success/50 group-hover/ai:animate-pulse" />
             </>
           )}
-        </Link>
+        </button>
       </div>
 
       {/* Collapse toggle button — desktop only (mobile uses the drawer) */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        aria-label="Collapse sidebar"
+        aria-label={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
         className="absolute -right-3 top-[72px] flex size-8 sm:size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-[opacity,transform,box-shadow,color,background-color,border-color] duration-200 hover:border-primary/40 hover:bg-accent hover:text-foreground hover:shadow-md hover:shadow-primary/10 active:scale-90 opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
       >
         {collapsed ? (
           <ChevronsRight className="size-3.5 transition-transform duration-200 hover:translate-x-0.5" />
@@ -215,6 +221,8 @@ export function ApiSidebar({
           <ChevronsLeft className="size-3.5 transition-transform duration-200 hover:-translate-x-0.5" />
         )}
       </button>
+
+      <AiAssistantModal open={aiModalOpen} onOpenChange={setAiModalOpen} />
     </aside>
   );
 }
