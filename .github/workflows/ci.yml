@@ -250,10 +250,10 @@ jobs:
             -f reqy-web/Dockerfile .
       - name: Test Docker container starts
         run: |
-          docker run --rm -d -p 3000:3000 \
+          docker run -d -p 3000:3000 \
             -e AUTH_SIGNING_SECRET=ci-runtime-placeholder-000000000000 \
             --name reqy-web-test reqy-web:ci
-          trap 'docker logs reqy-web-test 2>&1 || true; docker stop reqy-web-test 2>/dev/null || true' EXIT
+          trap 'docker logs reqy-web-test 2>&1 || true; docker stop reqy-web-test 2>/dev/null || true; docker rm -f reqy-web-test 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
             if curl -fsS http://localhost:3000; then
               exit 0
