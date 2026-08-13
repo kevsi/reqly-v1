@@ -49,11 +49,17 @@ impl OAuthProvider {
     fn env_candidates(&self) -> [(&'static str, &'static str); 2] {
         match self {
             OAuthProvider::Github => [
-                ("GITHUB_OAUTH_DESKTOP_CLIENT_ID", "GITHUB_OAUTH_DESKTOP_CLIENT_SECRET"),
+                (
+                    "GITHUB_OAUTH_DESKTOP_CLIENT_ID",
+                    "GITHUB_OAUTH_DESKTOP_CLIENT_SECRET",
+                ),
                 ("GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"),
             ],
             OAuthProvider::Gitlab => [
-                ("GITLAB_OAUTH_DESKTOP_CLIENT_ID", "GITLAB_OAUTH_DESKTOP_CLIENT_SECRET"),
+                (
+                    "GITLAB_OAUTH_DESKTOP_CLIENT_ID",
+                    "GITLAB_OAUTH_DESKTOP_CLIENT_SECRET",
+                ),
                 ("GITLAB_OAUTH_CLIENT_ID", "GITLAB_OAUTH_CLIENT_SECRET"),
             ],
         }
@@ -138,23 +144,23 @@ fn load_env_fallback() {
 /// Response shape from the device-authorization endpoint (RFC 8628 step 1).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeviceFlowInit {
-  pub device_code: String,
-  pub user_code: String,
-  pub verification_uri: String,
-  pub verification_uri_complete: Option<String>,
-  pub expires_in: i64,
-  pub interval: i64,
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub verification_uri_complete: Option<String>,
+    pub expires_in: i64,
+    pub interval: i64,
 }
 
 /// Response shape accepted by both GitHub and GitLab token endpoints when
 /// `Accept: application/json` is requested.
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
-  access_token: Option<String>,
-  #[serde(default)]
-  error: Option<String>,
-  #[serde(default)]
-  error_description: Option<String>,
+    access_token: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
 }
 
 /// Ask the provider for a device code + user code (RFC 8628 step 1).
@@ -163,34 +169,36 @@ struct TokenResponse {
 /// at a local mock server; the Tauri command passes
 /// [`OAuthProvider::device_authorization_url`].
 pub(crate) async fn start_device_flow(
-  http: &Client,
-  device_authorization_url: &str,
-  provider: OAuthProvider,
+    http: &Client,
+    device_authorization_url: &str,
+    provider: OAuthProvider,
 ) -> Result<DeviceFlowInit, AppError> {
-  let client_id = provider.client_id()?;
-  let params = [
-    ("client_id", client_id.as_str()),
-    ("scope", provider.scope()),
-  ];
+    let client_id = provider.client_id()?;
+    let params = [
+        ("client_id", client_id.as_str()),
+        ("scope", provider.scope()),
+    ];
 
-  let response = http
-    .post(device_authorization_url)
-    .header("Accept", "application/json")
-    .form(&params)
-    .send()
-    .await?;
+    let response = http
+        .post(device_authorization_url)
+        .header("Accept", "application/json")
+        .form(&params)
+        .send()
+        .await?;
 
-  let status = response.status();
-  let payload: DeviceFlowInit = response.json().await.map_err(|e| {
-    AppError::Network(format!("Invalid device authorization response (status {status}): {e}"))
-  })?;
+    let status = response.status();
+    let payload: DeviceFlowInit = response.json().await.map_err(|e| {
+        AppError::Network(format!(
+            "Invalid device authorization response (status {status}): {e}"
+        ))
+    })?;
 
-  if payload.device_code.is_empty() || payload.user_code.is_empty() {
-    return Err(AppError::Network(
-      "Device authorization response missing device_code or user_code".to_string(),
-    ));
-  }
-  Ok(payload)
+    if payload.device_code.is_empty() || payload.user_code.is_empty() {
+        return Err(AppError::Network(
+            "Device authorization response missing device_code or user_code".to_string(),
+        ));
+    }
+    Ok(payload)
 }
 
 /// Poll the token endpoint for the device flow (RFC 8628 step 3) until the
@@ -204,60 +212,61 @@ pub(crate) async fn start_device_flow(
 /// `token_url` is a parameter so unit tests can point the exchange at a local
 /// mock server; the Tauri command passes [`OAuthProvider::token_url`].
 pub(crate) async fn poll_device_token(
-  http: &Client,
-  token_url: &str,
-  provider: OAuthProvider,
-  device_code: &str,
-  interval: i64,
+    http: &Client,
+    token_url: &str,
+    provider: OAuthProvider,
+    device_code: &str,
+    interval: i64,
 ) -> Result<Option<String>, AppError> {
-  let client_id = provider.client_id()?;
+    let client_id = provider.client_id()?;
 
-  let params = [
-    ("client_id", client_id.as_str()),
-    ("device_code", device_code),
-    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-  ];
+    let params = [
+        ("client_id", client_id.as_str()),
+        ("device_code", device_code),
+        ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+    ];
 
-  let response = http
-    .post(token_url)
-    .header("Accept", "application/json")
-    .form(&params)
-    .send()
-    .await?;
+    let response = http
+        .post(token_url)
+        .header("Accept", "application/json")
+        .form(&params)
+        .send()
+        .await?;
 
-  let status = response.status();
-  let payload: TokenResponse = response.json().await.map_err(|e| {
-    AppError::Network(format!("Invalid token response (status {status}): {e}"))
-  })?;
+    let status = response.status();
+    let payload: TokenResponse = response
+        .json()
+        .await
+        .map_err(|e| AppError::Network(format!("Invalid token response (status {status}): {e}")))?;
 
-  if let Some(access_token) = payload.access_token {
-    return Ok(Some(access_token));
-  }
-
-  match payload.error.as_deref() {
-    // Still waiting on the user — caller should retry after `interval`.
-    Some("authorization_pending") => Ok(None),
-    // Provider wants us to slow down polling.
-    Some("slow_down") => {
-      let slow = interval.saturating_add(5).max(interval);
-      Err(AppError::Network(format!("slow_down:{slow}")))
+    if let Some(access_token) = payload.access_token {
+        return Ok(Some(access_token));
     }
-    Some("access_denied") => Err(AppError::Network(
-      "OAuth authorization was denied by the user".to_string(),
-    )),
-    Some("expired_token") => Err(AppError::Network(
-      "Device code expired; restart the authorization flow".to_string(),
-    )),
-    other => {
-      let detail = payload
-        .error_description
-        .or_else(|| other.map(|e| e.to_string()))
-        .unwrap_or_else(|| "OAuth provider rejected the device flow".to_string());
-      Err(AppError::Network(format!(
-        "OAuth device flow failed (status {status}): {detail}"
-      )))
+
+    match payload.error.as_deref() {
+        // Still waiting on the user — caller should retry after `interval`.
+        Some("authorization_pending") => Ok(None),
+        // Provider wants us to slow down polling.
+        Some("slow_down") => {
+            let slow = interval.saturating_add(5).max(interval);
+            Err(AppError::Network(format!("slow_down:{slow}")))
+        }
+        Some("access_denied") => Err(AppError::Network(
+            "OAuth authorization was denied by the user".to_string(),
+        )),
+        Some("expired_token") => Err(AppError::Network(
+            "Device code expired; restart the authorization flow".to_string(),
+        )),
+        other => {
+            let detail = payload
+                .error_description
+                .or_else(|| other.map(|e| e.to_string()))
+                .unwrap_or_else(|| "OAuth provider rejected the device flow".to_string());
+            Err(AppError::Network(format!(
+                "OAuth device flow failed (status {status}): {detail}"
+            )))
+        }
     }
-  }
 }
 
 /// Tauri command: start the device flow and return the user code + verification
@@ -265,17 +274,13 @@ pub(crate) async fn poll_device_token(
 /// boundary as a secret (it is public by design).
 #[tauri::command]
 pub async fn start_device_flow_cmd(
-  state: tauri::State<'_, crate::fetch::SharedClient>,
-  provider: String,
+    state: tauri::State<'_, crate::fetch::SharedClient>,
+    provider: String,
 ) -> Result<DeviceFlowInit, String> {
-  let provider = OAuthProvider::parse(&provider).map_err(|e| e.to_string())?;
-  start_device_flow(
-    &state.normal,
-    provider.device_authorization_url(),
-    provider,
-  )
-  .await
-  .map_err(|e| e.to_string())
+    let provider = OAuthProvider::parse(&provider).map_err(|e| e.to_string())?;
+    start_device_flow(&state.normal, provider.device_authorization_url(), provider)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Tauri command: poll the provider's token endpoint once.
@@ -285,21 +290,21 @@ pub async fn start_device_flow_cmd(
 /// cancel when the user closes the dialog.
 #[tauri::command]
 pub async fn poll_device_token_cmd(
-  state: tauri::State<'_, crate::fetch::SharedClient>,
-  provider: String,
-  device_code: String,
-  interval: i64,
+    state: tauri::State<'_, crate::fetch::SharedClient>,
+    provider: String,
+    device_code: String,
+    interval: i64,
 ) -> Result<Option<String>, String> {
-  let provider = OAuthProvider::parse(&provider).map_err(|e| e.to_string())?;
-  poll_device_token(
-    &state.normal,
-    provider.token_url(),
-    provider,
-    &device_code,
-    interval,
-  )
-  .await
-  .map_err(|e| e.to_string())
+    let provider = OAuthProvider::parse(&provider).map_err(|e| e.to_string())?;
+    poll_device_token(
+        &state.normal,
+        provider.token_url(),
+        provider,
+        &device_code,
+        interval,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -358,8 +363,14 @@ mod tests {
 
     #[test]
     fn parses_known_providers() {
-        assert_eq!(OAuthProvider::parse("github").unwrap(), OAuthProvider::Github);
-        assert_eq!(OAuthProvider::parse("gitlab").unwrap(), OAuthProvider::Gitlab);
+        assert_eq!(
+            OAuthProvider::parse("github").unwrap(),
+            OAuthProvider::Github
+        );
+        assert_eq!(
+            OAuthProvider::parse("gitlab").unwrap(),
+            OAuthProvider::Gitlab
+        );
     }
 
     #[test]
@@ -371,7 +382,10 @@ mod tests {
     fn missing_credentials_is_a_descriptive_error() {
         let _guard = env_guard();
         for (name, _) in [
-            ("GITHUB_OAUTH_DESKTOP_CLIENT_ID", "GITHUB_OAUTH_DESKTOP_CLIENT_SECRET"),
+            (
+                "GITHUB_OAUTH_DESKTOP_CLIENT_ID",
+                "GITHUB_OAUTH_DESKTOP_CLIENT_SECRET",
+            ),
             ("GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"),
         ] {
             std::env::remove_var(name);
@@ -415,15 +429,9 @@ mod tests {
             r#"{"access_token":"gho_mock-token","token_type":"bearer","scope":"repo"}"#,
         );
 
-        let token = poll_device_token(
-            &Client::new(),
-            &url,
-            OAuthProvider::Github,
-            "dc_123",
-            5,
-        )
-        .await
-        .expect("poll should succeed");
+        let token = poll_device_token(&Client::new(), &url, OAuthProvider::Github, "dc_123", 5)
+            .await
+            .expect("poll should succeed");
 
         assert_eq!(token, Some("gho_mock-token".to_string()));
     }
@@ -433,20 +441,11 @@ mod tests {
         let _guard = env_guard();
         let server = Server::http("127.0.0.1:0").expect("bind mock server");
         let url = mock_token_url(&server);
-        let _form = serve_one(
-            server,
-            r#"{"error":"authorization_pending"}"#,
-        );
+        let _form = serve_one(server, r#"{"error":"authorization_pending"}"#);
 
-        let token = poll_device_token(
-            &Client::new(),
-            &url,
-            OAuthProvider::Github,
-            "dc_123",
-            5,
-        )
-        .await
-        .expect("pending is not an error");
+        let token = poll_device_token(&Client::new(), &url, OAuthProvider::Github, "dc_123", 5)
+            .await
+            .expect("pending is not an error");
 
         assert_eq!(token, None);
     }
@@ -461,15 +460,9 @@ mod tests {
             r#"{"error":"access_denied","error_description":"The user denied the request."}"#,
         );
 
-        let err = poll_device_token(
-            &Client::new(),
-            &url,
-            OAuthProvider::Gitlab,
-            "dc_123",
-            5,
-        )
-        .await
-        .expect_err("access_denied should fail");
+        let err = poll_device_token(&Client::new(), &url, OAuthProvider::Gitlab, "dc_123", 5)
+            .await
+            .expect_err("access_denied should fail");
 
         assert!(err.to_string().contains("denied"));
     }

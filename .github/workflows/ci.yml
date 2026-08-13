@@ -96,13 +96,13 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Generate CI secrets
+        working-directory: reqy-web
+        run: node scripts/generate-dev-secrets.mjs
       - name: Install Playwright Chromium
         run: pnpm --dir reqy-web exec playwright install --with-deps chromium
       - name: Run Playwright E2E
         run: pnpm --dir reqy-web test:e2e
-        env:
-          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
-          NEXT_PUBLIC_SYNC_URL: ${{ vars.NEXT_PUBLIC_SYNC_URL }}
       - name: Upload Playwright reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

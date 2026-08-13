@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use tempfile::TempDir;
     use crate::git::commands::GitRepoState;
+    use tempfile::TempDir;
 
     fn setup_repo() -> (TempDir, GitRepoState) {
         let tmp = TempDir::new().unwrap();
@@ -18,7 +18,8 @@ mod tests {
         let tree_oid = index.write_tree().unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
         let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[]).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+            .unwrap();
 
         let state = GitRepoState::new();
         state.set_path(tmp.path().to_path_buf());
@@ -42,7 +43,11 @@ mod tests {
         opts.include_untracked(true);
         let statuses = repo.statuses(Some(&mut opts)).unwrap();
         assert_eq!(statuses.len(), 1);
-        assert!(statuses.get(0).unwrap().status().contains(git2::Status::WT_MODIFIED));
+        assert!(statuses
+            .get(0)
+            .unwrap()
+            .status()
+            .contains(git2::Status::WT_MODIFIED));
     }
 
     #[test]
@@ -59,7 +64,15 @@ mod tests {
         let parent = repo.head().unwrap().target().unwrap();
         let parent_commit = repo.find_commit(parent).unwrap();
         let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "Second commit", &tree, &[&parent_commit]).unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "Second commit",
+            &tree,
+            &[&parent_commit],
+        )
+        .unwrap();
 
         // Vérifier le log
         let mut revwalk = repo.revwalk().unwrap();
@@ -80,11 +93,17 @@ mod tests {
         repo.branch("feature", &commit, false).unwrap();
 
         // Lister les branches
-        let branches: Vec<_> = repo.branches(None).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        let branches: Vec<_> = repo
+            .branches(None)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(branches.len(), 2); // main + feature
 
         // Switch
-        let branch = repo.find_branch("feature", git2::BranchType::Local).unwrap();
+        let branch = repo
+            .find_branch("feature", git2::BranchType::Local)
+            .unwrap();
         let branch_oid = branch.get().target().unwrap();
         let branch_commit = repo.find_commit(branch_oid).unwrap();
         let tree = branch_commit.tree().unwrap();
@@ -111,13 +130,20 @@ mod tests {
         let tree = repo.find_tree(tree_oid).unwrap();
         let parent = repo.find_commit(oid1).unwrap();
         let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-        let oid2 = repo.commit(Some("HEAD"), &sig, &sig, "Second", &tree, &[&parent]).unwrap();
+        let oid2 = repo
+            .commit(Some("HEAD"), &sig, &sig, "Second", &tree, &[&parent])
+            .unwrap();
 
         // Diff
         let tree1 = repo.find_commit(oid1).unwrap().tree().unwrap();
         let tree2 = repo.find_commit(oid2).unwrap().tree().unwrap();
-        let diff = repo.diff_tree_to_tree(Some(&tree1), Some(&tree2), None).unwrap();
+        let diff = repo
+            .diff_tree_to_tree(Some(&tree1), Some(&tree2), None)
+            .unwrap();
         assert_eq!(diff.deltas().len(), 1);
-        assert_eq!(diff.deltas().next().unwrap().status(), git2::Delta::Modified);
+        assert_eq!(
+            diff.deltas().next().unwrap().status(),
+            git2::Delta::Modified
+        );
     }
 }

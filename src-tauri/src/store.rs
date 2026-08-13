@@ -74,12 +74,22 @@ pub struct QueueStore {
     queue: Mutex<Vec<QueuedRequest>>,
 }
 
-const SENSITIVE_HEADER_PREFIXES: &[&str] = &["authorization", "cookie", "proxy-authorization", "x-api-key", "x-auth-token"];
+const SENSITIVE_HEADER_PREFIXES: &[&str] = &[
+    "authorization",
+    "cookie",
+    "proxy-authorization",
+    "x-api-key",
+    "x-auth-token",
+];
 
 fn redact_headers(headers: &[(String, String)]) -> Vec<(String, String)> {
     headers
         .iter()
-        .filter(|(k, _)| !SENSITIVE_HEADER_PREFIXES.iter().any(|p| k.eq_ignore_ascii_case(p)))
+        .filter(|(k, _)| {
+            !SENSITIVE_HEADER_PREFIXES
+                .iter()
+                .any(|p| k.eq_ignore_ascii_case(p))
+        })
         .cloned()
         .collect()
 }
@@ -141,7 +151,11 @@ impl QueueStore {
 
     /// All requests still awaiting delivery, in enqueue (FIFO) order.
     pub fn list_pending(&self) -> Vec<QueuedRequest> {
-        self.queue.lock().ok().map(|g| g.clone()).unwrap_or_default()
+        self.queue
+            .lock()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_default()
     }
 
     /// Peek the oldest pending request without removing it, or `None` if empty.
@@ -183,20 +197,18 @@ pub fn init_queue_store(app_data_dir: PathBuf) {
 
 fn default_store() -> &'static QueueStore {
     DEFAULT_STORE.get_or_init(|| {
-        let candidate = QUEUE_FILE_PATH
-            .get()
-            .cloned()
-            .unwrap_or_else(|| std::env::temp_dir().join("reqly").join("offline-queue.json"));
+        let candidate = QUEUE_FILE_PATH.get().cloned().unwrap_or_else(|| {
+            std::env::temp_dir()
+                .join("reqly")
+                .join("offline-queue.json")
+        });
         match QueueStore::open(candidate.clone()) {
             Ok(store) => store,
             Err(e) => {
-                eprintln!(
-                    "[offline-queue] failed to open {candidate:?}: {e}; using temp fallback"
-                );
-                let fallback = std::env::temp_dir().join("reqly").join(format!(
-                    "offline-queue-{}.json",
-                    std::process::id()
-                ));
+                eprintln!("[offline-queue] failed to open {candidate:?}: {e}; using temp fallback");
+                let fallback = std::env::temp_dir()
+                    .join("reqly")
+                    .join(format!("offline-queue-{}.json", std::process::id()));
                 QueueStore::open(fallback).unwrap_or_else(|e| {
                     eprintln!("[offline-queue] CRITICAL: fallback also failed: {e}");
                     panic!("offline queue completely unavailable: {e}")
@@ -248,8 +260,7 @@ static SESSION_ENCRYPTION_KEY: OnceLock<String> = OnceLock::new();
 /// Initialise the session encryption passphrase.  Call from Tauri
 /// `setup` before any command runs.
 pub fn init_session_encryption_key() {
-    let _ = SESSION_ENCRYPTION_KEY
-        .set(uuid::Uuid::new_v4().to_string());
+    let _ = SESSION_ENCRYPTION_KEY.set(uuid::Uuid::new_v4().to_string());
 }
 
 /// Return the session passphrase to the renderer so it can encrypt
@@ -260,9 +271,7 @@ pub fn get_encryption_passphrase() -> Result<String, AppError> {
     SESSION_ENCRYPTION_KEY
         .get()
         .cloned()
-        .ok_or_else(|| AppError::Internal(
-            "Session encryption key not initialised".into(),
-        ))
+        .ok_or_else(|| AppError::Internal("Session encryption key not initialised".into()))
 }
 
 #[cfg(test)]
@@ -349,8 +358,14 @@ mod tests {
         );
 
         let json = serde_json::to_value(&request).expect("queued request must serialize");
-        assert!(json.get("createdAt").is_some(), "IPC payload must use camelCase");
-        assert!(json.get("created_at").is_none(), "snake_case must not leak to frontend");
+        assert!(
+            json.get("createdAt").is_some(),
+            "IPC payload must use camelCase"
+        );
+        assert!(
+            json.get("created_at").is_none(),
+            "snake_case must not leak to frontend"
+        );
         assert_eq!(json["method"], "POST");
         assert_eq!(json["url"], "https://api.example.com/health");
 
@@ -367,7 +382,10 @@ mod tests {
         let second = get_encryption_passphrase().expect("session key must remain available");
 
         assert!(!first.is_empty(), "session key must not be empty");
-        assert_eq!(first, second, "session key must remain stable during the process");
+        assert_eq!(
+            first, second,
+            "session key must remain stable during the process"
+        );
     }
 
     #[test]

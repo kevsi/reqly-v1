@@ -1,9 +1,9 @@
-use std::path::{Path, PathBuf};
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use git2::{DiffOptions, Repository, Signature, StatusOptions};
 use tauri::State;
-use git2::{Repository, DiffOptions, StatusOptions, Signature};
 
 use crate::error::AppError;
 use crate::git::types::*;
@@ -23,25 +23,38 @@ impl GitRepoState {
     }
 
     pub fn set_path(&self, path: PathBuf) -> Result<(), AppError> {
-        *self.repo_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? = Some(path);
+        *self
+            .repo_dir
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))? = Some(path);
         Ok(())
     }
 
     pub fn get_path(&self) -> Result<Option<PathBuf>, AppError> {
-        self.repo_dir.lock().map_err(|e| AppError::Internal(e.to_string())).map(|g| g.clone())
+        self.repo_dir
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))
+            .map(|g| g.clone())
     }
 
     pub fn set_workspace_dir(&self, path: PathBuf) -> Result<(), AppError> {
-        *self.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? = Some(path);
+        *self
+            .workspace_dir
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))? = Some(path);
         Ok(())
     }
 
     pub fn get_workspace_dir(&self) -> Result<Option<PathBuf>, AppError> {
-        self.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string())).map(|g| g.clone())
+        self.workspace_dir
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))
+            .map(|g| g.clone())
     }
 
     pub fn open_repo(&self) -> Result<Repository, AppError> {
-        let path = self.get_path()?
+        let path = self
+            .get_path()?
             .ok_or_else(|| AppError::InvalidInput("No git repository initialized".into()))?;
         Repository::open(&path)
             .map_err(|e| AppError::Internal(format!("Failed to open repo: {}", e)))
@@ -63,10 +76,7 @@ fn validate_url_scheme(url: &str) -> Result<(), AppError> {
                 )))
             }
         }
-        Err(_) => Err(AppError::InvalidInput(format!(
-            "Invalid URL: {}",
-            trimmed
-        ))),
+        Err(_) => Err(AppError::InvalidInput(format!("Invalid URL: {}", trimmed))),
     }
 }
 
@@ -120,22 +130,26 @@ fn is_valid_git_repo(path: &Path) -> bool {
 }
 
 #[tauri::command]
-pub async fn git_init(
-    path: String,
-    state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
+pub async fn git_init(path: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo_path = PathBuf::from(&path);
 
     if is_system_directory(&repo_path) {
         return Err(AppError::InvalidInput(format!(
-            "Path '{}' is in a system directory and cannot be used for a git repository.", path
+            "Path '{}' is in a system directory and cannot be used for a git repository.",
+            path
         )));
     }
 
-    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+    if let Some(ref workspace) = *state
+        .workspace_dir
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
         if !is_within_base(&repo_path, workspace) {
             return Err(AppError::InvalidInput(format!(
-                "Path '{}' must be within the workspace directory '{}'.", path, workspace.display()
+                "Path '{}' must be within the workspace directory '{}'.",
+                path,
+                workspace.display()
             )));
         }
     }
@@ -147,22 +161,26 @@ pub async fn git_init(
 }
 
 #[tauri::command]
-pub async fn git_open(
-    path: String,
-    state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
+pub async fn git_open(path: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo_path = PathBuf::from(&path);
 
     if is_system_directory(&repo_path) {
         return Err(AppError::InvalidInput(format!(
-            "Path '{}' is in a system directory and cannot be used for a git repository.", path
+            "Path '{}' is in a system directory and cannot be used for a git repository.",
+            path
         )));
     }
 
-    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+    if let Some(ref workspace) = *state
+        .workspace_dir
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
         if !is_within_base(&repo_path, workspace) {
             return Err(AppError::InvalidInput(format!(
-                "Path '{}' must be within the workspace directory '{}'.", path, workspace.display()
+                "Path '{}' must be within the workspace directory '{}'.",
+                path,
+                workspace.display()
             )));
         }
     }
@@ -175,16 +193,15 @@ pub async fn git_open(
 }
 
 #[tauri::command]
-pub async fn git_status(
-    state: State<'_, GitRepoState>,
-) -> Result<Vec<FileStatus>, AppError> {
+pub async fn git_status(state: State<'_, GitRepoState>) -> Result<Vec<FileStatus>, AppError> {
     let repo = state.open_repo()?;
     let mut opts = StatusOptions::new();
     opts.include_untracked(true)
         .recurse_untracked_dirs(true)
         .renames_head_to_index(true);
 
-    let statuses = repo.statuses(Some(&mut opts))
+    let statuses = repo
+        .statuses(Some(&mut opts))
         .map_err(|e| AppError::Internal(format!("git status failed: {}", e)))?;
 
     let mut result = Vec::new();
@@ -193,9 +210,27 @@ pub async fn git_status(
         let flags = entry.status();
         result.push(FileStatus {
             filepath,
-            head: if flags.contains(git2::Status::INDEX_NEW) { 0 } else { 1 },
-            workdir: if flags.intersects(git2::Status::WT_MODIFIED | git2::Status::WT_NEW | git2::Status::WT_DELETED) { 2 } else { 1 },
-            staged: if flags.intersects(git2::Status::INDEX_NEW | git2::Status::INDEX_MODIFIED | git2::Status::INDEX_DELETED) { 2 } else { 1 },
+            head: if flags.contains(git2::Status::INDEX_NEW) {
+                0
+            } else {
+                1
+            },
+            workdir: if flags.intersects(
+                git2::Status::WT_MODIFIED | git2::Status::WT_NEW | git2::Status::WT_DELETED,
+            ) {
+                2
+            } else {
+                1
+            },
+            staged: if flags.intersects(
+                git2::Status::INDEX_NEW
+                    | git2::Status::INDEX_MODIFIED
+                    | git2::Status::INDEX_DELETED,
+            ) {
+                2
+            } else {
+                1
+            },
         });
     }
     Ok(result)
@@ -207,11 +242,14 @@ pub async fn git_log(
     state: State<'_, GitRepoState>,
 ) -> Result<Vec<GitCommit>, AppError> {
     let repo = state.open_repo()?;
-    let mut revwalk = repo.revwalk()
+    let mut revwalk = repo
+        .revwalk()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    revwalk.push_head()
+    revwalk
+        .push_head()
         .map_err(|_| AppError::InvalidInput("No commits yet".into()))?;
-    revwalk.set_sorting(git2::Sort::TIME)
+    revwalk
+        .set_sorting(git2::Sort::TIME)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let count = max_count.unwrap_or(50);
@@ -219,7 +257,8 @@ pub async fn git_log(
 
     for (_, oid) in revwalk.enumerate().take(count as usize) {
         let oid = oid.map_err(|e| AppError::Internal(e.to_string()))?;
-        let commit = repo.find_commit(oid)
+        let commit = repo
+            .find_commit(oid)
             .map_err(|e| AppError::Internal(e.to_string()))?;
         commits.push(GitCommit {
             oid: oid.to_string(),
@@ -249,78 +288,81 @@ pub async fn git_commit(
     let sig = Signature::now(
         &author_name.unwrap_or_else(|| "Reqly User".into()),
         &author_email.unwrap_or_else(|| "user@reqly.local".into()),
-    ).map_err(|e| AppError::Internal(e.to_string()))?;
+    )
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let mut index = repo.index()
+    let mut index = repo
+        .index()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let tree_oid = index.write_tree()
+    let tree_oid = index
+        .write_tree()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let tree = repo.find_tree(tree_oid)
+    let tree = repo
+        .find_tree(tree_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let parent_commit = match repo.head() {
         Ok(head) => {
-            let oid = head.target()
+            let oid = head
+                .target()
                 .ok_or_else(|| AppError::Internal("HEAD has no target".into()))?;
-            Some(repo.find_commit(oid)
-                .map_err(|e| AppError::Internal(e.to_string()))?)
+            Some(
+                repo.find_commit(oid)
+                    .map_err(|e| AppError::Internal(e.to_string()))?,
+            )
         }
         Err(_) => None,
     };
 
     let parents: Vec<&git2::Commit> = parent_commit.iter().collect();
-    let oid = repo.commit(
-        Some("HEAD"),
-        &sig,
-        &sig,
-        &message,
-        &tree,
-        &parents,
-    ).map_err(|e| AppError::Internal(format!("git commit failed: {}", e)))?;
+    let oid = repo
+        .commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
+        .map_err(|e| AppError::Internal(format!("git commit failed: {}", e)))?;
 
     Ok(oid.to_string())
 }
 
 #[tauri::command]
-pub async fn git_stage(
-    filepath: String,
-    state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
+pub async fn git_stage(filepath: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut index = repo.index()
+    let mut index = repo
+        .index()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    index.add_path(std::path::Path::new(&filepath))
+    index
+        .add_path(std::path::Path::new(&filepath))
         .map_err(|e| AppError::Internal(format!("Failed to stage {filepath}: {e}")))?;
-    index.write()
+    index
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn git_stage_all(
-    state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
+pub async fn git_stage_all(state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut index = repo.index()
+    let mut index = repo
+        .index()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+    index
+        .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
         .map_err(|e| AppError::Internal(format!("Failed to stage all: {e}")))?;
-    index.write()
+    index
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn git_unstage(
-    filepath: String,
-    state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
+pub async fn git_unstage(filepath: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut index = repo.index()
+    let mut index = repo
+        .index()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    index.remove_path(std::path::Path::new(&filepath))
+    index
+        .remove_path(std::path::Path::new(&filepath))
         .map_err(|e| AppError::Internal(format!("Failed to unstage {filepath}: {e}")))?;
-    index.write()
+    index
+        .write()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(())
 }
@@ -333,38 +375,53 @@ pub async fn git_diff(
 ) -> Result<Vec<DiffFile>, AppError> {
     let repo = state.open_repo()?;
 
-    let old_commit = repo.find_commit(
-        git2::Oid::from_str(&old_oid).map_err(|_| AppError::InvalidInput("Invalid old_oid".into()))?
-    ).map_err(|e| AppError::InvalidInput(format!("commit not found: {e}")))?;
+    let old_commit = repo
+        .find_commit(
+            git2::Oid::from_str(&old_oid)
+                .map_err(|_| AppError::InvalidInput("Invalid old_oid".into()))?,
+        )
+        .map_err(|e| AppError::InvalidInput(format!("commit not found: {e}")))?;
 
     let new_tree = if new_oid == "WORKING" {
-        let mut index = repo.index()
+        let mut index = repo
+            .index()
             .map_err(|e| AppError::Internal(e.to_string()))?;
-        let tree_oid = index.write_tree()
+        let tree_oid = index
+            .write_tree()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         repo.find_tree(tree_oid)
             .map_err(|e| AppError::Internal(e.to_string()))?
     } else {
-        let new_commit = repo.find_commit(
-            git2::Oid::from_str(&new_oid).map_err(|_| AppError::InvalidInput("Invalid new_oid".into()))?
-        ).map_err(|e| AppError::InvalidInput(format!("commit not found: {e}")))?;
-        new_commit.tree().map_err(|e| AppError::Internal(e.to_string()))?
+        let new_commit = repo
+            .find_commit(
+                git2::Oid::from_str(&new_oid)
+                    .map_err(|_| AppError::InvalidInput("Invalid new_oid".into()))?,
+            )
+            .map_err(|e| AppError::InvalidInput(format!("commit not found: {e}")))?;
+        new_commit
+            .tree()
+            .map_err(|e| AppError::Internal(e.to_string()))?
     };
 
-    let old_tree = old_commit.tree()
+    let old_tree = old_commit
+        .tree()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let diff = repo.diff_tree_to_tree(
-        Some(&old_tree),
-        Some(&new_tree),
-        Some(&mut DiffOptions::new()),
-    ).map_err(|e| AppError::Internal(e.to_string()))?;
+    let diff = repo
+        .diff_tree_to_tree(
+            Some(&old_tree),
+            Some(&new_tree),
+            Some(&mut DiffOptions::new()),
+        )
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let files = RefCell::new(Vec::<DiffFile>::new());
 
     diff.foreach(
         &mut |delta, _| {
-            let filepath = delta.new_file().path()
+            let filepath = delta
+                .new_file()
+                .path()
                 .or_else(|| delta.old_file().path())
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
@@ -387,66 +444,85 @@ pub async fn git_diff(
             }
             true
         }),
-        Some(&mut |_delta, _hunk: Option<git2::DiffHunk<'_>>, line: git2::DiffLine<'_>| {
-            if let Some(file) = files.borrow_mut().last_mut() {
-                if let Some(hunk) = file.hunks.last_mut() {
-                    hunk.lines.push(DiffLine {
-                        origin: match line.origin() {
-                            '+' => "add",
-                            '-' => "delete",
-                            _ => "context",
-                        }.to_string(),
-                        content: String::from_utf8_lossy(line.content()).to_string(),
-                        old_lineno: line.old_lineno(),
-                        new_lineno: line.new_lineno(),
-                    });
+        Some(
+            &mut |_delta, _hunk: Option<git2::DiffHunk<'_>>, line: git2::DiffLine<'_>| {
+                if let Some(file) = files.borrow_mut().last_mut() {
+                    if let Some(hunk) = file.hunks.last_mut() {
+                        hunk.lines.push(DiffLine {
+                            origin: match line.origin() {
+                                '+' => "add",
+                                '-' => "delete",
+                                _ => "context",
+                            }
+                            .to_string(),
+                            content: String::from_utf8_lossy(line.content()).to_string(),
+                            old_lineno: line.old_lineno(),
+                            new_lineno: line.new_lineno(),
+                        });
+                    }
                 }
-            }
-            true
-        }),
-    ).map_err(|e| AppError::Internal(e.to_string()))?;
+                true
+            },
+        ),
+    )
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(files.into_inner())
 }
 
 #[tauri::command]
-pub async fn git_branch_list(
-    state: State<'_, GitRepoState>,
-) -> Result<Vec<BranchInfo>, AppError> {
+pub async fn git_branch_list(state: State<'_, GitRepoState>) -> Result<Vec<BranchInfo>, AppError> {
     let repo = state.open_repo()?;
     let current_head = repo.head().ok();
 
     let mut branches = Vec::new();
-    let branch_iter = repo.branches(None)
+    let branch_iter = repo
+        .branches(None)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     for branch_result in branch_iter {
-        let (branch, _kind) = branch_result
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        let name = branch.name()
+        let (branch, _kind) = branch_result.map_err(|e| AppError::Internal(e.to_string()))?;
+        let name = branch
+            .name()
             .map_err(|e| AppError::Internal(e.to_string()))?
             .unwrap_or("unknown")
             .to_string();
-        let oid = branch.get().target()
+        let oid = branch
+            .get()
+            .target()
             .map(|o| o.to_string())
             .unwrap_or_default();
-        let is_current = current_head.as_ref()
+        let is_current = current_head
+            .as_ref()
             .and_then(|h| h.shorthand())
             .map(|h| h == name)
             .unwrap_or(false);
 
         let (ahead, behind) = match branch.upstream() {
             Ok(upstream) => {
-                let merge_base = repo.merge_base(
-                    branch.get().target().ok_or_else(|| AppError::Internal("branch has no target".into()))?,
-                    upstream.get().target().ok_or_else(|| AppError::Internal("branch has no target".into()))?,
-                ).ok();
+                let merge_base = repo
+                    .merge_base(
+                        branch
+                            .get()
+                            .target()
+                            .ok_or_else(|| AppError::Internal("branch has no target".into()))?,
+                        upstream
+                            .get()
+                            .target()
+                            .ok_or_else(|| AppError::Internal("branch has no target".into()))?,
+                    )
+                    .ok();
                 match merge_base {
                     Some(base) => {
-                        let a = repo.graph_ahead_behind(
-                            branch.get().target().ok_or_else(|| AppError::Internal("branch has no target".into()))?,
-                            base,
-                        ).ok().unwrap_or((0, 0));
+                        let a = repo
+                            .graph_ahead_behind(
+                                branch.get().target().ok_or_else(|| {
+                                    AppError::Internal("branch has no target".into())
+                                })?,
+                                base,
+                            )
+                            .ok()
+                            .unwrap_or((0, 0));
                         (a.0 as i32, a.1 as i32)
                     }
                     None => (0, 0),
@@ -459,7 +535,9 @@ pub async fn git_branch_list(
             name,
             is_current,
             oid,
-            upstream: branch.upstream().ok()
+            upstream: branch
+                .upstream()
+                .ok()
                 .and_then(|u| u.name().ok().flatten().map(|s| s.to_string())),
             ahead,
             behind,
@@ -479,12 +557,14 @@ pub async fn git_branch_create(
     let target_oid = match from_oid {
         Some(oid_str) => git2::Oid::from_str(&oid_str)
             .map_err(|_| AppError::InvalidInput("Invalid OID".into()))?,
-        None => repo.head()
+        None => repo
+            .head()
             .map_err(|_| AppError::InvalidInput("No HEAD".into()))?
             .target()
             .ok_or_else(|| AppError::Internal("HEAD has no target".into()))?,
     };
-    let commit = repo.find_commit(target_oid)
+    let commit = repo
+        .find_commit(target_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
     repo.branch(&name, &commit, false)
         .map_err(|e| AppError::Internal(format!("Failed to create branch {name}: {e}")))?;
@@ -497,9 +577,11 @@ pub async fn git_branch_delete(
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut branch = repo.find_branch(&name, git2::BranchType::Local)
+    let mut branch = repo
+        .find_branch(&name, git2::BranchType::Local)
         .map_err(|_| AppError::InvalidInput(format!("Branch {name} not found")))?;
-    branch.delete()
+    branch
+        .delete()
         .map_err(|e| AppError::Internal(format!("Failed to delete branch {name}: {e}")))?;
     Ok(())
 }
@@ -510,13 +592,18 @@ pub async fn git_branch_switch(
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let branch = repo.find_branch(&name, git2::BranchType::Local)
+    let branch = repo
+        .find_branch(&name, git2::BranchType::Local)
         .map_err(|_| AppError::InvalidInput(format!("Branch {name} not found")))?;
-    let oid = branch.get().target()
+    let oid = branch
+        .get()
+        .target()
         .ok_or_else(|| AppError::Internal("Branch has no target".into()))?;
-    let commit = repo.find_commit(oid)
+    let commit = repo
+        .find_commit(oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let tree = commit.tree()
+    let tree = commit
+        .tree()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     repo.checkout_tree(tree.as_object(), None)
@@ -527,17 +614,19 @@ pub async fn git_branch_switch(
 }
 
 #[tauri::command]
-pub async fn git_remote_list(
-    state: State<'_, GitRepoState>,
-) -> Result<Vec<RemoteInfo>, AppError> {
+pub async fn git_remote_list(state: State<'_, GitRepoState>) -> Result<Vec<RemoteInfo>, AppError> {
     let repo = state.open_repo()?;
     let mut remotes = Vec::new();
-    for name_result in repo.remotes()
-        .map_err(|e| AppError::Internal(e.to_string()))?.iter() {
+    for name_result in repo
+        .remotes()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .iter()
+    {
         let name = name_result
             .ok_or_else(|| AppError::Internal("Invalid remote name".into()))?
             .to_string();
-        let url = repo.find_remote(&name)
+        let url = repo
+            .find_remote(&name)
             .map_err(|e| AppError::Internal(e.to_string()))?
             .url()
             .unwrap_or("")
@@ -578,11 +667,13 @@ pub async fn git_push(
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut remote_obj = repo.find_remote(&remote)
+    let mut remote_obj = repo
+        .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
 
     let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
-    remote_obj.push(&[&refspec], None)
+    remote_obj
+        .push(&[&refspec], None)
         .map_err(|e| push_error(e))?;
     Ok(())
 }
@@ -594,11 +685,14 @@ pub async fn git_ls_remote(
 ) -> Result<Vec<String>, AppError> {
     validate_url_scheme(&url)?;
     let repo = state.open_repo()?;
-    let mut remote = repo.remote_anonymous(&url)
+    let mut remote = repo
+        .remote_anonymous(&url)
         .map_err(|e| AppError::InvalidInput(format!("Invalid remote URL: {e}")))?;
-    remote.connect(git2::Direction::Fetch)
+    remote
+        .connect(git2::Direction::Fetch)
         .map_err(|e| AppError::Network(format!("Cannot connect to {url}: {e}")))?;
-    let refs = remote.list()
+    let refs = remote
+        .list()
         .map_err(|e| AppError::Network(format!("Cannot list remote refs: {e}")))?;
     let mut branches: Vec<String> = Vec::new();
     for head in refs.iter() {
@@ -620,11 +714,13 @@ pub async fn git_push_force(
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut remote_obj = repo.find_remote(&remote)
+    let mut remote_obj = repo
+        .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
 
     let refspec = format!("+refs/heads/{branch}:refs/heads/{branch}");
-    remote_obj.push(&[&refspec], None)
+    remote_obj
+        .push(&[&refspec], None)
         .map_err(|e| AppError::Network(format!("Force push failed: {e}")))?;
     Ok(())
 }
@@ -649,15 +745,14 @@ fn push_error(e: git2::Error) -> AppError {
 }
 
 #[tauri::command]
-pub async fn git_fetch(
-    remote: String,
-    state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
+pub async fn git_fetch(remote: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo = state.open_repo()?;
-    let mut remote_obj = repo.find_remote(&remote)
+    let mut remote_obj = repo
+        .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
     let refspec = format!("+refs/heads/*:refs/remotes/{remote}/*");
-    remote_obj.fetch(&[&refspec], None, None)
+    remote_obj
+        .fetch(&[&refspec], None, None)
         .map_err(|e| AppError::Network(format!("Fetch failed: {e}")))?;
     Ok(())
 }
@@ -671,31 +766,37 @@ pub async fn git_pull(
     let repo = state.open_repo()?;
 
     // Fetch d'abord
-    let mut remote_obj = repo.find_remote(&remote)
+    let mut remote_obj = repo
+        .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
     let refspec = format!("+refs/heads/{branch_name}:refs/remotes/{remote}/{branch_name}");
-    remote_obj.fetch(&[&refspec], None, None)
+    remote_obj
+        .fetch(&[&refspec], None, None)
         .map_err(|e| AppError::Network(format!("Fetch failed: {e}")))?;
 
     // Fast-forward merge: trouver le remote tracking branch et merger dans HEAD
     let remote_ref_name = format!("refs/remotes/{remote}/{branch_name}");
-    let remote_branch = repo.find_reference(&remote_ref_name)
+    let remote_branch = repo
+        .find_reference(&remote_ref_name)
         .map_err(|e| AppError::InvalidInput(format!("Remote branch not found: {e}")))?;
-    let remote_oid = remote_branch.target()
+    let remote_oid = remote_branch
+        .target()
         .ok_or_else(|| AppError::Internal("Remote branch has no target".into()))?;
-    let remote_commit = repo.find_commit(remote_oid)
+    let remote_commit = repo
+        .find_commit(remote_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let head = repo.head()
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let head_oid = head.target()
+    let head = repo.head().map_err(|e| AppError::Internal(e.to_string()))?;
+    let head_oid = head
+        .target()
         .ok_or_else(|| AppError::Internal("HEAD has no target".into()))?;
 
     if head_oid == remote_oid {
         return Ok(());
     }
 
-    let merge_base = repo.merge_base(head_oid, remote_oid)
+    let merge_base = repo
+        .merge_base(head_oid, remote_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     if merge_base == remote_oid {
@@ -705,7 +806,8 @@ pub async fn git_pull(
 
     if merge_base == head_oid {
         // Fast-forward possible.
-        let tree = remote_commit.tree()
+        let tree = remote_commit
+            .tree()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         repo.checkout_tree(tree.as_object(), None)
             .map_err(|e| AppError::Internal(format!("Checkout failed: {e}")))?;
@@ -715,15 +817,18 @@ pub async fn git_pull(
     }
 
     // Otherwise perform a merge commit.
-    let head_commit = repo.find_commit(head_oid)
+    let head_commit = repo
+        .find_commit(head_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let annotated = repo.find_annotated_commit(remote_oid)
+    let annotated = repo
+        .find_annotated_commit(remote_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     repo.merge(&[&annotated], None, None)
         .map_err(|e| AppError::Internal(format!("Merge failed: {e}")))?;
 
-    let mut index = repo.index()
+    let mut index = repo
+        .index()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     if index.has_conflicts() {
         return Err(AppError::InvalidInput(
@@ -731,11 +836,14 @@ pub async fn git_pull(
         ));
     }
 
-    let tree_oid = index.write_tree()
+    let tree_oid = index
+        .write_tree()
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let tree = repo.find_tree(tree_oid)
+    let tree = repo
+        .find_tree(tree_oid)
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let sig = repo.signature()
+    let sig = repo
+        .signature()
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let merge_message = format!(
         "Merge {} into {}",
@@ -750,7 +858,8 @@ pub async fn git_pull(
         &merge_message,
         &tree,
         &[&head_commit, &remote_commit],
-    ).map_err(|e| AppError::Internal(e.to_string()))?;
+    )
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
     repo.checkout_head(None)
         .map_err(|e| AppError::Internal(format!("Checkout failed: {e}")))?;
@@ -769,10 +878,16 @@ pub async fn git_clone(
 
     let dest = PathBuf::from(&dest_path);
 
-    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+    if let Some(ref workspace) = *state
+        .workspace_dir
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
         if !is_within_base(&dest, workspace) {
             return Err(AppError::InvalidInput(format!(
-                "Destination path '{}' must be within the workspace directory '{}'.", dest_path, workspace.display()
+                "Destination path '{}' must be within the workspace directory '{}'.",
+                dest_path,
+                workspace.display()
             )));
         }
     }
@@ -795,21 +910,28 @@ pub async fn git_write_collection_file(
 
     if is_system_directory(&repo_path) {
         return Err(AppError::InvalidInput(format!(
-            "Path '{}' is in a system directory and cannot be used for a git repository.", repo_dir
+            "Path '{}' is in a system directory and cannot be used for a git repository.",
+            repo_dir
         )));
     }
 
     if !is_valid_git_repo(&repo_path) {
         return Err(AppError::InvalidInput(format!(
-            "Path '{}' is not a valid git repository.", repo_dir
+            "Path '{}' is not a valid git repository.",
+            repo_dir
         )));
     }
 
-    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+    if let Some(ref workspace) = *state
+        .workspace_dir
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
         if !is_within_base(&repo_path, workspace) {
             return Err(AppError::InvalidInput(format!(
                 "Repository path '{}' must be within the workspace directory '{}'.",
-                repo_dir, workspace.display()
+                repo_dir,
+                workspace.display()
             )));
         }
     }
@@ -835,15 +957,21 @@ pub async fn git_sync_collections(
 
     if !is_valid_git_repo(&repo_path) {
         return Err(AppError::InvalidInput(format!(
-            "Path '{}' is not a valid git repository.", repo_dir
+            "Path '{}' is not a valid git repository.",
+            repo_dir
         )));
     }
 
-    if let Some(ref workspace) = *state.workspace_dir.lock().map_err(|e| AppError::Internal(e.to_string()))? {
+    if let Some(ref workspace) = *state
+        .workspace_dir
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
         if !is_within_base(&repo_path, workspace) {
             return Err(AppError::InvalidInput(format!(
                 "Repository path '{}' must be within the workspace directory '{}'.",
-                repo_dir, workspace.display()
+                repo_dir,
+                workspace.display()
             )));
         }
     }
@@ -856,7 +984,12 @@ pub async fn git_sync_collections(
     // Supprimer les anciens fichiers
     if let Ok(entries) = std::fs::read_dir(&collections_dir) {
         for entry in entries.flatten() {
-            if entry.path().extension().map(|e| e == "json").unwrap_or(false) {
+            if entry
+                .path()
+                .extension()
+                .map(|e| e == "json")
+                .unwrap_or(false)
+            {
                 std::fs::remove_file(entry.path()).ok();
             }
         }
@@ -872,8 +1005,8 @@ pub async fn git_sync_collections(
         let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
         let safe_id = id.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
         let filepath = collections_dir.join(format!("{}_{}.json", safe_name, safe_id));
-        let content = serde_json::to_string_pretty(col)
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let content =
+            serde_json::to_string_pretty(col).map_err(|e| AppError::Internal(e.to_string()))?;
         std::fs::write(&filepath, content)
             .map_err(|e| AppError::Internal(format!("Failed to write {filepath:?}: {e}")))?;
     }
@@ -883,8 +1016,8 @@ pub async fn git_sync_collections(
 
 #[cfg(test)]
 mod path_validation_tests {
-    use std::path::Path;
     use super::{is_system_directory, is_within_base};
+    use std::path::Path;
 
     #[test]
     fn system_directories_are_rejected() {
@@ -907,7 +1040,9 @@ mod path_validation_tests {
         }
         #[cfg(windows)]
         {
-            assert!(!is_system_directory(Path::new(r"C:\Users\alex\Documents\project")));
+            assert!(!is_system_directory(Path::new(
+                r"C:\Users\alex\Documents\project"
+            )));
         }
     }
 

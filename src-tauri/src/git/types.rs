@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "ts-export")]
 use ts_rs::TS;
 
@@ -29,9 +29,9 @@ pub struct GitSignature {
 #[cfg_attr(feature = "ts-export", ts(export, rename_all = "camelCase"))]
 pub struct FileStatus {
     pub filepath: String,
-    pub head: u8,       // 0=absent, 1=present
-    pub workdir: u8,    // 0=absent, 1=unchanged, 2=modified
-    pub staged: u8,     // 0=absent, 1=unchanged, 2=modified, 3=added
+    pub head: u8,    // 0=absent, 1=present
+    pub workdir: u8, // 0=absent, 1=unchanged, 2=modified
+    pub staged: u8,  // 0=absent, 1=unchanged, 2=modified, 3=added
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -51,7 +51,7 @@ pub struct DiffHunk {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts-export", ts(export, rename_all = "camelCase"))]
 pub struct DiffLine {
-    pub origin: String,      // "add", "delete", "context", "header"
+    pub origin: String, // "add", "delete", "context", "header"
     pub content: String,
     pub old_lineno: Option<u32>,
     pub new_lineno: Option<u32>,
