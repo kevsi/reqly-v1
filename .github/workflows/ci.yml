@@ -136,7 +136,7 @@ jobs:
       - name: Build web (with bundle analyzer)
         run: pnpm build
         env:
-          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
+          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET || 'ci-build-placeholder-000000000000' }}
           # NEXT_PUBLIC_SYNC_URL is a public URL baked into the client bundle —
           # store as a GitHub Actions variable (Settings > Variables), not a secret.
           NEXT_PUBLIC_SYNC_URL: ${{ vars.NEXT_PUBLIC_SYNC_URL }}
@@ -212,7 +212,7 @@ jobs:
       - name: Build desktop application
         run: pnpm tauri:build
         env:
-          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET }}
+          AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET || 'ci-build-placeholder-000000000000' }}
           NEXT_PUBLIC_SYNC_URL: ${{ vars.NEXT_PUBLIC_SYNC_URL }}
           TAURI_DEV_HOST: "localhost"
       - name: Upload desktop artifacts
@@ -244,7 +244,9 @@ jobs:
             -f reqy-web/Dockerfile .
       - name: Test Docker container starts
         run: |
-          docker run --rm -d -p 3000:3000 --name reqy-web-test reqy-web:ci
+          docker run --rm -d -p 3000:3000 \
+            -e AUTH_SIGNING_SECRET=ci-runtime-placeholder-000000000000 \
+            --name reqy-web-test reqy-web:ci
           sleep 10
           curl -f http://localhost:3000 || exit 1
           docker stop reqy-web-test

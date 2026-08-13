@@ -18,55 +18,57 @@
 // Copy-based exclusion (not rename) avoids EPERM that rename can hit when an
 // IDE/antivirus holds a file lock inside the folder.
 
-process.env.BUILD_TARGET = 'desktop'
+process.env.BUILD_TARGET = "desktop";
 
-import { spawnSync } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
-const apiDir = path.resolve('app/api')
-const workspacesApiDir = path.resolve('app/api/workspaces')
-const workspacesBackupDir = path.resolve('app/api/_workspaces.disabled')
-const DYNAMIC_RE = /export const dynamic\s*=\s*['"]force-dynamic["'];?/
-const DESKTOP_VALUE = "export const dynamic = 'force-static';"
+const apiDir = path.resolve("app/api");
+const workspacesApiDir = path.resolve("app/api/workspaces");
+const workspacesBackupDir = path.resolve("app/api/_workspaces.disabled");
+const DYNAMIC_RE = /export const dynamic\s*=\s*['"]force-dynamic["'];?/;
+const DESKTOP_VALUE = "export const dynamic = 'force-static';";
 
 function removeDirRobust(dir) {
-  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 
 // Copy-based exclusion: duplicate the tree to a backup, then delete the source.
 // Copy tolerates read locks; delete retries in case a transient lock remains.
 function excludeWorkspaces() {
-  if (!fs.existsSync(workspacesApiDir)) return false
-  if (fs.existsSync(workspacesBackupDir)) removeDirRobust(workspacesBackupDir)
-  fs.cpSync(workspacesApiDir, workspacesBackupDir, { recursive: true })
-  removeDirRobust(workspacesApiDir)
-  return true
+  if (!fs.existsSync(workspacesApiDir)) return false;
+  if (fs.existsSync(workspacesBackupDir)) removeDirRobust(workspacesBackupDir);
+  fs.cpSync(workspacesApiDir, workspacesBackupDir, { recursive: true });
+  removeDirRobust(workspacesApiDir);
+  return true;
 }
 
 function restoreWorkspaces() {
-  if (!fs.existsSync(workspacesBackupDir)) return
-  if (fs.existsSync(workspacesApiDir)) removeDirRobust(workspacesApiDir)
-  fs.cpSync(workspacesBackupDir, workspacesApiDir, { recursive: true })
-  removeDirRobust(workspacesBackupDir)
+  if (!fs.existsSync(workspacesBackupDir)) return;
+  if (fs.existsSync(workspacesApiDir)) removeDirRobust(workspacesApiDir);
+  fs.cpSync(workspacesBackupDir, workspacesApiDir, { recursive: true });
+  removeDirRobust(workspacesBackupDir);
 }
 
 function findRouteFiles(dir, results = []) {
-  if (!fs.existsSync(dir)) return results
+  if (!fs.existsSync(dir)) return results;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name)
+    const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      findRouteFiles(fullPath, results)
-    } else if (entry.name === 'route.ts') {
-      results.push(fullPath)
+      findRouteFiles(fullPath, results);
+    } else if (entry.name === "route.ts") {
+      results.push(fullPath);
     }
   }
-  return results
+  return results;
 }
 
-const workspacesExcluded = excludeWorkspaces()
+const workspacesExcluded = excludeWorkspaces();
 if (workspacesExcluded) {
-  console.log('[build-desktop] Excluded app/api/workspaces from desktop export (uses SYNC_URL directly)')
+  console.log(
+    "[build-desktop] Excluded app/api/workspaces from desktop export (uses SYNC_URL directly)",
+  );
 }
 
 // Build + deploy recli (dist + prod node_modules) as a Tauri resource so the
@@ -77,92 +79,98 @@ if (workspacesExcluded) {
 // ponytail: `pnpm deploy` re-resolves prod deps (network) and can be slow;
 // upgrade path is an offline bundle (esbuild single-file) if builds must be hermetic.
 function deployRecliForDesktop() {
-  const root = path.resolve('..')
-  const target = path.resolve(root, 'src-tauri', 'resources', 'recli')
-  console.log('[build-desktop] Building recli...')
-  const build = spawnSync('pnpm', ['--dir', 'recli', 'build'], {
-    stdio: 'inherit',
+  const root = path.resolve("..");
+  const target = path.resolve(root, "src-tauri", "resources", "recli");
+  console.log("[build-desktop] Building recli...");
+  const build = spawnSync("pnpm", ["--dir", "recli", "build"], {
+    cwd: root,
+    stdio: "inherit",
     shell: true,
     env: process.env,
-  })
+  });
   if (build.status !== 0) {
-    console.warn('[build-desktop] recli build failed — packaged app will have no MCP server')
-    return
+    console.warn("[build-desktop] recli build failed — packaged app will have no MCP server");
+    return;
   }
-  removeDirRobust(target)
-  console.log('[build-desktop] Deploying recli (prod deps) into src-tauri/resources/recli...')
-  const deploy = spawnSync(
-    'pnpm',
-    ['--filter', 'recli', 'deploy', '--legacy', '--prod', target],
-    { stdio: 'inherit', shell: true, env: process.env },
-  )
+  removeDirRobust(target);
+  console.log("[build-desktop] Deploying recli (prod deps) into src-tauri/resources/recli...");
+  const deploy = spawnSync("pnpm", ["--filter", "recli", "deploy", "--legacy", "--prod", target], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+    env: process.env,
+  });
   if (deploy.status !== 0) {
-    console.warn('[build-desktop] recli deploy failed — packaged app will have no MCP server')
+    console.warn("[build-desktop] recli deploy failed — packaged app will have no MCP server");
   } else {
-    console.log('[build-desktop] recli deployed to src-tauri/resources/recli')
+    console.log("[build-desktop] recli deployed to src-tauri/resources/recli");
   }
 }
 
-deployRecliForDesktop()
+deployRecliForDesktop();
 
 // Clean stale build artifacts AFTER excluding workspaces, so Next regenerates
 // route type validators without the excluded tree (avoids stale "cannot find
 // module" type errors from a prior build).
-for (const dir of ['.next', 'out']) {
+for (const dir of [".next", "out"]) {
   if (fs.existsSync(dir)) {
-    console.log(`[build-desktop] Cleaning ${dir}/`)
+    console.log(`[build-desktop] Cleaning ${dir}/`);
     try {
-      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
     } catch (err) {
-      console.warn(`[build-desktop] Could not fully clean ${dir}/: ${err.message} — continuing anyway`)
+      console.warn(
+        `[build-desktop] Could not fully clean ${dir}/: ${err.message} — continuing anyway`,
+      );
     }
   }
 }
 
-const routeFiles = findRouteFiles(apiDir)
+const routeFiles = findRouteFiles(apiDir);
 if (routeFiles.length === 0) {
-  console.error('[build-desktop] No route.ts files found in app/api/')
-  process.exit(1)
+  console.error("[build-desktop] No route.ts files found in app/api/");
+  process.exit(1);
 }
 
-console.log(`[build-desktop] Patching ${routeFiles.length} route files (dynamic: force-dynamic → force-static)`)
+console.log(
+  `[build-desktop] Patching ${routeFiles.length} route files (dynamic: force-dynamic → force-static)`,
+);
 
 // Snapshot originals so we can restore even if the build crashes.
-const backups = new Map()
+const backups = new Map();
 for (const file of routeFiles) {
-  backups.set(file, fs.readFileSync(file, 'utf8'))
+  backups.set(file, fs.readFileSync(file, "utf8"));
 }
 
-let buildStatus
+let buildStatus;
 try {
   for (const file of routeFiles) {
-    const original = backups.get(file)
+    const original = backups.get(file);
     if (!DYNAMIC_RE.test(original)) {
       console.warn(
         `[build-desktop] Skipping ${path.relative(process.cwd(), file)}: no force-dynamic export found.`,
-      )
-      continue
+      );
+      continue;
     }
-    fs.writeFileSync(file, original.replace(DYNAMIC_RE, DESKTOP_VALUE))
+    fs.writeFileSync(file, original.replace(DYNAMIC_RE, DESKTOP_VALUE));
   }
 
-  console.log('[build-desktop] Running next build --webpack...')
-  const result = spawnSync('next', ['build', '--webpack'], {
-    stdio: 'inherit',
+  console.log("[build-desktop] Running next build --webpack...");
+  const result = spawnSync("next", ["build", "--webpack"], {
+    stdio: "inherit",
     shell: true,
     env: process.env,
-  })
-  buildStatus = result.status ?? 1
+  });
+  buildStatus = result.status ?? 1;
 } finally {
   // Always restore source files to their original state.
   for (const [file, content] of backups) {
-    fs.writeFileSync(file, content)
+    fs.writeFileSync(file, content);
   }
-  console.log('[build-desktop] Restored route files to original state')
+  console.log("[build-desktop] Restored route files to original state");
   if (workspacesExcluded) {
-    restoreWorkspaces()
-    console.log('[build-desktop] Restored app/api/workspaces')
+    restoreWorkspaces();
+    console.log("[build-desktop] Restored app/api/workspaces");
   }
 }
 
-process.exit(buildStatus ?? 1)
+process.exit(buildStatus ?? 1);

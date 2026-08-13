@@ -46,7 +46,7 @@ ENV NEXT_PUBLIC_SYNC_URL=$NEXT_PUBLIC_SYNC_URL \
 # de reqy-web via --dir : `--filter reqly` matcherait aussi le package
 # racine (même nom "reqly") et déclencherait turbo, qui exige un champ
 # packageManager absent ici.
-RUN pnpm --dir reqy-web build
+RUN AUTH_SIGNING_SECRET=ci-build-placeholder-000000000000 pnpm --dir reqy-web build
 
 # --- Stage 2 : production ---
 FROM node:22-slim AS runner
