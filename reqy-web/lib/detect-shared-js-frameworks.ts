@@ -72,7 +72,9 @@ export function detectExpress(content: string): DetectedRoute[] {
         seen.add(key);
         routes.push(r);
       }
-    } catch {}
+    } catch {
+      // Ignore malformed route candidates and continue scanning the file.
+    }
   }
   const ROUTE_CHAIN_RE =
     /([A-Za-z_$][\w$]*)\.route\s*\(\s*(['"`])((?:[^'"`\\]|\\.)*?)\2\s*\)\s*((?:\s*\.\s*(?:get|post|put|delete|patch|options|head|all)\s*\(\s*[\s\S]*?\))+)/g;
@@ -179,7 +181,7 @@ export function detectKtor(content: string): DetectedRoute[] {
   const routes: DetectedRoute[] = [];
   const sanitized = stripLanguageCommentsAndStrings(content);
   const seen = new Set<string>();
-  const DIRECT_RE = /\b(get|post|put|delete|patch|options|head)\s*\(\s*(['"])([^'"\s][^'"\)]*)\2/g;
+  const DIRECT_RE = /\b(get|post|put|delete|patch|options|head)\s*\(\s*(['"])([^'"\s][^'")]*)\2/g;
   for (const m of sanitized.matchAll(DIRECT_RE)) {
     const method = m[1].toUpperCase();
     const rawPath = m[3];
@@ -189,7 +191,7 @@ export function detectKtor(content: string): DetectedRoute[] {
       routes.push(makeRoute(method, rawPath, ""));
     }
   }
-  const PREFIX_RE = /route\s*\(\s*(['"])([^'"\s][^'"\)]*)\1\s*\)\s*\{([\s\S]*?)\}/g;
+  const PREFIX_RE = /route\s*\(\s*(['"])([^'"\s][^'")]*)\1\s*\)\s*\{([\s\S]*?)\}/g;
   for (const m of sanitized.matchAll(PREFIX_RE)) {
     const prefix = m[2];
     const block = m[3];

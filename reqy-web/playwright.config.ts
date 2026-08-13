@@ -1,6 +1,11 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
+  fullyParallel: false,
+  workers: 1,
+  reporter: process.env.CI
+    ? [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]]
+    : "list",
   timeout: 60000,
   expect: {
     timeout: 10000,
@@ -13,9 +18,9 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
   },
   webServer: {
-    command: "pnpm dev --port 3000",
+    command: "pnpm build && pnpm start -p 3000",
     port: 3000,
-    reuseExistingServer: true,
+    reuseExistingServer: process.env.CI !== "true",
     cwd: __dirname,
     timeout: 120000,
   },

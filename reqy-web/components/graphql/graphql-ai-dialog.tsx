@@ -44,7 +44,10 @@ export function GraphqlAIDialog({
 
   // Reset on close.
   useEffect(() => {
-    if (!open) setDescription("");
+    if (!open) {
+      const timer = window.setTimeout(() => setDescription(""), 0);
+      return () => window.clearTimeout(timer);
+    }
   }, [open]);
 
   const trimmed = description.trim();

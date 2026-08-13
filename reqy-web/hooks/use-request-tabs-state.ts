@@ -24,7 +24,7 @@ export function useRequestTabsState() {
   const [tabs, setTabs] = useState<RequestTab[]>(initialTabs);
   const [activeTabId, setActiveTabId] = useState(initialTabs[0].id);
   const [isTabsLoaded, setIsTabsLoaded] = useState(false);
-  const [nativeMode, setNativeMode] = useState(false);
+  const nativeMode = isTauriAvailable();
   const [loadingCount, setLoadingCount] = useState(0);
   const [savedIndicator, setSavedIndicator] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -85,8 +85,6 @@ export function useRequestTabsState() {
   }, [tabs.length, updateScrollButtons]);
 
   useEffect(() => {
-    setNativeMode(isTauriAvailable());
-
     const loadState = async () => {
       const stored = persistence.getItem<{
         tabs: Array<Omit<RequestTab, "responseData">>;

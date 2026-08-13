@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Diff, Trash2, Save, AlertOctagon, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { persistence } from "@/lib/persistence";
@@ -85,14 +85,10 @@ interface Props {
 export function GraphqlSchemaDiff({ schema, endpoint }: Props) {
   const { t } = useTranslation();
   const [snapshotName, setSnapshotName] = useState("");
-  const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
+  const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>(loadSnapshots);
   const [diffTarget, setDiffTarget] = useState<string>("");
   const [changes, setChanges] = useState<ChangeEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSnapshots(loadSnapshots());
-  }, []);
 
   const saveSnapshot = () => {
     if (!schema || !snapshotName.trim()) return;

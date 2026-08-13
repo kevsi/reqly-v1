@@ -548,7 +548,9 @@ export async function detectRoutesWithTreeSitter(
           results.push(route);
         }
       }
-    } catch {}
+    } catch {
+      // A malformed node is skipped while the remaining syntax tree is processed.
+    }
   }
 
   // Post-process: prepend class-level @RequestMapping prefix for Java frameworks
@@ -578,7 +580,9 @@ export async function detectRoutesWithTreeSitter(
           route.path = normalizePath(`${classPrefix}/${route.path}`);
         }
       }
-    } catch {}
+    } catch {
+      // Missing class-level annotations do not invalidate the routes already found.
+    }
   }
 
   return results;

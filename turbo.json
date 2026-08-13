@@ -6,8 +6,12 @@
       "outputs": ["dist/**", ".next/**", "out/**"]
     },
     "lint": {},
-    "test": {},
-    "typecheck": {},
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

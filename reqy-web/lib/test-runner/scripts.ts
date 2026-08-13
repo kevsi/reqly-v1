@@ -104,7 +104,8 @@ async function getVm(): Promise<NodeVmLike | null> {
   if (_vm !== undefined) return _vm;
   try {
     const m = "node" + String.fromCharCode(58) + "vm";
-    _vm = require(m) ?? null;
+    const getBuiltinModule = process.getBuiltinModule;
+    _vm = typeof getBuiltinModule === "function" ? (getBuiltinModule(m) as NodeVmLike) : null;
   } catch {
     _vm = null;
   }

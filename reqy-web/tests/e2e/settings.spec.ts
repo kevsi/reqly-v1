@@ -3,11 +3,11 @@ import { test, expect } from "@playwright/test";
 test.describe("Settings", () => {
   test("page loads and shows settings layout", async ({ page }) => {
     await page.goto("/settings");
-    // Should show a settings title or heading
-    const heading = page
-      .locator("h1, h2, strong", { hasText: /settings|parametres|configuration/i })
-      .first();
-    await expect(heading).toBeVisible({ timeout: 10000 });
+    const settingsSections = page.getByRole("complementary", {
+      name: /settings sections|sections des paramètres/i,
+    });
+    await expect(settingsSections).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("main")).toBeVisible();
   });
 
   test("settings sidebar navigation items exist", async ({ page }) => {

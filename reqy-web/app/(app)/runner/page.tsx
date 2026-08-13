@@ -377,7 +377,7 @@ export default function RunnerPage() {
     return Object.keys(datasetRows[0]);
   }, [datasetRows]);
 
-  const handleRun = useCallback(async () => {
+  const handleRun = async () => {
     if (!selected) return;
     setIsRunning(true);
     setProgress(0);
@@ -396,9 +396,9 @@ export default function RunnerPage() {
     } finally {
       setIsRunning(false);
     }
-  }, [selected, baseContext, executor, iterations]);
+  };
 
-  const reRunFailed = useCallback(async () => {
+  const reRunFailed = async () => {
     if (!selected || !report) return;
     const failedIds = new Set(
       report.results
@@ -434,7 +434,7 @@ export default function RunnerPage() {
     } finally {
       setIsRunning(false);
     }
-  }, [selected, report, baseContext, executor, iterations]);
+  };
 
   const exportReport = useCallback(
     (format: "json" | "junit") => {

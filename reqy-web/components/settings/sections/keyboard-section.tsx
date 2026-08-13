@@ -142,7 +142,7 @@ function KeyRecorder({
   onSave: (combo: KeyCombo) => void;
   onCancel: () => void;
 }) {
-  const [recording, setRecording] = useState(false);
+  const [recording, setRecording] = useState(true);
   const [current, setCurrent] = useState<KeyCombo>(initialKeys);
   const ref = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
@@ -192,11 +192,6 @@ function KeyRecorder({
       return () => window.removeEventListener("keydown", handleKey, true);
     }
   }, [recording, handleKey]);
-
-  // Auto-start recording on mount
-  useEffect(() => {
-    setRecording(true);
-  }, []);
 
   const parts: string[] = [];
   if (current.ctrl) parts.push("Ctrl");

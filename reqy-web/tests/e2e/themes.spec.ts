@@ -15,11 +15,7 @@ test.describe("Theme switching", () => {
 
     // The theme switcher might be in the settings or as a direct button
     // First check if there's a palette/theme button on the page
-    const paletteBtn = page
-      .locator(
-        "button:has(svg.lucide-palette), button:has(svg.lucide-sun), button:has(svg.lucide-moon)",
-      )
-      .first();
+    const paletteBtn = page.getByTitle(/change theme|changer le thème/i).first();
     if (await paletteBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await paletteBtn.click();
 
@@ -57,11 +53,7 @@ test.describe("Theme switching", () => {
   test("can select a different theme from dialog", async ({ page }) => {
     await page.goto("/");
 
-    const paletteBtn = page
-      .locator(
-        "button:has(svg.lucide-palette), button:has(svg.lucide-sun), button:has(svg.lucide-moon)",
-      )
-      .first();
+    const paletteBtn = page.getByTitle(/change theme|changer le thème/i).first();
     if (await paletteBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await paletteBtn.click();
       await page.waitForTimeout(500);

@@ -387,7 +387,9 @@ export function findEntryPoint(files: { path: string; content: string }[]): stri
           if (found) return found.path;
         }
       }
-    } catch {}
+    } catch {
+      // Invalid package metadata is ignored; conventional entry-point patterns follow.
+    }
   }
 
   const entryPatterns = [
@@ -482,7 +484,7 @@ export function detectDynamicRoutes(files: { path: string; content: string }[]):
       const arrayContent = m[1];
       const pathMatches = arrayContent.match(/['"]([^'"]+)['"]/g) || [];
       for (const pathMatch of pathMatches) {
-        const path = pathMatch.replace(/['\"]/g, "");
+        const path = pathMatch.replace(/["']/g, "");
         const key = `*|${path}`;
         if (!seen.has(key)) {
           seen.add(key);

@@ -89,8 +89,8 @@ function useToolStatus(toolId: string, refreshKey = 0): ConnectionStatus {
           ? "/api/jina-auth/status"
           : null;
     if (!url) {
-      setStatus("disconnected");
-      return;
+      const timer = window.setTimeout(() => setStatus("disconnected"), 0);
+      return () => window.clearTimeout(timer);
     }
     fetch(url, { credentials: "include" })
       .then((r) => r.json())
@@ -188,11 +188,10 @@ export function ToolsSection() {
 
   // SSL verification (desktop only): when off, the Tauri fetch uses the
   // insecure reqwest client that skips certificate validation.
-  const [sslEnabled, setSslEnabled] = useState(true);
-  useEffect(() => {
+  const [sslEnabled, setSslEnabled] = useState(() => {
     const v = persistence.getItem<boolean>("reqly_ssl_verification_enabled");
-    if (typeof v === "boolean") setSslEnabled(v);
-  }, []);
+    return typeof v === "boolean" ? v : true;
+  });
   const setSslVerification = async (value: boolean) => {
     setSslEnabled(value);
     try {

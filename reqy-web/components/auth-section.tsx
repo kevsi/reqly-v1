@@ -82,20 +82,23 @@ export function AuthSection({
 
   // Re-sync when authToken changes externally (e.g. loading a saved request).
   useEffect(() => {
-    if (authType !== "basic") return;
-    if (!authToken) {
-      setBasicUsername("");
-      setBasicPassword("");
-      return;
-    }
-    try {
-      const decoded = atob(authToken);
-      const colon = decoded.indexOf(":");
-      setBasicUsername(colon === -1 ? decoded : decoded.slice(0, colon));
-      setBasicPassword(colon === -1 ? "" : decoded.slice(colon + 1));
-    } catch {
-      /* authToken may already be raw (legacy) — leave fields unchanged */
-    }
+    const timer = window.setTimeout(() => {
+      if (authType !== "basic") return;
+      if (!authToken) {
+        setBasicUsername("");
+        setBasicPassword("");
+        return;
+      }
+      try {
+        const decoded = atob(authToken);
+        const colon = decoded.indexOf(":");
+        setBasicUsername(colon === -1 ? decoded : decoded.slice(0, colon));
+        setBasicPassword(colon === -1 ? "" : decoded.slice(colon + 1));
+      } catch {
+        /* authToken may already be raw (legacy) — leave fields unchanged */
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
 

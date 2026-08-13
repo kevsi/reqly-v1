@@ -1,56 +1,54 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useState } from "react"
-import { persistence } from "@/lib/persistence"
+import { useCallback, useEffect, useState } from "react";
+import { persistence } from "@/lib/persistence";
 
-const STORAGE_KEY = "reqly-animations"
+const STORAGE_KEY = "reqly-animations";
 
 export interface UseAnimationsReturn {
-  enabled: boolean
-  toggle: () => void
-  setEnabled: (v: boolean) => void
+  enabled: boolean;
+  toggle: () => void;
+  setEnabled: (v: boolean) => void;
 }
 
 function readInitial(): boolean {
-  if (typeof window === "undefined") return true
+  if (typeof window === "undefined") return true;
   try {
-    const stored = persistence.getItem<string>(STORAGE_KEY)
-    if (stored === "off") return false
+    const stored = persistence.getItem<string>(STORAGE_KEY);
+    if (stored === "off") return false;
   } catch {
     /* ignore */
   }
-  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function applyClass(enabled: boolean) {
-  if (typeof document === "undefined") return
+  if (typeof document === "undefined") return;
   if (enabled) {
-    document.body.removeAttribute("data-animations")
+    document.body.removeAttribute("data-animations");
   } else {
-    document.body.setAttribute("data-animations", "off")
+    document.body.setAttribute("data-animations", "off");
   }
 }
 
 export function useAnimations(): UseAnimationsReturn {
-  const [enabled, setEnabledState] = useState<boolean>(true)
+  const [enabled, setEnabledState] = useState<boolean>(readInitial);
 
   useEffect(() => {
-    const initial = readInitial()
-    setEnabledState(initial)
-    applyClass(initial)
-  }, [])
+    applyClass(enabled);
+  }, [enabled]);
 
   const setEnabled = useCallback((v: boolean) => {
-    setEnabledState(v)
-    applyClass(v)
+    setEnabledState(v);
+    applyClass(v);
     try {
-      void persistence.setItem(STORAGE_KEY, v ? "on" : "off")
+      void persistence.setItem(STORAGE_KEY, v ? "on" : "off");
     } catch {
       /* ignore */
     }
-  }, [])
+  }, []);
 
-  const toggle = useCallback(() => setEnabled(!enabled), [enabled, setEnabled])
+  const toggle = useCallback(() => setEnabled(!enabled), [enabled, setEnabled]);
 
-  return { enabled, toggle, setEnabled }
+  return { enabled, toggle, setEnabled };
 }

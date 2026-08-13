@@ -89,7 +89,9 @@ function buildCsp(nonce: string): string {
     const syncOrigin = new URL(syncUrl).origin;
     const wsScheme = syncOrigin.startsWith("https") ? "wss:" : "ws:";
     syncConnectTargets = `${syncOrigin} ${syncOrigin.replace(/^https?:/, wsScheme)}`;
-  } catch {}
+  } catch {
+    // Keep the safe default sync targets when the configured URL is invalid.
+  }
   return [
     "default-src 'self'",
     // Nonce-based script-src: Next.js 16 applies the `x-nonce` request header

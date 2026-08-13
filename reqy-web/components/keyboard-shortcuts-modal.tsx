@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X, Keyboard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SHORTCUT_DEFS, type ShortcutDef } from "@/lib/shortcut-defs";
@@ -13,12 +13,10 @@ interface KeyboardShortcutsModalProps {
 }
 
 export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcutsModalProps) {
-  const [isMac, setIsMac] = useState(false);
+  const [isMac] = useState(
+    () => typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0,
+  );
   const { t } = useTranslation();
-
-  useEffect(() => {
-    setIsMac(navigator.platform.toUpperCase().indexOf("MAC") >= 0);
-  }, []);
 
   // Grouper les raccourcis par catégorie
   const categories = SHORTCUT_DEFS.reduce(

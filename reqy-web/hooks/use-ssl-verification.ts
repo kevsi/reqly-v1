@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { persistence } from "@/lib/persistence";
 
 const SSL_VERIFICATION_KEY = "reqly_ssl_verification_enabled";
@@ -15,12 +15,10 @@ const SSL_VERIFICATION_KEY = "reqly_ssl_verification_enabled";
  * Default is `true` (verification on), matching standard browser behaviour.
  */
 export function useSslVerification() {
-  const [enabled, setEnabledState] = useState(true);
-
-  useEffect(() => {
-    const v = persistence.getItem<boolean>("reqly_ssl_verification_enabled");
-    if (typeof v === "boolean") setEnabledState(v);
-  }, []);
+  const [enabled, setEnabledState] = useState(() => {
+    const stored = persistence.getItem<boolean>(SSL_VERIFICATION_KEY);
+    return typeof stored === "boolean" ? stored : true;
+  });
 
   const setEnabled = async (value: boolean) => {
     setEnabledState(value);

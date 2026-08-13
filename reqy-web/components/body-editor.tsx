@@ -146,7 +146,10 @@ export function BodyEditor({
       <AccordionContent>
         <div className="flex items-center gap-3 mb-3">
           <Select value={bodyType} onValueChange={(value) => onBodyTypeChange(value as BodyType)}>
-            <SelectTrigger className="w-32 h-9 border-input bg-muted/20 text-xs font-medium transition-all duration-200 hover:border-muted-foreground/30">
+            <SelectTrigger
+              data-testid="body-type-select"
+              className="w-32 h-9 border-input bg-muted/20 text-xs font-medium transition-all duration-200 hover:border-muted-foreground/30"
+            >
               <SelectValue placeholder={t("body.typePlaceholder")} />
             </SelectTrigger>
             <SelectContent>

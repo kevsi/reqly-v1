@@ -21,13 +21,13 @@ export function detectFastAPI(content: string): DetectedRoute[] {
   const routerPrefixMap = new Map<string, string>();
 
   const APIRouter_PREFIX_RE =
-    /([A-Za-z_][\w]*)\s*=\s*APIRouter\s*\(\s*(?:[^)]*\s+)?prefix\s*[:=]\s*['\"]([^'\"]+)['\"][\s\S]*?\)/g;
+    /([A-Za-z_][\w]*)\s*=\s*APIRouter\s*\(\s*(?:[^)]*\s+)?prefix\s*[:=]\s*['"]([^'"]+)['"][\s\S]*?\)/g;
   for (const m of content.matchAll(APIRouter_PREFIX_RE)) {
     routerPrefixMap.set(m[1], m[2]);
   }
 
   const INCLUDE_ROUTER_RE =
-    /\.include_router\s*\(\s*([A-Za-z_][\w]*)\s*(?:,\s*prefix\s*=\s*['\"]([^'\"]+)['\"])?/g;
+    /\.include_router\s*\(\s*([A-Za-z_][\w]*)\s*(?:,\s*prefix\s*=\s*['"]([^'"]+)['"])?/g;
   for (const m of content.matchAll(INCLUDE_ROUTER_RE)) {
     const routerName = m[1];
     const includePrefix = m[2];
@@ -84,7 +84,7 @@ export function detectFastAPI(content: string): DetectedRoute[] {
         r.reasonings?.push("Form(...) detected");
       } else if (
         !/\bQuery\s*\(|\bPath\s*\(|\bDepends\s*\(|\bHeader\s*\(/.test(params) &&
-        /:\s*[A-Za-z_][\w.<>\[\]]*/.test(params)
+        /:\s*[A-Za-z_][\w.<>[\]]*/.test(params)
       ) {
         r.bodyType = "json";
         r.reasonings?.push("Body JSON detected");
@@ -139,12 +139,12 @@ export function detectFlask(content: string): DetectedRoute[] {
   const blueprintPrefix = new Map<string, string>();
   const methodViewMethods = new Map<string, string[]>();
   const REGISTER_BP_RE =
-    /app\.register_blueprint\s*\(\s*([A-Za-z_][\w]*)\s*,\s*url_prefix\s*=\s*['\"]([^'\"]+)['\"]\s*\)/g;
+    /app\.register_blueprint\s*\(\s*([A-Za-z_][\w]*)\s*,\s*url_prefix\s*=\s*['"]([^'"]+)['"]\s*\)/g;
   for (const m of content.matchAll(REGISTER_BP_RE)) {
     blueprintPrefix.set(m[1], m[2]);
   }
   const BLUEPRINT_DEF_RE =
-    /([A-Za-z_][\w]*)\s*=\s*Blueprint\s*\(\s*['\"][^'\"\s]+['\"]\s*,[\s\S]*?url_prefix\s*=\s*['\"]([^'\"]+)['\"]/g;
+    /([A-Za-z_][\w]*)\s*=\s*Blueprint\s*\(\s*['"][^'"\s]+['"]\s*,[\s\S]*?url_prefix\s*=\s*['"]([^'"]+)['"]/g;
   for (const m of content.matchAll(BLUEPRINT_DEF_RE)) {
     blueprintPrefix.set(m[1], m[2]);
   }
@@ -159,7 +159,7 @@ export function detectFlask(content: string): DetectedRoute[] {
     if (methods.length) methodViewMethods.set(className, methods);
   }
   const ROUTE_RE =
-    /@([A-Za-z_][\w.]*)\.(route|get|post|put|delete|patch|options|head|add_url_rule)\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+    /@([A-Za-z_][\w.]*)\.(route|get|post|put|delete|patch|options|head|add_url_rule)\s*\(\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ROUTE_RE)) {
     const decoratorTarget = m[1];
     const methodName = m[2];
@@ -200,7 +200,7 @@ export function detectFlask(content: string): DetectedRoute[] {
     }
   }
   const ADD_URL_RULE_RE =
-    /([A-Za-z_][\w.]*)\.add_url_rule\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+    /([A-Za-z_][\w.]*)\.add_url_rule\s*\(\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ADD_URL_RULE_RE)) {
     const decoratorTarget = m[1];
     let routePath = m[2];
@@ -227,7 +227,7 @@ export function detectFlask(content: string): DetectedRoute[] {
     }
   }
   const ADD_RESOURCE_RE =
-    /([A-Za-z_][\w.]*)\.add_resource\s*\(\s*([A-Za-z_][\w.]*)\s*,\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+    /([A-Za-z_][\w.]*)\.add_resource\s*\(\s*([A-Za-z_][\w.]*)\s*,\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ADD_RESOURCE_RE)) {
     const resourceClass = m[2];
     const routePath = m[3];
@@ -290,7 +290,7 @@ export function detectTornado(content: string): DetectedRoute[] {
   const routes: DetectedRoute[] = [];
   const handlerMethods = new Map<string, string[]>();
   const HANDLER_RE =
-    /class\s+([A-Za-z_][\w]*)\s*\([^\n]*RequestHandler[^\)]*\):([\s\S]*?)(?=\nclass\s|\n\n|$)/g;
+    /class\s+([A-Za-z_][\w]*)\s*\([^\n]*RequestHandler[^)]*\):([\s\S]*?)(?=\nclass\s|\n\n|$)/g;
   for (const m of content.matchAll(HANDLER_RE)) {
     const className = m[1];
     const body = m[2];
@@ -327,12 +327,12 @@ export function detectSanic(content: string): DetectedRoute[] {
   const routes: DetectedRoute[] = [];
   const blueprintPrefix = new Map<string, string>();
   const BLUEPRINT_DEF_RE =
-    /([A-Za-z_][\w]*)\s*=\s*Blueprint\s*\(\s*['"][^'\"\s]+['\"]\s*,[\s\S]*?url_prefix\s*=\s*['"]([^'\"]+)['"]/g;
+    /([A-Za-z_][\w]*)\s*=\s*Blueprint\s*\(\s*['"][^'"\s]+['"]\s*,[\s\S]*?url_prefix\s*=\s*['"]([^'"]+)['"]/g;
   for (const m of content.matchAll(BLUEPRINT_DEF_RE)) {
     blueprintPrefix.set(m[1], m[2]);
   }
   const ROUTE_RE =
-    /@([A-Za-z_][\w.]*)\.(get|post|put|delete|patch|options|head|route)\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+    /@([A-Za-z_][\w.]*)\.(get|post|put|delete|patch|options|head|route)\s*\(\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ROUTE_RE)) {
     const target = m[1];
     const methodName = m[2];
@@ -354,14 +354,13 @@ export function detectSanic(content: string): DetectedRoute[] {
       routes.push(r);
     }
   }
-  const ADD_ROUTE_RE =
-    /([A-Za-z_][\w.]*)\.add_route\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+  const ADD_ROUTE_RE = /([A-Za-z_][\w.]*)\.add_route\s*\(\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ADD_ROUTE_RE)) {
     let method = m[2].toUpperCase();
     const routePath = m[3];
     const args = m[4] || "";
     if (method === "ROUTE") {
-      const explicit = args.match(/['\"](GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)['\"]/i)?.[1];
+      const explicit = args.match(/['"](GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)['"]/i)?.[1];
       if (explicit) method = explicit.toUpperCase();
     }
     const r = makeRoute(method, normalizePath(routePath), "");
@@ -377,7 +376,7 @@ export function detectStarlette(content: string): DetectedRoute[] {
   const astRoutes = detectPythonRoutesAST(content, "starlette");
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
-  const ROUTE_RE = /Route\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+  const ROUTE_RE = /Route\s*\(\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ROUTE_RE)) {
     const routePath = m[1];
     const args = m[2] || "";
@@ -401,7 +400,7 @@ export function detectLitestar(content: string): DetectedRoute[] {
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
   const ROUTE_RE =
-    /@(?:get|post|put|delete|patch|options|head|route)\s*\(\s*['\"]([^'"]+)['\"]([\s\S]*?)\)/g;
+    /@(?:get|post|put|delete|patch|options|head|route)\s*\(\s*['"]([^'"]+)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ROUTE_RE)) {
     const routePath = m[1];
     const argText = m[2] || "";
@@ -425,7 +424,7 @@ export function detectAiohttp(content: string): DetectedRoute[] {
   if (astRoutes.length > 0) return astRoutes;
   const routes: DetectedRoute[] = [];
   const DECORATOR_RE =
-    /@([A-Za-z_][\w.]*)\.(get|post|put|delete|patch)\s*\(\s*['\"]([^'"]+)['\"]([\s\S]*?)\)/g;
+    /@([A-Za-z_][\w.]*)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(DECORATOR_RE)) {
     const method = m[2].toUpperCase();
     const routePath = m[3];
@@ -434,13 +433,13 @@ export function detectAiohttp(content: string): DetectedRoute[] {
     routes.push(r);
   }
   const ADD_ROUTE_RE =
-    /([A-Za-z_][\w.]*)\.router\.add_(get|post|put|delete|patch|route)\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]([\s\S]*?)\)/g;
+    /([A-Za-z_][\w.]*)\.router\.add_(get|post|put|delete|patch|route)\s*\(\s*['"]([^'"\s][^'"]*)['"]([\s\S]*?)\)/g;
   for (const m of content.matchAll(ADD_ROUTE_RE)) {
     let method = m[2].toUpperCase();
     const routePath = m[3];
     const args = m[4] || "";
     if (method === "ROUTE") {
-      const explicit = args.match(/['\"](GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)['\"]/i)?.[1];
+      const explicit = args.match(/['"](GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)['"]/i)?.[1];
       if (explicit) method = explicit.toUpperCase();
     }
     const r = makeRoute(method, normalizePath(routePath), "");
@@ -467,7 +466,7 @@ export function detectFalcon(content: string): DetectedRoute[] {
     if (methods.length) resourceMethods.set(className, methods);
   }
   const ADD_ROUTE_RE =
-    /([A-Za-z_][\w.]*)\.add_route\s*\(\s*['\"]([^'"\s][^'\"]*)['\"]\s*,\s*([A-Za-z_][\w.]*)/g;
+    /([A-Za-z_][\w.]*)\.add_route\s*\(\s*['"]([^'"\s][^'"]*)['"]\s*,\s*([A-Za-z_][\w.]*)/g;
   for (const m of content.matchAll(ADD_ROUTE_RE)) {
     const routePath = m[2];
     const resourceName = m[3].split(".").pop() || m[3];
@@ -801,6 +800,8 @@ print(json.dumps(routes))
           return route;
         });
     }
-  } catch {}
+  } catch {
+    // AST detection is optional; callers fall back to regex-based detection.
+  }
   return [];
 }

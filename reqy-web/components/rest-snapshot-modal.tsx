@@ -142,7 +142,6 @@ export function RestSnapshotModal({
   const [selectedName, setSelectedName] = useState("");
   const [selectedEntry, setSelectedEntry] = useState<SnapshotEntry | null>(null);
   const [diff, setDiff] = useState<{ name: string; changes: FieldChange[] } | null>(null);
-  const [isJson, setIsJson] = useState(false);
 
   // Rename state
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
@@ -157,6 +156,7 @@ export function RestSnapshotModal({
 
   // ── Derived ──────────────────────────────────────────────────────────
   const parsed = parseResponseBody(responseBody);
+  const isJson = parsed !== undefined;
   const hasResponse = responseBody !== undefined && responseBody !== null && responseBody !== "";
   const canSave = newName.trim() && parsed !== undefined;
 
@@ -173,7 +173,8 @@ export function RestSnapshotModal({
   }, []);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const timer = window.setTimeout(() => {
       refresh();
       setDiff(null);
       setSelectedName("");
@@ -182,12 +183,9 @@ export function RestSnapshotModal({
       setPendingOverwrite(null);
       setRenameTarget(null);
       setShowDetail(false);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, refresh]);
-
-  useEffect(() => {
-    setIsJson(parseResponseBody(responseBody) !== undefined);
-  }, [responseBody]);
 
   // ── Save / Overwrite ─────────────────────────────────────────────────
   const handleSave = () => {

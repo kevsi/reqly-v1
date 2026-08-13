@@ -28,25 +28,18 @@ interface SidebarContextType {
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      const stored = persistence.getItem<string>("sidebar-collapsed");
+      return stored ? Boolean(JSON.parse(stored)) : true;
+    } catch {
+      return true;
+    }
+  });
 
   const isNarrow = useIsMobile(916);
   const isMobile = useIsMobile(768);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // Load from persistence (sync cache populated from localStorage on startup)
-  useEffect(() => {
-    try {
-      const stored = persistence.getItem<string>("sidebar-collapsed");
-      if (stored) {
-        const t = window.setTimeout(() => setIsCollapsed(JSON.parse(stored)), 0);
-        return () => window.clearTimeout(t);
-      }
-    } catch {
-      /* ignore */
-    }
-    return;
-  }, []);
 
   // Close sidebar automatically on narrower desktop widths
   useEffect(() => {
@@ -58,7 +51,10 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   // Auto-close the mobile drawer when resizing up to desktop
   useEffect(() => {
-    if (!isMobile && mobileOpen) setMobileOpen(false);
+    if (!isMobile && mobileOpen) {
+      const t = window.setTimeout(() => setMobileOpen(false), 0);
+      return () => window.clearTimeout(t);
+    }
   }, [isMobile, mobileOpen]);
 
   // Save to persistence

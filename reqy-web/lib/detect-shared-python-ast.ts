@@ -322,6 +322,8 @@ print(json.dumps(routes))
           return route;
         });
     }
-  } catch {}
+  } catch {
+    // AST detection is optional; callers fall back to regex-based detection.
+  }
   return [];
 }

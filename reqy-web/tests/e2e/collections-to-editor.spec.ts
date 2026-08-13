@@ -143,8 +143,12 @@ test.describe("Collections to Editor flow", () => {
 
     // Go back to collections and click again
     await page.goto("/collections");
-    await page.getByText("Test Collection", { exact: false }).first().click();
+    const collectionAgain = page.getByText("Test Collection", { exact: false }).first();
+    await expect(collectionAgain).toBeVisible({ timeout: 20_000 });
     const requestRowAgain = page.getByText("Get Test", { exact: false }).first();
+    if (!(await requestRowAgain.isVisible({ timeout: 2_000 }).catch(() => false))) {
+      await collectionAgain.click();
+    }
     await expect(requestRowAgain).toBeVisible({ timeout: 10_000 });
     await requestRowAgain.click();
 

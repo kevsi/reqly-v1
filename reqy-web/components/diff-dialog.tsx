@@ -52,7 +52,8 @@ export function DiffDialog({
   const [copiedRight, setCopiedRight] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const timer = window.setTimeout(() => {
       if (currentResponse) {
         setLeftId("__current__");
       }
@@ -60,7 +61,8 @@ export function DiffDialog({
       if (mostRecent) {
         setRightId(mostRecent.id);
       }
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, currentResponse, historyWithResponses]);
 
   const leftOptions = [

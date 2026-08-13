@@ -44,7 +44,7 @@ test.describe("API Request flows", () => {
     await urlInput.fill("https://httpbin.org/post");
 
     // Expand the Body accordion section and switch to JSON
-    const bodyTrigger = page.locator("button", { hasText: /^Body/ }).first();
+    const bodyTrigger = page.locator("button", { hasText: /^(Body|Corps)/i }).first();
     await bodyTrigger.click();
     await page.waitForTimeout(300);
 

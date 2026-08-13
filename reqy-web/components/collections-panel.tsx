@@ -583,8 +583,8 @@ export function CollectionsPanel({
   // ── Semantic search ──
   useEffect(() => {
     if (!semanticSearchEnabled || !searchQuery) {
-      setSemanticResults(null);
-      return;
+      const timer = window.setTimeout(() => setSemanticResults(null), 0);
+      return () => window.clearTimeout(timer);
     }
     let cancelled = false;
     void (async () => {

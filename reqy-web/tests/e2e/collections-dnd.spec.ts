@@ -250,7 +250,7 @@ test.describe("Collections — Drag & Drop (Session 3)", () => {
     const afterCount = await page.locator('[data-testid^="drag-handle-"]').count();
     expect(afterCount).toBe(3);
     // The duplicated request should be visible
-    await expect(page.getByText("Get Users (copy)", { exact: false }).first()).toBeVisible({
+    await expect(page.getByText(/Get Users \((copy|copie)\)/i).first()).toBeVisible({
       timeout: 5_000,
     });
   });

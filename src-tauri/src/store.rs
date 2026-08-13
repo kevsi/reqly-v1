@@ -339,6 +339,38 @@ mod tests {
     }
 
     #[test]
+    fn smoke_ipc_queue_payload_uses_frontend_field_names() {
+        let request = QueuedRequest::new(
+            "POST",
+            "https://api.example.com/health",
+            vec![("Content-Type".into(), "application/json".into())],
+            Some(br#"{"ok":true}"#.to_vec()),
+            "offline",
+        );
+
+        let json = serde_json::to_value(&request).expect("queued request must serialize");
+        assert!(json.get("createdAt").is_some(), "IPC payload must use camelCase");
+        assert!(json.get("created_at").is_none(), "snake_case must not leak to frontend");
+        assert_eq!(json["method"], "POST");
+        assert_eq!(json["url"], "https://api.example.com/health");
+
+        let round_trip: QueuedRequest =
+            serde_json::from_value(json).expect("IPC payload must deserialize back");
+        assert_eq!(round_trip.method, "POST");
+        assert_eq!(round_trip.body, Some(br#"{"ok":true}"#.to_vec()));
+    }
+
+    #[test]
+    fn smoke_session_encryption_command_is_available_after_initialisation() {
+        init_session_encryption_key();
+        let first = get_encryption_passphrase().expect("session key must be available");
+        let second = get_encryption_passphrase().expect("session key must remain available");
+
+        assert!(!first.is_empty(), "session key must not be empty");
+        assert_eq!(first, second, "session key must remain stable during the process");
+    }
+
+    #[test]
     fn empty_queue_dequeue_ready_is_none() {
         let store = isolated_store();
         assert!(store.dequeue_ready().is_none());

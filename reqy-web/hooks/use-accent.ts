@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useState } from "react"
-import { persistence } from "@/lib/persistence"
+import { useCallback, useEffect, useState } from "react";
+import { persistence } from "@/lib/persistence";
 
-const STORAGE_KEY = "reqly-accent"
+const STORAGE_KEY = "reqly-accent";
 
 export const ACCENT_PRESETS = [
   { id: "black", label: "Noir", hex: "#000000" },
@@ -11,58 +11,58 @@ export const ACCENT_PRESETS = [
   { id: "green", label: "Vert", hex: "#10B981" },
   { id: "blue", label: "Bleu", hex: "#3B82F6" },
   { id: "purple", label: "Violet", hex: "#8B5CF6" },
-] as const
+] as const;
 
-export const HEX_REGEX = /^#[0-9A-Fa-f]{6}$/
+export const HEX_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
 export interface UseAccentReturn {
-  accent: string | null
-  setAccent: (hex: string | null) => void
-  isPreset: (hex: string) => boolean
-  presets: typeof ACCENT_PRESETS
+  accent: string | null;
+  setAccent: (hex: string | null) => void;
+  isPreset: (hex: string) => boolean;
+  presets: typeof ACCENT_PRESETS;
 }
 
 function applyAccent(hex: string | null) {
-  if (typeof document === "undefined") return
-  const root = document.documentElement
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
   if (hex && HEX_REGEX.test(hex)) {
-    root.style.setProperty("--primary", hex)
+    root.style.setProperty("--primary", hex);
   } else {
-    root.style.removeProperty("--primary")
+    root.style.removeProperty("--primary");
   }
 }
 
 export function useAccent(): UseAccentReturn {
-  const [accent, setAccentState] = useState<string | null>(null)
+  const [accent, setAccentState] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = persistence.getItem<string>(STORAGE_KEY);
+      return stored && HEX_REGEX.test(stored) ? stored : null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    try {
-      const stored = persistence.getItem<string>(STORAGE_KEY)
-      if (stored && HEX_REGEX.test(stored)) {
-        setAccentState(stored)
-        applyAccent(stored)
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [])
+    applyAccent(accent);
+  }, [accent]);
 
   const setAccent = useCallback((hex: string | null) => {
-    if (hex !== null && !HEX_REGEX.test(hex)) return
-    setAccentState(hex)
-    applyAccent(hex)
+    if (hex !== null && !HEX_REGEX.test(hex)) return;
+    setAccentState(hex);
+    applyAccent(hex);
     try {
-      if (hex) void persistence.setItem(STORAGE_KEY, hex)
-      else void persistence.removeItem(STORAGE_KEY)
+      if (hex) void persistence.setItem(STORAGE_KEY, hex);
+      else void persistence.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
     }
-  }, [])
+  }, []);
 
   const isPreset = useCallback(
     (hex: string) => ACCENT_PRESETS.some((p) => p.hex.toLowerCase() === hex.toLowerCase()),
-    []
-  )
+    [],
+  );
 
-  return { accent, setAccent, isPreset, presets: ACCENT_PRESETS }
+  return { accent, setAccent, isPreset, presets: ACCENT_PRESETS };
 }

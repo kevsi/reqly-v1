@@ -2,15 +2,17 @@
 Date : 2026-08-08 09:22 UTC  
 Méthode : Exploration code direct (sans fichiers .md)  
 Version : 0.1.0
-📊 Vue d'Ensemble Architecture
-Composant Quantité
-Pages principales 15
-API endpoints 16
-Composants React 72+
-Hooks métier 32
-Modules lib/ 22 dossiers
-Moteur AI Complet
-✅ Fonctionnalités COMPLÈTES (Production-Ready)
+
+> **Document historique.** Ce fichier conserve l’état de l’audit réalisé le 8 août 2026 et n’est plus la source de vérité fonctionnelle. La documentation à jour se trouve dans [`docs/FONCTIONNALITES.md`](docs/FONCTIONNALITES.md) et le guide de validation dans [`docs/VALIDATION_CI.md`](docs/VALIDATION_CI.md). Hooklet mobile reste hors périmètre.
+> 📊 Vue d'Ensemble Architecture
+> Composant Quantité
+> Pages principales 15
+> API endpoints 16
+> Composants React 72+
+> Hooks métier 32
+> Modules lib/ 22 dossiers
+> Moteur AI Complet
+> ✅ Fonctionnalités COMPLÈTES (Production-Ready)
 
 1. 🚀 Core API Testing (100%)
    Envoi Requêtes HTTP

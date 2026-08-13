@@ -89,7 +89,10 @@ test.describe("GraphQL dashboard redesign", () => {
     await expect(name).toBeVisible();
     await name.fill("My GraphQL request");
     // Submit
-    await page.getByRole("button", { name: /^Save$/ }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^(Save|Enregistrer)$/i })
+      .click();
   });
 
   test("export button downloads a JSON file", async ({ page }) => {

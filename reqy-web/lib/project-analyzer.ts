@@ -103,7 +103,7 @@ async function analyzeStatic(folderPath: string): Promise<SavedProject> {
   const INCLUDE_ROUTER_RE =
     /include_router\s*\(\s*([A-Za-z0-9_.]+)\s*,\s*prefix\s*[:=]\s*['"]([^'"]+)['"]/g;
   const APIRouter_RE =
-    /([A-Za-z_][\w]*)\s*=\s*APIRouter\s*\(\s*[^\)]*prefix\s*[:=]\s*['"]([^'"]+)['"][^\)]*\)/g;
+    /([A-Za-z_][\w]*)\s*=\s*APIRouter\s*\(\s*[^)]*prefix\s*[:=]\s*['"]([^'"]+)['"][^)]*\)/g;
   for (const f of relevantFiles) {
     let m;
     INCLUDE_ROUTER_RE.lastIndex = 0;
@@ -276,7 +276,9 @@ async function analyzeStatic(folderPath: string): Promise<SavedProject> {
           r.reasonings?.push("Auth middleware global (app.use)");
         }
       }
-    } catch {}
+    } catch {
+      // Ignore malformed route metadata and preserve the route discovered so far.
+    }
   }
 
   // ── Frontend API call scanning ────────────────────────────────────────
@@ -334,7 +336,9 @@ async function analyzeStatic(folderPath: string): Promise<SavedProject> {
             r.reasonings?.push("Auth détecté dans la déclaration inline");
           }
         }
-      } catch {}
+      } catch {
+        // Ignore malformed inline route metadata and continue with the static result.
+      }
     }
 
     for (const called of calledPaths) {
@@ -608,7 +612,9 @@ export async function analyzeWithAI(
     try {
       const content = await readTextFile(fp);
       files.push({ path: fp, content });
-    } catch {}
+    } catch {
+      // Binary or unreadable files are not required for route enrichment.
+    }
   }
 
   const aiRoutes = await enrichRoutesWithAI(staticProject.routes, provider, apiKey, files);

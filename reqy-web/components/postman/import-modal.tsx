@@ -84,41 +84,47 @@ export function PostmanImportModal({
 
   useEffect(() => {
     if (!open || !collectionId) {
-      setRequests([]);
-      setFolders([]);
-      setCollectionIdReturned("");
-      setError(null);
-      return;
+      const timer = window.setTimeout(() => {
+        setRequests([]);
+        setFolders([]);
+        setCollectionIdReturned("");
+        setError(null);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch("/api/postman-import/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ collectionId }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        if (!data.requests) {
-          setError(data.message ?? t("importExport.postman.invalidResponse"));
-          return;
-        }
-        // Store ALL requests ÔÇö preview only shows PREVIEW_LIMIT of them.
-        setRequests(data.requests);
-        setFolders(data.folders ?? []);
-        setCollectionIdReturned(data.collectionId ?? collectionId);
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+      fetch("/api/postman-import/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ collectionId }),
       })
-      .catch(() => {
-        if (!cancelled) setError(t("importExport.common.networkError"));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        .then((r) => r.json())
+        .then((data) => {
+          if (cancelled) return;
+          if (!data.requests) {
+            setError(data.message ?? t("importExport.postman.invalidResponse"));
+            return;
+          }
+          // Store ALL requests ÔÇö preview only shows PREVIEW_LIMIT of them.
+          setRequests(data.requests);
+          setFolders(data.folders ?? []);
+          setCollectionIdReturned(data.collectionId ?? collectionId);
+        })
+        .catch(() => {
+          if (!cancelled) setError(t("importExport.common.networkError"));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [open, collectionId, t]);
 

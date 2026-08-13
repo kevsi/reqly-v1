@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
+// The CSP nonce is generated per request by proxy.ts. Dynamic rendering is
+// required so Next can propagate that nonce to inline RSC bootstrap scripts;
+// static prerendered HTML cannot carry a request-specific nonce.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Reqly - API Playground",
   description: "Professional API endpoint testing and management platform",

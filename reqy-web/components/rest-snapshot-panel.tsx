@@ -67,7 +67,6 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
   const [newName, setNewName] = useState("");
   const [selectedName, setSelectedName] = useState("");
   const [diff, setDiff] = useState<{ name: string; changes: FieldChange[] } | null>(null);
-  const [isJson, setIsJson] = useState(false);
 
   // Refresh snapshot list from localStorage
   const refresh = useCallback(() => {
@@ -75,15 +74,12 @@ export function RestSnapshotPanel({ responseBody }: RestSnapshotPanelProps) {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const timer = window.setTimeout(() => refresh(), 0);
+    return () => window.clearTimeout(timer);
   }, [refresh]);
 
-  // Detect whether the current response is parseable JSON
-  useEffect(() => {
-    setIsJson(parseResponseBody(responseBody) !== undefined);
-  }, [responseBody]);
-
   const parsed = parseResponseBody(responseBody);
+  const isJson = parsed !== undefined;
 
   const handleSave = () => {
     const name = newName.trim();

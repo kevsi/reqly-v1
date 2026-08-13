@@ -133,7 +133,9 @@ export function detectFramework(files: { path: string; content: string }[]): str
       if (deps.axum || deps.actix || deps.rocket) return "rust";
       if (deps.servant || deps.warp) return "haskell";
       if (deps.laravel || deps["laravel/framework"]) return "laravel";
-    } catch {}
+    } catch {
+      // Malformed dependency metadata is ignored; content and path heuristics follow.
+    }
   }
 
   const paths = files.map((f) => f.path.replace(/\\/g, "/")).join("\n");
@@ -231,7 +233,7 @@ export function detectFramework(files: { path: string; content: string }[]): str
     )
   )
     return "rust";
-  if (/import\s+(?:Servant|Wai\.Application)|servant\-server|warp\s*::/.test(all)) return "haskell";
+  if (/import\s+(?:Servant|Wai\.Application)|servant-server|warp\s*::/.test(all)) return "haskell";
   if (/Route::|Illuminate\\\\|app\/Http\/Controllers|Laravel/.test(all)) return "laravel";
 
   return "unknown";

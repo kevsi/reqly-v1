@@ -91,7 +91,10 @@ export function useChatHistory(
   }, [requestId, enabled]);
 
   useEffect(() => {
-    void refetch();
+    const timer = window.setTimeout(() => {
+      void refetch();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refetch]);
 
   const append = useCallback(

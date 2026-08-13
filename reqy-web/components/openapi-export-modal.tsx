@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,11 +42,6 @@ export function OpenApiExportModal({
     if (!historyItems || historyItems.length === 0) return false;
     return historyItems.some((h) => h.responseBody !== undefined && h.responseBody !== null);
   }, [historyItems]);
-
-  useEffect(() => {
-    if (!open) return;
-    setIsExporting(false);
-  }, [open]);
 
   const handleExportClick = async () => {
     setIsExporting(true);

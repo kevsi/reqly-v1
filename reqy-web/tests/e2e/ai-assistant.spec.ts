@@ -16,7 +16,7 @@ test.describe("AI Assistant sidebar", () => {
 
     // Close via Escape
     await page.keyboard.press("Escape");
-    await expect(sidebar).not.toBeVisible();
+    await expect(sidebar).toHaveAttribute("aria-hidden", "true");
   });
 
   test("suggestion prompts are shown in empty state", async ({ page }) => {
@@ -37,7 +37,7 @@ test.describe("AI Assistant sidebar", () => {
     const toggle = page.getByTitle(/Ouvrir l'assistant IA/i);
     await toggle.click();
 
-    const input = page.locator('input[placeholder*="assistant"]');
+    const input = page.getByTestId("ai-sidebar").locator("textarea");
     await expect(input).toBeVisible();
 
     await input.fill("Hello AI");

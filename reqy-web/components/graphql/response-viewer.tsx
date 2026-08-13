@@ -70,10 +70,10 @@ export function ResponseViewer({ data, errors, error, status, timeMs, loading }:
     status !== undefined && status >= 200 && status < 300 && graphqlErrors.length > 0;
   const isHttpError = status !== undefined && status >= 400;
   const isEmpty =
-    data === undefined &&
-    errors === undefined &&
-    error === undefined &&
-    status === undefined &&
+    (data === undefined || data === null) &&
+    (errors === undefined || errors === null) &&
+    (error === undefined || error === null) &&
+    (status === undefined || status === null) &&
     !loading;
 
   if (isEmpty) {

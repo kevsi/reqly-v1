@@ -47,7 +47,8 @@ export default function SignupPage() {
   // If we started on verify step (from ?verify=email), start countdown
   useEffect(() => {
     if (step === "verify" && email) {
-      startCountdown();
+      const timer = setTimeout(() => startCountdown(), 0);
+      return () => clearTimeout(timer);
     }
   }, [step, email, startCountdown]);
 

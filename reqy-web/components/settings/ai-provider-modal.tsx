@@ -63,7 +63,8 @@ export function AiProviderModal({
 
   // Reset form when modal opens with different provider
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const timer = window.setTimeout(() => {
       setApiKey(currentApiKey);
       setBaseUrl(currentBaseUrl);
       setSelectedModel(currentModel);
@@ -71,7 +72,8 @@ export function AiProviderModal({
       setModelsFetched(false);
       setLoadingModels(false);
       clearTestResult();
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, provider, currentApiKey, currentModel, currentBaseUrl, clearTestResult]);
 
   // Auto-fetch models after typing API key (same as existing AISection)

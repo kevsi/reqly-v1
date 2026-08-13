@@ -243,7 +243,7 @@ export function detectServant(content: string): DetectedRoute[] {
       routes.push(makeRoute("GET", path, "Servant inferred route"));
     }
   }
-  const LIT_RE = /\"([\/][^\"]+)\"/g;
+  const LIT_RE = /"(\/[^"]+)"/g;
   for (const m of content.matchAll(LIT_RE)) {
     const p = m[1];
     if (p.includes("/") && !seen.has(p)) {

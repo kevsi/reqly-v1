@@ -26,7 +26,7 @@ test.describe("Autocomplete suggestions", () => {
     await page.waitForSelector('[role="tab"]', { timeout: 10000 });
 
     // Expand Headers section
-    const headersAccordion = page.locator("button", { hasText: /Headers/i }).first();
+    const headersAccordion = page.locator("button", { hasText: /Headers|En-têtes/i }).first();
     await headersAccordion.click();
     await page.waitForTimeout(500);
 
@@ -49,7 +49,7 @@ test.describe("Autocomplete suggestions", () => {
     await page.waitForSelector('[role="tab"]', { timeout: 10000 });
 
     // Expand Query Params section
-    const paramsAccordion = page.locator("button", { hasText: /Query Params/i }).first();
+    const paramsAccordion = page.locator("button", { hasText: /Query Params|Paramètres/i }).first();
     await paramsAccordion.click();
     await page.waitForTimeout(500);
 

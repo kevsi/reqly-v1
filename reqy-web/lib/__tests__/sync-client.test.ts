@@ -242,6 +242,7 @@ describe("sync-client", () => {
 
       const onPage = vi.fn();
       for await (const _ of pollAllSyncChanges({ workspaceId: "ws-123" }, baseConfig, onPage)) {
+        // Consume the async generator so all pages are fetched.
       }
 
       expect(onPage).toHaveBeenCalledTimes(2);

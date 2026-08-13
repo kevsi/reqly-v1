@@ -4,7 +4,9 @@ test.describe("Environments", () => {
   test("environment selector is visible on home page", async ({ page }) => {
     await page.goto("/");
     const envSelector = page
-      .getByRole("button", { name: /select environment|no environment|environment/i })
+      .getByRole("button", {
+        name: /select environment|no environment|environment|sélectionner un environnement|aucun environnement|environnement/i,
+      })
       .first();
     await expect(envSelector).toBeVisible({ timeout: 10000 });
   });
@@ -13,12 +15,14 @@ test.describe("Environments", () => {
     await page.goto("/");
 
     // Open the environment dropdown
-    const envBtn = page.getByRole("button", { name: /environment/i }).first();
+    const envBtn = page.getByRole("button", { name: /environment|environnement/i }).first();
     await expect(envBtn).toBeVisible({ timeout: 10000 });
     await envBtn.click();
 
     // "Manage Environments" option should be visible
-    const manageOption = page.getByRole("menuitem", { name: /manage environment/i });
+    const manageOption = page.getByRole("menuitem", {
+      name: /manage environment|gérer les environnements/i,
+    });
     if (await manageOption.isVisible({ timeout: 3000 }).catch(() => false)) {
       await expect(manageOption).toBeVisible();
     }
@@ -28,16 +32,20 @@ test.describe("Environments", () => {
     await page.goto("/");
 
     // Open the environment dropdown
-    const envBtn = page.getByRole("button", { name: /environment/i }).first();
+    const envBtn = page.getByRole("button", { name: /environment|environnement/i }).first();
     await envBtn.click();
 
     // Click "Manage Environments"
-    const manageOption = page.getByRole("menuitem", { name: /manage environment/i });
+    const manageOption = page.getByRole("menuitem", {
+      name: /manage environment|gérer les environnements/i,
+    });
     if (await manageOption.isVisible({ timeout: 3000 }).catch(() => false)) {
       await manageOption.click();
 
       // Dialog should open with a title
-      const dialogTitle = page.locator("h2", { hasText: /manage|environment/i });
+      const dialogTitle = page.locator("h2", {
+        hasText: /manage|environment|gérer|environnement/i,
+      });
       await expect(dialogTitle).toBeVisible({ timeout: 5000 });
     }
   });
@@ -46,11 +54,13 @@ test.describe("Environments", () => {
     await page.goto("/");
 
     // Open the environment dropdown
-    const envBtn = page.getByRole("button", { name: /environment/i }).first();
+    const envBtn = page.getByRole("button", { name: /environment|environnement/i }).first();
     await envBtn.click();
 
     // Click "New Environment"
-    const newEnvOption = page.getByRole("menuitem", { name: /new environment/i });
+    const newEnvOption = page.getByRole("menuitem", {
+      name: /new environment|nouvel environnement/i,
+    });
     if (await newEnvOption.isVisible({ timeout: 3000 }).catch(() => false)) {
       await newEnvOption.click();
 

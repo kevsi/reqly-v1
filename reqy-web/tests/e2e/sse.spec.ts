@@ -6,7 +6,7 @@ test.describe("SSE (Server-Sent Events)", () => {
     await expect(page.getByTestId("sse-page")).toBeVisible();
 
     // URL input and connect button should be present
-    const urlInput = page.locator('input[placeholder*="URL"i]').first();
+    const urlInput = page.locator('input[placeholder*="localhost" i]').first();
     await expect(urlInput).toBeVisible();
     await expect(urlInput).toHaveValue(/localhost:3000\/sse/);
 

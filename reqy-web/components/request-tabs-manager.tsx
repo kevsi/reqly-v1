@@ -46,14 +46,13 @@ export function RequestTabsManager() {
   // "Mode simple" (Task 13): when enabled, hide the raw request editor and show
   // the natural-language guided builder instead. Persisted via the existing
   // persistence layer (the same store used by Settings).
-  const [simpleMode, setSimpleMode] = useState(false);
-  useEffect(() => {
+  const [simpleMode] = useState(() => {
     try {
-      setSimpleMode(persistence.getItem<boolean>("reqly_simple_mode") === true);
+      return persistence.getItem<boolean>("reqly_simple_mode") === true;
     } catch {
-      /* ignore */
+      return false;
     }
-  }, []);
+  });
   const execution = useRequestTabExecution(tabState);
 
   // Sur mobile, on empile requête/réponse verticalement au lieu du split horizontal.
