@@ -69,6 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(SharedClient {
             normal: http_client,
+            #[cfg(debug_assertions)]
             insecure: insecure_client,
         })
         .manage::<ManagedCaptureProxyState>(Arc::new(Mutex::new(

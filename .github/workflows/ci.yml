@@ -136,7 +136,7 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @reqly/shared build
       - name: Build web (with bundle analyzer)
-        run: pnpm build
+        run: pnpm --dir reqy-web build
         env:
           AUTH_SIGNING_SECRET: ${{ secrets.AUTH_SIGNING_SECRET || 'ci-build-placeholder-000000000000' }}
           # NEXT_PUBLIC_SYNC_URL is a public URL baked into the client bundle —
@@ -251,6 +251,12 @@ jobs:
           docker run --rm -d -p 3000:3000 \
             -e AUTH_SIGNING_SECRET=ci-runtime-placeholder-000000000000 \
             --name reqy-web-test reqy-web:ci
-          sleep 10
-          curl -f http://localhost:3000 || exit 1
-          docker stop reqy-web-test
+          trap 'docker logs reqy-web-test 2>&1 || true; docker stop reqy-web-test 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://localhost:3000; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Container did not become ready within 30 seconds"
+          exit 1
