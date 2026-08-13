@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
-use tiny_http::{Header, Request, Response, Server};
+use tiny_http::{Header, Response, Server};
 #[cfg(feature = "ts-export")]
 use ts_rs::TS;
 use uuid::Uuid;
