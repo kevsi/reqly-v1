@@ -22,7 +22,7 @@ import type { CorrectionSuggestion } from "@/src/ai/cloud-engine/actions/propose
 import type { TauriCookie } from "@/lib/tauri";
 import dynamic from "next/dynamic";
 
-// Heavy dependencies — only loaded on demand (response received, AI opened).
+// Heavy dependencies â€” only loaded on demand (response received, AI opened).
 const ResponseContentRenderer = dynamic(
   () =>
     import("@/components/response-content-renderer").then((m) => ({
@@ -133,8 +133,8 @@ export function ResponsePanel({
       }
       return "json";
     }
-    if (isXml(responseBody, responseHeaders)) return "xml";
     if (isHtml(responseBody, responseHeaders)) return "html";
+    if (isXml(responseBody, responseHeaders)) return "xml";
     if (isImage(responseData, responseHeaders)) return "image";
     if (isPdf(responseData, responseHeaders)) return "pdf";
     if (isAudio(responseData, responseHeaders)) return "audio";
@@ -147,6 +147,11 @@ export function ResponsePanel({
     if (!responseBody && !responseData) return "pretty";
     return getAutoFormat();
   });
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResponseFormat(responseBody || responseData ? getAutoFormat() : "pretty");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [responseBody, responseData, responseHeaders]);
   const [activeTab, setActiveTab] = useState("response");
   const [diffDialogOpen, setDiffDialogOpen] = useState(false);
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -213,7 +218,7 @@ export function ResponsePanel({
         window.clearTimeout(timer);
       };
     }
-  }, [responseBody]);
+  }, [responseBody, responseData, responseHeaders]);
 
   const hasResponse = Boolean(responseBody) || responseStatus !== undefined;
 
@@ -224,7 +229,7 @@ export function ResponsePanel({
     return 0;
   }, [responseBody, responseData]);
 
-  // ── Timing gauge animation ─────────────────────────────────────
+  // â”€â”€ Timing gauge animation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [timingGaugeWidth, setTimingGaugeWidth] = useState(0);
 
   useEffect(() => {
@@ -243,22 +248,29 @@ export function ResponsePanel({
     }
   }, [responseTime, hasResponse, isLoading]);
 
-  // ── Auto-format helper is declared earlier to be available for useState init
+  // â”€â”€ Auto-format helper is declared earlier to be available for useState init
 
   const handleExport = useCallback(() => {
-    if (!responseBody) return;
+    if (!responseBody && !(responseData instanceof Blob)) return;
     try {
-      const blob = new Blob([responseBody], { type: "application/json" });
+      const contentType =
+        responseHeaders?.["content-type"] ??
+        responseHeaders?.["Content-Type"] ??
+        "application/octet-stream";
+      const blob =
+        responseData instanceof Blob
+          ? responseData
+          : new Blob([responseBody ?? ""], { type: contentType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "response.json";
+      a.download = responseData instanceof Blob ? "response" : "response.txt";
       a.click();
       URL.revokeObjectURL(url);
     } catch {
       // ignore
     }
-  }, [responseBody]);
+  }, [responseBody, responseData, responseHeaders]);
 
   const handleRun = useCallback(async () => {
     if (!onRun) return;
@@ -292,7 +304,7 @@ export function ResponsePanel({
         onDiff={handleOpenDiff}
       />
 
-      {/* Response Timing Gauge — full-width animation bar */}
+      {/* Response Timing Gauge â€” full-width animation bar */}
       {hasResponse && !isLoading && (
         <div className="h-1 bg-muted-foreground/10 overflow-hidden">
           <div
@@ -398,7 +410,7 @@ export function ResponsePanel({
           data-testid="response-body"
           className="m-0 min-h-0 flex-1 animate-fade-in relative overflow-hidden bg-muted/5"
         >
-          {/* Payload size — real byte count of the response body */}
+          {/* Payload size â€” real byte count of the response body */}
           {hasResponse && responseByteSize > 0 && (
             <div
               className="px-4 py-1 text-[11px] font-mono text-muted-foreground border-b border-border/50"

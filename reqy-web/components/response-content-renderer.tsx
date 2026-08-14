@@ -78,7 +78,16 @@ export function ResponseContentRenderer({
   const [copied, setCopied] = React.useState(false);
   const { t } = useTranslation();
 
-  if (!safeBody && !responseData) return null;
+  if (!safeBody && !(responseData instanceof Blob)) {
+    return (
+      <div
+        className="flex h-full items-center justify-center bg-code-bg px-6 text-center text-sm text-muted-foreground"
+        data-testid="response-empty-body"
+      >
+        {t("response.noPreview")}
+      </div>
+    );
+  }
 
   const renderRaw = () => (
     <div className="bg-code-bg h-full overflow-auto code-scrollbar">
@@ -88,7 +97,7 @@ export function ResponseContentRenderer({
     </div>
   );
 
-  /** Shared plain code block — no syntax highlighting. */
+  /** Shared plain code block â€” no syntax highlighting. */
   const codeBlock = (content: string, textColor = "text-code-text") => (
     <div className="bg-code-bg h-full overflow-auto code-scrollbar">
       <pre
@@ -101,7 +110,7 @@ export function ResponseContentRenderer({
     </div>
   );
 
-  /** Shared highlighted code block — for JSON with syntax colours. Same base style as codeBlock. */
+  /** Shared highlighted code block â€” for JSON with syntax colours. Same base style as codeBlock. */
   const codeBlockHighlighted = (html: string) => (
     <div className="bg-code-bg h-full overflow-auto code-scrollbar">
       <pre
@@ -487,6 +496,7 @@ export function ResponseContentRenderer({
   };
 
   const handleCopy = async () => {
+    if (responseData instanceof Blob || !safeBody) return;
     try {
       await navigator.clipboard.writeText(safeBody);
       setCopied(true);
@@ -507,7 +517,10 @@ export function ResponseContentRenderer({
             value={responseFormat}
             onValueChange={(value: ResponseFormat) => onFormatChange(value)}
           >
-            <SelectTrigger className="h-8 w-36 border-input bg-muted/20 text-xs font-medium transition-all duration-200 hover:border-muted-foreground/30">
+            <SelectTrigger
+              data-testid="response-format-select"
+              className="h-8 w-36 border-input bg-muted/20 text-xs font-medium transition-all duration-200 hover:border-muted-foreground/30"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -530,6 +543,7 @@ export function ResponseContentRenderer({
             copied && "border-success/30 text-success bg-success/10",
           )}
           onClick={handleCopy}
+          disabled={responseData instanceof Blob || !safeBody}
         >
           {copied ? (
             <>
