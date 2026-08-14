@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Monitor, Palette, Check } from "lucide-react";
@@ -105,7 +105,11 @@ export function ThemeSwitcher() {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
-  const [systemActive, setSystemActive] = useState(isSystemThemeActive);
+  const [systemActive, setSystemActive] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSystemActive(isSystemThemeActive());
+  }, []);
 
   const effectiveOption: ThemeOption = systemActive ? "system" : theme;
   const activeTheme = themes.find((t) => t.value === effectiveOption);

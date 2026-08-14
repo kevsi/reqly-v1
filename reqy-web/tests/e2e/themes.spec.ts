@@ -90,3 +90,16 @@ test.describe("Theme switching", () => {
     await expect(page.locator("body")).toBeVisible();
   });
 });
+test("theme UI mounts without hydration errors", async function ({ page }) {
+  const errors: string[] = [];
+  page.on("console", function (message) {
+    if (message.type() === "error") {
+      if (message.text().toLowerCase().includes("hydration")) {
+        errors.push(message.text());
+      }
+    }
+  });
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  expect(errors).toEqual([]);
+});
