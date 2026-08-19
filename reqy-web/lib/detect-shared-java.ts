@@ -31,7 +31,9 @@ let _javaParser: JavaParserLike | null = null;
 async function getJavaParser(): Promise<JavaParserLike | null> {
   if (!_javaParser) {
     try {
-      _javaParser = (await import("java-parser")) as unknown as JavaParserLike;
+      _javaParser = (await import(
+        /* webpackIgnore: true */ "java-parser"
+      )) as unknown as JavaParserLike;
     } catch {
       return null;
     }

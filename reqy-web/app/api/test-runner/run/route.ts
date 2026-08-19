@@ -4,19 +4,23 @@ import { createRateLimiter } from "@/lib/rate-limiter";
 import { runCollection } from "@/lib/test-runner/runner";
 import { toJUnitXml } from "@/lib/test-runner/junit-export";
 import { loadJsonDataset, loadCsvDataset } from "@/lib/test-runner/data-driven";
+import { isPublicWebDeployment } from "@/lib/environment";
 import type { Collection, RequestItem } from "@/hooks/request-types";
 
-async function proxyFetch(req: {
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body?: unknown;
-}) {
+async function proxyFetch(
+  req: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body?: unknown;
+  },
+  baseUrl: string,
+) {
   const started = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
 
-  const proxyRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/proxy`, {
+  const proxyRes = await fetch(`${baseUrl}/api/proxy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -72,6 +76,15 @@ interface RunBody {
 }
 
 export async function POST(req: NextRequest) {
+  // 🔐 SECURITY: Block test runner on public web deployment
+  // Test runner accepts arbitrary code via scripts, only safe on desktop
+  if (isPublicWebDeployment()) {
+    return NextResponse.json(
+      { error: "Test runner is not available on web deployment. Use the desktop application." },
+      { status: 403 },
+    );
+  }
+
   const rateKey = getRateLimitKey(req);
   const rateResult = await rateLimiter.check(rateKey);
   if (!rateResult.allowed) {
@@ -129,7 +142,12 @@ export async function POST(req: NextRequest) {
   const report = await runCollection(
     body.collection,
     { environment: body.environment ?? {}, iterationData: {}, iterationIndex: 0, log: () => {} },
-    { executor: proxyFetch, iterations, scriptTimeoutMs: 3000, disableScripts: true },
+    {
+      executor: (r) => proxyFetch(r, process.env.NEXT_PUBLIC_API_URL || new URL(req.url).origin),
+      iterations,
+      scriptTimeoutMs: 3000,
+      disableScripts: true,
+    },
   );
 
   const url = new URL(req.url);

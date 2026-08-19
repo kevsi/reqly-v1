@@ -10,6 +10,8 @@ const PROTECTED_PREFIXES = [
   "/api/postman-export",
   "/api/github-import",
   "/api/embed",
+  "/api/capture",
+  "/api/git/proxy",
 ];
 
 function isExempt(pathname: string): boolean {
@@ -67,13 +69,36 @@ function getVisitorToken(request: NextRequest): string | null {
   }
 }
 
+function isSecureRequest(request: NextRequest): boolean {
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase();
+  return forwardedProto ? forwardedProto === "https" : request.nextUrl.protocol === "https:";
+}
+
+function isSameOriginRequest(request: NextRequest): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return ["GET", "HEAD", "OPTIONS"].includes(request.method);
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase();
+  const protocol = forwardedProto || request.nextUrl.protocol.replace(":", "");
+  const host = request.headers.get("host");
+  return Boolean(host && origin === `${protocol}://${host}`);
+}
+
 function ensureVisitorCookie(response: NextResponse, request: NextRequest): NextResponse {
   if (getVisitorToken(request)) return response;
   const token = crypto.randomUUID(); // 36 chars, > 32 minimum
+  const secure = process.env.NODE_ENV === "production" && isSecureRequest(request);
   response.headers.append(
     "Set-Cookie",
     `${VISITOR_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}${
-      process.env.NODE_ENV === "production" ? "; Secure" : ""
+      secure ? "; Secure" : ""
     }`,
   );
   return response;
@@ -101,7 +126,7 @@ function buildCsp(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
-    `connect-src 'self' https: wss: ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
+    `connect-src 'self' https: wss: http://localhost:* ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
     "font-src 'self' data:",
     "frame-ancestors 'none'",
     "object-src 'none'",
@@ -143,9 +168,17 @@ export function proxy(request: NextRequest): NextResponse {
   const bearer = extractBearerToken(request.headers.get("authorization"));
 
   // Constant-time comparison so token checks don't leak length/prefix via timing.
+  // Browser requests use the HttpOnly visitor cookie as the capability.  The
+  // cookie is not readable by JavaScript, so requiring a matching bearer would
+  // make the real web client fail closed.  State-changing requests still need
+  // an explicit same-origin Origin; service callers may use the service token.
+  const visitorCookieAuthorized =
+    !!visitorToken &&
+    (["GET", "HEAD", "OPTIONS"].includes(request.method) || isSameOriginRequest(request));
   const authorized =
     (!!bearer && envTokenValid && safeEqual(bearer, envToken)) ||
-    (!!bearer && !!visitorToken && safeEqual(bearer, visitorToken));
+    (!!bearer && !!visitorToken && safeEqual(bearer, visitorToken)) ||
+    visitorCookieAuthorized;
 
   if (!authorized) {
     const error = NextResponse.json(
