@@ -1,0 +1,33 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/users/:id",
+    "framework": "nextjs",
+    "auth": false,
+    "params": ["id"]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/users/:id",
+    "framework": "nextjs",
+    "auth": false,
+    "params": ["id"],
+    "body": "application/json"
+  },
+  {
+    "method": "GET",
+    "path": "/api/users",
+    "framework": "nextjs",
+    "auth": true,
+    "middleware": ["session", "auth"],
+    "query": ["searchParams"]
+  },
+  {
+    "method": "POST",
+    "path": "/api/users",
+    "framework": "nextjs",
+    "auth": false,
+    "body": "application/json"
+  },
+  { "method": "ALL", "path": "/api/health", "framework": "nextjs", "auth": false }
+]

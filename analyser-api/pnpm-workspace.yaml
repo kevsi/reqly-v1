@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+
+onlyBuiltDependencies:
+  - "@ast-grep/lang-go"
+  - "@ast-grep/lang-python"
+  - "@ast-grep/lang-rust"

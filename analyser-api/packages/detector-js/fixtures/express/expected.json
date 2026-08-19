@@ -1,0 +1,29 @@
+[
+  { "method": "GET", "path": "/health", "framework": "express", "auth": false },
+  {
+    "method": "POST",
+    "path": "/users",
+    "framework": "express",
+    "auth": true,
+    "middleware": ["auth"],
+    "body": "application/json"
+  },
+  {
+    "method": "GET",
+    "path": "/users/:id",
+    "framework": "express",
+    "auth": false,
+    "params": ["id"],
+    "query": ["verbose"]
+  },
+  {
+    "method": "PATCH",
+    "path": "/users/:id",
+    "framework": "express",
+    "auth": true,
+    "middleware": ["auth"],
+    "params": ["id"],
+    "body": "application/json"
+  },
+  { "method": "GET", "path": "/api/widgets", "framework": "express", "auth": false }
+]

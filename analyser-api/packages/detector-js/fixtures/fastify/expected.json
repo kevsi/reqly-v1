@@ -1,0 +1,12 @@
+[
+  { "method": "GET", "path": "/health", "framework": "fastify", "auth": false },
+  {
+    "method": "POST",
+    "path": "/users",
+    "framework": "fastify",
+    "auth": true,
+    "middleware": ["fastify-hook"],
+    "body": "application/json"
+  },
+  { "method": "GET", "path": "/ping", "framework": "fastify", "auth": false }
+]

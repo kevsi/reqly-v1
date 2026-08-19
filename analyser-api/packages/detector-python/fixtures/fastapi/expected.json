@@ -1,0 +1,18 @@
+[
+  { "method": "GET", "path": "/health", "framework": "fastapi", "auth": false },
+  {
+    "method": "GET",
+    "path": "/users/{user_id}",
+    "framework": "fastapi",
+    "auth": false,
+    "params": ["user_id"]
+  },
+  {
+    "method": "POST",
+    "path": "/users",
+    "framework": "fastapi",
+    "auth": true,
+    "middleware": ["get_current_user"],
+    "body": "UserIn"
+  }
+]

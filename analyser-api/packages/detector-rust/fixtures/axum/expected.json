@@ -1,0 +1,12 @@
+[
+  { "method": "GET", "path": "/health", "framework": "axum", "auth": false },
+  {
+    "method": "GET",
+    "path": "/users/:id",
+    "framework": "axum",
+    "auth": true,
+    "middleware": ["require_auth"],
+    "params": ["id"]
+  },
+  { "method": "POST", "path": "/users", "framework": "axum", "auth": false }
+]

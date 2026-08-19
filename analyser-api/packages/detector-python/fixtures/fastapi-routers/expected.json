@@ -1,0 +1,24 @@
+[
+  { "method": "GET", "path": "/api/v1/items", "framework": "fastapi", "auth": false },
+  {
+    "method": "GET",
+    "path": "/api/v1/items/{item_id}",
+    "framework": "fastapi",
+    "auth": false,
+    "params": ["item_id"]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/users/me",
+    "framework": "fastapi",
+    "auth": true,
+    "middleware": ["get_current_user"]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/users/{user_id}",
+    "framework": "fastapi",
+    "auth": false,
+    "params": ["user_id"]
+  }
+]

@@ -1,0 +1,26 @@
+[
+  { "method": "GET", "path": "/health", "framework": "actix-web", "auth": false },
+  {
+    "method": "POST",
+    "path": "/users",
+    "framework": "actix-web",
+    "auth": false,
+    "body": "NewUser"
+  },
+  {
+    "method": "GET",
+    "path": "/users/{id}",
+    "framework": "actix-web",
+    "auth": false,
+    "params": ["id"]
+  },
+  {
+    "method": "PUT",
+    "path": "/users/{id}",
+    "framework": "actix-web",
+    "auth": true,
+    "middleware": ["actix-middleware"],
+    "params": ["id"],
+    "body": "UpdateUser"
+  }
+]

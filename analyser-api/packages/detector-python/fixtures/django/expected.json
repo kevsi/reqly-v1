@@ -1,0 +1,11 @@
+[
+  { "method": "ALL", "path": "users/", "framework": "django", "auth": false },
+  {
+    "method": "ALL",
+    "path": "users/<int:pk>/",
+    "framework": "django",
+    "auth": false,
+    "params": ["pk"]
+  },
+  { "method": "ALL", "path": "posts/", "framework": "django", "auth": false }
+]

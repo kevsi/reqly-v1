@@ -1,0 +1,22 @@
+{
+  "name": "@analyser/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ast-grep/lang-go": "^0.0.6",
+    "@ast-grep/lang-python": "^0.0.6",
+    "@ast-grep/lang-rust": "^0.0.7",
+    "@ast-grep/napi": "^0.45.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

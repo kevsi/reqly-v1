@@ -1,0 +1,12 @@
+[
+  { "method": "GET", "path": "/health", "framework": "flask", "auth": false },
+  {
+    "method": "POST",
+    "path": "/users",
+    "framework": "flask",
+    "auth": true,
+    "middleware": ["login_required"],
+    "body": "application/json"
+  },
+  { "method": "GET", "path": "/ping", "framework": "flask", "auth": false }
+]

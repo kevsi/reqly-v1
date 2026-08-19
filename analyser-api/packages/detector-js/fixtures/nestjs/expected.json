@@ -1,0 +1,12 @@
+[
+  { "method": "GET", "path": "/users", "framework": "nestjs", "auth": false, "query": ["page"] },
+  { "method": "GET", "path": "/users/:id", "framework": "nestjs", "auth": false, "params": ["id"] },
+  {
+    "method": "POST",
+    "path": "/users",
+    "framework": "nestjs",
+    "auth": true,
+    "middleware": ["AuthGuard"],
+    "body": "CreateUserDto"
+  }
+]

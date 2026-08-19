@@ -1,0 +1,5 @@
+[
+  { "method": "GET", "path": "/health", "framework": "gin", "auth": false },
+  { "method": "GET", "path": "/users/:id", "framework": "gin", "auth": false, "params": ["id"] },
+  { "method": "POST", "path": "/users", "framework": "gin", "auth": true, "middleware": ["auth"] }
+]

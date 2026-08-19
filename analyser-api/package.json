@@ -1,0 +1,14 @@
+{
+  "name": "analyser-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r run typecheck",
+    "test": "node --test \"packages/*/test/*.test.ts\"",
+    "scan": "node packages/cli/src/index.ts"
+  }
+}
