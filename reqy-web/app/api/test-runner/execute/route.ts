@@ -3,8 +3,11 @@
  *
  * @deprecated Ce endpoint n'est pas appelé depuis l'UI React.
  * Il est uniquement couvert par des tests e2e (tests/e2e/scripts-assertions.spec.ts,
- * tests/e2e/offline-sync.spec.ts). Le moteur canonique est `lib/test-runner/runner.ts`.
- * À migrer vers le moteur canonique avant suppression.
+ * tests/e2e/offline-sync.spec.ts). Conservé car le moteur canonique
+ * `lib/test-runner/runner.ts` n'exécute pas de scripts côté serveur
+ * (la route canonique `/api/test-runner/run` tourne avec `disableScripts: true`),
+ * il ne peut donc pas remplacer ce contrat. Le contexte sandbox est durci pour
+ * refléter la politique FORBIDDEN_GLOBALS du moteur canonique.
  *
  * Execute test scripts for a captured request/response
  */

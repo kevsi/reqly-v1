@@ -1,10 +1,11 @@
-import { z } from "zod"
-import type { HistoryItem } from "@/lib/types"
+import { z } from "zod";
+import type { HistoryItem } from "@/lib/types";
 
-import type { AIProvider } from "@/lib/types"
-import { proxyAuthHeaders } from "@/lib/proxy-auth"
-import { isTauriAvailable } from "@/lib/tauri"
-import { callAiProxyTauri } from "@/lib/tauri-ai"
+import type { AIProvider } from "@/lib/types";
+import { proxyAuthHeaders } from "@/lib/proxy-auth";
+import { isTauriAvailable } from "@/lib/tauri";
+import { callAiProxyTauri } from "@/lib/tauri-ai";
+import { maskSensitivePayload } from "@/src/ai/cloud-engine/prompt";
 export const generatedRequestSchema = z.object({
   name: z.string().min(1),
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
@@ -33,18 +34,18 @@ export const generatedRequestSchema = z.object({
   preRequestScript: z.string().optional(),
   /** Optional JS executed after the response is received (uses the pm.* sandbox). */
   postResponseScript: z.string().optional(),
-})
+});
 
-export type GeneratedRequest = z.infer<typeof generatedRequestSchema>
+export type GeneratedRequest = z.infer<typeof generatedRequestSchema>;
 
 export function buildFollowUpPrompt(item: HistoryItem): string {
-  let responsePreview: string
+  let responsePreview: string;
   if (item.responseBody instanceof Blob) {
-    responsePreview = "[binary data]"
+    responsePreview = "[binary data]";
   } else if (item.responseBody && item.responseBody.length > 6000) {
-    responsePreview = escapeXml(`${item.responseBody.slice(0, 6000)}\n…(truncated)`)
+    responsePreview = escapeXml(`${item.responseBody.slice(0, 6000)}\n…(truncated)`);
   } else {
-    responsePreview = escapeXml(item.responseBody || "(empty)")
+    responsePreview = escapeXml(String(maskSensitivePayload(item.responseBody || "(empty)")));
   }
 
   return `You are an API testing assistant. Based on the HTTP request and response below, propose ONE logical follow-up request (e.g. use a token, fetch a nested resource, paginate, confirm creation).
@@ -68,8 +69,8 @@ Original request:
 - Method: ${item.method}
 - URL: ${item.url}
 - Endpoint: ${item.endpoint}
-- Headers: ${JSON.stringify(item.headers ?? {})}
-- Body: ${item.body ?? ""}
+- Headers: ${JSON.stringify(maskSensitivePayload(item.headers ?? {}))}
+- Body: ${String(maskSensitivePayload(item.body ?? ""))}
 
 Response:
 - Status: ${item.responseStatus ?? "unknown"}
@@ -77,7 +78,7 @@ Response:
 - Body:
 <response_body>
 ${responsePreview}
-</response_body>`
+</response_body>`;
 }
 
 // SECURITY FIX H9: XML escape helper to prevent prompt injection
@@ -91,38 +92,38 @@ function escapeXml(str: string): string {
 }
 
 export function parseGeneratedRequest(text: string): GeneratedRequest | null {
-  const trimmed = text.trim()
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) return null
+  const trimmed = text.trim();
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
   try {
-    const parsed = JSON.parse(jsonMatch[0])
-    const result = generatedRequestSchema.safeParse(parsed)
-    if (!result.success) return null
-    const data = result.data
+    const parsed = JSON.parse(jsonMatch[0]);
+    const result = generatedRequestSchema.safeParse(parsed);
+    if (!result.success) return null;
+    const data = result.data;
     return {
       ...data,
       endpoint: data.endpoint || data.url,
-    }
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
 export type AiProxyPayload = {
-  provider: AIProvider
-  apiKey: string
-  model?: string
-  openaiUrl?: string
-  host?: string
-  port?: number
-  system: string
-  message: string
-}
+  provider: AIProvider;
+  apiKey: string;
+  model?: string;
+  openaiUrl?: string;
+  host?: string;
+  port?: number;
+  system: string;
+  message: string;
+};
 
 export async function callAiProxy(payload: AiProxyPayload): Promise<string> {
   if (isTauriAvailable()) {
-    const { content } = await callAiProxyTauri(payload as Record<string, unknown>)
-    return content
+    const { content } = await callAiProxyTauri(payload as Record<string, unknown>);
+    return content;
   }
 
   const response = await fetch("/api/proxy-ai", {
@@ -132,22 +133,22 @@ export async function callAiProxy(payload: AiProxyPayload): Promise<string> {
       ...proxyAuthHeaders(),
     },
     body: JSON.stringify(payload),
-  })
+  });
 
-  const rawText = await response.text()
+  const rawText = await response.text();
   const data: { content?: string; error?: string } = (() => {
     try {
-      return JSON.parse(rawText)
+      return JSON.parse(rawText);
     } catch {
-      return { content: rawText }
+      return { content: rawText };
     }
-  })()
+  })();
 
   if (!response.ok) {
-    throw new Error(data.error || `AI request failed (${response.status})`)
+    throw new Error(data.error || `AI request failed (${response.status})`);
   }
 
-  return typeof data.content === "string" ? data.content : ""
+  return typeof data.content === "string" ? data.content : "";
 }
 
 export async function generateFollowUpRequest(
@@ -159,11 +160,11 @@ export async function generateFollowUpRequest(
     system:
       "You output only JSON for API follow-up requests. No markdown fences, no commentary outside the JSON object.",
     message: buildFollowUpPrompt(item),
-  })
+  });
 
-  const parsed = parseGeneratedRequest(content)
+  const parsed = parseGeneratedRequest(content);
   if (!parsed) {
-    throw new Error("L'IA n'a pas renvoyé une requête JSON valide.")
+    throw new Error("L'IA n'a pas renvoyé une requête JSON valide.");
   }
-  return parsed
+  return parsed;
 }

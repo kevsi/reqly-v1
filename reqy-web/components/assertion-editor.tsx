@@ -52,6 +52,7 @@ export function AssertionEditor({ assertions, onChange }: Props) {
               <SelectItem value="status">{t("assertion.typeStatus")}</SelectItem>
               <SelectItem value="responseTime">{t("assertion.typeTime")}</SelectItem>
               <SelectItem value="jsonPath">{t("assertion.typeJsonPath")}</SelectItem>
+              <SelectItem value="header">Header</SelectItem>
               <SelectItem value="schema">{t("assertion.typeSchema")}</SelectItem>
             </SelectContent>
           </Select>
@@ -73,6 +74,8 @@ function defaultAssertion(type: Assertion["type"]): Assertion {
       return { type: "responseTime", operator: "<", valueMs: 1000 };
     case "jsonPath":
       return { type: "jsonPath", path: "$.id", operator: "equals", value: "" };
+    case "header":
+      return { type: "header", name: "content-type", operator: "exists" };
     case "schema":
       return { type: "schema", schema: { type: "object" } };
   }
@@ -157,6 +160,44 @@ function AssertionFields({
             value={String(assertion.value ?? "")}
             onChange={(e) => onChange({ ...assertion, value: e.target.value })}
             className="w-32"
+          />
+        )}
+      </>
+    );
+  }
+  if (assertion.type === "header") {
+    return (
+      <>
+        <Input
+          placeholder="Content-Type"
+          value={assertion.name}
+          onChange={(e) => onChange({ ...assertion, name: e.target.value })}
+          className="w-32"
+        />
+        <Select
+          value={assertion.operator}
+          onValueChange={(v) =>
+            onChange({
+              ...assertion,
+              operator: v as "exists" | "equals" | "contains",
+            })
+          }
+        >
+          <SelectTrigger className="w-24">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="exists">exists</SelectItem>
+            <SelectItem value="equals">equals</SelectItem>
+            <SelectItem value="contains">contains</SelectItem>
+          </SelectContent>
+        </Select>
+        {assertion.operator !== "exists" && (
+          <Input
+            placeholder="application/json"
+            value={assertion.value ?? ""}
+            onChange={(e) => onChange({ ...assertion, value: e.target.value })}
+            className="flex-1"
           />
         )}
       </>

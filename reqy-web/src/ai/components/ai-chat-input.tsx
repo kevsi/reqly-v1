@@ -2,17 +2,7 @@
 
 import { useRef, useCallback, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  SendHorizontal,
-  Square,
-  X,
-  Folder,
-  Globe,
-  Zap,
-  Paperclip,
-  Check,
-  Loader2,
-} from "lucide-react";
+import { SendHorizontal, Square, X, Folder, Globe, Zap, Paperclip, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AiContextPicker } from "@/src/ai/components/ai-context-picker";
 import { AiCommandMenu } from "@/src/ai/components/ai-command-menu";
@@ -189,10 +179,7 @@ export function AiChatInput({
       {/* Hint row */}
       <p className="mt-1.5 flex h-3.5 items-center justify-center gap-1.5 text-[10px] text-muted-foreground/45">
         {isLoading ? (
-          <>
-            <Loader2 className="size-2.5 animate-spin text-primary/50" />
-            <span className="text-primary/60">{t("aiChat.generatingResponse")}</span>
-          </>
+          <span className="text-primary/60">{t("aiChat.generatingResponse")}</span>
         ) : (
           t("aiChat.hint")
         )}

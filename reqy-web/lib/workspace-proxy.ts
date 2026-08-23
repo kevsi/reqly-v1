@@ -7,8 +7,11 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 
-const SYNC_URL =
-  (process.env.NEXT_PUBLIC_SYNC_URL ?? "https://reqly.duckdns.org").replace(/\/$/, "");
+const SYNC_URL = (process.env.NEXT_PUBLIC_SYNC_URL ?? "https://reqly.duckdns.org").replace(
+  /\/$/,
+  "",
+);
+const SYNC_TIMEOUT_MS = 15000;
 
 /**
  * Forward a request to the sync server.
@@ -36,15 +39,17 @@ export async function proxyToSync(
   if (ct) headers.set("content-type", ct);
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
     const res = await fetch(url, {
       method: init?.method ?? request.method,
       headers,
       body:
         init?.body ??
-        (request.method !== "GET" && request.method !== "HEAD"
-          ? await request.text()
-          : undefined),
+        (request.method !== "GET" && request.method !== "HEAD" ? await request.text() : undefined),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     const body = await res.text();
     return new NextResponse(body, {
@@ -55,7 +60,10 @@ export async function proxyToSync(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync server unreachable";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json(
+      { error: message.includes("aborted") ? "Sync server timeout" : "Sync server unreachable" },
+      { status: message.includes("aborted") ? 504 : 502 },
+    );
   }
 }
 
@@ -63,10 +71,7 @@ export async function proxyToSync(
  * Build a sync server path by interpolating an :id parameter.
  * Ensures the id is URI-encoded to prevent path traversal.
  */
-export function workspacePath(
-  template: string,
-  params: { id?: string },
-): string {
+export function workspacePath(template: string, params: { id?: string }): string {
   let path = template;
   if (params.id) {
     path = path.replace(":id", encodeURIComponent(params.id));

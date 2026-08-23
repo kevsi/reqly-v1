@@ -4,11 +4,17 @@ import type { Assertion, AssertionResult, RequestResponse } from "@/lib/test-run
 import { evaluateAssertions } from "@/lib/test-runner/assertions";
 import { interpolate, replaceLocalhostPort, parseJsonSafe } from "@/lib/utils";
 import { proxyAuthHeaders } from "@/lib/proxy-auth";
-import { invokeTauriFetch, type TauriCookie } from "@/lib/tauri";
+import {
+  invokeTauriFetch,
+  isTauriInvokeError,
+  type TauriCookie,
+  type TauriErrorPayload,
+} from "@/lib/tauri";
 import { persistence } from "@/lib/persistence";
 import { classifyError, enqueueOnNetworkFailure } from "@/lib/offline/queue";
 import type { ResponseTimings } from "@/components/response-timeline";
 import { applyPathParams, type PathParam } from "@/lib/path-params";
+import i18n from "@/src/i18n";
 export type BodyType = "json" | "form-data" | "x-www-form" | "raw" | "binary";
 export type AuthType = "none" | "bearer" | "basic" | "api-key" | "oauth2";
 export type { PathParam };
@@ -49,6 +55,7 @@ export interface RequestTab {
   responseHeaders?: Record<string, string>;
   responseCookies?: TauriCookie[];
   responseTimings?: ResponseTimings;
+  transportError?: TauriErrorPayload | null;
   assertions?: RequestTestAssertion[];
   runnerAssertions?: Assertion[];
   preRequestScript?: string;
@@ -60,6 +67,11 @@ export interface RequestTab {
     operationName?: string;
   };
   testResults?: TestResult[];
+  /**
+   * Follow HTTP redirects (3xx) through the proxy. Web mode only — the
+   * desktop runtime follows redirects natively via reqwest.
+   */
+  followRedirects?: boolean;
   /**
    * Key identifying the dataset row to use for data-driven execution.
    * Loaded from RequestItem.datasetKey via buildTabFromRequest; persisted
@@ -201,6 +213,8 @@ export interface ExecuteRequestContext {
   activeProject: boolean;
   nativeMode: boolean;
   activeWorkspaceId: string | null;
+  /** External AbortSignal (e.g. from a user cancel button). */
+  signal?: AbortSignal;
 }
 
 function buildFormDataBody(body: string): { body: string; boundary: string } {
@@ -280,8 +294,72 @@ async function withTimeout<T>(promise: Promise<T>, signal: AbortSignal): Promise
   });
 }
 
-export const executeRequest = async (context: ExecuteRequestContext) => {
-  const { tab, nativeMode, activeWorkspaceId } = context;
+/** Résultat normalisé d'une exécution de requête (web ou desktop). */
+export interface RequestExecutionResult {
+  responseStatus: number | undefined;
+  responseHeaders: Record<string, string>;
+  responseCookies: TauriCookie[];
+  responseBody: string;
+  responseData: string | Blob;
+  responseSize: string;
+  responseTime: number | undefined;
+  responseTimings: ResponseTimings;
+  transportError: TauriErrorPayload | null;
+  testResults: TestResult[] | undefined;
+}
+
+/**
+ * Traduit une erreur du proxy (`/api/proxy`) en message français actionnable.
+ * Le détail technique brut est conservé pour le diagnostic.
+ */
+function translateProxyError(
+  code: string | undefined,
+  raw: string,
+  url: string,
+): { message: string; detail: string } {
+  const detail = raw && raw !== "Proxy request failed" ? raw : "";
+  switch (code) {
+    case "RATE_LIMIT_EXCEEDED":
+      return {
+        message: "Trop de requêtes envoyées : patientez une minute avant de réessayer.",
+        detail,
+      };
+    case "BLOCKED_SSRF":
+    case "INVALID_URL":
+    case "DNS_ERROR":
+      return {
+        message:
+          "URL de destination refusée par le proxy (adresse privée ou invalide) : vérifiez l'adresse demandée.",
+        detail,
+      };
+    case "TIMEOUT":
+      return {
+        message: "La requête a expiré (30 s) : le serveur cible est trop lent ou injoignable.",
+        detail,
+      };
+    case "PROXY_AUTH_REQUIRED":
+      return {
+        message: "Session expirée : rechargez la page pour continuer.",
+        detail,
+      };
+    case "BAD_GATEWAY":
+    case "INTERNAL_ERROR":
+      return {
+        message: "Le proxy a rencontré une erreur : réessayez dans quelques instants.",
+        detail,
+      };
+    default:
+      return {
+        message: `La requête vers ${url} a échoué. Vérifiez l'URL et votre connexion.`,
+        detail,
+      };
+  }
+}
+
+export const executeRequest = async (
+  context: ExecuteRequestContext,
+): Promise<RequestExecutionResult> => {
+  const { tab, nativeMode, activeWorkspaceId, signal: externalSignal } = context;
   const { finalUrl, finalBody, headers } = buildRequestPayload(context);
 
   const startedAt = performance.now();
@@ -289,19 +367,23 @@ export const executeRequest = async (context: ExecuteRequestContext) => {
   let responseData: string | Blob;
   let responseHeaders: Record<string, string> = {};
   let responseStatus: number | undefined;
-  let responseSize = "0 B";
+  let responseSize: string;
   let responseTime: number | undefined;
   let proxyTimings: { dnsMs?: number; connectMs?: number; ttfbMs?: number } | undefined;
   let responseCookies: TauriCookie[] = [];
+  let transportError: TauriErrorPayload | null = null;
 
   // SSL verification toggle (desktop only): when disabled, the Tauri fetch
   // uses the insecure reqwest client that skips certificate validation.
   const sslEnabled = persistence.getItem<boolean>("reqly_ssl_verification_enabled");
   const acceptInvalidCerts = sslEnabled === false;
 
-  // Create an AbortController with a 30-second timeout to prevent hung requests
+  // Create an AbortController with a 30-second timeout to prevent hung
+  // requests. An external signal (user cancel) aborts the same controller.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
 
   try {
     if (nativeMode) {
@@ -355,6 +437,7 @@ export const executeRequest = async (context: ExecuteRequestContext) => {
           headers,
           body: tab.method !== "GET" && tab.method !== "HEAD" ? finalBody : undefined,
           workspaceId: activeWorkspaceId,
+          followRedirects: tab.followRedirects === true,
         }),
         signal: controller.signal,
       });
@@ -391,19 +474,53 @@ export const executeRequest = async (context: ExecuteRequestContext) => {
           responseSize = formatSize(new Blob([responseBody]).size);
         }
       } else {
-        responseBody = proxyError ?? "Proxy request failed";
+        // The proxy itself failed (timeout, blocked destination, rate limit…):
+        // surface an actionable French message instead of the raw English one.
+        const translated = translateProxyError(
+          proxyResult.code,
+          proxyError ?? "Proxy request failed",
+          finalUrl,
+        );
+        transportError = {
+          kind: "proxy",
+          code: proxyResult.code || "unknown",
+          message: translated.message,
+          detail: translated.detail,
+        };
+        responseBody = translated.message;
         responseData = responseBody;
         responseSize = formatSize(new Blob([responseBody]).size);
       }
     }
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      responseBody = "Error: Request timed out after 30 seconds";
+    if (isTauriInvokeError(error)) {
+      transportError = {
+        kind: error.kind,
+        code: error.code,
+        message: error.message,
+        detail: error.detail,
+      };
+    } else if (error instanceof DOMException && error.name === "AbortError") {
+      const cancelled = externalSignal?.aborted === true;
+      transportError = {
+        kind: "network",
+        code: cancelled ? "cancelled" : "connection_timeout",
+        message: cancelled ? i18n.t("request.cancelled") : i18n.t("request.transferTimeout"),
+        detail: error.message || "AbortError",
+      };
     } else {
-      responseBody = error instanceof Error ? `Error: ${error.message}` : String(error);
+      const detail = error instanceof Error ? error.message : String(error);
+      transportError = {
+        kind: "network",
+        code: "unknown",
+        message: i18n.t("request.transferDefault"),
+        detail,
+      };
     }
-    responseData = responseBody;
+    responseBody = "";
+    responseData = "";
     responseStatus = 0;
+    responseSize = "0 B";
 
     // Store-and-forward: a genuine network failure (no HTTP response was
     // produced) is queued for automatic replay when connectivity returns.
@@ -422,12 +539,17 @@ export const executeRequest = async (context: ExecuteRequestContext) => {
           queueError instanceof Error
             ? queueError.message
             : String(queueError ?? "unknown queue error");
-        responseBody = `Error: ${responseBody}\nQueueing failed: ${queueMessage}`;
-        responseData = responseBody;
+        if (transportError) {
+          transportError = {
+            ...transportError,
+            detail: `${transportError.detail}\nQueueing failed: ${queueMessage}`,
+          };
+        }
       });
     }
   } finally {
     clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", onExternalAbort);
   }
 
   if (responseTime === undefined) {
@@ -470,6 +592,7 @@ export const executeRequest = async (context: ExecuteRequestContext) => {
     responseSize,
     responseTime,
     responseTimings,
+    transportError,
     testResults,
   };
 };

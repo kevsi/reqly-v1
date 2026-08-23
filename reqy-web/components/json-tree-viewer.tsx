@@ -50,7 +50,9 @@ const JsonLeaf = memo(function JsonLeaf({ name, value }: { name: string | null; 
           <span className={bracketColor}>: </span>
         </>
       )}
-      <span className={typeColor(value)}>{formatValue(value)}</span>
+      <span className={cn(typeColor(value), typeof value === "string" && "break-all")}>
+        {formatValue(value)}
+      </span>
     </span>
   );
 });

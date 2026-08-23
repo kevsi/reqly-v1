@@ -14,6 +14,9 @@ test.describe("Session 1 & 2 — REST editor + GraphQL fixes", () => {
 
   test("binary body type is selectable", async ({ page }) => {
     await page.goto("/");
+    await expect(page.getByTestId("store-ready")).toHaveAttribute("data-ready", "true", {
+      timeout: 10000,
+    });
     // Open the Body accordion
     const bodyAccordion = page.getByText(/^(Body|Corps)/i).first();
     await bodyAccordion.click();

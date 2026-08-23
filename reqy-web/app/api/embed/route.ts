@@ -37,7 +37,28 @@ export async function POST(req: NextRequest) {
   }
 
   const model = inputModel || "jina-embeddings-v3";
-  const inputs = typeof input === "string" ? [input] : input;
+  const inputs = (typeof input === "string" ? [input] : input) as unknown[];
+
+  // Limites d'entrée : mémoire + coûts Jina (facturation au token).
+  const MAX_INPUTS = 32;
+  const MAX_CHARS_PER_INPUT = 100_000;
+  if (!Array.isArray(inputs) || inputs.length > MAX_INPUTS) {
+    return NextResponse.json({ error: `Too many inputs (max ${MAX_INPUTS})` }, { status: 413 });
+  }
+  for (const item of inputs) {
+    if (typeof item !== "string") {
+      return NextResponse.json(
+        { error: "input must be a string or array of strings" },
+        { status: 400 },
+      );
+    }
+    if (item.length > MAX_CHARS_PER_INPUT) {
+      return NextResponse.json(
+        { error: `Input too large (max ${MAX_CHARS_PER_INPUT} chars each)` },
+        { status: 413 },
+      );
+    }
+  }
 
   try {
     const controller = new AbortController();

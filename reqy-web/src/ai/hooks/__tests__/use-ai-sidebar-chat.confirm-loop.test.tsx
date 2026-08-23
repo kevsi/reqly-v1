@@ -9,32 +9,32 @@ vi.mock("@/src/ai/cloud-engine/llm", () => ({
 }));
 vi.mock("@/lib/llm-tools", () => ({
   REQLY_TOOLS: [],
-  executeToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),
+  executeAuthorizedToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),
   maskSensitiveObject: (o: unknown) => o,
 }));
 
-import { executeToolCall } from "@/lib/llm-tools";
+import { executeAuthorizedToolCall } from "@/lib/llm-tools";
 
 describe("useAiSidebarChat — bug #2 (boucle de confirmation infinie)", () => {
   beforeEach(() => {
-    vi.mocked(executeToolCall).mockClear();
+    vi.mocked(executeAuthorizedToolCall).mockClear();
     vi.mocked(streamLLM).mockReset();
   });
 
-  it("A: transmet `confirmed` à executeToolCall pour exécuter l'outil après validation (pas de re-demande infinie)", async () => {
+  it("A: transmet une approbation utilisateur au runtime partagé après validation", async () => {
     const { result } = renderHook(() => useAiSidebarChat());
     await import("@testing-library/react").then(({ act }) =>
       act(async () => {
         await result.current.gatedExecute(
           { callId: "c1", name: "delete_collection", arguments: "{}" },
-          true,
+          "user",
         );
       }),
     );
-    const calls = vi.mocked(executeToolCall).mock.calls;
+    const calls = vi.mocked(executeAuthorizedToolCall).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    const opts = calls[0][1] as { confirmed?: boolean } | undefined;
-    expect(opts?.confirmed).toBe(true);
+    const opts = calls[0][1] as { approval?: string } | undefined;
+    expect(opts?.approval).toBe("user");
   });
 
   it("B: ne boucle pas si l'outil redemande confirmation après validation (gardefou anti-boucle)", async () => {
@@ -53,7 +53,7 @@ describe("useAiSidebarChat — bug #2 (boucle de confirmation infinie)", () => {
     });
     // Pire cas : le handler ignore `confirmed` et redemande TOUJOURS confirmation.
     // Sans gardefou, la boucle tourne indéfiniment → isLoading reste true.
-    vi.mocked(executeToolCall).mockImplementation(
+    vi.mocked(executeAuthorizedToolCall).mockImplementation(
       async () =>
         ({
           callId: "c1",
@@ -95,7 +95,7 @@ describe("useAiSidebarChat — bug #2 (boucle de confirmation infinie)", () => {
       }
     });
     // Chaque outil « ask » renvoie requireConfirmation sans s'exécuter.
-    vi.mocked(executeToolCall).mockImplementation(
+    vi.mocked(executeAuthorizedToolCall).mockImplementation(
       async () =>
         ({
           callId: "c",

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { GitService } from "../git-service";
+import { GitService, friendlyGitError } from "../git-service";
 import type { GitBackend } from "../git-backend";
 import type { Collection } from "@/hooks/use-request-store";
 
@@ -23,6 +23,49 @@ function mockCollection(overrides?: Partial<Collection>): Collection {
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────
+
+describe("friendlyGitError", () => {
+  it("explique l'erreur 401/403 et oriente vers Paramètres → Outils intégrés", () => {
+    const msg = friendlyGitError("HTTP Error: 401 Unauthorized");
+    expect(msg).toContain("Paramètres");
+    expect(msg).toContain("authentification");
+    expect(msg).toContain("HTTP Error: 401"); // détail technique conservé
+  });
+
+  it("détecte 'could not read username' (libgit2 sans identifiants)", () => {
+    const msg = friendlyGitError(
+      "could not read Username for 'https://github.com': terminal prompts disabled",
+    );
+    expect(msg).toContain("Connectez votre compte");
+  });
+
+  it("détecte les dépôts introuvables (404)", () => {
+    const msg = friendlyGitError("remote: Repository not found.");
+    expect(msg).toContain("introuvable");
+    expect(msg).toContain("URL du remote");
+  });
+
+  it("explique le non-fast-forward et propose fetch/force push", () => {
+    const msg = friendlyGitError("Push rejected (non-fast-forward). Updates were rejected.");
+    expect(msg).toContain("Récupérez");
+    expect(msg).toContain("Force Push");
+  });
+
+  it("détecte les erreurs réseau", () => {
+    const msg = friendlyGitError("fetch failed: connect ECONNREFUSED");
+    expect(msg).toContain("connexion internet");
+  });
+
+  it("ne double pas les messages déjà actionnables (Rust)", () => {
+    const rust =
+      "Connectez votre compte GitHub/GitLab dans Paramètres → Outils intégrés\nDétail technique : ...";
+    expect(friendlyGitError(rust)).toBe(rust);
+  });
+
+  it("laisse passer les erreurs inconnues", () => {
+    expect(friendlyGitError("something weird")).toBe("something weird");
+  });
+});
 
 describe("GitService", () => {
   let backend: GitBackend;
@@ -247,6 +290,19 @@ describe("GitService", () => {
     });
   });
 
+  it("should pass session credentials to remote operations", async () => {
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const credentials = { username: "token", password: "secret" };
+
+    await service.push("origin", "main", credentials);
+
+    expect(backend.invoke).toHaveBeenCalledWith("git_push", {
+      remote: "origin",
+      branch: "main",
+      credentials,
+    });
+  });
+
   it("should handle push reject (non-fast-forward)", async () => {
     (backend.invoke as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Push rejected (non-fast-forward)"),
@@ -271,6 +327,16 @@ describe("GitService", () => {
     expect(service.getState().repoPath).toBe("/tmp/clone");
   });
 
+  it("should rethrow clone errors for the UI to display", async () => {
+    const error = new Error("remote unavailable");
+    (backend.invoke as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+    await expect(service.clone("https://github.com/user/repo.git", "/tmp/clone")).rejects.toThrow(
+      "remote unavailable",
+    );
+    expect(service.getState().error).toContain("remote unavailable");
+  });
+
   // ── Queries ───────────────────────────────────────────────────────────
 
   it("should refresh state from all git queries", async () => {
@@ -290,12 +356,14 @@ describe("GitService", () => {
       { name: "main", isCurrent: true, oid: "abc", upstream: null, ahead: 0, behind: 0 },
     ];
     const mockRemotes = [{ name: "origin", url: "https://github.com/user/repo.git" }];
+    const mockStashes = [{ index: 0, message: "WIP", oid: "stash123" }];
 
     (backend.invoke as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce(mockCommits) // git_log
       .mockResolvedValueOnce(mockStatus) // git_status
       .mockResolvedValueOnce(mockBranches) // git_branch_list
-      .mockResolvedValueOnce(mockRemotes); // git_remote_list
+      .mockResolvedValueOnce(mockRemotes) // git_remote_list
+      .mockResolvedValueOnce(mockStashes); // git_stash_list
 
     await service.refreshAll();
 
@@ -304,7 +372,39 @@ describe("GitService", () => {
     expect(state.status).toEqual(mockStatus);
     expect(state.branches).toEqual(mockBranches);
     expect(state.remotes).toEqual(mockRemotes);
+    expect(state.stashes).toEqual(mockStashes);
     expect(state.currentBranch).toBe("main");
+  });
+
+  // ── Stash operations ──────────────────────────────────────────────────
+
+  it("should save stash", async () => {
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce("stash123"); // git_stash_save
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { index: 0, message: "test", oid: "stash123" },
+    ]);
+
+    const oid = await service.stashSave("test");
+
+    expect(oid).toBe("stash123");
+    expect(backend.invoke).toHaveBeenCalledWith("git_stash_save", { message: "test" });
+  });
+
+  it("should pop stash", async () => {
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined); // git_stash_pop
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (backend.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+    await service.stashPop(0);
+
+    expect(backend.invoke).toHaveBeenCalledWith("git_stash_pop", { index: 0 });
   });
 
   it("should return empty array on diff error", async () => {

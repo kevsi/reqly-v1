@@ -409,7 +409,7 @@ describe("convertToCollections", () => {
     expect(collections[0].requests).toHaveLength(3);
   });
 
-  it("creates a single collection when groupByTag is false", () => {
+  it("creates a single collection with folders by tag when groupByTag is false", () => {
     const parseResult = parseOpenApiSpec(JSON.stringify(OPENAPI_3_0_SPEC));
     assertSuccess(parseResult);
 
@@ -420,6 +420,11 @@ describe("convertToCollections", () => {
     expect(collections).toHaveLength(1);
     expect(collections[0].name).toBe("My Collection");
     expect(collections[0].requests).toHaveLength(3);
+    expect(collections[0].folders).toHaveLength(1);
+    expect(collections[0].folders?.[0].name).toBe("Users");
+    expect(
+      collections[0].requests.every((r) => r.folderId === collections[0].folders?.[0].id),
+    ).toBe(true);
   });
 
   it("applies baseUrlOverride when provided", () => {

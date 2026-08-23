@@ -3,6 +3,8 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Plus, FileText, Circle, FileDiff } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 import type { FileStatus } from "@/hooks/use-git";
 
 interface StatusRowProps {
@@ -14,27 +16,35 @@ interface StatusRowProps {
 }
 
 export function GitStatusRow({ status, onStage, onUnstage, onView, displayName }: StatusRowProps) {
+  const { t } = useTranslation();
   const isStaged = status.staged !== 1; // 1 = unchanged
 
-  let label = "modified";
+  let label = t("git.statusModified");
   let Icon = Circle;
   let iconClass = "text-warning";
-  if (status.head === 0 && status.workdir !== 0) {
-    label = "new";
+  if (status.conflicted) {
+    label = t("git.conflictActionRequired");
+    Icon = FileDiff;
+    iconClass = "text-destructive";
+  } else if (status.head === 0 && status.workdir !== 0) {
+    label = t("git.statusNew");
     Icon = Plus;
     iconClass = "text-success";
   } else if (status.head === 1 && status.workdir === 0) {
-    label = "deleted";
+    label = t("git.statusDeleted");
     Icon = FileText;
     iconClass = "text-destructive";
   }
 
   return (
     <div
-      className="group flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-accent/50 transition-colors"
+      className={cn(
+        "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-accent/50 transition-colors",
+        status.conflicted && "bg-destructive/5",
+      )}
       onClick={() => onView?.(status.filepath)}
       role={onView ? "button" : undefined}
-      title={onView ? "View working-tree diff" : undefined}
+      title={onView ? t("git.statusViewDiff") : undefined}
     >
       <Checkbox
         checked={isStaged}
@@ -58,10 +68,13 @@ export function GitStatusRow({ status, onStage, onUnstage, onView, displayName }
       </div>
       {isStaged && (
         <Badge variant="secondary" className="text-[9px] h-4 px-1.5">
-          staged
+          {t("git.statusStaged")}
         </Badge>
       )}
-      <Badge variant="outline" className="text-[9px] h-4 px-1.5">
+      <Badge
+        variant={status.conflicted ? "destructive" : "outline"}
+        className={cn("text-[9px] h-4 px-1.5", status.conflicted && "border-destructive/30")}
+      >
         {label}
       </Badge>
       {onView && (

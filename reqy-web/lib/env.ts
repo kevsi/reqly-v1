@@ -13,24 +13,58 @@ import { z } from "zod";
  *   `next.config.mjs` to call during `next build`.
  */
 
+const preprocessEmpty = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((val) => (typeof val === "string" && val.trim() === "" ? undefined : val), schema);
+
+const safeUrl = () =>
+  z.preprocess((val) => {
+    if (typeof val !== "string") return undefined;
+    const trimmed = val.trim();
+    if (!trimmed) return undefined;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? trimmed : undefined;
+    } catch {
+      console.warn(
+        `[env] Invalid URL format for environment variable (${trimmed}). Treating as undefined.`,
+      );
+      return undefined;
+    }
+  }, z.string().optional());
+
+const safeUrlWithDefault = (fallback: string) =>
+  z.preprocess((val) => {
+    if (typeof val !== "string") return fallback;
+    const trimmed = val.trim();
+    if (!trimmed) return fallback;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? trimmed : fallback;
+    } catch {
+      console.warn(`[env] Invalid URL format (${trimmed}). Falling back to default: ${fallback}`);
+      return fallback;
+    }
+  }, z.string().default(fallback));
+
 const ServerEnvSchema = z.object({
-  AUTH_SIGNING_SECRET: z.string().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-  GITHUB_OAUTH_CLIENT_ID: z.string().min(1).optional(),
-  GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
-  GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
-  GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
-  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
-  ALLOW_LOCAL_HOSTS: z.enum(["true", "false"]).optional(),
-  JINA_API_KEY: z.string().min(1).optional(),
+  AUTH_SIGNING_SECRET: preprocessEmpty(z.string().optional()),
+  SUPABASE_URL: safeUrl(),
+  SUPABASE_SERVICE_ROLE_KEY: preprocessEmpty(z.string().optional()),
+  GITHUB_OAUTH_CLIENT_ID: preprocessEmpty(z.string().optional()),
+  GITHUB_OAUTH_CLIENT_SECRET: preprocessEmpty(z.string().optional()),
+  GOOGLE_OAUTH_CLIENT_ID: preprocessEmpty(z.string().optional()),
+  GOOGLE_OAUTH_CLIENT_SECRET: preprocessEmpty(z.string().optional()),
+  UPSTASH_REDIS_REST_URL: safeUrl(),
+  UPSTASH_REDIS_REST_TOKEN: preprocessEmpty(z.string().optional()),
+  ALLOW_LOCAL_HOSTS: preprocessEmpty(z.enum(["true", "false"]).optional()),
+  JINA_API_KEY: preprocessEmpty(z.string().optional()),
 });
 
 const PublicEnvSchema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1).optional(),
-  NEXT_PUBLIC_SYNC_URL: z.string().url().optional(),
+  NEXT_PUBLIC_APP_URL: safeUrlWithDefault("http://localhost:3000"),
+  NEXT_PUBLIC_SUPABASE_URL: safeUrl(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: preprocessEmpty(z.string().optional()),
+  NEXT_PUBLIC_SYNC_URL: safeUrl(),
 });
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;

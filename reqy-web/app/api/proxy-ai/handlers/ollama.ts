@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { structuredError } from "../lib/errors";
 import { passthroughSSE } from "../lib/sse";
 import { isOllamaHostAllowed } from "../lib/url-utils";
+import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
 import { buildOpenAIToolHistory } from "../lib/tool-history";
 import type { PreviousTurn } from "../lib/tool-history";
 
@@ -52,13 +53,16 @@ export async function handleOllama(
     );
   }
 
-  const res = await fetch(`http://${host}:${ollamaPort}/v1/chat/completions`, {
+  const ollamaUrl = `http://${host}:${ollamaPort}/v1/chat/completions`;
+  const dispatcher = await createPinnedDispatcher(ollamaUrl);
+  const res = await fetch(ollamaUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Connection: "keep-alive",
     },
     redirect: "manual",
+    ...(dispatcher ? { dispatcher } : {}),
     signal: extra.signal,
     body: JSON.stringify({
       model,

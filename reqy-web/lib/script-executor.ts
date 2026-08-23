@@ -2,8 +2,9 @@
  * @deprecated Ce module n'est plus appelé depuis l'UI React.
  * Son unique consommateur actif est `app/api/test-runner/execute/route.ts`,
  * qui est testé uniquement par des specs e2e (tests/e2e/scripts-assertions.spec.ts).
- * Le moteur canonique est `lib/test-runner/runner.ts` + `lib/test-runner/assertions.ts`.
- * À migrer vers le moteur canonique avant suppression.
+ * Le moteur canonique est `lib/test-runner/runner.ts` + `lib/test-runner/assertions.ts`,
+ * mais il n'exécute pas de scripts côté serveur (`disableScripts: true`) : ce module
+ * est conservé pour la couverture e2e, sur un sandbox durci (FORBIDDEN_GLOBALS).
  *
  * Script Executor - High-level API for executing test scripts with assertions
  * Supports pre/post scripts, assertions, and data-driven testing
@@ -55,8 +56,8 @@ export interface AssertionResult {
  */
 export async function executeTestScript(
   definition: TestScriptDefinition,
-  request: any,
-  response: any,
+  request: unknown,
+  response: unknown,
 ): Promise<TestScriptExecution> {
   const timeout = definition.timeout || 5000;
   const startTime = Date.now();
@@ -68,8 +69,8 @@ export async function executeTestScript(
         ...definition.variables,
       },
     },
-    request,
-    response,
+    request: request as ScriptContext["request"],
+    response: response as ScriptContext["response"],
   };
 
   // Execute scripts
@@ -85,7 +86,11 @@ export async function executeTestScript(
   const duration = Date.now() - startTime;
 
   // Execute assertions
-  const assertions = await executeAssertions(definition.assertions || [], response, context);
+  const assertions = await executeAssertions(
+    definition.assertions || [],
+    response as ScriptContext["response"] | undefined,
+    context,
+  );
 
   return {
     name: definition.name,
@@ -108,8 +113,8 @@ export async function executeTestScript(
  */
 export async function executeTestScripts(
   definitions: TestScriptDefinition[],
-  request: any,
-  response: any,
+  request: unknown,
+  response: unknown,
 ): Promise<TestScriptExecution[]> {
   const results = await Promise.all(
     definitions.map((def) => executeTestScript(def, request, response)),
@@ -123,7 +128,7 @@ export async function executeTestScripts(
  */
 async function executeAssertions(
   assertions: AssertionDefinition[],
-  response: any,
+  response: ScriptContext["response"] | undefined,
   context: ScriptContext,
 ): Promise<{
   total: number;
@@ -151,7 +156,7 @@ async function executeAssertions(
  */
 async function evaluateAssertion(
   assertion: AssertionDefinition,
-  response: any,
+  response: ScriptContext["response"] | undefined,
   context: ScriptContext,
 ): Promise<AssertionResult> {
   try {
@@ -229,13 +234,15 @@ async function evaluateAssertion(
 /**
  * Navigate JSON path (e.g., "data.user.name")
  */
-function getJsonPath(obj: any, path: string): any {
+function getJsonPath(obj: unknown, path: string): unknown {
   const keys = path.split(".");
-  let current = obj;
+  let current: unknown = obj;
 
   for (const key of keys) {
     if (current == null) return undefined;
-    current = current[key];
+    // Anti-prototype-pollution : ne jamais suivre __proto__/constructor/prototype
+    if (key === "__proto__" || key === "constructor" || key === "prototype") return undefined;
+    current = (current as Record<string, unknown>)[key];
   }
 
   return current;
@@ -258,7 +265,7 @@ export function parseAssertionsFromScript(scriptCode: string): AssertionDefiniti
         if (assertionCode.includes("===")) {
           const [left, right] = assertionCode.split("===").map((s) => s.trim());
           assertions.push({
-            type: left as any,
+            type: left as AssertionDefinition["type"],
             value: right.replace(/['"]/g, ""),
             message: `Assert ${left} === ${right}`,
           });

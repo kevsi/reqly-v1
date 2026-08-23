@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockHttpbin } from "./helpers/httpbin";
 
 /**
  * Seed IndexedDB with a collection containing a request, replicating what
@@ -91,6 +92,7 @@ async function seedIndexedDB(page: import("@playwright/test").Page) {
 
 test.describe("Collections to Editor flow", () => {
   test("opens a collection request in the editor from the collections page", async ({ page }) => {
+    await mockHttpbin(page);
     // Navigate first, seed IndexedDB, then reload to trigger store rehydration
     await page.goto("/collections");
     await seedIndexedDB(page);
@@ -122,6 +124,7 @@ test.describe("Collections to Editor flow", () => {
   test("clicking an already-open request activates the tab without duplication", async ({
     page,
   }) => {
+    await mockHttpbin(page);
     // Navigate first, seed IndexedDB, then reload
     await page.goto("/collections");
     await seedIndexedDB(page);
@@ -146,7 +149,7 @@ test.describe("Collections to Editor flow", () => {
     const collectionAgain = page.getByText("Test Collection", { exact: false }).first();
     await expect(collectionAgain).toBeVisible({ timeout: 20_000 });
     const requestRowAgain = page.getByText("Get Test", { exact: false }).first();
-    if (!(await requestRowAgain.isVisible({ timeout: 2_000 }).catch(() => false))) {
+    if (!(await requestRowAgain.isVisible())) {
       await collectionAgain.click();
     }
     await expect(requestRowAgain).toBeVisible({ timeout: 10_000 });

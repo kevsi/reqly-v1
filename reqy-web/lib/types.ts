@@ -188,6 +188,7 @@ export interface SavedProject {
   analyzedAt: string;
   mode: AnalysisMode;
   workspaceId?: string;
+  warnings?: string[];
 }
 
 export interface GithubConfig {

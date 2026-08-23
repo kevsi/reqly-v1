@@ -196,6 +196,12 @@ export function maskSensitiveObject(obj: Record<string, unknown>): Record<string
 import { requestStore } from "@/hooks/use-request-store";
 import type { Collection, RequestItem } from "@/hooks/request-types";
 import type { HttpMethod } from "@/lib/types";
+import { requestItemSchema } from "@/lib/import-schemas";
+import type { z } from "zod";
+import { safeColor } from "@/lib/collection-utils";
+
+type ImportSchemaRequest = z.infer<typeof requestItemSchema>;
+import { maskSensitivePayload } from "@/src/ai/cloud-engine/prompt";
 import { runSubAgent, assertDelegationAllowed } from "@/src/ai/agent/subagent";
 import { runCollection } from "@/lib/test-runner/runner";
 import type { RunnerContext, RequestResponse } from "@/lib/test-runner/types";
@@ -210,6 +216,7 @@ import {
 } from "@/src/ai/cloud-engine/explain";
 import { proposeAssertionCorrection } from "@/src/ai/cloud-engine/actions/propose-correction";
 import { generateOpenApiSpec } from "@/lib/openapi-export";
+import { authorizeToolCall, type ApprovalSource } from "@/src/ai/agent/permissions";
 import {
   loadAIProvider,
   loadApiKey,
@@ -442,37 +449,69 @@ async function handleCreateRequest(args: Record<string, unknown>): Promise<ToolR
   };
 }
 
-async function handleExecuteRequest(args: Record<string, unknown>): Promise<ToolResult> {
-  const method = typeof args.method === "string" ? args.method.trim() : "";
-  const url = typeof args.url === "string" ? args.url.trim() : "";
-  const headers =
-    typeof args.headers === "object" && args.headers !== null
-      ? (args.headers as Record<string, string>)
-      : {};
-  const body = typeof args.body === "string" ? args.body : undefined;
+const EXECUTE_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const MAX_EXECUTE_BODY_CHARS = 1_000_000;
 
-  if (!method || !url) {
+type ParsedExecuteRequest = {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+};
+
+export function parseExecuteRequestArgs(
+  args: Record<string, unknown>,
+): { value: ParsedExecuteRequest } | { error: string } {
+  const method = typeof args.method === "string" ? args.method.trim().toUpperCase() : "";
+  const url = typeof args.url === "string" ? args.url.trim() : "";
+  if (!method || !url) return { error: "La méthode et l'URL sont requises." };
+  if (!EXECUTE_METHODS.has(method)) {
+    return { error: "Méthode HTTP non supportée." };
+  }
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return { error: "URL invalide : protocole HTTP/HTTPS requis." };
+    }
+  } catch {
+    return { error: "URL invalide." };
+  }
+
+  const rawHeaders = args.headers;
+  const headers: Record<string, string> = {};
+  if (rawHeaders !== undefined) {
+    if (typeof rawHeaders !== "object" || rawHeaders === null || Array.isArray(rawHeaders)) {
+      return { error: "Headers invalides." };
+    }
+    for (const [key, value] of Object.entries(rawHeaders)) {
+      if (typeof value !== "string" || /[\r\n]/.test(key) || /[\r\n]/.test(value)) {
+        return { error: "Headers invalides." };
+      }
+      headers[key] = value;
+    }
+  }
+
+  const rawBody = args.body;
+  if (rawBody !== undefined && typeof rawBody !== "string") {
+    return { error: "Body invalide." };
+  }
+  if (typeof rawBody === "string" && rawBody.length > MAX_EXECUTE_BODY_CHARS) {
+    return { error: "Body trop volumineux." };
+  }
+  return { value: { method, url, headers, body: rawBody as string | undefined } };
+}
+
+async function handleExecuteRequest(args: Record<string, unknown>): Promise<ToolResult> {
+  const parsedArgs = parseExecuteRequestArgs(args);
+  if ("error" in parsedArgs) {
     return {
       callId: "",
       name: "execute_request",
       content: "",
-      error: "La méthode et l'URL sont requises.",
+      error: parsedArgs.error,
     };
   }
-
-  try {
-    const parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return {
-        callId: "",
-        name: "execute_request",
-        content: "",
-        error: "URL invalide : protocole HTTP/HTTPS requis.",
-      };
-    }
-  } catch {
-    return { callId: "", name: "execute_request", content: "", error: "URL invalide." };
-  }
+  const { method, url, headers, body } = parsedArgs.value;
 
   const requestItem: Partial<RequestItem> = {
     name: `${method} ${url}`,
@@ -493,7 +532,9 @@ async function handleExecuteRequest(args: Record<string, unknown>): Promise<Tool
     const status = store.lastResponse?.status ?? "unknown";
     const duration = store.lastResponse?.durationMs ?? 0;
     const responseBody =
-      typeof store.lastResponse?.body === "string" ? store.lastResponse.body.slice(0, 2000) : "";
+      typeof store.lastResponse?.body === "string"
+        ? String(maskSensitivePayload(store.lastResponse.body)).slice(0, 2000)
+        : "";
 
     return {
       callId: "",
@@ -825,27 +866,35 @@ async function handleImportCollection(args: Record<string, unknown>): Promise<To
         groupByTag: false,
         baseUrlOverride: undefined,
       });
+      let imported = 0;
       for (const col of collections) {
-        requestStore.getState().addCollection({
-          name: col.name,
-          description: col.description ?? "",
-          color: col.color ?? "emerald",
-          icon: col.icon ?? "package",
-          workspaceId: wsId,
-          requests: col.requests.map((r) => ({
-            ...r,
+        // Validation Zod : les requêtes invalides (méthode hors enum, champs
+        // manquants) sont ignorées au lieu d'être injectées dans le store.
+        const requests = col.requests
+          .map((r) => requestItemSchema.safeParse({ ...r, method: r.method }))
+          .filter((r): r is { success: true; data: ImportSchemaRequest } => r.success)
+          .map(({ data }) => ({
+            ...data,
             id: `req-${crypto.randomUUID()}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            method: r.method as HttpMethod,
-          })),
+          }));
+        if (requests.length === 0) continue;
+        requestStore.getState().addCollection({
+          name: col.name,
+          description: col.description ?? "",
+          color: safeColor(col.color ?? "emerald"),
+          icon: col.icon ?? "package",
+          workspaceId: wsId,
+          requests,
           folders: [],
         });
+        imported++;
       }
       return {
         callId: "",
         name: "import_collection",
-        content: `${collections.length} collection(s) importée(s) depuis OpenAPI.`,
+        content: `${imported} collection(s) importée(s) depuis OpenAPI.`,
       };
     }
 
@@ -855,27 +904,33 @@ async function handleImportCollection(args: Record<string, unknown>): Promise<To
         return { callId: "", name: "import_collection", content: "", error: parsed.error };
       }
       const collections = convertBrunoToCollections(parsed);
+      let imported = 0;
       for (const col of collections) {
-        requestStore.getState().addCollection({
-          name: col.name,
-          description: "",
-          color: col.color ?? "emerald",
-          icon: col.icon ?? "package",
-          workspaceId: wsId,
-          requests: col.requests.map((r) => ({
-            ...r,
+        const requests = col.requests
+          .map((r) => requestItemSchema.safeParse({ ...r, method: r.method }))
+          .filter((r): r is { success: true; data: ImportSchemaRequest } => r.success)
+          .map(({ data }) => ({
+            ...data,
             id: `req-${crypto.randomUUID()}`,
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            method: r.method as HttpMethod,
-          })),
+          }));
+        if (requests.length === 0) continue;
+        requestStore.getState().addCollection({
+          name: col.name,
+          description: "",
+          color: safeColor(col.color ?? "emerald"),
+          icon: col.icon ?? "package",
+          workspaceId: wsId,
+          requests,
           folders: [],
         });
+        imported++;
       }
       return {
         callId: "",
         name: "import_collection",
-        content: `${collections.length} collection(s) importée(s) depuis Bruno.`,
+        content: `${imported} collection(s) importée(s) depuis Bruno.`,
       };
     }
 
@@ -1638,7 +1693,7 @@ export function getToolByName(name: string): ReqlyTool | undefined {
   return REQLY_TOOLS.find((t) => t.name === name);
 }
 
-export async function executeToolCall(
+async function executeToolCall(
   call: ToolCall,
   options?: ToolExecutionOptions | boolean,
 ): Promise<ToolResult> {
@@ -1682,6 +1737,138 @@ export async function executeToolCall(
             ? e
             : "Erreur lors de l'exécution de l'outil.",
     };
+  }
+}
+
+export interface AuthorizedToolExecutionOptions {
+  approval?: ApprovalSource;
+  depth?: number;
+  /** Clé stable pour éviter les doubles commits après retry/reprise. */
+  idempotencyKey?: string;
+}
+
+function parseToolArgumentsForAudit(raw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function recordAuthorizationAudit(
+  actionType: string,
+  call: ToolCall,
+  decision: ReturnType<typeof authorizeToolCall>,
+  approval: ApprovalSource,
+  idempotencyKey: string,
+  result?: ToolResult,
+): void {
+  requestStore.getState().addAiAuditEntry?.({
+    actionType,
+    detail: {
+      tool: call.name,
+      toolCallId: call.id,
+      permission: decision.permission,
+      approvalSource: approval,
+      idempotencyKey,
+      decision: decision.allowed ? "allow" : decision.requiresConfirmation ? "ask" : "deny",
+      reason: decision.reason,
+      arguments: maskSensitiveObject(parseToolArgumentsForAudit(call.arguments)),
+    },
+    result: result
+      ? {
+          ok: !result.error,
+          error: result.error,
+        }
+      : undefined,
+  });
+}
+
+/**
+ * Point d’entrée unique pour les tool calls issus de toutes les surfaces IA.
+ * Le handler brut n’est appelé qu’après la décision d’autorisation.
+ */
+export async function executeAuthorizedToolCall(
+  call: ToolCall,
+  options: AuthorizedToolExecutionOptions = {},
+): Promise<ToolResult> {
+  const approval = options.approval ?? "none";
+  const idempotencyKey = options.idempotencyKey ?? `${call.id}:${call.name}:${call.arguments}`;
+  const decision = authorizeToolCall(call.name, approval);
+
+  if (!decision.allowed) {
+    const result: ToolResult = {
+      callId: call.id,
+      name: call.name,
+      content: "",
+      error: decision.reason,
+      ...(decision.requiresConfirmation ? { requireConfirmation: true } : {}),
+    };
+    recordAuthorizationAudit(
+      decision.requiresConfirmation ? "AI_TOOL_CONFIRMATION_REQUIRED" : "AI_TOOL_DENIED",
+      call,
+      decision,
+      approval,
+      idempotencyKey,
+      result,
+    );
+    return result;
+  }
+
+  const previousCommit = requestStore.getState().aiAudit?.some((entry) => {
+    if (entry.actionType !== "AI_TOOL_COMMITTED") return false;
+    const detail = entry.detail;
+    return (
+      detail &&
+      typeof detail === "object" &&
+      (detail as { idempotencyKey?: unknown }).idempotencyKey === idempotencyKey
+    );
+  });
+  if (previousCommit) {
+    const result: ToolResult = {
+      callId: call.id,
+      name: call.name,
+      content: "",
+      error: "Cet appel d’outil a déjà été exécuté; nouvelle exécution bloquée.",
+    };
+    recordAuthorizationAudit(
+      "AI_TOOL_DUPLICATE_BLOCKED",
+      call,
+      decision,
+      approval,
+      idempotencyKey,
+      result,
+    );
+    return result;
+  }
+
+  recordAuthorizationAudit("AI_TOOL_APPROVED", call, decision, approval, idempotencyKey);
+  try {
+    const result = await executeToolCall(call, {
+      depth: options.depth ?? 0,
+      confirmed: true,
+    });
+    recordAuthorizationAudit("AI_TOOL_COMMITTED", call, decision, approval, idempotencyKey, result);
+    return result;
+  } catch (error) {
+    const result: ToolResult = {
+      callId: call.id,
+      name: call.name,
+      content: "",
+      error: error instanceof Error ? error.message : String(error),
+    };
+    recordAuthorizationAudit(
+      "AI_TOOL_COMMIT_FAILED",
+      call,
+      decision,
+      approval,
+      idempotencyKey,
+      result,
+    );
+    return result;
   }
 }
 

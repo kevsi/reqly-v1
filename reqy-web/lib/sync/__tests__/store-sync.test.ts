@@ -86,6 +86,49 @@ describe("mergeChangesIntoStore", () => {
     expect(next.collections[0].id).toBe("c1");
   });
 
+  it("strips request and environment secrets from remote changes", () => {
+    const next = mergeChangesIntoStore(baseStore(), [
+      change({
+        entityType: "collection",
+        id: "c1",
+        data: col("c1", 100, {
+          requests: [
+            {
+              id: "r1",
+              name: "Secret request",
+              method: "GET",
+              url: "https://example.com",
+              endpoint: "https://example.com",
+              authToken: "bearer-secret",
+              headers: {
+                Authorization: "Bearer secret",
+                "X-API-Key": "api-secret",
+                Accept: "application/json",
+              },
+              createdAt: 100,
+              updatedAt: 100,
+            },
+          ],
+        }),
+      }),
+      change({
+        entityType: "environment",
+        id: "e1",
+        data: env("e1", 100, {
+          variables: [
+            { key: "API_TOKEN", value: "secret", enabled: true },
+            { key: "BASE_URL", value: "https://example.com", enabled: true },
+          ],
+        }),
+      }),
+    ]);
+
+    expect(next.collections[0].requests[0].authToken).toBe("");
+    expect(next.collections[0].requests[0].headers).toEqual({ Accept: "application/json" });
+    expect(next.environments[0].variables[0].value).toBe("");
+    expect(next.environments[0].variables[1].value).toBe("https://example.com");
+  });
+
   it("updates an existing collection when server is newer (LWW on updatedAt)", () => {
     const store = baseStore();
     store.collections = [col("c1", 100, { name: "old" })];

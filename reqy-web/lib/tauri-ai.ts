@@ -1,3 +1,7 @@
+/**
+ * Provider parity: this desktop adapter mirrors app/api/proxy-ai/route.ts.
+ * Any provider, validation, timeout, or response-format change must be replicated in both paths.
+ */
 import { invokeTauriFetch } from "@/lib/tauri";
 import type { AIProvider } from "@/lib/types";
 import type { ModelOption } from "./provider-models";
@@ -29,8 +33,32 @@ interface ModelRecord {
   supportedGenerationMethods?: unknown;
 }
 
+const TAURI_AI_TIMEOUT_MS = 60_000;
+
 function isRecord(m: unknown): m is Record<string, unknown> {
   return typeof m === "object" && m !== null;
+}
+
+async function invokeTauriFetchWithTimeout(
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  body?: string,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      invokeTauriFetch(method, url, headers, body),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("AI provider request timed out")),
+          TAURI_AI_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 function isModelRecord(m: unknown): m is ModelRecord {
@@ -39,6 +67,31 @@ function isModelRecord(m: unknown): m is ModelRecord {
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+/**
+ * Validate the direct desktop Ollama target. Local loopback is intentional in
+ * Tauri, but URL syntax, authority injection and invalid ports are rejected.
+ * The server proxy keeps its stricter DNS/IP SSRF policy in url-utils.ts.
+ */
+export function normalizeOllamaTarget(
+  hostValue: unknown,
+  portValue: unknown,
+): { host: string; port: number } {
+  const host = typeof hostValue === "string" && hostValue.trim() ? hostValue.trim() : "127.0.0.1";
+  if (host.length > 253 || /[\s/?#@\\]/.test(host) || host.includes(":")) {
+    throw new Error("Invalid Ollama host");
+  }
+  const port =
+    typeof portValue === "number"
+      ? portValue
+      : typeof portValue === "string" && portValue.trim()
+        ? Number(portValue.trim())
+        : 11434;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Invalid Ollama port");
+  }
+  return { host, port };
 }
 
 function normalizeModelsOpenAI(data: unknown[]): ModelOption[] {
@@ -125,17 +178,12 @@ export async function fetchModelsTauri(
     headers["x-api-key"] = apiKey;
     headers["anthropic-version"] = "2023-06-01";
   } else if (provider === "gemini") {
-    // API key goes in query string
+    headers["x-goog-api-key"] = apiKey;
   } else if (provider !== "ollama") {
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  let requestUrl = fullUrl;
-  if (provider === "gemini") {
-    requestUrl = `${fullUrl}?key=${encodeURIComponent(apiKey)}`;
-  }
-
-  const res = await invokeTauriFetch("GET", requestUrl, headers);
+  const res = await invokeTauriFetch("GET", fullUrl, headers);
 
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`);
@@ -259,7 +307,7 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
       break;
     }
     case "gemini": {
-      url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       const geminiTools = tools?.length
         ? [
             {
@@ -286,8 +334,9 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
       break;
     }
     case "ollama": {
-      const host = (payload.host as string) ?? "127.0.0.1";
-      const port = (payload.port as number) ?? 11434;
+      const target = normalizeOllamaTarget(payload.host, payload.port);
+      const host = target.host;
+      const port = target.port;
       url = `http://${host}:${port}/v1/chat/completions`;
       body = {
         model,
@@ -330,11 +379,13 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
   if (provider === "anthropic") {
     headers["x-api-key"] = apiKey;
     headers["anthropic-version"] = "2023-06-01";
+  } else if (provider === "gemini") {
+    headers["x-goog-api-key"] = apiKey;
   } else if (provider !== "ollama" && provider !== "gemini") {
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  const res = await invokeTauriFetch("POST", url, headers, JSON.stringify(body));
+  const res = await invokeTauriFetchWithTimeout("POST", url, headers, JSON.stringify(body));
 
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`);

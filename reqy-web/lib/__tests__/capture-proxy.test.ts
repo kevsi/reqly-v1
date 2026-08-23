@@ -136,10 +136,10 @@ describe("Capture Proxy", () => {
       ).rejects.toThrow("Capture not running");
     });
 
-    it("should throw on bandwidth limit exceeded", async () => {
-      // NOTE: Bandwidth limiting is currently disabled in lib/capture-proxy.ts
-      // This test is a placeholder for when bandwidth limiting is re-enabled
-      // For now, this test just verifies that large sessions can be recorded
+    it("records captured body size accounting", async () => {
+      // NOTE: bandwidth limiting is disabled in lib/capture-proxy.ts (see the
+      // "TODO: Add bandwidth limiting when needed" there) — this test asserts
+      // that a large session is recorded successfully with its byte size.
       const largeBody = "x".repeat(1 * 1024); // 1 KB
 
       const session = await recordSession(
@@ -215,7 +215,7 @@ describe("Capture Proxy", () => {
     });
 
     it("should get a specific session", async () => {
-      const recorded = await recordSession(
+      await recordSession(
         {
           id: "test-123",
           timestamp: Date.now(),
@@ -338,9 +338,7 @@ describe("Capture Proxy", () => {
     });
 
     it("should record multiple sessions under rate limit", async () => {
-      const sessions: (typeof recordSession extends (...args: any[]) => Promise<infer R>
-        ? R
-        : never)[] = [];
+      const sessions: Awaited<ReturnType<typeof recordSession>>[] = [];
 
       for (let i = 0; i < 5; i++) {
         const session = await recordSession(

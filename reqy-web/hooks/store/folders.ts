@@ -4,6 +4,9 @@ import type { CollectionFolder, RequestItem, Collection } from "@/hooks/request-
 import { computeOrder } from "@/lib/types";
 import type { CommitFn } from "./types";
 import { toast } from "sonner";
+import i18n from "@/src/i18n";
+
+const t = (key: string) => i18n.t(key);
 
 export function createFoldersMutations(commit: CommitFn) {
   const addFolder = (collectionId: string, name: string, parentId: string | null = null) => {
@@ -79,21 +82,38 @@ export function createFoldersMutations(commit: CommitFn) {
     folderId: string | null,
   ) => {
     const now = Date.now();
-    commit((prev) => ({
-      ...prev,
-      collections: prev.collections.map((c) =>
-        c.id === collectionId
-          ? {
-              ...c,
-              requests: c.requests.map((r) =>
-                r.id === requestId ? { ...r, folderId, updatedAt: now } : r,
-              ),
-              updatedAt: now,
-            }
-          : c,
-      ),
-    }));
-    toast.success("Requête déplacée");
+    commit((prev) => {
+      // La requête peut venir d'UNE AUTRE collection (drop cross-collection) :
+      // on la cherche partout, on la retire de sa collection d'origine, puis
+      // on l'ajoute à la collection cible dans le dossier visé.
+      let moved: RequestItem | undefined;
+      const stripped = prev.collections.map((c) => {
+        const found = c.requests.find((r) => r.id === requestId);
+        if (found) {
+          moved = found;
+          return {
+            ...c,
+            requests: c.requests.filter((r) => r.id !== requestId),
+            updatedAt: now,
+          };
+        }
+        return c;
+      });
+      if (!moved) return prev;
+      return {
+        ...prev,
+        collections: stripped.map((c) =>
+          c.id === collectionId
+            ? {
+                ...c,
+                requests: [...c.requests, { ...moved!, folderId, updatedAt: now }],
+                updatedAt: now,
+              }
+            : c,
+        ),
+      };
+    });
+    toast.success(t("collections.folder.requestMoved"));
   };
 
   const moveFolder = (collectionId: string, folderId: string, newParentId: string | null) => {
@@ -156,7 +176,7 @@ export function createFoldersMutations(commit: CommitFn) {
         };
       }),
     }));
-    toast.success("Requêtes réorganisées");
+    toast.success(t("collections.folder.requestsReordered"));
   };
 
   const reorderFolders = (
@@ -193,7 +213,7 @@ export function createFoldersMutations(commit: CommitFn) {
         ),
       };
     });
-    toast.success("Dossiers réorganisés");
+    toast.success(t("collections.folder.foldersReordered"));
   };
 
   const getFoldersForCollection = (

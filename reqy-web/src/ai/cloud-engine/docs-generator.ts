@@ -5,6 +5,8 @@
  * page for a collection of HTTP endpoints.
  */
 
+import { isSensitiveName } from "./prompt";
+
 export interface EndpointSummary {
   method: string;
   url: string;
@@ -23,10 +25,9 @@ export interface EndpointSummary {
  */
 export function safeHeaders(headers?: Record<string, string>): Record<string, string> {
   if (!headers) return {};
-  const SECRET = /^(authorization|x-api-key|apikey|cookie|set-cookie|x-auth-token|x-csrf-token)$/i;
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers)) {
-    if (!SECRET.test(k)) out[k] = v;
+    if (!isSensitiveName(k)) out[k] = v;
   }
   return out;
 }
@@ -38,7 +39,7 @@ export function safeHeaders(headers?: Record<string, string>): Record<string, st
  */
 export function buildCollectionDocsPrompt(
   endpoints: EndpointSummary[],
-  options: { title?: string; audience?: string } = {}
+  options: { title?: string; audience?: string } = {},
 ): string {
   const title = options.title ?? "API Collection";
   const audience = options.audience ?? "developers integrating with this API";

@@ -225,7 +225,7 @@ describe("useRequestExecutionCore", () => {
 
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "Missing URL",
+        title: "URL manquante",
         variant: "destructive",
       }),
     );
@@ -259,7 +259,7 @@ describe("useRequestExecutionCore", () => {
     // Should have shown unresolved variables toast
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "Unresolved variables",
+        title: "Variables non résolues",
         variant: "destructive",
       }),
     );

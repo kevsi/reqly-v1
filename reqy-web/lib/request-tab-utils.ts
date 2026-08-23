@@ -73,6 +73,7 @@ export function createEmptyTab(overrides: Partial<RequestTab> = {}): RequestTab 
     bodyType: "json",
     authType: "none",
     authToken: "",
+    followRedirects: false,
     hasResponse: false,
     isSaved: false,
     ...overrides,

@@ -11,6 +11,51 @@ import {
 } from "@/lib/capture-proxy";
 import { randomUUID } from "crypto";
 
+/**
+ * En-têtes sensibles dont la valeur est masquée avant stockage/export
+ * (miroir de la liste desktop dans capture.rs, complétée).
+ */
+const SENSITIVE_HEADERS = [
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "api-key",
+  "x-auth-token",
+  "x-access-token",
+  "x-refresh-token",
+  "x-session-token",
+  "x-csrf-token",
+  "credentials",
+];
+
+/** `true` si le nom d'en-tête contient un mot-clé sensible. */
+function isSensitiveHeader(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (SENSITIVE_HEADERS.includes(lower)) return true;
+  return (
+    lower.includes("authorization") ||
+    lower.includes("auth-token") ||
+    lower.includes("access-token") ||
+    lower.includes("refresh-token") ||
+    lower.includes("session-token") ||
+    lower.includes("secret") ||
+    lower.includes("password") ||
+    lower.endsWith("-key") ||
+    lower.includes("private-key")
+  );
+}
+
+/** Masque les valeurs des en-têtes sensibles (« [REDACTED] »). */
+export function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key] = isSensitiveHeader(key) ? "[REDACTED]" : value;
+  }
+  return out;
+}
+
 export async function captureRequest(
   method: string,
   url: string,
@@ -22,7 +67,7 @@ export async function captureRequest(
     timestamp: Date.now(),
     method,
     url,
-    headers,
+    headers: redactSensitiveHeaders(headers),
     body: body || undefined,
   };
 }
@@ -35,7 +80,7 @@ export async function captureResponse(
   return {
     statusCode,
     statusMessage: getStatusMessage(statusCode),
-    headers,
+    headers: redactSensitiveHeaders(headers),
     body,
   };
 }
@@ -45,6 +90,7 @@ export async function recordCapturedRequest(
   response: CapturedResponse,
   duration: number,
   rateLimitKey?: string,
+  userId?: string,
 ) {
   const state = getProxyState();
   if (!state.isRunning) {
@@ -52,7 +98,7 @@ export async function recordCapturedRequest(
   }
 
   try {
-    return await recordSession(request, response, duration, rateLimitKey);
+    return await recordSession(request, response, duration, rateLimitKey, userId);
   } catch (error) {
     console.error("[Capture Middleware] Error recording session:", error);
     return null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { interpolate, replaceLocalhostPort, hasUnresolvedPlaceholders } from "@/lib/utils";
 import { runScript } from "@/lib/test-runner/scripts";
 import type { RunnerContext } from "@/lib/test-runner/types";
@@ -11,9 +11,16 @@ import { type HttpMethod, type RequestTab, executeRequest } from "@/lib/request-
 import { computeDynamicVars, getUnresolvedWarnings } from "@/lib/variable-mapping";
 import type { RequestTabsState } from "@/hooks/use-request-tabs-state";
 import type { PendingCollectionRequest } from "@/lib/request-bridge";
+import { isTauriInvokeError } from "@/lib/tauri";
+import { useTranslation } from "react-i18next";
 
 export function useRequestExecutionCore(state: RequestTabsState) {
   const { nativeMode, setLoadingCount, updateTab } = state;
+  const { t } = useTranslation();
+
+  // Abort handle for the in-flight request so the UI can offer a Cancel
+  // button while a request is running.
+  const abortRef = useRef<AbortController | null>(null);
 
   const {
     environments,
@@ -47,11 +54,11 @@ export function useRequestExecutionCore(state: RequestTabsState) {
       .join(" · ");
     const suffix = warnings.length > 3 ? ` (+${warnings.length - 3} autres)` : "";
     toast({
-      title: "Unresolved variables",
+      title: t("request.unresolvedVariables"),
       description: `${preview}${suffix}`,
       variant: "destructive",
     });
-  }, [variableMappings, history]);
+  }, [variableMappings, history, t]);
 
   const buildTabFromRequest = useCallback(
     (request: RequestItem | HistoryItem | PendingCollectionRequest): Partial<RequestTab> => ({
@@ -117,7 +124,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           } catch (scriptErr) {
             console.error("[executeRequestWrapper pre-request script]", scriptErr);
             toast({
-              title: "Pre-request script crashed",
+              title: t("request.preScriptCrashed"),
               description: scriptErr instanceof Error ? scriptErr.message : String(scriptErr),
               variant: "destructive",
             });
@@ -125,13 +132,13 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           }
           if (out?.error) {
             toast({
-              title: "Pre-request script error",
+              title: t("request.preScriptError"),
               description: out.error,
               variant: "destructive",
             });
           } else if (out && out.consoleLines.length > 0) {
             toast({
-              title: "Pre-request script",
+              title: t("request.preScriptOutput"),
               description: out.consoleLines.join("\n").slice(0, 200),
             });
           }
@@ -154,21 +161,30 @@ export function useRequestExecutionCore(state: RequestTabsState) {
         ) {
           notifyUnresolvedVariables();
           toast({
-            title: "Unresolved variables",
-            description: "Resolve all {{placeholders}} before sending the request.",
+            title: t("request.unresolvedVariables"),
+            description: t("request.unresolvedVariablesHint"),
             variant: "destructive",
           });
           return null;
         }
 
-        const result = await executeRequest({
-          tab,
-          allVars: allVarsAfterScript,
-          activeProjectPort,
-          activeProject: !!activeProject,
-          nativeMode,
-          activeWorkspaceId: activeWorkspaceId ?? null,
-        });
+        // Expose the abort handle so the UI can cancel this request.
+        const controller = new AbortController();
+        abortRef.current = controller;
+        let result: Awaited<ReturnType<typeof executeRequest>>;
+        try {
+          result = await executeRequest({
+            tab,
+            allVars: allVarsAfterScript,
+            activeProjectPort,
+            activeProject: !!activeProject,
+            nativeMode,
+            activeWorkspaceId: activeWorkspaceId ?? null,
+            signal: controller.signal,
+          });
+        } finally {
+          if (abortRef.current === controller) abortRef.current = null;
+        }
         // Post-response script
         if (tab.postResponseScript?.trim()) {
           const responseForScript = {
@@ -187,7 +203,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           } catch (scriptErr) {
             console.error("[executeRequestWrapper post-response script]", scriptErr);
             toast({
-              title: "Post-response script crashed",
+              title: t("request.postScriptCrashed"),
               description: scriptErr instanceof Error ? scriptErr.message : String(scriptErr),
               variant: "destructive",
             });
@@ -195,13 +211,13 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           }
           if (out?.error) {
             toast({
-              title: "Post-response script error",
+              title: t("request.postScriptError"),
               description: out.error,
               variant: "destructive",
             });
           } else if (out && out.consoleLines.length > 0) {
             toast({
-              title: "Post-response script",
+              title: t("request.postScriptOutput"),
               description: out.consoleLines.join("\n").slice(0, 200),
             });
           }
@@ -220,6 +236,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
       activeWorkspaceId,
       setLoadingCount,
       notifyUnresolvedVariables,
+      t,
     ],
   );
 
@@ -228,8 +245,8 @@ export function useRequestExecutionCore(state: RequestTabsState) {
       try {
         if (!tabToSend?.url?.trim()) {
           toast({
-            title: "Missing URL",
-            description: "Enter a valid URL before sending the request.",
+            title: t("request.missingUrl"),
+            description: t("request.missingUrlHint"),
             variant: "destructive",
           });
           return null;
@@ -246,6 +263,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           responseData: result.responseData,
           responseHeaders: result.responseHeaders,
           responseTimings: result.responseTimings,
+          transportError: result.transportError,
           testResults: result.testResults,
         });
 
@@ -285,21 +303,31 @@ export function useRequestExecutionCore(state: RequestTabsState) {
       } catch (err) {
         console.error("[sendSpecificRequest]", err);
         toast({
-          title: "Request failed",
-          description: err instanceof Error ? err.message : String(err),
+          title: t("request.executionFailed"),
+          description: isTauriInvokeError(err)
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : String(err),
           variant: "destructive",
         });
         return null;
       }
     },
-    [executeRequestWrapper, updateTab, setCurrentRequest, setLastResponse, addHistoryAndNotify],
+    [executeRequestWrapper, updateTab, setCurrentRequest, setLastResponse, addHistoryAndNotify, t],
   );
+
+  const cancelRequest = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, []);
 
   return {
     allVars,
     buildTabFromRequest,
     executeRequestWrapper,
     sendSpecificRequest,
+    cancelRequest,
     notifyUnresolvedVariables,
   };
 }

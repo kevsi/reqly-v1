@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Play, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, Play, Loader2, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DiffDialog } from "@/components/diff-dialog";
 import { analyze } from "@/src/ai/local-engine/analyzer";
@@ -19,7 +19,7 @@ import { ResponseCookiesTab } from "@/components/response-cookies-tab";
 import { CodeSnippet } from "@/components/response-code-snippet";
 import { TestResultsSection } from "@/components/response-test-results";
 import type { CorrectionSuggestion } from "@/src/ai/cloud-engine/actions/propose-correction";
-import type { TauriCookie } from "@/lib/tauri";
+import type { TauriCookie, TauriErrorPayload } from "@/lib/tauri";
 import dynamic from "next/dynamic";
 
 // Heavy dependencies â€” only loaded on demand (response received, AI opened).
@@ -63,9 +63,11 @@ interface ResponsePanelProps {
   };
   responseSize?: string;
   responseHeaders?: Record<string, string>;
+  transportError?: TauriErrorPayload | null;
   responseCookies?: TauriCookie[];
   isLoading?: boolean;
   onRun?: () => Promise<void>;
+  onRetry?: () => Promise<void>;
   onRunAndSave?: () => Promise<void>;
   onRunAndDownload?: () => Promise<void>;
   onAnalyze?: () => Promise<void>;
@@ -96,10 +98,12 @@ export function ResponsePanel({
   responseTimings,
   responseSize,
   responseHeaders,
+  transportError,
   responseCookies = [],
   testResults,
   isLoading = false,
   onRun,
+  onRetry,
   onRunAndSave,
   onRunAndDownload,
   onPatchRequest,
@@ -290,6 +294,28 @@ export function ResponsePanel({
         flash && "response-flash",
       )}
     >
+      {transportError && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 border-b border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 break-words">
+            <p>{transportError.message}</p>
+            {transportError.detail && (
+              <p className="mt-1 text-xs text-destructive/80">{transportError.detail}</p>
+            )}
+          </div>
+        </div>
+      )}
+      {Object.entries(responseHeaders ?? {}).some(
+        ([key, value]) => key.toLowerCase() === "x-proxy-truncated" && value === "1",
+      ) && (
+        <div className="flex items-center gap-2 border-b border-warning/20 bg-warning/5 px-4 py-2 text-xs text-warning">
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+          {t("response.truncated")}
+        </div>
+      )}
       <ResponseStatusBar
         responseStatus={responseStatus}
         responseTime={responseTime}
@@ -297,7 +323,7 @@ export function ResponsePanel({
         isLoading={isLoading}
         hasResponse={hasResponse}
         aiIsLoading={aiIsLoading}
-        onRun={onRun}
+        onRun={onRetry ?? onRun}
         onRunAndSave={onRunAndSave}
         onRunAndDownload={onRunAndDownload}
         onExport={handleExport}

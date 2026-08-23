@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import {
@@ -26,21 +25,7 @@ import {
   Sparkles,
   Settings,
   ListChecks,
-  XCircle,
-  CheckCircle2,
-  CircleSlash,
-  AlertCircle,
-  Clock,
-  Terminal,
-  Download,
   BarChart3,
-  RotateCcw,
-  GripVertical,
-  Folder,
-  FolderOpen,
-  ChevronRight,
-  ChevronDown,
-  ArrowUpDown,
 } from "lucide-react";
 import { loadJsonDataset, loadCsvDataset } from "@/lib/test-runner/data-driven";
 import type { VariableExtractionRule } from "@/lib/test-runner/types";
@@ -48,8 +33,6 @@ import type { VariableExtractionRule } from "@/lib/test-runner/types";
 interface RunConfigPanelProps {
   runType: "functional" | "performance";
   setRunType: (type: "functional" | "performance") => void;
-  runMethod: "local" | "proxy";
-  setRunMethod: (method: "local" | "proxy") => void;
   virtualUsers: number;
   setVirtualUsers: (count: number) => void;
   iterationsCount: number;
@@ -74,13 +57,8 @@ interface RunConfigPanelProps {
   setDatasetFileName: (name: string | null) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isRunning: boolean;
-  activeWorkspaceId: string | null;
   onRun: () => void;
-  onReRunFailed: () => void;
-  onExportReport: (format: "json" | "junit") => void;
   canRun: boolean;
-  hasReport: boolean;
-  hasFailures: boolean;
   selectedCount: number;
   report?: {
     performanceReport?: {
@@ -97,8 +75,6 @@ interface RunConfigPanelProps {
 export function RunConfigPanel({
   runType,
   setRunType,
-  runMethod,
-  setRunMethod,
   virtualUsers,
   setVirtualUsers,
   iterationsCount,
@@ -113,54 +89,20 @@ export function RunConfigPanel({
   setSaveCookies,
   extractions,
   setExtractions,
-  datasetText,
   setDatasetText,
   datasetRows,
   setDatasetRows,
   datasetError,
   setDatasetError,
-  datasetFileName,
   setDatasetFileName,
   fileInputRef,
   isRunning,
-  activeWorkspaceId,
   onRun,
-  onReRunFailed,
-  onExportReport,
   canRun,
-  hasReport,
-  hasFailures,
   selectedCount,
   report,
 }: RunConfigPanelProps) {
   const { t } = useTranslation();
-
-  const handleLoadDataset = useCallback(() => {
-    setDatasetError(null);
-    const trimmed = datasetText.trim();
-    if (!trimmed) {
-      setDatasetError(t("runner.errorEmpty"));
-      return;
-    }
-    try {
-      setDatasetRows(loadJsonDataset(trimmed));
-      setDatasetFileName(null);
-      return;
-    } catch {
-      /* fall through */
-    }
-    try {
-      const rows = loadCsvDataset(trimmed);
-      if (rows.length === 0) {
-        setDatasetError(t("runner.errorNoRows"));
-        return;
-      }
-      setDatasetRows(rows);
-      setDatasetFileName(null);
-    } catch (e) {
-      setDatasetError(e instanceof Error ? e.message : t("runner.errorParse"));
-    }
-  }, [datasetText, setDatasetRows, setDatasetError, setDatasetFileName, t]);
 
   const handleFileUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -409,7 +351,9 @@ export function RunConfigPanel({
               >
                 <Select
                   value={rule.source}
-                  onValueChange={(v) => updateExtractionRule(rule.id, { source: v as any })}
+                  onValueChange={(v) =>
+                    updateExtractionRule(rule.id, { source: v as VariableExtractionRule["source"] })
+                  }
                   disabled={isRunning}
                 >
                   <SelectTrigger className="w-24 h-7 text-[11px]">

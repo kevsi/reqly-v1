@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { REQLY_TOOLS } from "@/lib/llm-tools";
-import { loadPermissions, savePermission } from "@/src/ai/agent/permissions";
+import { isHighImpactTool, loadPermissions, savePermission } from "@/src/ai/agent/permissions";
 import type { ToolPermission } from "@/src/ai/agent/types";
 
 const LABELS: Record<ToolPermission | "default", string> = {
@@ -50,7 +50,9 @@ export function AiPermissionsPopover({ onClose }: Props) {
       )}
       <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
         {REQLY_TOOLS.map((t) => {
-          const current: ToolPermission | "default" = perms[t.name] ?? "default";
+          const persisted = perms[t.name] ?? "default";
+          const current: ToolPermission | "default" =
+            isHighImpactTool(t.name) && persisted === "allow" ? "ask" : persisted;
           return (
             <div
               key={t.name}
@@ -72,14 +74,17 @@ export function AiPermissionsPopover({ onClose }: Props) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      savePermission(t.name, "allow");
-                      setPerms({ ...perms, [t.name]: "allow" });
-                    }}
-                  >
-                    {LABELS.allow}
-                  </DropdownMenuItem>
+                  {!isHighImpactTool(t.name) && (
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        if (savePermission(t.name, "allow")) {
+                          setPerms({ ...perms, [t.name]: "allow" });
+                        }
+                      }}
+                    >
+                      {LABELS.allow}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     onSelect={() => {
                       savePermission(t.name, "ask");

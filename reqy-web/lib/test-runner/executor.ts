@@ -7,6 +7,8 @@ export interface RunnerExecutorOptions {
   workspaceId?: string | null;
   /** Use direct fetch (server-side API routes � no CORS). */
   serverSide?: boolean;
+  /** Abort the active web request when the user stops a run. */
+  signal?: AbortSignal;
 }
 
 function parseResponseBody(body: string, headers: Record<string, string>): unknown {
@@ -28,10 +30,13 @@ function parseResponseBody(body: string, headers: Record<string, string>): unkno
 async function executeViaProxy(
   req: { method: string; url: string; headers: Record<string, string>; body?: unknown },
   workspaceId: string | null | undefined,
+  signal?: AbortSignal,
 ): Promise<RequestResponse> {
+  if (signal?.aborted) throw new Error("Execution annulée");
   const started = Date.now();
   const proxyResponse = await fetch("/api/proxy", {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...proxyAuthHeaders(),
@@ -70,7 +75,9 @@ async function executeViaTauri(req: {
   url: string;
   headers: Record<string, string>;
   body?: unknown;
+  signal?: AbortSignal;
 }): Promise<RequestResponse> {
+  if (req.signal?.aborted) throw new Error("Execution annulée");
   const bodyStr =
     req.body !== undefined && req.body !== null
       ? typeof req.body === "string"
@@ -79,6 +86,7 @@ async function executeViaTauri(req: {
       : undefined;
 
   const result = await invokeTauriFetch(req.method, req.url, req.headers, bodyStr);
+  if (req.signal?.aborted) throw new Error("Execution annulée");
 
   return {
     statusCode: result.status,
@@ -93,12 +101,15 @@ async function executeDirect(req: {
   url: string;
   headers: Record<string, string>;
   body?: unknown;
+  signal?: AbortSignal;
 }): Promise<RequestResponse> {
+  if (req.signal?.aborted) throw new Error("Execution annulée");
   const started = Date.now();
   const res = await fetch(req.url, {
     method: req.method,
     headers: req.headers,
     body: req.body as BodyInit | undefined,
+    signal: req.signal,
   });
   const text = await res.text();
   const headers = Object.fromEntries(res.headers.entries());
@@ -120,13 +131,14 @@ export function createRunnerExecutor(options: RunnerExecutorOptions = {}) {
     headers: Record<string, string>;
     body?: unknown;
   }): Promise<RequestResponse> => {
+    if (options.signal?.aborted) throw new Error("Execution annulée");
     if (options.serverSide) {
-      return executeDirect(req);
+      return executeDirect({ ...req, signal: options.signal });
     }
     if (isTauriAvailable()) {
-      return executeViaTauri(req);
+      return executeViaTauri({ ...req, signal: options.signal });
     }
-    return executeViaProxy(req, options.workspaceId);
+    return executeViaProxy(req, options.workspaceId, options.signal);
   };
 }
 

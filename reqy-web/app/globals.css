@@ -23,7 +23,7 @@ body[data-scroll-locked] {
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.696 0.17 162.48);
-  --primary-foreground: oklch(1 0 0);
+  --primary-foreground: oklch(0.393 0.095 152.535);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -44,7 +44,7 @@ body[data-scroll-locked] {
   --sidebar: oklch(0.99 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.696 0.17 162.48);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.393 0.095 152.535);
   --sidebar-accent: oklch(0.95 0.02 160);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
@@ -127,7 +127,7 @@ body[data-scroll-locked] {
   --popover: oklch(0.99 0.005 160);
   --popover-foreground: oklch(0.2 0.03 160);
   --primary: oklch(0.6 0.2 160);
-  --primary-foreground: oklch(1 0 0);
+  --primary-foreground: oklch(0.3 0.08 160);
   --secondary: oklch(0.94 0.02 160);
   --secondary-foreground: oklch(0.3 0.05 160);
   --muted: oklch(0.94 0.02 160);
@@ -148,7 +148,7 @@ body[data-scroll-locked] {
   --sidebar: oklch(0.96 0.02 160);
   --sidebar-foreground: oklch(0.2 0.03 160);
   --sidebar-primary: oklch(0.6 0.2 160);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.3 0.08 160);
   --sidebar-accent: oklch(0.9 0.05 160);
   --sidebar-accent-foreground: oklch(0.25 0.05 160);
   --sidebar-border: oklch(0.88 0.03 160);
@@ -170,7 +170,7 @@ body[data-scroll-locked] {
   --popover: oklch(0.99 0.005 240);
   --popover-foreground: oklch(0.2 0.03 240);
   --primary: oklch(0.55 0.2 250);
-  --primary-foreground: oklch(1 0 0);
+  --primary-foreground: oklch(0.28 0.08 250);
   --secondary: oklch(0.94 0.02 240);
   --secondary-foreground: oklch(0.3 0.05 240);
   --muted: oklch(0.94 0.02 240);
@@ -191,7 +191,7 @@ body[data-scroll-locked] {
   --sidebar: oklch(0.96 0.02 240);
   --sidebar-foreground: oklch(0.2 0.03 240);
   --sidebar-primary: oklch(0.55 0.2 250);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.28 0.08 250);
   --sidebar-accent: oklch(0.9 0.05 240);
   --sidebar-accent-foreground: oklch(0.25 0.05 240);
   --sidebar-border: oklch(0.88 0.03 240);
@@ -213,7 +213,7 @@ body[data-scroll-locked] {
   --popover: oklch(0.99 0.005 40);
   --popover-foreground: oklch(0.25 0.05 30);
   --primary: oklch(0.65 0.22 35);
-  --primary-foreground: oklch(1 0 0);
+  --primary-foreground: oklch(0.32 0.1 35);
   --secondary: oklch(0.94 0.03 40);
   --secondary-foreground: oklch(0.35 0.06 30);
   --muted: oklch(0.94 0.03 40);
@@ -234,7 +234,7 @@ body[data-scroll-locked] {
   --sidebar: oklch(0.96 0.02 40);
   --sidebar-foreground: oklch(0.25 0.05 30);
   --sidebar-primary: oklch(0.65 0.22 35);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.32 0.1 35);
   --sidebar-accent: oklch(0.9 0.06 40);
   --sidebar-accent-foreground: oklch(0.3 0.06 30);
   --sidebar-border: oklch(0.88 0.04 40);
@@ -256,7 +256,7 @@ body[data-scroll-locked] {
   --popover: oklch(0.99 0.005 300);
   --popover-foreground: oklch(0.2 0.04 290);
   --primary: oklch(0.55 0.22 300);
-  --primary-foreground: oklch(1 0 0);
+  --primary-foreground: oklch(0.28 0.1 300);
   --secondary: oklch(0.94 0.03 300);
   --secondary-foreground: oklch(0.3 0.05 290);
   --muted: oklch(0.94 0.03 300);
@@ -277,7 +277,7 @@ body[data-scroll-locked] {
   --sidebar: oklch(0.96 0.02 300);
   --sidebar-foreground: oklch(0.2 0.04 290);
   --sidebar-primary: oklch(0.55 0.22 300);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.28 0.1 300);
   --sidebar-accent: oklch(0.9 0.06 300);
   --sidebar-accent-foreground: oklch(0.25 0.05 290);
   --sidebar-border: oklch(0.88 0.04 300);
@@ -394,7 +394,6 @@ body[data-scroll-locked] {
   }
   body {
     @apply bg-background text-foreground;
-    overflow-x: hidden;
   }
 
   /* Theme class transition — only on body to avoid full-page repaint flash */
@@ -498,6 +497,17 @@ body[data-scroll-locked] {
     }
   }
 
+  @keyframes page-route-enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   @keyframes scale-in {
     from {
       opacity: 0;
@@ -506,6 +516,15 @@ body[data-scroll-locked] {
     to {
       opacity: 1;
       transform: scale(1);
+    }
+  }
+
+  @keyframes progress-slide {
+    0% {
+      left: -40%;
+    }
+    100% {
+      left: 110%;
     }
   }
 
@@ -524,6 +543,10 @@ body[data-scroll-locked] {
   }
   .animate-fade-in {
     animation: fade-in 0.15s ease-out both;
+  }
+  .page-route-enter {
+    animation: page-route-enter 0.22s var(--ease-out-strong) both;
+    will-change: opacity, transform;
   }
   .animate-scale-in {
     animation: scale-in 0.12s ease-out both;
@@ -788,7 +811,6 @@ html {
 
 /* Prevent app from shrinking below minimum dimensions */
 html {
-  overflow-x: hidden;
   overflow-y: auto;
 }
 

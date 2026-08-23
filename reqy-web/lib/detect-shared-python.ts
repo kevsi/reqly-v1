@@ -492,6 +492,10 @@ export function detectPythonRoutesAST(content: string, targetFramework?: string)
     if (typeof process.getBuiltinModule !== "function") return [];
     const cp = process.getBuiltinModule("child_process") as typeof import("child_process");
     if (!cp) return [];
+    // Cap the input size and duration: the AST detector is best-effort and must
+    // never block the server event loop on hostile/large input. `spawnSync` is
+    // synchronous, so a hard timeout and input size limit are mandatory.
+    if (content.length > 500_000) return [];
     const spawnSync = cp.spawnSync;
     const py = spawnSync(
       "python",
@@ -770,7 +774,7 @@ if not any(flags.values()):
 print(json.dumps(routes))
 `,
       ],
-      { input: content, encoding: "utf8" },
+      { input: content, encoding: "utf8", timeout: 3000, maxBuffer: 2 * 1024 * 1024 },
     );
     if (py.status !== 0) {
       console.error("Python AST error:", py.stderr?.toString());

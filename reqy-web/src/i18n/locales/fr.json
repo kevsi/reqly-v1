@@ -27,7 +27,8 @@
     "regenerate": "Régénérer la réponse",
     "messageCopied": "Message copié",
     "messageCopiedDesc": "Le contenu a été copié dans le presse-papiers.",
-    "copyFailed": "Impossible de copier le message."
+    "copyFailed": "Impossible de copier le message.",
+    "discard": "Abandonner"
   },
   "settings": {
     "sidebar": {
@@ -83,6 +84,7 @@
       "save": "Sauvegarder",
       "activeProvider": "Fournisseur actif :",
       "configured": "Configuré",
+      "desktopOnly": "App desktop requise",
       "providers": {
         "openai": {
           "description": "GPT-4, GPT-4o, GPT-4o Mini"
@@ -129,7 +131,11 @@
         "keyStoredLocal": "La clé est conservée localement et utilisée uniquement par l'assistant IA.",
         "deleteConfig": "Supprimer la configuration",
         "test": "Tester",
-        "testing": "Test…"
+        "testing": "Test…",
+        "hideKey": "Masquer la clé",
+        "showKey": "Afficher la clé",
+        "confirmDelete": "Confirmer la suppression ?",
+        "incompleteForm": "Complétez les champs requis avant d'enregistrer."
       },
       "models": {
         "title": "Modèle",
@@ -244,6 +250,7 @@
       "description": "Connectez vos services tiers pour importer et synchroniser vos données.",
       "manage": "Gérer",
       "connect": "Connecter",
+      "webOnly": "Web uniquement",
       "postman": {
         "description": "Import et export de collections Postman.",
         "instructions": "Allez sur go.postman.co → Settings → API Keys → Generate API Key. Copiez la clé (elle commence par PMAK-)."
@@ -413,6 +420,12 @@
   "language": {},
   "runner": {
     "title": "Runner",
+    "runSequence": "Séquence d'exécution",
+    "executionMode": "Mode d'exécution",
+    "stopOnError": "Arrêter si une erreur survient",
+    "avgLatency": "Latence moyenne",
+    "errorRate": "Taux d'erreur",
+    "minMax": "Min / Max",
     "tabs": {
       "scrollLeft": "Défiler à gauche",
       "scrollRight": "Défiler à droite",
@@ -441,6 +454,7 @@
     "requestCount_other": "{{count}} requêtes",
     "running": "Exécution…",
     "runCollection": "Exécuter la collection",
+    "scriptsDisabledServer": "Scripts désactivés côté serveur pour ce run (pré/post-scripts ignorés)",
     "selectCollectionFirst": "Sélectionnez d'abord une collection",
     "dataset": "Jeu de données",
     "optional": "(optionnel)",
@@ -540,6 +554,13 @@
   "collections": {
     "title": "Collections",
     "description": "Gérez vos groupes de requêtes et exportez-les en OpenAPI.",
+    "collectionEmpty": "La collection « {{name}} » est vide.",
+    "sync": {
+      "conflictTitle": "Conflit de synchronisation",
+      "conflictBody": "{{count}} modification(s) en conflit avec le serveur. La version serveur a été appliquée.",
+      "pushFailedTitle": "Synchronisation impossible",
+      "pushFailedBody": "Les modifications n'ont pas pu être envoyées. Vérifiez votre connexion et réessayez."
+    },
     "import": "Importer",
     "export": "Exporter",
     "importFromPostman": "Importer depuis Postman",
@@ -555,6 +576,8 @@
       "new": "Nouvelle",
       "copySuffix": " (copie)",
       "importedCollection": "Collection importée",
+      "importTooLarge": "Fichier trop volumineux",
+      "importTooLargeHint": "Taille maximale : {{size}} Mo",
       "collectionsImported": "{{count}} collections importées",
       "unknownFormat": "Format non reconnu",
       "invalidJson": "Fichier JSON invalide",
@@ -606,6 +629,8 @@
     "row": {
       "renameFolder": "Renommer le dossier",
       "deleteFolder": "Supprimer le dossier",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
       "newFolderName": "Nouveau nom du dossier :",
       "deleteFolderConfirm": "Supprimer le dossier « {{name}} » ? Les requêtes seront déplacées à la racine de la collection.",
       "addRequest": "Ajouter une requête",
@@ -619,17 +644,22 @@
       "delete": "Supprimer",
       "dragLabel": "Faire glisser {{name}}",
       "loadAndSend": "Charger et envoyer",
-      "removeRequest": "Supprimer la requête"
+      "removeRequest": "Supprimer la requête",
+      "deleteRequest": "Supprimer la requête « {{name}} » ?"
     },
     "folder": {
       "namePlaceholder": "Nom du dossier",
       "create": "Créer un dossier",
       "new": "Nouveau dossier",
       "moveFolder": "Déplacer le dossier vers…",
-      "moveRequest": "Déplacer la requête vers…"
+      "moveRequest": "Déplacer la requête vers…",
+      "requestMoved": "Requête déplacée",
+      "requestsReordered": "Requêtes réorganisées",
+      "foldersReordered": "Dossiers réorganisés"
     },
     "toast": {
       "postmanImported": "Collection Postman importée : {{name}}",
+      "postmanSkipped": "{{count}} requête(s) ignorée(s) (format invalide)",
       "postmanRenamed": "Renommée depuis « {{old}} » (conflit de nom).",
       "postmanNotConnected": "Postman non connecté",
       "noCollectionSelected": "Aucune collection sélectionnée",
@@ -638,6 +668,8 @@
       "postmanExportError": "Erreur lors de l'export vers Postman",
       "postmanExportSuccess": "Export vers Postman réussi",
       "postmanCollectionCreated": "Collection créée dans Postman",
+      "postmanExportUid": "Collection créée dans Postman — UID : {{uid}}",
+      "postmanExportConnectFirst": "Connectez votre compte Postman puis relancez l'export.",
       "postmanExportFailed": "Impossible d'exporter vers Postman",
       "requestLoaded": "Requête chargée dans l'éditeur",
       "requestLoadedAndSent": "« {{name}} » chargée et envoyée",
@@ -710,7 +742,46 @@
     "exportPlaceholder": "Exporter",
     "exportCurl": "cURL",
     "exportFetch": "Fetch",
-    "sizeLabel": "Taille : {{size}}"
+    "sizeLabel": "Taille : {{size}}",
+    "executionFailed": "La requête a échoué",
+    "missingUrl": "URL manquante",
+    "missingUrlHint": "Saisissez une URL valide avant d'envoyer la requête.",
+    "unresolvedVariables": "Variables non résolues",
+    "unresolvedVariablesHint": "Résolvez tous les {{placeholders}} avant d'envoyer la requête.",
+    "preScriptCrashed": "Script pré-requête planté",
+    "preScriptError": "Erreur du script pré-requête",
+    "preScriptOutput": "Script pré-requête",
+    "postScriptCrashed": "Script post-réponse planté",
+    "postScriptError": "Erreur du script post-réponse",
+    "postScriptOutput": "Script post-réponse",
+    "saved": "« {{name}} » enregistré",
+    "savedInCollection": "« {{name}} » enregistré dans {{collection}}",
+    "theCollection": "la collection",
+    "responseDownloaded": "Réponse téléchargée",
+    "createdInCollection": "Nouvelle requête créée dans la collection",
+    "loadedInEditor": "Requête chargée dans l'éditeur",
+    "sendingCollection": "Envoi de la requête de la collection…",
+    "sentCollection": "Requête de la collection envoyée",
+    "loadedCollection": "Requête de la collection chargée dans l'éditeur",
+    "cancel": "Annuler",
+    "cancelled": "Requête annulée",
+    "followRedirects": "Suivre les redirections",
+    "followRedirectsHint": "Suivre automatiquement les redirections HTTP (3xx)",
+    "invalidVariableSyntax": "Syntaxe de variable invalide",
+    "enterUrlHint": "Saisissez une URL valide pour activer l'envoi.",
+    "nothingToDownload": "Rien à télécharger",
+    "nothingToDownloadHint": "La réponse est vide.",
+    "transferTimeout": "La requête a expiré.",
+    "transferTimeoutHint": "Le serveur n'a pas répondu dans les 30 secondes. Vérifiez le réseau ou augmentez le délai.",
+    "transferHint": "Vérifiez l'URL, votre connexion réseau, ou qu'un pare-feu ne bloque pas la requête.",
+    "transferBlocked": "Destination bloquée (IP privée ou interne).",
+    "transferDns": "Résolution DNS impossible.",
+    "transferRateLimit": "Trop de requêtes. Réessayez dans une minute.",
+    "transferBodyTooLarge": "Corps de requête trop volumineux (max 10 Mo).",
+    "transferInvalid": "URL ou requête invalide.",
+    "transferDefault": "La requête réseau a échoué.",
+    "transferTarget": "Cible : {{url}}",
+    "sending": "Envoi…"
   },
   "response": {
     "noCookies": "Aucun cookie reçu (pas d'en-tête Set-Cookie)",
@@ -736,6 +807,7 @@
     "export": "Exporter",
     "diff": "Diff",
     "snapshots": "Snapshots",
+    "truncated": "Réponse tronquée (limite 5 Mo)",
     "headersCount_one": "{{count}} en-tête",
     "headersCount_other": "{{count}} en-têtes",
     "noHeadersYet": "Les en-têtes apparaîtront après l'exécution d'une requête",
@@ -989,7 +1061,67 @@
     "remove": "Supprimer",
     "forcePushTooltip": "Force Push — écrase l'historique distant",
     "forcePushTitle": "Force push ?",
-    "forcePushDesc": "Cette action va <1>écraser l'historique distant</1> pour la branche <2>{{branch}}</2> sur <3>{{remote}}</3>."
+    "forcePushDesc": "Cette action va <1>écraser l'historique distant</1> pour la branche <2>{{branch}}</2> sur <3>{{remote}}</3>.",
+    "branchCreate": "Créer la branche",
+    "branchCreateTitle": "Créer une branche",
+    "branchDelete": "Supprimer la branche",
+    "branchNamePlaceholder": "Nom de la branche",
+    "branchNew": "Nouvelle branche",
+    "commitAuthorEmail": "E-mail de l'auteur",
+    "commitAuthorEmailPlaceholder": "auteur@exemple.com",
+    "commitAuthorName": "Nom de l'auteur",
+    "commitAuthorNamePlaceholder": "Nom de l'auteur",
+    "conflictActionRequired": "Action requise",
+    "conflictDescription": "Ce fichier est en conflit.",
+    "conflictResolve": "Résoudre",
+    "diffComputing": "Calcul du diff…",
+    "diffLayout1": "Unifié",
+    "diffLayout2": "Scindé",
+    "diffLayout3": "Scindé + aperçu",
+    "diffLines": "lignes",
+    "diffNoDifferences": "Aucune différence",
+    "diffPanel1": "Vue unifiée",
+    "diffPanel2": "Vue scindée",
+    "diffPanel3": "Scindé avec aperçu",
+    "diffPreview": "Aperçu",
+    "remoteAdd": "Ajouter un dépôt distant",
+    "remoteAddDialogTitle": "Ajouter un dépôt distant",
+    "remoteAddShort": "Ajouter",
+    "remoteClone": "Cloner",
+    "remoteCloneAuth": "Authentification",
+    "remoteCloneDestRequired": "Dossier de destination requis",
+    "remoteClonePassword": "Mot de passe",
+    "remoteCloneTitle": "Cloner un dépôt",
+    "remoteCloneUrlRequired": "URL du dépôt requise",
+    "remoteCloneUsername": "Nom d'utilisateur",
+    "remoteCloning": "Clonage…",
+    "remoteConnected": "Dépôt connecté",
+    "remoteFetchingBranches": "Récupération des branches…",
+    "remoteForcePush": "Force push",
+    "remoteInProgress": "Opération en cours…",
+    "remoteNamePlaceholder": "Nom du remote (ex. origin)",
+    "remoteNoRemote": "Aucun dépôt distant",
+    "remoteUrlPlaceholder": "https://github.com/user/repo.git",
+    "remotes": "Dépôts distants",
+    "stash": "Stash",
+    "stashApply": "Appliquer",
+    "stashDrop": "Supprimer",
+    "stashEmpty": "Aucun stash",
+    "stashMessagePlaceholder": "Message du stash",
+    "stashPop": "Récupérer",
+    "stashSaveAction": "Stasher",
+    "statusDeleted": "Supprimé",
+    "statusModified": "Modifié",
+    "statusNew": "Nouveau",
+    "statusStaged": "Indexé",
+    "statusViewDiff": "Voir le diff",
+    "conflictTitle_one": "1 conflit à résoudre",
+    "conflictTitle_other": "{{count}} conflits à résoudre",
+    "diffMoreLines_one": "{{count}} ligne de plus",
+    "diffMoreLines_other": "{{count}} lignes de plus",
+    "remoteAvailableBranches_one": "{{count}} branche disponible",
+    "remoteAvailableBranches_other": "{{count}} branches disponibles",
+    "selectFolderModalTitle": "Ouvrir ou créer un répertoire de projet"
   },
   "env": {
     "selectorAria": "Sélectionner l'environnement",
@@ -1255,7 +1387,18 @@
     "noEvents": "Aucun événement pour le moment",
     "noEventsHint": "Connectez-vous à un endpoint SSE pour commencer à recevoir des événements",
     "variableDesc": "variable",
-    "headerDesc": "en-tête"
+    "headerDesc": "en-tête",
+    "errorHint": "Vérifiez l'URL, l'authentification et que le serveur autorise le CORS.",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "eventsPerSec": "{{rate}} év/s",
+    "statsReconnects_one": "{{count}} reconnexion",
+    "statsReconnects_other": "{{count}} reconnexions"
+  },
+  "offline": {
+    "replayTitle": "Reconnexion",
+    "replayBody": "{{replayed}} requête(s) rejouée(s), {{succeeded}} réussie(s).",
+    "replayNotificationTitle": "Requêtes rejouées"
   },
   "workspace": {
     "workspace": "Workspace",
@@ -1323,7 +1466,8 @@
     "routesLabel": "Routes",
     "portLabel": "Port",
     "addProject": "Ajouter le projet",
-    "analyze": "Analyser"
+    "analyze": "Analyser",
+    "resultTitle": "Résultat de l'analyse"
   },
   "routeModal": {
     "collectionName": "Collection {{framework}} · {{name}}",
@@ -1357,7 +1501,11 @@
     "public": "publique",
     "confidence": "confiance",
     "middleware": "Middleware",
-    "detection": "Détection"
+    "detection": "Détection",
+    "clearSearch": "Effacer la recherche",
+    "close": "Fermer",
+    "resetFilters": "Réinitialiser les filtres",
+    "usedByFrontend": "Utilisé par le frontend"
   },
   "importExport": {
     "common": {
@@ -1735,7 +1883,10 @@
     "executedDesc_one": "{{count}} requête terminée",
     "executedDesc_other": "{{count}} requêtes terminées",
     "executionFailed": "Échec d'exécution",
-    "unknownError": "Erreur inconnue"
+    "unknownError": "Erreur inconnue",
+    "defaultName": "Nouvelle chaîne",
+    "executing": "Exécution…",
+    "stepFailed": "Étapes en échec : {{names}}"
   },
   "ai": {
     "code": {
@@ -1814,7 +1965,9 @@
       "thinking": "Réflexion…",
       "toolCall": "Exécution : {{detail}}",
       "executing": "Exécution…",
-      "done": "Terminé"
+      "done": "Terminé",
+      "inProgress": "En cours",
+      "waiting": "En attente"
     },
     "modal": {
       "responseHeaders": "Headers de réponse",
@@ -1985,5 +2138,72 @@
         "fix": "Réduire la taille du payload (pagination, sous-ressources)"
       }
     }
+  },
+  "cancel": "Annuler",
+  "confirm": "Confirmer",
+  "capturePage": {
+    "allMethods": "Toutes les méthodes",
+    "awaitingTraffic": "En attente de trafic…",
+    "bodyPayload": "Corps",
+    "browserMode": "Mode navigateur",
+    "bundlePreview": "Aperçu du bundle",
+    "captures": "Captures",
+    "changePort": "Changer le port",
+    "clear": "Effacer",
+    "collectionName": "Nom de la collection",
+    "copied": "Copié",
+    "copyAll": "Tout copier",
+    "copyBody": "Copier le corps",
+    "copyCommand": "Copier la commande",
+    "copyUrl": "Copier l'URL",
+    "curl": "cURL",
+    "curlCommand": "Commande cURL",
+    "deleteSession": "Supprimer la session",
+    "description": "Capturez le trafic",
+    "diskDb": "Stockage sur disque",
+    "duration": "Durée",
+    "exportHar": "Exporter HAR",
+    "exportMocks": "Exporter les mocks",
+    "exportOpenApi": "Exporter OpenAPI",
+    "fullUrl": "URL complète",
+    "generateSuite": "Générer une suite de tests",
+    "generatorExporters": "Exporteurs du générateur",
+    "group": "Groupe",
+    "headers": "En-têtes",
+    "listeningActive": "Écoute active",
+    "method": "Méthode",
+    "noRequestBody": "Aucun corps de requête",
+    "noRequestHeaders": "Aucun en-tête de requête",
+    "noResponseBody": "Aucun corps de réponse",
+    "noResponseHeaders": "Aucun en-tête de réponse",
+    "noSessionsExport": "Aucune session à exporter.",
+    "noSessionsGenerate": "Aucune session à convertir.",
+    "overview": "Vue d'ensemble",
+    "persistence": "Persistance",
+    "proxyStopped": "Proxy arrêté",
+    "redactExports": "Masquer les secrets dans les exports",
+    "refresh": "Actualiser",
+    "renameSave": "Renommer et enregistrer",
+    "replay": "Rejouer",
+    "requestBodyPayload": "Corps de la requête",
+    "requestDetails": "Détails de la requête",
+    "requestHeaders": "En-têtes de la requête",
+    "responseBodyPayload": "Corps de la réponse",
+    "responseHeaders": "En-têtes de la réponse",
+    "saveToWorkspace": "Enregistrer dans le workspace",
+    "searchUrl": "Rechercher par URL…",
+    "sessionControl": "Contrôle de la session",
+    "startCapture": "Démarrer la capture",
+    "startProxy": "Démarrer le proxy",
+    "statusCode": "Code de statut",
+    "stopProxy": "Arrêter le proxy",
+    "timestamp": "Horodatage",
+    "title": "Capture",
+    "trafficList": "Liste du trafic",
+    "transferError": "Erreur de transfert"
+  },
+  "requestUnsaved": {
+    "title": "Modifications non enregistrées",
+    "description": "« {{name}} » n'est pas enregistré."
   }
 }

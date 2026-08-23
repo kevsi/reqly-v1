@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useRequestStore, type HistoryItem, type Collection } from "@/hooks/use-request-store";
+import { maskSensitivePayload } from "@/src/ai/cloud-engine/prompt";
 
 export interface AiPageContext {
   /** Page label shown in the UI */
@@ -84,8 +85,8 @@ function buildApiEndpointsContext(history: HistoryItem[]): AiPageContext {
     lastRequestSummary = `${lastRequest.method} ${lastRequest.endpoint || lastRequest.url}
 Statut : ${lastRequest.responseStatus ?? "-"}
 Temps de réponse : ${lastRequest.responseTime ?? "-"}ms
-Headers : ${JSON.stringify(lastRequest.headers ?? {})}
-Body : ${lastRequest.body ?? "(vide)"}`;
+Headers : ${JSON.stringify(maskSensitivePayload(lastRequest.headers ?? {}))}
+Body : ${String(maskSensitivePayload(lastRequest.body ?? "(vide)"))}`;
   }
 
   return {

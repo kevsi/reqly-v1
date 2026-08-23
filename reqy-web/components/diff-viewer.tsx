@@ -20,48 +20,72 @@ export interface DiffResult {
 }
 
 /**
- * Simple LCS-based line diff algorithm
+ * Hard cap on the size of the trimmed "middle" (after common prefix/suffix
+ * removal) fed to the O(n×m) LCS matrix. Beyond this, the full-matrix
+ * allocation can freeze/crash the tab, so we collapse the middle instead.
  */
-function computeLineDiff(leftRaw: string, rightRaw: string): DiffResult {
+export const MAX_DIFF_LINES = 2000;
+
+/**
+ * Simple LCS-based line diff algorithm.
+ *
+ * PERF-1: common prefix/suffix lines are trimmed before the (m+1)×(n+1)
+ * matrix is allocated, so typical diffs (small change inside a big payload)
+ * only pay for the changed region. If the trimmed middle still exceeds
+ * MAX_DIFF_LINES per side, LCS is skipped entirely and the middle collapses
+ * into one removed-block / added-block pair annotated with the omitted count.
+ */
+export function computeLineDiff(leftRaw: string, rightRaw: string): DiffResult {
   const leftLines = leftRaw.split("\n");
   const rightLines = rightRaw.split("\n");
 
-  const m = leftLines.length;
-  const n = rightLines.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  // ── Trim common prefix ────────────────────────────────────────────────
+  let prefixLen = 0;
+  while (
+    prefixLen < leftLines.length &&
+    prefixLen < rightLines.length &&
+    leftLines[prefixLen] === rightLines[prefixLen]
+  ) {
+    prefixLen++;
+  }
 
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (leftLines[i - 1] === rightLines[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
+  // ── Trim common suffix (never overlapping the prefix) ────────────────
+  let suffixLen = 0;
+  while (
+    suffixLen < leftLines.length - prefixLen &&
+    suffixLen < rightLines.length - prefixLen &&
+    leftLines[leftLines.length - 1 - suffixLen] === rightLines[rightLines.length - 1 - suffixLen]
+  ) {
+    suffixLen++;
+  }
+
+  const prefix: DiffLine[] = [];
+  for (let k = 0; k < prefixLen; k++) {
+    prefix.push({ type: "unchanged", content: leftLines[k] });
+  }
+  const suffix: DiffLine[] = [];
+  for (let k = leftLines.length - suffixLen; k < leftLines.length; k++) {
+    suffix.push({ type: "unchanged", content: leftLines[k] });
+  }
+
+  const midLeft = leftLines.slice(prefixLen, leftLines.length - suffixLen);
+  const midRight = rightLines.slice(prefixLen, rightLines.length - suffixLen);
+
+  let middle: DiffLine[];
+  if (midLeft.length > MAX_DIFF_LINES || midRight.length > MAX_DIFF_LINES) {
+    // ── Cap path: skip LCS, collapse the middle with omitted-line counts ──
+    middle = [];
+    if (midLeft.length > 0) {
+      middle.push({ type: "removed", content: `… ${midLeft.length} lignes omises …` });
     }
-  }
-
-  const diffLines: DiffLine[] = [];
-  let i = m;
-  let j = n;
-  const tempLines: DiffLine[] = [];
-
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && leftLines[i - 1] === rightLines[j - 1]) {
-      tempLines.push({ type: "unchanged", content: leftLines[i - 1] });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      tempLines.push({ type: "added", content: rightLines[j - 1] });
-      j--;
-    } else {
-      tempLines.push({ type: "removed", content: leftLines[i - 1] });
-      i--;
+    if (midRight.length > 0) {
+      middle.push({ type: "added", content: `… ${midRight.length} lignes omises …` });
     }
+  } else {
+    middle = lcsMiddleDiff(midLeft, midRight);
   }
 
-  for (let k = tempLines.length - 1; k >= 0; k--) {
-    diffLines.push(tempLines[k]);
-  }
+  const diffLines = [...prefix, ...middle, ...suffix];
 
   const addedLines = diffLines.filter((l) => l.type === "added").length;
   const removedLines = diffLines.filter((l) => l.type === "removed").length;
@@ -73,6 +97,47 @@ function computeLineDiff(leftRaw: string, rightRaw: string): DiffResult {
     addedLines,
     removedLines,
   };
+}
+
+/** LCS backtrack over the already-trimmed middle sections only. */
+function lcsMiddleDiff(midLeft: string[], midRight: string[]): DiffLine[] {
+  const m = midLeft.length;
+  const n = midRight.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (midLeft[i - 1] === midRight[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const tempLines: DiffLine[] = [];
+  let i = m;
+  let j = n;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && midLeft[i - 1] === midRight[j - 1]) {
+      tempLines.push({ type: "unchanged", content: midLeft[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      tempLines.push({ type: "added", content: midRight[j - 1] });
+      j--;
+    } else {
+      tempLines.push({ type: "removed", content: midLeft[i - 1] });
+      i--;
+    }
+  }
+
+  const diffLines: DiffLine[] = [];
+  for (let k = tempLines.length - 1; k >= 0; k--) {
+    diffLines.push(tempLines[k]);
+  }
+  return diffLines;
 }
 
 function tryFormatJson(text: string): string {

@@ -81,7 +81,7 @@ describe("Page Capture (persistance + UI)", () => {
   it("efface les captures quand on clique sur « Clear »", async () => {
     render(<CapturePage />);
     await waitFor(() => expect(hoisted.listCapturedSessions).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
+    fireEvent.click(screen.getByRole("button", { name: /effacer|clear/i }));
     await waitFor(() => expect(hoisted.clearCapturedSessions).toHaveBeenCalled());
   });
 
@@ -90,5 +90,14 @@ describe("Page Capture (persistance + UI)", () => {
     fireEvent.click(await screen.findByText("https://api.test/ping"));
     await waitFor(() => expect(hoisted.getCapturedSession).toHaveBeenCalledWith("c1"));
     expect(await screen.findByText("HTTP 200")).toBeTruthy();
+  });
+
+  it("démarre la capture proxy au clic sur « Start »", async () => {
+    hoisted.startCaptureProxy.mockResolvedValue(undefined);
+    render(<CapturePage />);
+    const startBtn = screen.getAllByRole("button", { name: /d[ée]marrer|start/i })[0];
+    expect((startBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(startBtn);
+    await waitFor(() => expect(hoisted.startCaptureProxy).toHaveBeenCalled());
   });
 });

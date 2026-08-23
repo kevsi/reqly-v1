@@ -58,7 +58,13 @@ vi.mock("node:vm", () => ({
   createContext: (...args: unknown[]) => mockCreateContext(...args),
 }));
 
-import { runCollection } from "@/lib/test-runner/runner";
+import {
+  buildIterationContexts,
+  moveItemInArray,
+  moveItemById,
+  runCollection,
+} from "@/lib/test-runner/runner";
+import { resolveSelectedCollectionId } from "@/lib/runner-state";
 import type { RequestItem, Collection } from "@/hooks/request-types";
 import type { RequestResponse } from "@/lib/test-runner/types";
 
@@ -170,6 +176,61 @@ describe("runCollection", () => {
     expect(fakeFetch).toHaveBeenCalledTimes(2);
   });
 
+  it("builds iteration contexts from the configured repetition count even without dataset", () => {
+    const contexts = buildIterationContexts(
+      { environment: {}, iterationData: {}, iterationIndex: 0, log: () => {} },
+      [],
+      3,
+    );
+
+    expect(contexts).toHaveLength(3);
+    expect(contexts.map((ctx) => ctx.iterationIndex)).toEqual([0, 1, 2]);
+    expect(contexts[2].iterationData.iteration).toBe("3");
+  });
+
+  it("reorders request items without losing the dragged element", () => {
+    const list = ["A", "B", "C", "D"];
+
+    expect(moveItemInArray(list, 0, 2)).toEqual(["B", "C", "A", "D"]);
+    expect(moveItemInArray(list, 3, 1)).toEqual(["A", "D", "B", "C"]);
+    expect(moveItemInArray(list, 1, 1)).toEqual(list);
+  });
+
+  it("reorders by stable request id instead of stale dragged index", () => {
+    const list = [
+      { id: "A", label: "Alpha" },
+      { id: "B", label: "Bravo" },
+      { id: "C", label: "Charlie" },
+      { id: "D", label: "Delta" },
+    ];
+
+    expect(moveItemById(list, "A", "C")).toEqual([
+      { id: "B", label: "Bravo" },
+      { id: "C", label: "Charlie" },
+      { id: "A", label: "Alpha" },
+      { id: "D", label: "Delta" },
+    ]);
+
+    expect(moveItemById(list, "D", "B")).toEqual([
+      { id: "A", label: "Alpha" },
+      { id: "D", label: "Delta" },
+      { id: "B", label: "Bravo" },
+      { id: "C", label: "Charlie" },
+    ]);
+  });
+
+  it("falls back to the first collection when the selected id is empty or stale", () => {
+    const collections = [
+      { id: "c1", name: "Alpha" },
+      { id: "c2", name: "Beta" },
+    ] as Collection[];
+
+    expect(resolveSelectedCollectionId(collections, "")).toBe("c1");
+    expect(resolveSelectedCollectionId(collections, "missing")).toBe("c1");
+    expect(resolveSelectedCollectionId(collections, "c2")).toBe("c2");
+    expect(resolveSelectedCollectionId([], "c1")).toBe("");
+  });
+
   it("interpolates {{var}} in URL from environment", async () => {
     fakeFetch.mockClear();
     const reqWithVar: RequestItem = {
@@ -221,5 +282,44 @@ describe("runCollection", () => {
     expect(ctx.environment.preRan).toBe("yes");
     expect(ctx.environment.postRan).toBe("yes");
     expect(preExecuted.length).toBe(1);
+  });
+
+  it("stops execution on failure when stopOnFailure is true", async () => {
+    const req1: RequestItem = {
+      ...request,
+      id: "r1",
+      name: "r1",
+      runnerAssertions: [{ type: "status", expected: 500 }],
+    } as unknown as RequestItem;
+    const req2: RequestItem = { ...request, id: "r2", name: "r2" } as unknown as RequestItem;
+    const multiColl: Collection = { ...collection, requests: [req1, req2] };
+
+    const localExecutor = vi
+      .fn()
+      .mockResolvedValue({ statusCode: 200, body: {}, headers: {}, responseTimeMs: 10 });
+    const report = await runCollection(
+      multiColl,
+      { environment: {}, iterationData: {}, iterationIndex: 0, log: () => {} },
+      { executor: localExecutor, stopOnFailure: true },
+    );
+
+    expect(report.results.length).toBe(1);
+    expect(report.results[0].requestId).toBe("r1");
+  });
+
+  it("triggers onRequestDone callback for each completed request", async () => {
+    const progressCalls: number[] = [];
+    const localExecutor = vi
+      .fn()
+      .mockResolvedValue({ statusCode: 200, body: {}, headers: {}, responseTimeMs: 10 });
+    await runCollection(
+      collection,
+      { environment: {}, iterationData: {}, iterationIndex: 0, log: () => {} },
+      {
+        executor: localExecutor,
+        onRequestDone: (completed, total) => progressCalls.push(completed / total),
+      },
+    );
+    expect(progressCalls).toEqual([1]);
   });
 });

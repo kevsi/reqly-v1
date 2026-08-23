@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertOctagon, CheckCircle2, FileCode, Check } from "lucide-react";
+import { AlertOctagon, FileCode, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ interface GitConflictResolverProps {
 }
 
 export function GitConflictResolver({ conflicts, onStage }: GitConflictResolverProps) {
+  const { t } = useTranslation();
   if (conflicts.length === 0) return null;
 
   return (
@@ -19,16 +21,15 @@ export function GitConflictResolver({ conflicts, onStage }: GitConflictResolverP
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-destructive font-medium text-xs">
           <AlertOctagon className="size-4 shrink-0 animate-pulse" />
-          <span>Conflits de fusion détectés ({conflicts.length})</span>
+          <span>{t("git.conflictTitle", { count: conflicts.length })}</span>
         </div>
         <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px]">
-          Action requise
+          {t("git.conflictActionRequired")}
         </Badge>
       </div>
 
       <p className="text-[11px] text-muted-foreground leading-relaxed">
-        Des modifications simultanées ont eu lieu lors du pull/merge. Sélectionnez une option pour
-        chaque fichier en conflit ou ajustez le fichier manuellement puis marquez-le comme résolu.
+        {t("git.conflictDescription")}
       </p>
 
       <div className="space-y-1.5 pt-1">
@@ -51,7 +52,7 @@ export function GitConflictResolver({ conflicts, onStage }: GitConflictResolverP
                 }}
               >
                 <Check className="size-3" />
-                Marquer résolu
+                {t("git.conflictResolve")}
               </Button>
             </div>
           </div>

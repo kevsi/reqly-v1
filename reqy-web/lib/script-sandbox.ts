@@ -1,7 +1,9 @@
 /**
  * @deprecated Uniquement importé par `lib/script-executor.ts` (lui-même deprecated).
- * Ne pas utiliser dans de nouveau code. À supprimer après migration de la route
- * `/api/test-runner/execute` vers le moteur canonique `lib/test-runner/`.
+ * Ne pas utiliser dans de nouveau code. Conservé pour la route
+ * `/api/test-runner/execute` (couverte par les specs e2e), car le moteur canonique
+ * `lib/test-runner/` n'exécute pas de scripts côté serveur. Le contexte sandbox
+ * est durci pour refléter la politique FORBIDDEN_GLOBALS du moteur canonique.
  *
  * Script Sandbox - VM-based script execution for safe script execution
  * Provides isolated execution environment with timeout and memory limits
@@ -25,9 +27,9 @@ export interface ScriptContext {
     body: string;
   };
   console?: {
-    log: (...args: any[]) => void;
-    error: (...args: any[]) => void;
-    warn: (...args: any[]) => void;
+    log: (...args: unknown[]) => void;
+    error: (...args: unknown[]) => void;
+    warn: (...args: unknown[]) => void;
   };
 }
 
@@ -83,9 +85,9 @@ export async function executeScriptInSandbox(
           duration: Date.now() - startTime,
           logs,
         });
-      } catch (error: any) {
+      } catch (error) {
         // Check if it's a timeout error
-        if (error.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") {
+        if ((error as { code?: string }).code === "ERR_SCRIPT_EXECUTION_TIMEOUT") {
           resolve({
             success: false,
             error: `Script execution timeout (${timeoutMs}ms)`,
@@ -114,22 +116,61 @@ export async function executeScriptInSandbox(
 }
 
 /**
+ * Globals explicitly shadowed to `undefined` inside the sandbox, mirroring the
+ * canonical engine policy in lib/test-runner/scripts.ts (FORBIDDEN_GLOBALS):
+ * no dynamic code escape hatches, no shared-memory/timer primitives, and no
+ * network/egress APIs even if the vm boundary were breached.
+ */
+const FORBIDDEN_GLOBALS = [
+  "require",
+  "module",
+  "exports",
+  "__dirname",
+  "__filename",
+  "global",
+  "globalThis",
+  "process",
+  "Buffer",
+  "child_process",
+  "fs",
+  "eval",
+  "Function",
+  "Proxy",
+  "Reflect",
+  "WeakRef",
+  "FinalizationRegistry",
+  "SharedArrayBuffer",
+  "Atomics",
+  "queueMicrotask",
+  "setImmediate",
+  "setInterval",
+  "setTimeout",
+  "clearTimeout",
+  "clearImmediate",
+  "fetch",
+  "XMLHttpRequest",
+  "WebSocket",
+  "EventSource",
+  "importScripts",
+];
+
+/**
  * Build safe sandbox context with restricted APIs
  */
 function buildSandboxContext(context: ScriptContext, logs: string[]) {
   const consoleProxy = {
-    log: (...args: any[]) => {
+    log: (...args: unknown[]) => {
       logs.push(args.map((a) => JSON.stringify(a)).join(" "));
     },
-    error: (...args: any[]) => {
+    error: (...args: unknown[]) => {
       logs.push(`ERROR: ${args.map((a) => JSON.stringify(a)).join(" ")}`);
     },
-    warn: (...args: any[]) => {
+    warn: (...args: unknown[]) => {
       logs.push(`WARN: ${args.map((a) => JSON.stringify(a)).join(" ")}`);
     },
   };
 
-  return {
+  const sandboxContext: Record<string, unknown> = {
     // Provide safe APIs
     pm: {
       environment: context.pm?.environment || {},
@@ -138,18 +179,7 @@ function buildSandboxContext(context: ScriptContext, logs: string[]) {
     response: context.response || {},
     console: consoleProxy,
 
-    // Prevent dangerous global APIs
-    require: undefined,
-    eval: undefined,
-    Function: undefined,
-    process: undefined,
-    Buffer: undefined,
-    child_process: undefined,
-    fs: undefined,
-    __dirname: undefined,
-    __filename: undefined,
-
-    // Math and JSON are safe
+    // Math, JSON and other intrinsics needed for legitimate assertion scripts
     Math,
     JSON,
     Object,
@@ -162,7 +192,12 @@ function buildSandboxContext(context: ScriptContext, logs: string[]) {
     Error,
     Set,
     Map,
+    Promise,
   };
+
+  for (const key of FORBIDDEN_GLOBALS) sandboxContext[key] = undefined;
+
+  return sandboxContext;
 }
 
 /**
@@ -179,20 +214,24 @@ export async function executeScriptSequence(
   mainResult: ScriptResult;
   postResult?: ScriptResult;
 }> {
-  const results: any = {};
+  const results: {
+    preResult?: ScriptResult;
+    mainResult?: ScriptResult;
+    postResult?: ScriptResult;
+  } = {};
 
   // Execute pre-script if provided
   if (preScript) {
     results.preResult = await executeScriptInSandbox(preScript, context, timeoutMs);
     if (!results.preResult.success) {
-      return results; // Stop on pre-script failure
+      return results as Required<typeof results>; // Stop on pre-script failure
     }
   }
 
   // Execute main script
   results.mainResult = await executeScriptInSandbox(mainScript, context, timeoutMs);
   if (!results.mainResult.success) {
-    return results; // Stop on main script failure
+    return results as Required<typeof results>; // Stop on main script failure
   }
 
   // Execute post-script if provided
@@ -200,5 +239,5 @@ export async function executeScriptSequence(
     results.postResult = await executeScriptInSandbox(postScript, context, timeoutMs);
   }
 
-  return results;
+  return results as Required<typeof results>;
 }

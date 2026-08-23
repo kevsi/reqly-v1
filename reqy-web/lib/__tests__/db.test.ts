@@ -3,7 +3,7 @@
  * Tests Supabase fallback to in-memory storage
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   insertCaptureSession,
   getCaptureSession,
@@ -97,8 +97,6 @@ describe("Database Layer", () => {
 
   describe("listCaptureSessions", () => {
     it("should list all sessions in reverse chronological order", async () => {
-      const now = Date.now();
-
       for (let i = 0; i < 3; i++) {
         const session = createMockSession(`test-${i}`, i * 10);
         await insertCaptureSession(session);
@@ -154,9 +152,9 @@ describe("Database Layer", () => {
       expect(await getCaptureSession("test-delete")).toBeNull();
     });
 
-    it("should handle deletion of non-existent session", async () => {
+    it("should return false for non-existent session (no throw)", async () => {
       const result = await deleteCaptureSession("non-existent");
-      expect(result).toBe(true); // Should not throw
+      expect(result).toBe(false); // Should not throw
     });
   });
 

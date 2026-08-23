@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, Plus, Trash2, GitBranch } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ export function GitBranchBar({
   onCreate,
   onDelete,
 }: BranchBarProps) {
+  const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
 
@@ -78,7 +80,7 @@ export function GitBranchBar({
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setDialogOpen(true)} className="text-xs gap-2">
             <Plus className="size-3.5" />
-            New branch
+            {t("git.branchNew")}
           </DropdownMenuItem>
           {branches.filter((b) => !b.isCurrent).length > 0 && (
             <>
@@ -92,7 +94,7 @@ export function GitBranchBar({
                     className="text-xs text-destructive gap-2"
                   >
                     <Trash2 className="size-3.5" />
-                    Delete "{b.name}"
+                    {t("git.branchDelete")} "{b.name}"
                   </DropdownMenuItem>
                 ))}
             </>
@@ -105,13 +107,13 @@ export function GitBranchBar({
           <DialogHeader>
             <DialogTitle className="text-sm flex items-center gap-2">
               <Plus className="size-4" />
-              Create branch
+              {t("git.branchCreateTitle")}
             </DialogTitle>
           </DialogHeader>
           <Input
             value={newBranchName}
             onChange={(e) => setNewBranchName(e.target.value)}
-            placeholder="branch-name"
+            placeholder={t("git.branchNamePlaceholder")}
             className="text-sm"
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           />
@@ -130,7 +132,7 @@ export function GitBranchBar({
               disabled={!newBranchName.trim()}
               className="text-xs"
             >
-              Create
+              {t("git.branchCreate")}
             </Button>
           </DialogFooter>
         </DialogContent>

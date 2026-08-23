@@ -34,6 +34,7 @@ import { useTranslation } from "react-i18next";
 
 export type NewCollectionInput = {
   name?: string;
+  description?: string;
   color?: string;
   icon?: string;
 };
@@ -82,6 +83,8 @@ interface CollectionsPanelProps {
   onRunCollection?: (collection: Collection) => void;
 }
 
+export const MAX_IMPORT_BYTES = 10 * 1024 * 1024; // 10 Mo — anti-DoS
+
 export function CollectionsPanel({
   collections,
   onSelectRequest,
@@ -100,6 +103,8 @@ export function CollectionsPanel({
   onRenameFolder,
   onDeleteFolder,
   onMoveFolder,
+  onReorderCollections,
+  onReorderFolders,
 }: CollectionsPanelProps) {
   const { t } = useTranslation();
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(() => {
@@ -261,13 +266,21 @@ export function CollectionsPanel({
           if (!onReorderRequestsInCollection) return;
           const sourceCol = collections.find((c) => c.id === sourceColId);
           if (!sourceCol) return;
-          const siblings = sourceCol.requests.map((r) => r.id);
+          const sourceReq = sourceCol.requests.find((r) => r.id === requestId);
+          const sourceFolderId = sourceReq?.folderId ?? null;
+          const targetReq = sourceCol.requests.find((r) => r.id === targetRequestId);
+          // Ne réordonner que si les deux requêtes sont au même niveau
+          // (même dossier, ou toutes deux à la racine).
+          if ((targetReq?.folderId ?? null) !== sourceFolderId) return;
+          const siblings = sourceCol.requests
+            .filter((r) => (r.folderId ?? null) === sourceFolderId)
+            .map((r) => r.id);
           const fromIdx = siblings.indexOf(requestId);
           const toIdx = siblings.indexOf(targetRequestId);
           if (fromIdx === -1 || toIdx === -1) return;
           siblings.splice(fromIdx, 1);
           siblings.splice(toIdx, 0, requestId);
-          onReorderRequestsInCollection(sourceColId, null, siblings);
+          onReorderRequestsInCollection(sourceColId, sourceFolderId, siblings);
         } else {
           // ── Cross-collection move: insert before the target request ──
           if (!onMoveBetweenCollections) return;
@@ -308,6 +321,19 @@ export function CollectionsPanel({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Anti-DoS : refuser les fichiers déraisonnables avant lecture/parse.
+    if (file.size > MAX_IMPORT_BYTES) {
+      toast({
+        title: t("collections.panel.importTooLarge"),
+        description: t("collections.panel.importTooLargeHint", {
+          size: Math.round(MAX_IMPORT_BYTES / (1024 * 1024)),
+        }),
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
+
     setImporting(true);
     try {
       const text = await file.text();
@@ -315,15 +341,27 @@ export function CollectionsPanel({
 
       const processCollection = (colData: {
         name?: string;
+        description?: string;
         color?: string;
         icon?: string;
+        folders?: Array<{ id?: string; name: string; parentId?: string | null }>;
         requests?: unknown[];
       }) => {
         const colId = onAddCollection({
           name: colData.name || t("collections.panel.importedCollection"),
+          description: colData.description || "",
           color: colData.color || "emerald",
           icon: colData.icon || "package",
         });
+
+        // Restaurer les dossiers (avec parentId pour les imbrications)
+        const folderIdMap = new Map<string, string>();
+        for (const folder of colData.folders ?? []) {
+          if (!folder.name) continue;
+          const parentId = folder.parentId ? (folderIdMap.get(folder.parentId) ?? null) : null;
+          const newId = onAddFolder?.(colId, folder.name, parentId);
+          if (newId && folder.id) folderIdMap.set(folder.id, newId);
+        }
 
         if (colData.requests && Array.isArray(colData.requests)) {
           colData.requests.forEach((req: unknown) => {
@@ -334,9 +372,15 @@ export function CollectionsPanel({
                   id: _id,
                   createdAt: _createdAt,
                   updatedAt: _updatedAt,
+                  folderId,
                   ...rest
                 } = parsed.data;
-                onAddRequestToCollection(colId, rest);
+                // Mapper l'ancien folderId vers le nouveau
+                const mappedFolderId = folderId ? (folderIdMap.get(folderId) ?? null) : null;
+                onAddRequestToCollection(colId, {
+                  ...rest,
+                  ...(mappedFolderId ? { folderId: mappedFolderId } : {}),
+                });
               }
             }
           });
@@ -545,6 +589,7 @@ export function CollectionsPanel({
     const exportData = {
       name: collection.name,
       description: collection.description,
+      folders: collection.folders ?? [],
       requests: collection.requests,
       exportedAt: new Date().toISOString(),
       type: "collection",
@@ -667,6 +712,41 @@ export function CollectionsPanel({
       });
   }, [sortedCollections, searchQuery, searchLower, methodFilter, semanticResults, collections]);
 
+  // ── Déplacement des collections (menu Monter/Descendre) ──
+  const moveCollection = useCallback(
+    (id: string, dir: -1 | 1) => {
+      if (!onReorderCollections) return;
+      const ids = filteredCollections.map((c) => c.id);
+      const idx = ids.indexOf(id);
+      const target = idx + dir;
+      if (idx < 0 || target < 0 || target >= ids.length) return;
+      ids.splice(idx, 1);
+      ids.splice(target, 0, id);
+      onReorderCollections(ids);
+    },
+    [filteredCollections, onReorderCollections],
+  );
+
+  // ── Déplacement des dossiers (menu Monter/Descendre, par niveau) ──
+  const moveFolderInCollection = useCallback(
+    (collectionId: string, folderId: string, dir: -1 | 1) => {
+      if (!onReorderFolders) return;
+      const col = collections.find((c) => c.id === collectionId);
+      const folders = col?.folders ?? [];
+      const folder = folders.find((f) => f.id === folderId);
+      if (!folder) return;
+      const level = folder.parentId ?? null;
+      const ids = folders.filter((f) => (f.parentId ?? null) === level).map((f) => f.id);
+      const idx = ids.indexOf(folderId);
+      const target = idx + dir;
+      if (idx < 0 || target < 0 || target >= ids.length) return;
+      ids.splice(idx, 1);
+      ids.splice(target, 0, folderId);
+      onReorderFolders(collectionId, level, ids);
+    },
+    [collections, onReorderFolders],
+  );
+
   return (
     <div className="flex h-full flex-col">
       {/* Ambient top highlight */}
@@ -758,7 +838,7 @@ export function CollectionsPanel({
       >
         <div data-testid="collection-list" className="flex-1 overflow-y-auto">
           <div className="divide-y divide-border/40">
-            {filteredCollections.map((collection) => (
+            {filteredCollections.map((collection, collectionIndex) => (
               <CollectionRow
                 key={collection.id}
                 collection={collection}
@@ -797,6 +877,16 @@ export function CollectionsPanel({
                 onRenameFolder={onRenameFolder}
                 onDeleteFolder={onDeleteFolder}
                 onMoveFolder={onMoveFolder}
+                onMoveUp={() => moveCollection(collection.id, -1)}
+                onMoveDown={() => moveCollection(collection.id, 1)}
+                canMoveUp={collectionIndex > 0}
+                canMoveDown={collectionIndex < filteredCollections.length - 1}
+                onFolderMoveUp={(folderId: string) =>
+                  moveFolderInCollection(collection.id, folderId, -1)
+                }
+                onFolderMoveDown={(folderId: string) =>
+                  moveFolderInCollection(collection.id, folderId, 1)
+                }
               />
             ))}
           </div>

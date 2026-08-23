@@ -23,6 +23,9 @@ void i18n.use(initReactI18next).init({
   },
   lng: DEFAULT_LANGUAGE,
   fallbackLng: DEFAULT_LANGUAGE,
+  // Make translations available during Next static generation before the
+  // React provider renders translated components.
+  initAsync: false,
   interpolation: { escapeValue: false },
   returnNull: false,
 });

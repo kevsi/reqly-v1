@@ -29,17 +29,15 @@ export interface ResponsePayload {
   size: number; // bytes
 }
 
-export type NetworkErrorType =
-  | "network"
-  | "ssl"
-  | "dns"
-  | "timeout"
-  | "unknown";
+import type { TauriErrorPayload } from "@/lib/tauri";
 
-export interface NetworkError {
-  message: string;
-  code: string;
+/** IPC-derived error codes plus the legacy AI aliases kept for compatibility. */
+export type NetworkErrorType =
+  TauriErrorPayload["code"] | "network" | "ssl" | "dns" | "timeout" | "unknown";
+
+export interface NetworkError extends Pick<TauriErrorPayload, "message" | "code"> {
   type: NetworkErrorType;
+  detail?: string;
 }
 
 export interface RequestContext {
@@ -62,13 +60,7 @@ export interface RetrievedChunk {
 export type Severity = "error" | "warning" | "info";
 export type Confidence = "certain" | "probable" | "uncertain";
 export type DiagnosticSource = "local" | "llm" | "rag";
-export type DiagnosticCategory =
-  | "auth"
-  | "format"
-  | "performance"
-  | "ssl"
-  | "server"
-  | "business";
+export type DiagnosticCategory = "auth" | "format" | "performance" | "ssl" | "server" | "business";
 
 export type FixType = "header" | "body" | "url" | "auth" | "method";
 

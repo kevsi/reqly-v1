@@ -15,14 +15,14 @@ import {
 } from "@/lib/config";
 import {
   REQLY_TOOLS,
-  executeToolCall,
+  executeAuthorizedToolCall,
   maskSensitiveObject,
   type ToolResult,
   type ToolCall,
 } from "@/lib/llm-tools";
 import type { ProcessStep } from "@/src/ai/components/assistant-steps-renderer";
 import type { ChatMessage, ChatMessagePhase } from "@/src/ai/components/ai-sidebar-types";
-import { getPermission } from "@/src/ai/agent/permissions";
+import type { ApprovalSource } from "@/src/ai/agent/permissions";
 import { loadRules, buildRulesSystemPrompt } from "@/src/ai/agent/rules";
 import { attachmentsToPrompt } from "@/src/ai/agent/context-picker";
 import { emptyUsage, addUsage } from "@/src/ai/agent/usage";
@@ -131,29 +131,11 @@ export function useAiSidebarChat() {
   const gatedExecute = useCallback(
     async (
       tc: { callId: string; name: string; arguments: string },
-      confirmed: boolean,
+      approval: ApprovalSource = "none",
     ): Promise<ToolResult> => {
-      const perm = getPermission(tc.name);
-      if (perm === "deny") {
-        return {
-          callId: tc.callId,
-          name: tc.name,
-          content: "",
-          error: i18n.t("ai.hooks.toolDenied"),
-        };
-      }
-      if (perm === "ask" && !confirmed) {
-        return {
-          callId: tc.callId,
-          name: tc.name,
-          content: "",
-          error: i18n.t("ai.hooks.confirmRequired"),
-          requireConfirmation: true,
-        };
-      }
-      return executeToolCall(
+      return executeAuthorizedToolCall(
         { id: tc.callId, name: tc.name, arguments: tc.arguments },
-        { depth: 0, confirmed },
+        { depth: 0, approval },
       );
     },
     [],
@@ -196,7 +178,7 @@ export function useAiSidebarChat() {
           name: "execute_request",
           arguments: JSON.stringify(request),
         },
-        true,
+        "code",
       );
       const step: ProcessStep = {
         type: "execute",
@@ -642,7 +624,10 @@ export function useAiSidebarChat() {
           for (let i = 0; i < calls.length; i++) {
             const tc = calls[i];
             try {
-              const result = await gatedExecute(tc, preApproved || autoApply);
+              const result = await gatedExecute(
+                tc,
+                preApproved ? "plan" : autoApply ? "autoApply" : "none",
+              );
               const toolUsage = result.usage;
               if (toolUsage) {
                 setSessionUsage((prev) => addUsage(prev, toolUsage));
@@ -733,7 +718,7 @@ export function useAiSidebarChat() {
               syncSteps();
               return;
             }
-            const result = await gatedExecute(targetTc, true);
+            const result = await gatedExecute(targetTc, "user");
             const toolUsage = result.usage;
             if (toolUsage) {
               setSessionUsage((prev) => addUsage(prev, toolUsage));

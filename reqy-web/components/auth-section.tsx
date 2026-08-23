@@ -174,7 +174,7 @@ export function AuthSection({
                         onChange={(e) => handleBasicChange(basicUsername, e.target.value)}
                         placeholder={t("auth.passwordPlaceholder")}
                         className="h-10 bg-muted/20 border-input pr-10 font-mono text-sm transition-all duration-200 focus:bg-muted/40"
-                        autoComplete="current-password"
+                        autoComplete="off"
                       />
                       {(basicUsername || basicPassword) && (
                         <button
@@ -210,7 +210,7 @@ export function AuthSection({
                           ? "eyJhbGciOiJIUzI1NiIs..."
                           : authType === "api-key"
                             ? "sk-..."
-                            : "ya29.a0AfH6S..."
+                            : "ya29.example-token..."
                       }
                       className="h-10 bg-muted/20 border-input pr-10 font-mono text-sm transition-all duration-200 focus:bg-muted/40"
                       suggestions={authVarSuggestions}

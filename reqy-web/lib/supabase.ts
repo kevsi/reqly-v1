@@ -45,7 +45,7 @@ export async function initializeSupabase() {
 
   try {
     // Verify connection with a simple health check
-    const { data, error } = await client.from("capture_sessions").select("count").limit(1);
+    const { error } = await client.from("capture_sessions").select("count").limit(1);
 
     if (error) {
       console.warn("[Supabase] Health check failed. Table may not exist yet:", error.message);
@@ -98,7 +98,19 @@ CREATE INDEX IF NOT EXISTS idx_capture_sessions_created_at ON capture_sessions(c
 -- Enable RLS (Row Level Security)
 ALTER TABLE capture_sessions ENABLE ROW LEVEL SECURITY;
 
--- Policy: Allow all reads/writes for now (can be restricted later)
-CREATE POLICY "Enable all operations for service role" ON capture_sessions
-  FOR ALL USING (true) WITH CHECK (true);
+-- Supprimer l'ancienne politique qui donnait un accès complet à tous les rôles
+-- (dont anon, qui expose toutes les sessions via la clé anon publique).
+DROP POLICY IF EXISTS "Enable all operations for service role" ON capture_sessions;
+
+-- Le service role (clé serveur) contourne RLS par BYPASSRLS — pas besoin de politique.
+-- Les rôles anon et authenticated n'ont par défaut aucune politique → accès refusé.
+-- Cette politique permet aux utilisateurs Supabase Auth de lire leurs propres sessions.
+-- (L'application utilise son propre auth sync, pas Supabase Auth ; cette politique
+--  est une sécurité supplémentaire si quelqu'un utilisait la clé anon.)
+CREATE POLICY "Users read own sessions" ON capture_sessions
+  FOR SELECT TO authenticated
+  USING (auth.uid()::text = user_id);
+CREATE POLICY "Users delete own sessions" ON capture_sessions
+  FOR DELETE TO authenticated
+  USING (auth.uid()::text = user_id);
 `;

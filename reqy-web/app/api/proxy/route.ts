@@ -12,7 +12,11 @@ import { getServerEnv } from "@/lib/env";
 import { isPrivateHost, isBlockedIp } from "@/lib/security/ssrf";
 import { readWithCap } from "@/lib/security/streaming";
 import { resolveCached } from "@/lib/security/dns-cache";
+import { captureRequest, captureResponse, recordCapturedRequest } from "@/lib/capture-middleware";
+import { requireCaptureUserId, CaptureAuthError } from "@/lib/capture-auth";
+import { isPublicWebDeployment } from "@/lib/environment";
 import net, { isIP } from "node:net";
+import { Agent } from "undici";
 
 /**
  * Parse a single Set-Cookie header value into structured fields.
@@ -160,12 +164,27 @@ function sanitizeUrlForDebug(url: URL): string {
 }
 
 export async function POST(request: NextRequest) {
+  // 🔐 SECURITY: on a public web deployment this endpoint must never act as an
+  // unauthenticated open proxy. Authenticate up front (mirrors the capture
+  // routes) and reuse the resolved user id for capture attribution below.
+  let authenticatedUserId: string | null = null;
+  if (isPublicWebDeployment()) {
+    try {
+      authenticatedUserId = await requireCaptureUserId(request);
+    } catch (error) {
+      if (error instanceof CaptureAuthError) {
+        return NextResponse.json({ error: "Authentication required" }, { status: error.status });
+      }
+      throw error;
+    }
+  }
+
   // Declare these in outer scope so the catch block can reference them for
   // useful debug output when things fail.
   let parsedUrl: URL | undefined = undefined;
   let targetUrl = "";
   let debugMode = false;
-  let hostOverride: string | undefined;
+  let pinnedDispatcher: Agent | undefined;
 
   // ── Timing metrics ────────────────────────────────────────────────────
   const timings = { dnsMs: 0, connectMs: 0, ttfbMs: 0 };
@@ -212,8 +231,6 @@ export async function POST(request: NextRequest) {
     const method = validPayload.method.toUpperCase() as typeof validPayload.method;
     const headers = validPayload.headers || {};
     const payloadBody = validPayload.body;
-    debugMode =
-      validPayload.debug || String(request.headers.get("x-proxy-debug") || "").trim() === "1";
 
     // ── Validate URL ─────────────────────────────────────────────────────
     const urlValidation = validateUrl(rawUrl);
@@ -260,24 +277,22 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 3) Rewrite the target URL to use the literal IP, but keep the
-      //    original `Host` header so virtualhosts / SNI still match.
-      const portPart = parsedUrl.port ? `:${parsedUrl.port}` : "";
-      const hostLiteral = isIP(resolvedIp) === 6 ? `[${resolvedIp}]` : resolvedIp;
-      targetUrl = `${parsedUrl.protocol}//${hostLiteral}${portPart}${parsedUrl.pathname}${parsedUrl.search}`;
-      // Capture the original Host to apply after `finalHeaders` is created.
-      hostOverride = parsedUrl.host;
+      // Keep the hostname in the URL for SNI/certificate validation, but force
+      // Undici's socket lookup to use the already validated address.
+      targetUrl = parsedUrl.href;
+      pinnedDispatcher = new Agent({
+        connect: {
+          lookup(_hostname, _options, callback) {
+            callback(null, resolvedIp, isIP(resolvedIp));
+          },
+        },
+      });
     }
 
     // ── Prepare headers and body ─────────────────────────────────────────
     const finalHeaders: Record<string, string> = Object.fromEntries(
       Object.entries(headers).map(([key, value]) => [key, String(value)]),
     );
-
-    // SSRF protection: pin Host header to original hostname when IP was rewritten.
-    if (hostOverride) {
-      finalHeaders["Host"] = hostOverride;
-    }
 
     // debug mode can be requested either via header `x-proxy-debug: 1` or via
     // a `debug: true` boolean in the JSON payload.
@@ -301,8 +316,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Execute fetch with timeout ───────────────────────────────────────
+    // Client-requested, but capped at 60s so a single request cannot pin a
+    // worker for two minutes (rate limit × timeout = worker-seconds DoS).
     const customTimeoutMs = parseInt(request.headers.get("x-proxy-timeout") || "30000", 10);
-    const finalTimeoutMs = Math.min(Math.max(customTimeoutMs, 1000), 120000);
+    const finalTimeoutMs = Math.min(Math.max(customTimeoutMs, 1000), 60000);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), finalTimeoutMs);
@@ -332,13 +349,13 @@ export async function POST(request: NextRequest) {
       socket.once("connect", () => done(Math.max(0, Date.now() - probeStart)));
       socket.once("error", () => done(0));
     });
-
     const startTime = Date.now();
-    const response = await fetch(targetUrl, {
+    let response = await fetch(targetUrl, {
       method,
       headers: finalHeaders,
       body: bodyToSend,
       signal: controller.signal,
+      ...(pinnedDispatcher ? { dispatcher: pinnedDispatcher } : {}),
       // SSRF hardening: do NOT follow redirects automatically. An attacker
       // could host a public URL that responds 302 → http://10.0.0.1/, which
       // fetch would silently follow past our SSRF guard. With redirect:
@@ -346,52 +363,113 @@ export async function POST(request: NextRequest) {
       // re-validate the Location against the SSRF guard before following.
       redirect: "manual",
     }).finally(() => clearTimeout(timeout));
+    // ── Redirect handling ──────────────────────────────────────────────────
+    // With redirect: "manual" a 3xx is surfaced to the caller unless
+    // followRedirects is set: then we follow up to MAX_REDIRECTS hops,
+    // re-validating every Location against the same SSRF checks applied to
+    // the original URL (a public endpoint redirecting to a private host must
+    // never be followed silently). When not following, the Location is still
+    // validated so the client never receives a pointer to a private host.
+    const MAX_REDIRECTS = 5;
 
-    // SSRF hardening for redirects: when the server responds with a 3xx,
-    // validate the Location header against the same SSRF checks that were
-    // applied to the original URL. An attacker hosting a public endpoint
-    // that 302 -> http://10.0.0.1/ would otherwise bypass the guard.
-    const location = response.headers.get("location");
-    if (location && response.status >= 300 && response.status < 400) {
-      const locValidation = validateUrl(location);
+    const validateRedirectTarget = async (
+      location: string,
+      base: string,
+    ): Promise<{ url?: string; error?: string }> => {
+      const locValidation = validateUrl(new URL(location, base).toString());
       if (!locValidation.valid) {
-        return NextResponse.json(
-          {
-            error: "blocked_redirect",
-            message: `Redirect to blocked destination: ${locValidation.error}`,
-            status: 502,
-          },
-          { status: 502 },
-        );
+        return { error: `Redirect to blocked destination: ${locValidation.error}` };
       }
-      // Resolve the redirect target and block private/internal hosts, mirroring
-      // the SSRF checks applied to the primary URL (IP literals + DNS rebinding).
-      const redirectAllowLocal =
-        process.env.NODE_ENV === "development" || getServerEnv().ALLOW_LOCAL_HOSTS === "true";
-      if (!redirectAllowLocal) {
+      if (!allowLocal) {
         const redirectHost = locValidation.parsed!.hostname;
         if (isIP(redirectHost) && isBlockedIp(redirectHost)) {
-          return NextResponse.json(
-            {
-              error: "blocked_redirect",
-              message: "Redirect to blocked destination: private/internal IP",
-              status: 502,
-            },
-            { status: 502 },
-          );
+          return { error: "Redirect to blocked destination: private/internal IP" };
         }
         const resolvedRedirect = await resolveCached(redirectHost);
         if (!resolvedRedirect || isBlockedIp(resolvedRedirect)) {
-          return NextResponse.json(
-            {
-              error: "blocked_redirect",
-              message: "Redirect to blocked destination: private/internal IP",
-              status: 502,
-            },
-            { status: 502 },
-          );
+          return { error: "Redirect to blocked destination: private/internal IP" };
         }
       }
+      return { url: locValidation.parsed!.href };
+    };
+
+    const redirectErrorResponse = (message: string) =>
+      NextResponse.json({ error: "blocked_redirect", message, status: 502 }, { status: 502 });
+
+    let redirectsFollowed = 0;
+    let location = response.headers.get("location");
+
+    while (
+      validPayload.followRedirects === true &&
+      response.status >= 300 &&
+      response.status < 400 &&
+      location &&
+      redirectsFollowed < MAX_REDIRECTS
+    ) {
+      const target = await validateRedirectTarget(location, targetUrl);
+      if (target.error) return redirectErrorResponse(target.error);
+
+      // Re-pin the dispatcher to the validated address of the next hop so a
+      // DNS rebinding between hops cannot redirect to a private host.
+      if (!allowLocal) {
+        const address = await resolveCached(new URL(target.url!).hostname);
+        if (!address || isBlockedIp(address)) {
+          return redirectErrorResponse("Redirect to blocked destination: private/internal IP");
+        }
+        await pinnedDispatcher?.close().catch(() => undefined);
+        pinnedDispatcher = new Agent({
+          connect: {
+            lookup(_hostname, _options, callback) {
+              callback(null, address, isIP(address));
+            },
+          },
+        });
+      }
+
+      // 301/302/303 switch to GET without body (HEAD stays HEAD); 307/308
+      // preserve method and body.
+      let nextMethod = method;
+      let nextBody = bodyToSend;
+      if (
+        (response.status === 301 || response.status === 302 || response.status === 303) &&
+        method !== "GET" &&
+        method !== "HEAD"
+      ) {
+        nextMethod = "GET";
+        nextBody = undefined;
+      }
+
+      targetUrl = target.url!;
+      redirectsFollowed += 1;
+      response = await fetch(targetUrl, {
+        method: nextMethod,
+        headers: finalHeaders,
+        body: nextBody,
+        signal: controller.signal,
+        ...(pinnedDispatcher ? { dispatcher: pinnedDispatcher } : {}),
+        redirect: "manual",
+      });
+      location = response.headers.get("location");
+    }
+
+    if (
+      validPayload.followRedirects === true &&
+      response.status >= 300 &&
+      response.status < 400 &&
+      location &&
+      redirectsFollowed >= MAX_REDIRECTS
+    ) {
+      return NextResponse.json(
+        { error: "too_many_redirects", message: "Too many redirects (max 5)", status: 502 },
+        { status: 502 },
+      );
+    }
+
+    // Not following (or the loop ended on a final 3xx): validate the Location
+    // so the client never receives a pointer to a private/internal host.
+    if (location && response.status >= 300 && response.status < 400) {
+      const target = await validateRedirectTarget(location, targetUrl);
+      if (target.error) return redirectErrorResponse(target.error);
     }
 
     // Real TCP connect time (probe ran concurrently with the fetch above).
@@ -474,14 +552,36 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // ── Record captured request (if capture is active) ────────────────────
+    try {
+      const capturedReq = await captureRequest(method, parsedUrl!.href, finalHeaders, bodyToSend);
+      const capturedResp = await captureResponse(response.status, responseHeaders, body);
+      const rateLimitKey = getRateLimitKey(request); // Reuse same rate-limit key
+      // On public deployments the user was already validated at the top of the
+      // handler (single validation pass); desktop/self-hosted validate here.
+      const captureUserId = authenticatedUserId ?? (await requireCaptureUserId(request));
+      await recordCapturedRequest(
+        capturedReq,
+        capturedResp,
+        durationMs,
+        rateLimitKey,
+        captureUserId,
+      );
+    } catch (captureError) {
+      console.warn("[Capture] Failed to record session:", captureError);
+      // Non-blocking: don't fail the request if capture fails
+    }
+
     return NextResponse.json(successPayload);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       return structuredError("Request timed out", "TIMEOUT", 504);
     }
 
+    const detailMsg = error instanceof Error ? error.message : String(error);
+
     if (isFetchNetworkError(error)) {
-      const resp = structuredError("Upstream request failed", "BAD_GATEWAY", 502);
+      const resp = structuredError(`Upstream request failed: ${detailMsg}`, "BAD_GATEWAY", 502);
       if (debugMode) {
         return NextResponse.json(
           {
@@ -489,7 +589,7 @@ export async function POST(request: NextRequest) {
             _debug: {
               requestedUrl: parsedUrl ? sanitizeUrlForDebug(parsedUrl) : null,
               hostname: parsedUrl?.hostname ?? null,
-              error: error instanceof Error ? error.message : String(error),
+              error: detailMsg,
             },
           },
           { status: 502 },
@@ -498,7 +598,7 @@ export async function POST(request: NextRequest) {
       return resp;
     }
 
-    const resp = structuredError("Upstream request failed", "INTERNAL_ERROR", 500);
+    const resp = structuredError(`Upstream request failed: ${detailMsg}`, "INTERNAL_ERROR", 500);
     if (debugMode) {
       return NextResponse.json(
         {
@@ -506,12 +606,14 @@ export async function POST(request: NextRequest) {
           _debug: {
             requestedUrl: targetUrl,
             hostname: parsedUrl?.hostname ?? null,
-            error: error instanceof Error ? error.message : String(error),
+            error: detailMsg,
           },
         },
         { status: 500 },
       );
     }
     return resp;
+  } finally {
+    await pinnedDispatcher?.close().catch(() => undefined);
   }
 }

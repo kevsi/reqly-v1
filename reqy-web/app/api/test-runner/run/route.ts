@@ -150,6 +150,11 @@ export async function POST(req: NextRequest) {
     },
   );
 
+  const hasScripts = body.collection.requests.some(
+    (r) => r.preRequestScript?.trim() || r.postResponseScript?.trim(),
+  );
+  const warnings = hasScripts ? ["scripts_disabled_server"] : [];
+
   const url = new URL(req.url);
   if (url.searchParams.get("format") === "junit") {
     return new NextResponse(toJUnitXml(report), {
@@ -157,5 +162,5 @@ export async function POST(req: NextRequest) {
       headers: { "content-type": "application/xml" },
     });
   }
-  return NextResponse.json(report);
+  return NextResponse.json(warnings.length > 0 ? { ...report, warnings } : report);
 }

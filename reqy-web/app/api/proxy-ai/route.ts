@@ -1,3 +1,7 @@
+/**
+ * Provider parity: this web route mirrors lib/tauri-ai.ts.
+ * Any provider, validation, timeout, or response-format change must be replicated in both paths.
+ */
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimiter, getRateLimitKey } from "./lib/rate-limit";

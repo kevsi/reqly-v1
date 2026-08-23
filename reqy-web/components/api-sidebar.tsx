@@ -20,7 +20,7 @@ import { ToolsSection } from "@/components/sidebar/tools-section";
 import { ModuleNavList } from "@/components/modules/module-nav-list";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
@@ -57,6 +57,8 @@ export function ApiSidebar({
   const { t } = useTranslation();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const isMobile = useIsMobile(768);
+  const drawerRef = useRef<HTMLElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   // Sur mobile, le drawer est TOUJOURS en pleine largeur avec les libellés,
   // indépendamment de l'état `collapsed` du contexte (forcé à true sous 916px).
   const expanded = isMobile ? true : !collapsed;
@@ -65,6 +67,33 @@ export function ApiSidebar({
     onCollapse?.(v);
   };
 
+  useEffect(() => {
+    if (!isMobile) return;
+
+    if (mobileOpen) {
+      const activeElement = document.activeElement;
+      returnFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+      drawerRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    returnFocusRef.current?.focus({ preventScroll: true });
+    returnFocusRef.current = null;
+  }, [isMobile, mobileOpen]);
+
+  useEffect(() => {
+    if (!isMobile || !mobileOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onMobileClose?.();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMobile, mobileOpen, onMobileClose]);
+
   // Navigation sur mobile : ferme le drawer après un clic sur un lien.
   const handleNavClick = () => {
     if (isMobile) onMobileClose?.();
@@ -72,10 +101,13 @@ export function ApiSidebar({
 
   return (
     <aside
+      ref={drawerRef}
       aria-label={t("sidebar.ariaLabel")}
       aria-hidden={isMobile && !mobileOpen}
+      inert={isMobile && !mobileOpen ? true : undefined}
+      tabIndex={-1}
       className={cn(
-        "group/sidebar fixed inset-y-0 left-0 z-30 flex h-screen flex-col border-r bg-sidebar transition-[width,transform,visibility] duration-200 ease-out will-change-auto",
+        "group/sidebar fixed inset-y-0 left-0 z-30 flex flex-col border-r bg-sidebar transition-[width,transform,visibility] duration-200 ease-out will-change-auto h-[calc(var(--vh)*100)]",
         // Desktop: rail replié ou déplié
         !isMobile && (collapsed ? "w-[60px]" : "w-64"),
         // Mobile: drawer off-canvas (pleine hauteur, glissé hors-écran quand fermé)
@@ -148,7 +180,7 @@ export function ApiSidebar({
               </>
             );
             const linkClassName = cn(
-              "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150",
+              "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
               expanded ? "gap-3 px-3" : "justify-center",
               isActive
                 ? "bg-primary/10 text-primary"
@@ -212,7 +244,7 @@ export function ApiSidebar({
       <button
         onClick={() => setCollapsed(!collapsed)}
         aria-label={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-        className="absolute -right-3 top-[72px] flex size-8 sm:size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-[opacity,transform,box-shadow,color,background-color,border-color] duration-200 hover:border-primary/40 hover:bg-accent hover:text-foreground hover:shadow-md hover:shadow-primary/10 active:scale-90 opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
+        className="absolute -right-3 top-[72px] flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-[opacity,transform,box-shadow,color,background-color,border-color] duration-200 hover:border-primary/40 hover:bg-accent hover:text-foreground hover:shadow-md hover:shadow-primary/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-90 opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
         title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
       >
         {collapsed ? (

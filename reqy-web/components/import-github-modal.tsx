@@ -1,10 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Github, Loader2, X } from "lucide-react";
+import { Github, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -15,6 +23,10 @@ import {
 import { toast } from "@/hooks/use-toast";
 import type { SavedProject, AnalysisMode } from "@/lib/types";
 import { useTranslation } from "react-i18next";
+import { useRouter } from "next/navigation";
+import { isTauriAvailable } from "@/lib/tauri";
+import { secureKeys } from "@/lib/secure-storage";
+import { OAUTH_TOKEN_KEYS } from "@/hooks/use-tool-connections";
 
 interface ImportGithubModalProps {
   open: boolean;
@@ -24,6 +36,7 @@ interface ImportGithubModalProps {
 
 export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModalProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const [repoUrl, setRepoUrl] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -64,19 +77,67 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
     return null;
   };
 
+  const GITHUB_REPOS_URL =
+    "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,organization_member";
+
+  const normalizeRepo = (repo: Record<string, unknown>) => ({
+    id: repo.id as number,
+    full_name: repo.full_name as string,
+    name: repo.name as string,
+    owner: {
+      login: ((repo.owner as Record<string, unknown> | undefined)?.login as string) ?? "",
+    },
+    html_url: repo.html_url as string,
+    description: repo.description as string | undefined,
+    default_branch: repo.default_branch as string,
+  });
+
   const fetchGithubRepos = useCallback(async () => {
     setReposLoading(true);
     setReposError(null);
     try {
+      // Desktop (Tauri static export): API routes don't exist — read the
+      // token from the encrypted secure store and call GitHub directly.
+      if (isTauriAvailable()) {
+        await secureKeys.waitForReady();
+        const token = secureKeys.get(OAUTH_TOKEN_KEYS.github);
+        if (!token) {
+          setGithubRepos([]);
+          return;
+        }
+        const response = await fetch(GITHUB_REPOS_URL, {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "api-playground",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          setReposError(t("importExport.github.repoLoadError"));
+          setGithubRepos([]);
+          return;
+        }
+        const data: unknown = await response.json();
+        setGithubRepos(
+          Array.isArray(data) ? (data as Record<string, unknown>[]).map(normalizeRepo) : [],
+        );
+        return;
+      }
+
       const response = await fetch("/api/github-auth/repos");
+      const data = await response.json().catch(() => ({}));
+      // 401 with connected:false = not authenticated — show connect hint,
+      // not an error.
+      if (response.status === 401 || data.connected === false) {
+        setGithubRepos([]);
+        return;
+      }
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        setReposError(error.message || t("importExport.github.repoLoadError"));
+        setReposError(data.message || t("importExport.github.repoLoadError"));
         setGithubRepos([]);
         return;
       }
 
-      const data = await response.json();
       setGithubRepos(data.repos || []);
     } catch {
       setReposError(t("importExport.github.repoLoadError"));
@@ -148,6 +209,12 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
     setImportStatus(t("importExport.github.analyzing"));
 
     try {
+      let githubToken: string | undefined;
+      if (isTauriAvailable()) {
+        await secureKeys.waitForReady();
+        githubToken = secureKeys.get(OAUTH_TOKEN_KEYS.github);
+      }
+
       const response = await fetch(`/api/github-import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -155,6 +222,7 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
           owner: parsed.owner,
           repo: parsed.repo,
           branch: parsed.branch,
+          githubToken,
         }),
       });
 
@@ -186,36 +254,28 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md rounded-xl border bg-card p-6 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
+    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
           <div className="flex items-center gap-2">
             <Github className="size-5 text-primary" />
-            <h2 className="text-lg font-semibold">{t("importExport.github.title")}</h2>
+            <DialogTitle>{t("importExport.github.title")}</DialogTitle>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="size-4" />
-          </button>
-        </div>
+          <DialogDescription>{t("importExport.github.repoUrl")}</DialogDescription>
+        </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">
-              {t("importExport.github.repoUrl")}
-            </label>
-            <Input
-              placeholder="https://github.com/owner/repo"
-              value={repoUrl}
-              onChange={(e) => {
-                setRepoUrl(e.target.value);
-                setProjectPreview(null);
-                setImportStatus(null);
-              }}
-              disabled={isImporting}
-            />
-            <p className="text-xs text-muted-foreground mt-1">{t("importExport.github.example")}</p>
-          </div>
+          <Input
+            placeholder="https://github.com/owner/repo"
+            value={repoUrl}
+            onChange={(e) => {
+              setRepoUrl(e.target.value);
+              setProjectPreview(null);
+              setImportStatus(null);
+            }}
+            disabled={isImporting}
+          />
+          <p className="text-xs text-muted-foreground">{t("importExport.github.example")}</p>
 
           <div className="rounded-2xl border border-border/50 bg-muted p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -261,9 +321,22 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("importExport.github.connectHint")}
-              </p>
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {t("importExport.github.connectHint")}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={() => {
+                    onClose();
+                    router.push("/settings");
+                  }}
+                >
+                  {t("importExport.postman.goToSettings")}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -317,7 +390,7 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
             </div>
           )}
 
-          <div className="flex gap-2">
+          <DialogFooter>
             <Button variant="ghost" onClick={onClose} disabled={isImporting}>
               {t("common.cancel")}
             </Button>
@@ -327,9 +400,9 @@ export function ImportGithubModal({ open, onClose, onImport }: ImportGithubModal
                 ? t("importExport.github.importProject")
                 : t("importExport.github.analyze")}
             </Button>
-          </div>
+          </DialogFooter>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

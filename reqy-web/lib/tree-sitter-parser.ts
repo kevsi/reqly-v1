@@ -5,7 +5,7 @@ import { join } from "path";
 // this file to pay that cost, even if they never parse anything (e.g. the
 // main `request-panel` page). Keep type-only imports up here and load the
 // real bindings on first use inside `initTreeSitter()`.
-import type { Parser, Language, Tree } from "web-tree-sitter";
+import type { Parser, Language, Tree, Query } from "web-tree-sitter";
 
 export interface ParsedRoute {
   method: string;
@@ -101,6 +101,13 @@ let initPromise: Promise<void> | null = null;
 const loadedLangs = new Map<string, Language>();
 const parserCache = new Map<string, Parser>();
 
+// PERF-10: compiled tree-sitter queries are memoized per (grammar, source).
+// Query sources are static constants (ROUTE_QUERIES + the Java class-level
+// annotation query), so the cache stays bounded by that static set and is
+// never cleared. The grammar id in the key prevents reuse across languages /
+// grammar versions.
+const compiledQueries = new Map<string, Query>();
+
 // Cached dynamic import — the real bindings are loaded once on first use.
 let treeSitterModule: typeof import("web-tree-sitter") | null = null;
 async function getTreeSitter(): Promise<typeof import("web-tree-sitter")> {
@@ -108,6 +115,21 @@ async function getTreeSitter(): Promise<typeof import("web-tree-sitter")> {
     treeSitterModule = await import("web-tree-sitter");
   }
   return treeSitterModule;
+}
+
+function compileQueryCached(
+  ts: NonNullable<typeof treeSitterModule>,
+  language: Language,
+  grammarId: string,
+  source: string,
+): Query {
+  const key = `${grammarId}::${source}`;
+  let query = compiledQueries.get(key);
+  if (!query) {
+    query = new ts.Query(language, source);
+    compiledQueries.set(key, query);
+  }
+  return query;
 }
 
 const MODULE_DIR = __dirname;
@@ -471,32 +493,113 @@ function normalizePath(p: string): string {
 
 // ── Main detection API ─────────────────────────────────────────────────
 
+/**
+ * Fallback regex-based route detection when tree-sitter is unavailable
+ * (e.g., bundle size optimization, missing WASM). Accuracy is lower but
+ * catches most common route definitions.
+ */
+function detectRoutesWithRegex(content: string, framework: string): ParsedRoute[] {
+  const results: ParsedRoute[] = [];
+
+  // 🔐 NOTE: These regexes are best-effort and will have false positives/negatives.
+  // For accurate parsing, tree-sitter is required. This is a fallback only.
+
+  const regexPatterns: Record<
+    string,
+    Array<{ pattern: RegExp; extract: (m: RegExpMatchArray) => ParsedRoute | null }>
+  > = {
+    fastapi: [
+      {
+        pattern: /@app\.(get|post|put|delete|patch)\s*\(\s*['"](.*?)['"]\s*\)/gi,
+        extract: (m) => ({
+          method: m[1].toUpperCase(),
+          path: normalizePath(m[2]),
+          framework: "fastapi",
+          name: "",
+        }),
+      },
+    ],
+    flask: [
+      {
+        pattern: /@app\.(route|get|post|put|delete)\s*\(\s*['"](.*?)['"]/gi,
+        extract: (m) => ({
+          method: m[1] === "route" ? "GET" : m[1].toUpperCase(),
+          path: normalizePath(m[2]),
+          framework: "flask",
+          name: "",
+        }),
+      },
+    ],
+    express: [
+      {
+        pattern: /app\.(get|post|put|delete|patch)\s*\(\s*['"](.*?)['"]/gi,
+        extract: (m) => ({
+          method: m[1].toUpperCase(),
+          path: normalizePath(m[2]),
+          framework: "express",
+          name: "",
+        }),
+      },
+    ],
+    django: [
+      {
+        pattern: /path\s*\(\s*['"](.*?)['"]\s*,\s*(\w+)/gi,
+        extract: (m) => ({
+          method: "GET",
+          path: normalizePath(m[1]),
+          framework: "django",
+          name: m[2] || "",
+        }),
+      },
+    ],
+  };
+
+  const patterns = regexPatterns[framework] || [];
+  const seen = new Set<string>();
+
+  for (const { pattern, extract } of patterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const route = extract(match);
+      if (!route) continue;
+
+      const key = `${route.method}|${route.path}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        results.push(route);
+      }
+    }
+  }
+
+  return results;
+}
+
 export async function detectRoutesWithTreeSitter(
   content: string,
   filePath: string,
   framework: string,
 ): Promise<ParsedRoute[]> {
   const grammarId = grammarForFramework(framework);
-  if (!grammarId) return [];
+  if (!grammarId) return detectRoutesWithRegex(content, framework); // Fallback to regex
 
   await initTreeSitter();
   // `initTreeSitter` guarantees `treeSitterModule` is populated. Use the
   // local `ts` reference for `Query` so we don't have to keep the bare
   // type-only `Query` import in sync.
   const ts = treeSitterModule;
-  if (!ts) return [];
+  if (!ts) return detectRoutesWithRegex(content, framework); // Fallback to regex
 
   const language = loadedLangs.get(grammarId) || (await loadLanguage(grammarId));
-  if (!language) return [];
+  if (!language) return detectRoutesWithRegex(content, framework); // Fallback to regex
 
   const parser = getParser(grammarId);
-  if (!parser) return [];
+  if (!parser) return detectRoutesWithRegex(content, framework); // Fallback to regex
 
   let tree: Tree | null;
   try {
     tree = parser.parse(content);
   } catch {
-    return [];
+    return detectRoutesWithRegex(content, framework); // Fallback to regex
   }
   if (!tree?.rootNode) return [];
 
@@ -510,7 +613,9 @@ export async function detectRoutesWithTreeSitter(
 
   for (const rq of relevantQueries) {
     try {
-      const query = new ts.Query(language, rq.query);
+      // PERF-10: memoized — queries are static constants, recompiling per
+      // scanned file was the hot path.
+      const query = compileQueryCached(ts, language, grammarId, rq.query);
       const matches = query.matches(tree.rootNode);
 
       for (const match of matches) {
@@ -556,8 +661,11 @@ export async function detectRoutesWithTreeSitter(
   // Post-process: prepend class-level @RequestMapping prefix for Java frameworks
   if (["spring", "micronaut", "quarkus"].includes(framework) && results.length > 0) {
     try {
-      const classQuery = new ts.Query(
+      // PERF-10: memoized like the route queries (static source, java grammar).
+      const classQuery = compileQueryCached(
+        ts,
         language,
+        grammarId,
         `(annotation name: (identifier)@annot (annotation_argument_list (string_literal)@path)) @full`,
       );
       const classMatches = classQuery.matches(tree.rootNode);

@@ -51,15 +51,26 @@ export function convertToCollections(
     }));
   }
 
-  // Single collection with all endpoints
+  // Single collection with folders by tag
   const name = options.collectionName || result.spec.title || "API Import";
+  const tagFolderMap = new Map<string, { id: string; name: string; parentId: string | null }>();
+  for (const tag of result.tagGroups.map((g) => g.tag)) {
+    tagFolderMap.set(tag, { id: `folder-import-${tag.toLowerCase()}`, name: tag, parentId: null });
+  }
+  const folders = Array.from(tagFolderMap.values());
+  const requests = result.endpoints.map((ep) => {
+    const tag = ep.tags[0] ?? "General";
+    const folder = tagFolderMap.get(tag) ?? tagFolderMap.get("General");
+    return { ...endpointToRequest(ep, context), folderId: folder?.id ?? null };
+  });
   return [
     {
       name,
       description: result.spec.description,
       color: "emerald",
       icon: "package",
-      requests: result.endpoints.map((ep) => endpointToRequest(ep, context)),
+      folders,
+      requests,
     },
   ];
 }

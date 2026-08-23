@@ -2,8 +2,8 @@
  * Tests for Script Sandbox execution
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { executeScriptInSandbox, executeScriptSequence, ScriptResult } from "@/lib/script-sandbox";
+import { describe, it, expect } from "vitest";
+import { executeScriptInSandbox, executeScriptSequence } from "@/lib/script-sandbox";
 import {
   executeTestScript,
   parseAssertionsFromScript,
@@ -74,6 +74,54 @@ describe("Script Sandbox", () => {
         {
           response: { status: 200, body: "OK" },
         },
+      );
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("Hardened globals (FORBIDDEN_GLOBALS policy)", () => {
+    const hardenedGlobals = [
+      "Proxy",
+      "Reflect",
+      "WeakRef",
+      "FinalizationRegistry",
+      "SharedArrayBuffer",
+      "Atomics",
+      "globalThis",
+      "global",
+      "process",
+      "Buffer",
+      "require",
+      "module",
+      "exports",
+      "__dirname",
+      "__filename",
+      "eval",
+      "Function",
+      "queueMicrotask",
+      "setImmediate",
+      "setInterval",
+      "setTimeout",
+      "clearTimeout",
+      "clearImmediate",
+      "fetch",
+      "XMLHttpRequest",
+      "WebSocket",
+      "EventSource",
+      "importScripts",
+    ];
+
+    for (const globalName of hardenedGlobals) {
+      it(`should not expose ${globalName} inside executed scripts`, async () => {
+        const result = await executeScriptInSandbox(`typeof ${globalName};`);
+        expect(result.success).toBe(true);
+        expect(result.result).toBe("undefined");
+      });
+    }
+
+    it("should keep Promise and Math available for legitimate scripts", async () => {
+      const result = await executeScriptInSandbox(
+        'if (typeof Promise !== "function") throw new Error("Promise missing"); if (Math.max(1, 2) !== 2) throw new Error("Math missing"); true;',
       );
       expect(result.success).toBe(true);
     });

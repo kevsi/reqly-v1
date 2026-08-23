@@ -85,6 +85,7 @@ export {
   ensureTreeSitterLoaded,
   matchFramework,
   detectRoutes,
+  enrichTreeSitterRoutes,
   scanFrontendApiCalls,
   correlateWithFrontendCall,
   detectNextJsRoutesFromTree,

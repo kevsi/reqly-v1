@@ -5,6 +5,9 @@ import {
   resetLatency,
   resetAllLatency,
   timeAsync,
+  recordAICall,
+  getAICallStats,
+  resetAICallEvents,
 } from "@/src/ai/cloud-engine/metrics";
 
 describe("recordLatency / getLatencyStats", () => {
@@ -74,6 +77,50 @@ describe("recordLatency / getLatencyStats", () => {
   });
 });
 
+describe("AICall events", () => {
+  beforeEach(() => resetAICallEvents());
+
+  it("aggregates outcomes, tokens and optional provider/model filters", () => {
+    recordAICall({
+      provider: "openai",
+      model: "gpt-test",
+      outcome: "success",
+      durationMs: 10,
+      inputTokens: 3,
+      outputTokens: 2,
+    });
+    recordAICall({
+      provider: "openai",
+      model: "gpt-test",
+      outcome: "timeout",
+      durationMs: 20,
+      inputTokens: 4,
+      outputTokens: 0,
+    });
+    recordAICall({
+      provider: "ollama",
+      model: "local",
+      outcome: "error",
+      durationMs: 5,
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    expect(getAICallStats()).toMatchObject({
+      count: 3,
+      successes: 1,
+      errors: 1,
+      timeouts: 1,
+      inputTokens: 8,
+      outputTokens: 3,
+    });
+    expect(getAICallStats({ provider: "openai", model: "gpt-test" })).toMatchObject({
+      count: 2,
+      avgDurationMs: 15,
+    });
+  });
+});
+
 describe("timeAsync", () => {
   beforeEach(() => resetAllLatency());
 
@@ -92,7 +139,7 @@ describe("timeAsync", () => {
       timeAsync("fail", async () => {
         await new Promise((r) => setTimeout(r, 10));
         throw new Error("boom");
-      })
+      }),
     ).rejects.toThrow("boom");
     const stats = getLatencyStats("fail");
     expect(stats?.count).toBe(1);

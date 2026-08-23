@@ -1,11 +1,43 @@
 import { NextRequest } from "next/server";
-import { isPrivateHost, isBlockedIp } from "@/lib/security/ssrf";
+import { isBlockedIp } from "@/lib/security/ssrf";
 import { resolveCached } from "@/lib/security/dns-cache";
 import { getServerEnv } from "@/lib/env";
 import { isIP } from "node:net";
+import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
+import { rateLimiter, getRateLimitKey } from "../proxy-ai/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_SSE_BODY_BYTES = 2 * 1024 * 1024;
+const UPSTREAM_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Origins allowed to consume this proxy cross-origin (dev + ALLOWED_ORIGIN). */
+function getAllowedOrigins(): string[] {
+  const configured =
+    process.env.ALLOWED_ORIGIN?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+  return Array.from(new Set(["http://localhost:3000", "http://127.0.0.1:3000", ...configured]));
+}
+
+/**
+ * Build CORS headers only for allowed origins. Third-party sites (which could
+ * otherwise turn this route into an open proxy) get no CORS headers and are
+ * blocked by the browser. Same-origin callers need no CORS headers at all.
+ */
+function corsHeaders(request: NextRequest): Record<string, string> | null {
+  const origin = request.headers.get("origin");
+  if (!origin || !getAllowedOrigins().includes(origin)) return null;
+  const requestedHeaders = request.headers.get("access-control-request-headers");
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Headers": requestedHeaders || "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
 
 /**
  * SSE Streaming Proxy
@@ -35,19 +67,38 @@ export async function PUT(request: NextRequest) {
 }
 
 // CORS pre-flight for SSE proxy
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const cors = corsHeaders(request);
+  if (!cors) {
+    // Deny cross-origin preflights from unlisted origins.
+    return new Response(null, { status: 204 });
+  }
   return new Response(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-      "Access-Control-Allow-Headers": "*",
-      "Access-Control-Max-Age": "86400",
-    },
+    headers: cors,
   });
 }
 
 async function handleSSEProxy(request: NextRequest, method: string): Promise<Response> {
+  // ── Rate limiting (defence-in-depth against open-proxy abuse) ──────────
+  const rateKey = getRateLimitKey(request);
+  const { allowed, resetAt } = await rateLimiter.check(`proxy-sse:${rateKey}`);
+  if (!allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Trop de requêtes, réessayez plus tard",
+        code: "RATE_LIMITED",
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))),
+        },
+      },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const rawUrl = searchParams.get("url");
 
@@ -83,7 +134,7 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
   const env = getServerEnv();
   const allowLocal = process.env.NODE_ENV === "development" || env.ALLOW_LOCAL_HOSTS === "true";
 
-  let targetUrl = parsedUrl.href;
+  const targetUrl = parsedUrl.href;
 
   if (!allowLocal) {
     if (isIP(parsedUrl.hostname) && isBlockedIp(parsedUrl.hostname)) {
@@ -113,10 +164,7 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
       );
     }
 
-    // Pin to resolved IP to prevent DNS rebinding
-    const portPart = parsedUrl.port ? `:${parsedUrl.port}` : "";
-    const hostLiteral = isIP(resolvedIp) === 6 ? `[${resolvedIp}]` : resolvedIp;
-    targetUrl = `${parsedUrl.protocol}//${hostLiteral}${portPart}${parsedUrl.pathname}${parsedUrl.search}`;
+    // Keep the hostname for TLS/SNI; the dispatcher pins the socket address.
   }
 
   // ── Forward headers (strip hop-by-hop and CORS collision headers) ────────
@@ -150,8 +198,27 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
   // ── Read body for POST/PUT ───────────────────────────────────────────────
   let body: string | undefined;
   if (method === "POST" || method === "PUT") {
+    const declaredLength = Number(request.headers.get("content-length") ?? 0);
+    if (declaredLength > MAX_SSE_BODY_BYTES) {
+      return new Response(
+        JSON.stringify({ error: "Request body too large", code: "BODY_TOO_LARGE" }),
+        {
+          status: 413,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
     try {
       body = await request.text();
+      if (new TextEncoder().encode(body).byteLength > MAX_SSE_BODY_BYTES) {
+        return new Response(
+          JSON.stringify({ error: "Request body too large", code: "BODY_TOO_LARGE" }),
+          {
+            status: 413,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
     } catch {
       body = undefined;
     }
@@ -160,6 +227,23 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
   // ── Abort controller with client disconnect detection ────────────────────
   const abortController = new AbortController();
   request.signal.addEventListener("abort", () => abortController.abort());
+  const timeout = setTimeout(() => abortController.abort(), UPSTREAM_TIMEOUT_MS);
+  let dispatcher: Awaited<ReturnType<typeof createPinnedDispatcher>>;
+  try {
+    dispatcher = await createPinnedDispatcher(targetUrl);
+  } catch {
+    clearTimeout(timeout);
+    return new Response(
+      JSON.stringify({
+        error: "Requests to private/internal hosts are not allowed",
+        code: "SSRF_BLOCKED",
+      }),
+      {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
 
   // ── Fetch upstream ───────────────────────────────────────────────────────
   let upstreamResponse: Response;
@@ -170,13 +254,71 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
       body: body ?? undefined,
       signal: abortController.signal,
       redirect: "manual",
+      ...(dispatcher ? { dispatcher } : {}),
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+  } catch {
+    clearTimeout(timeout);
+    await dispatcher?.close().catch(() => undefined);
     return new Response(
-      JSON.stringify({ error: "Upstream connection failed", code: "BAD_GATEWAY", detail: message }),
+      JSON.stringify({ error: "Upstream connection failed", code: "BAD_GATEWAY" }),
       { status: 502, headers: { "Content-Type": "application/json" } },
     );
+  }
+  clearTimeout(timeout);
+
+  // ── SSRF hardening for redirects ────────────────────────────────────────
+  // With redirect: "manual" the upstream 3xx is surfaced to the client
+  // instead of being followed server-side, but we still validate the Location
+  // header so a public endpoint that redirects to a private host is rejected
+  // outright (defense-in-depth, mirroring /api/proxy).
+  const location = upstreamResponse.headers.get("location");
+  if (location && upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
+    let locationUrl: URL;
+    try {
+      locationUrl = new URL(location, parsedUrl);
+    } catch {
+      await dispatcher?.close().catch(() => undefined);
+      return new Response(
+        JSON.stringify({
+          error: "Redirect to invalid destination",
+          code: "BLOCKED_REDIRECT",
+        }),
+        { status: 502, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (!["http:", "https:"].includes(locationUrl.protocol)) {
+      await dispatcher?.close().catch(() => undefined);
+      return new Response(
+        JSON.stringify({
+          error: "Redirect to blocked destination: invalid protocol",
+          code: "BLOCKED_REDIRECT",
+        }),
+        { status: 502, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (!allowLocal) {
+      if (isIP(locationUrl.hostname) && isBlockedIp(locationUrl.hostname)) {
+        await dispatcher?.close().catch(() => undefined);
+        return new Response(
+          JSON.stringify({
+            error: "Redirect to blocked destination: private/internal IP",
+            code: "BLOCKED_REDIRECT",
+          }),
+          { status: 502, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      const resolvedRedirect = await resolveCached(locationUrl.hostname);
+      if (!resolvedRedirect || isBlockedIp(resolvedRedirect)) {
+        await dispatcher?.close().catch(() => undefined);
+        return new Response(
+          JSON.stringify({
+            error: "Redirect to blocked destination: private/internal IP",
+            code: "BLOCKED_REDIRECT",
+          }),
+          { status: 502, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
   }
 
   if (!upstreamResponse.ok && !upstreamResponse.body) {
@@ -190,28 +332,26 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
   }
 
   // ── Build response headers (proxy the upstream content-type / etc.) ──────
-  const responseHeaders: HeadersInit = {
+  const responseHeaders: Record<string, string> = {
     // SSE/streaming specific
     "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    // CORS: allow the browser to consume the stream cross-origin
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "*",
+    // CORS: allow the browser to consume the stream cross-origin (only
+    // for allowed origins, blocking third-party open-proxy usage).
+    ...(corsHeaders(request) ?? {}),
   };
 
   // Forward relevant headers from upstream
   const FORWARDED_FROM_UPSTREAM = ["content-type", "retry-after", "x-request-id"];
   upstreamResponse.headers.forEach((value, key) => {
     if (FORWARDED_FROM_UPSTREAM.includes(key.toLowerCase())) {
-      (responseHeaders as Record<string, string>)[key] = value;
+      responseHeaders[key] = value;
     }
   });
 
   // Ensure Content-Type is SSE if upstream says so
   const upstreamContentType = upstreamResponse.headers.get("content-type") ?? "";
   if (!upstreamContentType) {
-    (responseHeaders as Record<string, string>)["content-type"] =
-      "text/event-stream; charset=utf-8";
+    responseHeaders["content-type"] = "text/event-stream; charset=utf-8";
   }
 
   // ── Pipe the upstream body directly to the client (no buffering) ─────────

@@ -12,6 +12,10 @@ import {
   FolderOpen,
   Loader2,
   ChevronDown,
+  Archive,
+  CornerUpLeft,
+  Check,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,11 +25,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { FolderPickerModal } from "@/components/folder-picker-modal";
+import type { PickedFolder } from "@/lib/folder-picker";
 
 import { isTauriAvailable } from "@/lib/tauri";
 import { useGit, type GitCommit as GitCommitType, type DiffFile } from "@/hooks/use-git";
@@ -33,6 +46,7 @@ import { GitStatusRow } from "@/components/git/git-status-row";
 import { GitBranchBar } from "@/components/git/git-branch-bar";
 import { GitRemoteBar } from "@/components/git/git-remote-bar";
 import { GitDiffViewer } from "@/components/git/git-diff-viewer";
+import { GitConflictResolver } from "@/components/git/git-conflict-resolver";
 
 import type { Collection } from "@/hooks/use-request-store";
 
@@ -46,6 +60,11 @@ export function GitPanel({ collections }: GitPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [commitLoading, setCommitLoading] = useState(false);
+  const [commitAuthorName, setCommitAuthorName] = useState("");
+  const [commitAuthorEmail, setCommitAuthorEmail] = useState("");
+  const [stashDialogOpen, setStashDialogOpen] = useState(false);
+  const [stashMessage, setStashMessage] = useState("");
+  const [stashLoading, setStashLoading] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
   const [openLoading, setOpenLoading] = useState(false);
   const [_diffOids, setDiffOids] = useState<[string, string] | null>(null);
@@ -53,6 +72,7 @@ export function GitPanel({ collections }: GitPanelProps) {
   const [diffLoading, setDiffLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("history");
   const [repoPathInput, setRepoPathInput] = useState("");
+  const [repoPickerOpen, setRepoPickerOpen] = useState(false);
 
   const pickRepoFolder = async () => {
     if (isTauriAvailable()) {
@@ -68,15 +88,37 @@ export function GitPanel({ collections }: GitPanelProps) {
     }
   };
 
+  const handleRepoFolderSelected = (picked: PickedFolder) => {
+    setRepoPathInput(picked.path ?? picked.name);
+    if (picked.handle) git.setRepoHandle(picked.handle);
+  };
+
   const handleCommit = async () => {
     if (!commitMessage.trim()) return;
     setCommitLoading(true);
     try {
-      await git.commit(commitMessage.trim());
+      await git.commit(
+        commitMessage.trim(),
+        commitAuthorName.trim() || undefined,
+        commitAuthorEmail.trim() || undefined,
+      );
       setCommitMessage("");
+      setCommitAuthorName("");
+      setCommitAuthorEmail("");
       setCommitDialogOpen(false);
     } finally {
       setCommitLoading(false);
+    }
+  };
+
+  const handleStashSave = async () => {
+    setStashLoading(true);
+    try {
+      await git.stashSave(stashMessage.trim() || undefined);
+      setStashMessage("");
+      setStashDialogOpen(false);
+    } finally {
+      setStashLoading(false);
     }
   };
 
@@ -149,14 +191,90 @@ export function GitPanel({ collections }: GitPanelProps) {
         </div>
         <div className="flex items-center gap-1.5">
           {git.isInitialized && (
-            <Button
-              size="sm"
-              onClick={() => setCommitDialogOpen(true)}
-              className="h-7 gap-1.5 text-xs font-medium"
-            >
-              <GitCommit className="size-3.5" />
-              {t("git.commit")}
-            </Button>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs font-medium"
+                    title={t("git.stash")}
+                  >
+                    <Archive className="size-3.5" />
+                    {t("git.stash")}
+                    {git.stashes.length > 0 && (
+                      <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px]">
+                        {git.stashes.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  <DropdownMenuItem
+                    onClick={() => setStashDialogOpen(true)}
+                    className="text-xs gap-2"
+                  >
+                    <Archive className="size-3.5" />
+                    {t("git.stashSaveAction")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {git.stashes.length === 0 ? (
+                    <p className="px-3 py-2 text-[11px] text-muted-foreground">
+                      {t("git.stashEmpty")}
+                    </p>
+                  ) : (
+                    git.stashes.map((s) => (
+                      <div
+                        key={s.oid}
+                        className="flex items-center gap-1 px-2 py-1.5 hover:bg-accent/50 rounded-md mx-1"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-foreground truncate">{s.message}</p>
+                          <p className="text-[10px] text-muted-foreground/50">
+                            {s.oid.slice(0, 7)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-6 p-0"
+                          onClick={() => git.stashApply(s.index)}
+                          title={t("git.stashApply")}
+                        >
+                          <CornerUpLeft className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-6 p-0"
+                          onClick={() => git.stashPop(s.index)}
+                          title={t("git.stashPop")}
+                        >
+                          <Check className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-6 p-0 text-destructive/60"
+                          onClick={() => git.stashDrop(s.index)}
+                          title={t("git.stashDrop")}
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                size="sm"
+                onClick={() => setCommitDialogOpen(true)}
+                className="h-7 gap-1.5 text-xs font-medium"
+              >
+                <GitCommit className="size-3.5" />
+                {t("git.commit")}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -169,22 +287,21 @@ export function GitPanel({ collections }: GitPanelProps) {
         </div>
       )}
 
-      {git.isInitialized && (
-        <div className="px-4 py-1 shrink-0">
-          <GitRemoteBar
-            remotes={git.remotes}
-            currentBranch={git.currentBranch}
-            onAdd={git.remoteAdd}
-            onRemove={git.remoteRemove}
-            onPush={git.push}
-            onForcePush={git.forcePush}
-            onPull={git.pull}
-            onFetch={git.fetch}
-            onClone={git.clone}
-            onLsRemote={git.lsRemote}
-          />
-        </div>
-      )}
+      <div className="px-4 py-1 shrink-0">
+        <GitRemoteBar
+          remotes={git.remotes}
+          currentBranch={git.currentBranch || "main"}
+          onAdd={git.remoteAdd}
+          onRemove={git.remoteRemove}
+          onPush={git.push}
+          onForcePush={git.forcePush}
+          onPull={git.pull}
+          onFetch={git.fetch}
+          onClone={git.clone}
+          onLsRemote={git.lsRemote}
+          onSetRepoHandle={git.setRepoHandle}
+        />
+      </div>
 
       {/* Main content */}
       {git.isInitialized ? (
@@ -246,6 +363,9 @@ export function GitPanel({ collections }: GitPanelProps) {
           <TabsContent value="status" className="flex-1 min-h-0 m-0 px-4 pb-4">
             <ScrollArea className="h-full pr-2">
               <div className="space-y-1">
+                {git.conflicts.length > 0 && (
+                  <GitConflictResolver conflicts={git.conflicts} onStage={git.stage} />
+                )}
                 {statusFiles.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <CheckCircle2 className="size-8 text-success/40 mb-3" />
@@ -336,16 +456,14 @@ export function GitPanel({ collections }: GitPanelProps) {
               className="flex-1 text-xs h-8"
               readOnly={isTauriAvailable()}
             />
-            {isTauriAvailable() && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={pickRepoFolder}
-                className="h-8 shrink-0 gap-1"
-              >
-                <FolderOpen className="size-3.5" /> {t("git.browse")}
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (isTauriAvailable() ? pickRepoFolder() : setRepoPickerOpen(true))}
+              className="h-8 shrink-0 gap-1"
+            >
+              <FolderOpen className="size-3.5" /> {t("git.browse")}
+            </Button>
           </div>
 
           <div className="flex gap-2">
@@ -394,6 +512,13 @@ export function GitPanel({ collections }: GitPanelProps) {
         </div>
       )}
 
+      <FolderPickerModal
+        open={repoPickerOpen}
+        onClose={() => setRepoPickerOpen(false)}
+        onSelect={handleRepoFolderSelected}
+        title={t("git.selectFolderModalTitle", "Sélectionner le dépôt Git")}
+      />
+
       {/* Commit dialog */}
       <Dialog open={commitDialogOpen} onOpenChange={setCommitDialogOpen}>
         <DialogContent className="max-w-md">
@@ -409,6 +534,28 @@ export function GitPanel({ collections }: GitPanelProps) {
             placeholder={t("git.commitPlaceholder")}
             className="min-h-[80px] text-sm resize-none"
           />
+          <details className="rounded-md border border-border/60 px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+              {t("git.commitAuthorName")} / {t("git.commitAuthorEmail")}
+            </summary>
+            <div className="mt-2 space-y-2">
+              <Input
+                value={commitAuthorName}
+                onChange={(e) => setCommitAuthorName(e.target.value)}
+                placeholder={t("git.commitAuthorNamePlaceholder")}
+                autoComplete="name"
+                className="text-sm"
+              />
+              <Input
+                type="email"
+                value={commitAuthorEmail}
+                onChange={(e) => setCommitAuthorEmail(e.target.value)}
+                placeholder={t("git.commitAuthorEmailPlaceholder")}
+                autoComplete="email"
+                className="text-sm"
+              />
+            </div>
+          </details>
           <DialogFooter>
             <Button
               size="sm"
@@ -432,6 +579,48 @@ export function GitPanel({ collections }: GitPanelProps) {
               ) : (
                 t("git.commit")
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stash dialog */}
+      <Dialog open={stashDialogOpen} onOpenChange={setStashDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Archive className="size-4 text-primary" />
+              {t("git.stash")}
+            </DialogTitle>
+          </DialogHeader>
+          <Input
+            value={stashMessage}
+            onChange={(e) => setStashMessage(e.target.value)}
+            placeholder={t("git.stashMessagePlaceholder")}
+            className="text-sm"
+            onKeyDown={(e) => e.key === "Enter" && handleStashSave()}
+          />
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setStashDialogOpen(false)}
+              className="text-xs"
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleStashSave}
+              disabled={stashLoading}
+              className="text-xs gap-1.5"
+            >
+              {stashLoading ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Archive className="size-3.5" />
+              )}
+              {t("git.stash")}
             </Button>
           </DialogFooter>
         </DialogContent>

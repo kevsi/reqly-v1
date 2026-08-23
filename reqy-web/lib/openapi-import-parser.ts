@@ -20,7 +20,16 @@ import {
 
 // ─── Main parser entry ──────────────────────────────────────────────────────
 
+/** Taille maximale acceptée pour une spec importée (anti-DoS). */
+export const MAX_OPENAPI_IMPORT_BYTES = 10 * 1024 * 1024; // 10 Mo
+
 export function parseOpenApiSpec(contents: string, fileName?: string): OpenApiParseResult {
+  if (new TextEncoder().encode(contents).length > MAX_OPENAPI_IMPORT_BYTES) {
+    return {
+      success: false,
+      error: `Fichier trop volumineux (max ${MAX_OPENAPI_IMPORT_BYTES / (1024 * 1024)} Mo)`,
+    };
+  }
   try {
     const doc = parseToJson(contents, fileName);
     if (!doc || typeof doc !== "object") {
@@ -241,7 +250,10 @@ function parseToJson(contents: string, _fileName?: string): unknown {
 
   // Try YAML
   try {
-    return yaml.load(contents);
+    // JSON_SCHEMA: accept only standard JSON-compatible YAML types. js-yaml v4
+    // `load` already rejects `!!js/*` custom tags by default; pinning the
+    // schema makes that explicit for untrusted OpenAPI specs.
+    return yaml.load(contents, { schema: yaml.JSON_SCHEMA });
   } catch {
     throw new Error(
       "Impossible de parser le fichier. Format non supporté (attendu: JSON ou YAML).",

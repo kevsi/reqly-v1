@@ -22,6 +22,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ connected: false });
   }
   const user = getUserFromRequest(request);
+  // Cookie utilisateur présent mais signature invalide (falsifié/corrompu)
+  // → considérer déconnecté plutôt que de retomber sur un pseudo générique.
+  if (!user && request.cookies.get("postman_user")?.value) {
+    return NextResponse.json({ connected: false });
+  }
   return NextResponse.json({
     connected: true,
     user: user ?? { username: "postman-user" },

@@ -14,7 +14,7 @@ import { useRequestStore, type Collection, type RequestItem } from "@/hooks/use-
 
 import { useRouter } from "next/navigation";
 import { setPendingCollectionRequest, type PendingCollectionRequest } from "@/lib/request-bridge";
-import { resolveUniqueCollectionName } from "@/lib/import-schemas";
+import { resolveUniqueCollectionName, requestItemSchema } from "@/lib/import-schemas";
 import { generateOpenApiSpec } from "@/lib/openapi-export";
 
 import { toast } from "@/hooks/use-toast";
@@ -110,6 +110,7 @@ export default function CollectionsPage() {
         ? collection.requests
         : (collection.routes ?? []);
 
+    let skipped = 0;
     source.forEach((item) => {
       const route = item as {
         method?: string;
@@ -123,13 +124,14 @@ export default function CollectionsPage() {
         authToken?: string;
         queryParams?: RequestItem["queryParams"];
       };
-      const method = (route.method || "GET") as HttpMethod;
-      const path = route.path || route.url || "/";
-      addRequestToCollection(newCollectionId, {
-        name: route.name || `${method} ${path}`,
+      const method = (route.method || "GET").toUpperCase() as HttpMethod;
+      // Validation Zod : méthode hors enum, champs invalides… sont rejetés
+      // au lieu d'être injectés tels quels dans le store.
+      const parsed = requestItemSchema.safeParse({
+        name: route.name || `${method} ${route.path || route.url || "/"}`,
         method,
-        url: path,
-        endpoint: path,
+        url: route.path || route.url || "/",
+        endpoint: route.path || route.url || "/",
         headers: route.headers || {},
         body: route.body ?? "",
         bodyType: route.bodyType,
@@ -137,14 +139,26 @@ export default function CollectionsPage() {
         authToken: route.authToken,
         queryParams: route.queryParams || [],
       });
+      if (!parsed.success) {
+        skipped++;
+        return;
+      }
+      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = parsed.data;
+      addRequestToCollection(newCollectionId, rest);
     });
 
     toast({
       title: t("collections.toast.postmanImported", { name: uniqueName }),
       description:
-        uniqueName !== collection.name
-          ? t("collections.toast.postmanRenamed", { old: collection.name })
-          : undefined,
+        skipped > 0
+          ? `${t("collections.toast.postmanSkipped", { count: skipped })}${
+              uniqueName !== collection.name
+                ? ` — ${t("collections.toast.postmanRenamed", { old: collection.name })}`
+                : ""
+            }`
+          : uniqueName !== collection.name
+            ? t("collections.toast.postmanRenamed", { old: collection.name })
+            : undefined,
     });
   };
 
@@ -196,13 +210,26 @@ export default function CollectionsPage() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        // 409 : le serveur ne trouve pas de clé Postman (session expirée,
+        // cookie effacé ou desktop statique) → inviter à connecter Postman.
+        if (response.status === 409 || error.error === "postman_not_connected") {
+          toast({
+            title: t("collections.toast.postmanNotConnected"),
+            description: t("collections.toast.postmanExportConnectFirst"),
+            variant: "destructive",
+            meta: { event: "importExport" },
+          });
+          return;
+        }
         throw new Error(error.message || t("collections.toast.postmanExportError"));
       }
 
       const data = await response.json();
       toast({
         title: t("collections.toast.postmanExportSuccess"),
-        description: data.message || t("collections.toast.postmanCollectionCreated"),
+        description: data.postmanUid
+          ? t("collections.toast.postmanExportUid", { uid: String(data.postmanUid) })
+          : data.message || t("collections.toast.postmanCollectionCreated"),
         meta: { event: "importExport" },
       });
     } catch (err) {
@@ -291,6 +318,7 @@ export default function CollectionsPage() {
       description?: string;
       color: string;
       icon: string;
+      folders?: Array<{ id: string; name: string; parentId?: string | null }>;
       requests: Array<{
         name: string;
         method: string;
@@ -306,6 +334,7 @@ export default function CollectionsPage() {
         runnerAssertions?: RequestItem["runnerAssertions"];
         preRequestScript?: string;
         postResponseScript?: string;
+        folderId?: string | null;
       }>;
     }>,
   ) => {
@@ -320,7 +349,14 @@ export default function CollectionsPage() {
         description: col.description,
       });
 
+      const tempToRealFolderId = new Map<string, string>();
+      for (const folder of col.folders ?? []) {
+        const realId = addFolder(newCollectionId, folder.name, folder.parentId ?? null);
+        tempToRealFolderId.set(folder.id, realId);
+      }
+
       for (const req of col.requests) {
+        const folderId = req.folderId ? (tempToRealFolderId.get(req.folderId) ?? null) : null;
         addRequestToCollection(newCollectionId, {
           name: req.name,
           method: (req.method as HttpMethod) || "GET",
@@ -336,6 +372,7 @@ export default function CollectionsPage() {
           runnerAssertions: req.runnerAssertions,
           preRequestScript: req.preRequestScript,
           postResponseScript: req.postResponseScript,
+          folderId,
         });
         createdCount++;
       }

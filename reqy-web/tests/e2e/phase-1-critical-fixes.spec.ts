@@ -19,6 +19,31 @@ test.describe("Phase 1 - Critical Fixes", () => {
     expect(error.loaded).toBe(true);
   });
 
+  test("real browser requests use the HttpOnly visitor cookie", async ({ page }) => {
+    await page.goto("/");
+    const result = await page.evaluate(async () => {
+      const response = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: "invalid-url-not-a-valid-url", method: "GET" }),
+      });
+      const text = await response.text();
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = { raw: text };
+      }
+      return { status: response.status, body };
+    });
+    // 401 would prove the browser could not use its HttpOnly visitor cookie.
+    // 503 is accepted only for a local run without the proxy service token.
+    expect([400, 503]).toContain(result.status);
+    if (result.status === 400) {
+      expect(result.body).toMatchObject({ code: expect.any(String) });
+    }
+  });
+
   test("P1.4: Type validation in API requests", async ({ page }) => {
     // Test that proxy API validates request payloads
     const visitorToken = (await page.context().cookies()).find(

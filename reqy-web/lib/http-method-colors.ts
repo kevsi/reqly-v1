@@ -21,14 +21,14 @@ export const METHOD_HUE: Record<HttpMethod, string> = {
 
 /** Badge plein — ex: onglet de requête, pilule dans les listes */
 export const methodBadge: Record<HttpMethod, string> = {
-  GET: "bg-emerald-500 text-white border-emerald-500",
-  POST: "bg-blue-500 text-white border-blue-500",
-  PUT: "bg-amber-500 text-white border-amber-500",
-  PATCH: "bg-purple-500 text-white border-purple-500",
-  DELETE: "bg-red-500 text-white border-red-500",
-  HEAD: "bg-slate-500 text-white border-slate-500",
-  OPTIONS: "bg-slate-500 text-white border-slate-500",
-  GRAPHQL: "bg-pink-500 text-white border-pink-500",
+  GET: "bg-emerald-700 text-white border-emerald-700",
+  POST: "bg-blue-600 text-white border-blue-600",
+  PUT: "bg-amber-700 text-white border-amber-700",
+  PATCH: "bg-purple-600 text-white border-purple-600",
+  DELETE: "bg-red-700 text-white border-red-700",
+  HEAD: "bg-slate-600 text-white border-slate-600",
+  OPTIONS: "bg-slate-600 text-white border-slate-600",
+  GRAPHQL: "bg-pink-600 text-white border-pink-600",
 };
 
 /** Subtile — fond transparent, utilisé dans les listes et l'historique */

@@ -1,22 +1,15 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
-  CheckCircle2,
-  XCircle,
   ChevronDown,
   ChevronRight,
   Folder,
   FolderOpen,
   GripVertical,
   ArrowUpDown,
-  Trash2,
-  RotateCcw,
-  Plus,
-  X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { methodText } from "@/lib/http-method-colors";

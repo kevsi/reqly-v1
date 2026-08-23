@@ -156,9 +156,52 @@ export function ResponseContentRenderer({
 
   const renderPreview = () => {
     if (isHtml(safeBody, responseHeaders)) {
+      // Sanitized preview: formatting-only tag allowlist, no scripting, and
+      // URI schemes limited to http(s)/mailto so data:/javascript: targets
+      // cannot survive sanitization as navigation endpoints.
+      const previewHtml = DOMPurify.sanitize(safeBody, {
+        ALLOWED_TAGS: [
+          "a",
+          "b",
+          "i",
+          "em",
+          "strong",
+          "u",
+          "s",
+          "code",
+          "pre",
+          "blockquote",
+          "p",
+          "div",
+          "span",
+          "br",
+          "hr",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "ul",
+          "ol",
+          "li",
+          "dl",
+          "dt",
+          "dd",
+          "table",
+          "thead",
+          "tbody",
+          "tr",
+          "th",
+          "td",
+        ],
+        ALLOWED_ATTR: ["href", "title"],
+        ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+        ALLOW_DATA_ATTR: false,
+      });
       return (
         <iframe
-          srcDoc={DOMPurify.sanitize(safeBody)}
+          srcDoc={previewHtml}
           sandbox=""
           className="w-full h-full border-0 bg-background"
           title={t("response.htmlPreview")}

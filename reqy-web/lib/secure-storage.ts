@@ -69,7 +69,7 @@ async function getKey(passphrase: string): Promise<CryptoKey> {
 
 async function deriveKey(passphrase: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const saltBytes = getOrCreateSalt();
+  const saltBytes = await getOrCreateSalt();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(passphrase),
@@ -91,7 +91,7 @@ async function deriveKey(passphrase: string): Promise<CryptoKey> {
   );
 }
 
-function getOrCreateSalt(): Uint8Array {
+async function getOrCreateSalt(): Promise<Uint8Array> {
   const existing = storeGet(SALT_KEY);
   if (existing) {
     try {
@@ -102,7 +102,10 @@ function getOrCreateSalt(): Uint8Array {
   }
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const encoded = btoa(String.fromCharCode(...salt));
-  storeSet(SALT_KEY, encoded);
+  // Await the persistence commit before handing the new salt to the caller.
+  // Fire-and-forget here let a reload before the IndexedDB write complete
+  // regenerate a different salt, making every stored value undecryptable.
+  await storeSet(SALT_KEY, encoded);
   return salt;
 }
 

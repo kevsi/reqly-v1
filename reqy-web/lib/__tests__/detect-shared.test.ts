@@ -36,6 +36,7 @@ import {
   analyzeMiddlewareChain,
   stripLanguageCommentsAndStrings,
   isNonRouteFile,
+  enrichTreeSitterRoutes,
 } from "@/lib/detect-shared";
 
 function expectRoute(routes: { method: string; path: string }[], method: string, path: string) {
@@ -594,5 +595,62 @@ app.get("/users", requireAuth, (req, res) => res.json([]))
     expect(map.get("/|*")).toEqual(
       expect.arrayContaining(["django.middleware.security.SecurityMiddleware", "custom.AuthMW"]),
     );
+  });
+});
+
+describe("enrichTreeSitterRoutes — AST routes keep regex/AST enrichment", () => {
+  it("enriches matching routes with auth/body/middleware from regex detection", () => {
+    const tsRoutes = [
+      makeRoute("GET", "/items", ""),
+      makeRoute("GET", "/protected", ""),
+      makeRoute("GET", "/ts-only", ""),
+    ];
+    const regexRoutes = [
+      {
+        ...makeRoute("GET", "/items", ""),
+        bodyType: "json",
+        requiredBodyFields: ["name"],
+        authRequired: false,
+        middlewareChain: ["authMiddleware"],
+      },
+      {
+        ...makeRoute("GET", "/protected", ""),
+        authRequired: true,
+        authType: "bearer",
+      },
+    ];
+
+    const merged = enrichTreeSitterRoutes(tsRoutes, regexRoutes);
+
+    const items = merged.find((r) => r.path === "/items")!;
+    expect(items.bodyType).toBe("json");
+    expect(items.requiredBodyFields).toEqual(["name"]);
+    expect(items.middlewareChain).toEqual(["authMiddleware"]);
+
+    const protected_ = merged.find((r) => r.path === "/protected")!;
+    expect(protected_.authRequired).toBe(true);
+    expect(protected_.authType).toBe("bearer");
+
+    expect(merged.some((r) => r.path === "/ts-only")).toBe(true);
+    expect(merged).toHaveLength(3);
+  });
+
+  it("keeps tree-sitter controller and preserves AST auth signal when regex has none", () => {
+    const tsRoutes = [{ ...makeRoute("GET", "/users", ""), controller: "UsersController" }];
+    const regexRoutes = [makeRoute("GET", "/users", "")];
+
+    const merged = enrichTreeSitterRoutes(tsRoutes, regexRoutes);
+
+    expect(merged[0].controller).toBe("UsersController");
+    expect(merged[0].authRequired).toBe(false);
+  });
+
+  it("appends regex-only routes missed by tree-sitter", () => {
+    const tsRoutes = [makeRoute("GET", "/items", "")];
+    const regexRoutes = [makeRoute("POST", "/create", "")];
+
+    const merged = enrichTreeSitterRoutes(tsRoutes, regexRoutes);
+
+    expect(merged.map((r) => `${r.method}|${r.path}`)).toEqual(["GET|/items", "POST|/create"]);
   });
 });

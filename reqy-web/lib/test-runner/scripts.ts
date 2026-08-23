@@ -100,6 +100,10 @@ interface NodeVmLike {
 }
 
 let _vm: NodeVmLike | null | undefined;
+/**
+ * The hardened vm sandbox is available only in Node/Tauri runtimes. Browser
+ * execution deliberately returns an explicit error; it is not a web sandbox.
+ */
 async function getVm(): Promise<NodeVmLike | null> {
   if (_vm !== undefined) return _vm;
   try {

@@ -1,4 +1,5 @@
-import { proxyAuthHeaders } from "@/lib/proxy-auth"
+import { proxyAuthHeaders } from "@/lib/proxy-auth";
+import { friendlyGraphQLError } from "./errors";
 
 // Deep introspection query: GraphQL wraps non-null/list types via ofType,
 // with up to 4 levels for a type like [Foo!]! — NON_NULL > LIST > NON_NULL >
@@ -80,20 +81,20 @@ const INTROSPECTION_QUERY = `query IntrospectionQuery {
       }
     }
   }
-}`
+}`;
 
-export const INTROSPECTION_QUERY_STRING = INTROSPECTION_QUERY
+export const INTROSPECTION_QUERY_STRING = INTROSPECTION_QUERY;
 
 interface ProxySuccessBody {
-  status: number
-  body: string
-  headers: Record<string, string>
-  durationMs: number
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+  durationMs: number;
 }
 
 interface ProxyErrorBody {
-  error?: string
-  status?: number
+  error?: string;
+  status?: number;
 }
 
 /**
@@ -101,7 +102,10 @@ interface ProxyErrorBody {
  * This avoids direct fetch() calls from the browser and routes through
  * the Next.js middleware (auth-checked /api/proxy endpoint).
  */
-export async function introspectSchema(endpoint: string, headers?: Record<string, string>): Promise<string> {
+export async function introspectSchema(
+  endpoint: string,
+  headers?: Record<string, string>,
+): Promise<string> {
   const proxyRes = await fetch("/api/proxy", {
     method: "POST",
     headers: {
@@ -114,37 +118,37 @@ export async function introspectSchema(endpoint: string, headers?: Record<string
       headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify({ query: INTROSPECTION_QUERY }),
     }),
-  })
+  });
 
   const proxyData: ProxySuccessBody | ProxyErrorBody = await proxyRes.json().catch(() => ({
     error: "Invalid proxy response",
-  }))
+  }));
 
-  const isError = !proxyRes.ok || "error" in proxyData
+  const isError = !proxyRes.ok || "error" in proxyData;
 
   if (isError) {
-    const errBody = proxyData as ProxyErrorBody
-    throw new Error(errBody.error ?? `Proxy request failed (HTTP ${proxyRes.status})`)
+    const errBody = proxyData as ProxyErrorBody;
+    const raw = errBody.error ?? `Proxy request failed (HTTP ${proxyRes.status})`;
+    throw new Error(friendlyGraphQLError(proxyRes.status, raw));
   }
 
-  let json: Record<string, unknown> = {}
+  let json: Record<string, unknown> = {};
   try {
-    json = JSON.parse((proxyData as ProxySuccessBody).body)
+    json = JSON.parse((proxyData as ProxySuccessBody).body);
   } catch {
     /* body is not JSON */
   }
 
-  const data = (json && typeof json === "object" && "data" in json)
-    ? (json as { data: unknown }).data
-    : json
+  const data =
+    json && typeof json === "object" && "data" in json ? (json as { data: unknown }).data : json;
 
-  return JSON.stringify(data ?? {})
+  return JSON.stringify(data ?? {});
 }
 
 export function endpointHash(endpoint: string): string {
-  let hash = 0
+  let hash = 0;
   for (let i = 0; i < endpoint.length; i++) {
-    hash = ((hash << 5) - hash + endpoint.charCodeAt(i)) | 0
+    hash = ((hash << 5) - hash + endpoint.charCodeAt(i)) | 0;
   }
-  return `gql-${Math.abs(hash).toString(36)}`
+  return `gql-${Math.abs(hash).toString(36)}`;
 }

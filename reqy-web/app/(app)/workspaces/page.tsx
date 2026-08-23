@@ -89,6 +89,7 @@ export default function WorkspacesPage() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
 
   // Load workspaces from the sync server and populate the shared store
   useEffect(() => {
@@ -155,10 +156,57 @@ export default function WorkspacesPage() {
     }
   };
 
+  const handleRemoveMember = async (memberId: string) => {
+    if (!selected) return;
+    try {
+      const res = await workspaceFetch(
+        `/api/workspaces/${encodeURIComponent(selected.id)}/members/${encodeURIComponent(memberId)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "remove failed");
+      }
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      toast({ title: "Member removed" });
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Failed to remove member",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleChangeRole = async (memberId: string, newRole: "editor" | "viewer") => {
+    if (!selected) return;
+    try {
+      const res = await workspaceFetch(
+        `/api/workspaces/${encodeURIComponent(selected.id)}/members/${encodeURIComponent(memberId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole }),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "role change failed");
+      }
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m)));
+      toast({ title: `Role changed to ${newRole}` });
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Failed to change role",
+        variant: "destructive",
+      });
+    }
+  };
+
   const openInvite = (ws: Workspace) => {
     if (isLocalWorkspace(ws)) return;
     setSelected(ws);
     setInvitation(null);
+    setInviteRole("editor");
     setInviteOpen(true);
   };
 
@@ -172,7 +220,7 @@ export default function WorkspacesPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ role: inviteRole }),
         },
       );
       if (!res.ok) throw new Error("invite failed");
@@ -187,7 +235,7 @@ export default function WorkspacesPage() {
   };
 
   const inviteUrl = invitation
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/join?token=${invitation.token}`
+    ? `${process.env.NEXT_PUBLIC_APP_URL ?? (typeof window !== "undefined" ? window.location.origin : "")}/join?token=${invitation.token}`
     : "";
 
   return (
@@ -388,16 +436,41 @@ export default function WorkspacesPage() {
                     <p className="text-sm font-medium text-foreground truncate">{m.name}</p>
                     <p className="text-xs text-muted-foreground truncate">{m.email}</p>
                   </div>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                      m.role === "owner"
-                        ? "bg-success/10 text-success"
-                        : "bg-warning/10 text-warning",
+                  <div className="flex items-center gap-2">
+                    {selected?.role === "owner" && m.role !== "owner" ? (
+                      <select
+                        value={m.role}
+                        onChange={(e) =>
+                          handleChangeRole(m.id, e.target.value as "editor" | "viewer")
+                        }
+                        className="rounded border border-border bg-background px-2 py-1 text-xs"
+                      >
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    ) : (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          m.role === "owner"
+                            ? "bg-success/10 text-success"
+                            : "bg-warning/10 text-warning",
+                        )}
+                      >
+                        {m.role}
+                      </span>
                     )}
-                  >
-                    {m.role}
-                  </span>
+                    {selected?.role === "owner" && m.role !== "owner" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                        onClick={() => handleRemoveMember(m.id)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -419,9 +492,22 @@ export default function WorkspacesPage() {
           {!invitation ? (
             <form onSubmit={handleCreateInvitation} className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Generate an invitation link. Anyone with the link can join this workspace as an
-                editor.
+                Generate an invitation link. The member joins with the role chosen below.
               </p>
+              <div className="space-y-2">
+                <label htmlFor="invite-role" className="text-sm font-medium">
+                  Role
+                </label>
+                <select
+                  id="invite-role"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as "editor" | "viewer")}
+                  className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                >
+                  <option value="editor">Editor — peut créer et modifier</option>
+                  <option value="viewer">Viewer — lecture seule</option>
+                </select>
+              </div>
               <DialogFooter>
                 <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>
                   Cancel
@@ -517,7 +603,7 @@ export default function WorkspacesPage() {
               {joining ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  Redirection\u2026
+                  Redirection…
                 </span>
               ) : (
                 "Continue"

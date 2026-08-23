@@ -22,7 +22,19 @@ interface StoredSession {
 }
 
 // Fallback in-memory storage (for when Supabase is not configured)
-let inMemoryStorage = new Map<string, StoredSession>();
+const inMemoryStorage = new Map<string, StoredSession>();
+
+let inMemoryFallbackWarned = false;
+
+/** Warn once, loudly, before the first in-memory fallback write/read. */
+function warnInMemoryFallback(): void {
+  if (inMemoryFallbackWarned) return;
+  inMemoryFallbackWarned = true;
+  console.warn(
+    "[DB] Supabase is not configured — falling back to IN-MEMORY session " +
+      "storage. All captured sessions will be LOST on restart.",
+  );
+}
 
 function convertSessionToStored(
   session: CapturedSession,
@@ -91,20 +103,22 @@ export async function insertCaptureSession(
   }
 
   // In-memory fallback
+  warnInMemoryFallback();
   inMemoryStorage.set(session.id, convertSessionToStored(session, userId));
   return true;
 }
 
-export async function getCaptureSession(sessionId: string): Promise<CapturedSession | null> {
+export async function getCaptureSession(
+  sessionId: string,
+  userId?: string,
+): Promise<CapturedSession | null> {
   const supabase = getSupabaseClient();
 
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from("capture_sessions")
-        .select("*")
-        .eq("id", sessionId)
-        .single();
+      let query = supabase.from("capture_sessions").select("*").eq("id", sessionId);
+      if (userId) query = query.eq("user_id", userId);
+      const { data, error } = await query.single();
 
       if (error && error.code !== "PGRST116") {
         // PGRST116 = no rows found (expected for missing sessions)
@@ -118,23 +132,26 @@ export async function getCaptureSession(sessionId: string): Promise<CapturedSess
   }
 
   // In-memory fallback
+  warnInMemoryFallback();
   const stored = inMemoryStorage.get(sessionId);
-  return stored ? convertStoredToSession(stored) : null;
+  return stored && (!userId || stored.user_id === userId) ? convertStoredToSession(stored) : null;
 }
 
 export async function listCaptureSessions(
   limit: number = 100,
   offset: number = 0,
+  userId?: string,
 ): Promise<CapturedSession[]> {
   const supabase = getSupabaseClient();
 
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("capture_sessions")
         .select("*")
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+        .order("created_at", { ascending: false });
+      if (userId) query = query.eq("user_id", userId);
+      const { data, error } = await query.range(offset, offset + limit - 1);
 
       if (error) {
         console.error("[DB] Failed to list sessions:", error);
@@ -148,18 +165,28 @@ export async function listCaptureSessions(
   }
 
   // In-memory fallback
+  warnInMemoryFallback();
   return Array.from(inMemoryStorage.values())
+    .filter((stored) => !userId || stored.user_id === userId)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(offset, offset + limit)
     .map(convertStoredToSession);
 }
 
-export async function deleteCaptureSession(sessionId: string): Promise<boolean> {
+export async function deleteCaptureSession(sessionId: string, userId?: string): Promise<boolean> {
   const supabase = getSupabaseClient();
 
   if (supabase) {
     try {
-      const { error } = await supabase.from("capture_sessions").delete().eq("id", sessionId);
+      // Vérifie d'abord l'existence/propriété (le DELETE ne renvoie pas de count)
+      let checkQuery = supabase.from("capture_sessions").select("id").eq("id", sessionId);
+      if (userId) checkQuery = checkQuery.eq("user_id", userId);
+      const { data: existing } = await checkQuery.maybeSingle();
+      if (!existing) return false;
+
+      let query = supabase.from("capture_sessions").delete().eq("id", sessionId);
+      if (userId) query = query.eq("user_id", userId);
+      const { error } = await query;
 
       if (error) {
         console.error("[DB] Failed to delete session:", error);
@@ -173,22 +200,29 @@ export async function deleteCaptureSession(sessionId: string): Promise<boolean> 
   }
 
   // In-memory fallback
-  inMemoryStorage.delete(sessionId);
-  return true;
+  warnInMemoryFallback();
+  const stored = inMemoryStorage.get(sessionId);
+  if (stored && (!userId || stored.user_id === userId)) {
+    inMemoryStorage.delete(sessionId);
+    return true;
+  }
+  return false;
 }
 
-export async function clearCapturesSessions(): Promise<number> {
+export async function clearCapturesSessions(userId?: string): Promise<number> {
   const supabase = getSupabaseClient();
 
   if (supabase) {
     try {
-      const { data: countData } = await supabase
-        .from("capture_sessions")
-        .select("id", { count: "exact" });
+      let countQuery = supabase.from("capture_sessions").select("id", { count: "exact" });
+      if (userId) countQuery = countQuery.eq("user_id", userId);
+      const { data: countData } = await countQuery;
 
       const count = countData?.length || 0;
 
-      const { error } = await supabase.from("capture_sessions").delete().neq("id", "");
+      let deleteQuery = supabase.from("capture_sessions").delete();
+      deleteQuery = userId ? deleteQuery.eq("user_id", userId) : deleteQuery.neq("id", "");
+      const { error } = await deleteQuery;
 
       if (error) {
         console.error("[DB] Failed to clear sessions:", error);
@@ -202,8 +236,12 @@ export async function clearCapturesSessions(): Promise<number> {
   }
 
   // In-memory fallback
-  const count = inMemoryStorage.size;
-  inMemoryStorage.clear();
+  warnInMemoryFallback();
+  const owned = Array.from(inMemoryStorage.entries()).filter(
+    ([, stored]) => !userId || stored.user_id === userId,
+  );
+  const count = owned.length;
+  for (const [id] of owned) inMemoryStorage.delete(id);
   return count;
 }
 
@@ -240,6 +278,7 @@ export async function cleanupOldSessions(daysOld: number = 30): Promise<number> 
   }
 
   // In-memory fallback
+  warnInMemoryFallback();
   const cutoffTime = cutoffDate.getTime();
   let count = 0;
 

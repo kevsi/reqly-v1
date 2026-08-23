@@ -297,8 +297,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(validated.data);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("GitHub import error:", error);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return NextResponse.json({ message }, { status: 500 });
   }
 }
 

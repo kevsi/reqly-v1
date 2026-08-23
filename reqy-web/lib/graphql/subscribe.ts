@@ -1,3 +1,5 @@
+import { validateSubscriptionEndpoint } from "./errors";
+
 export interface SubscriptionMessage {
   type: "data" | "error" | "complete" | "connection_ack" | "ping" | "pong";
   payload?: unknown;
@@ -9,6 +11,11 @@ export interface SubscriptionHandle {
   send: (data: unknown) => void;
 }
 
+/** Handle "no-op" renvoyé quand l'URL de subscription est invalide. */
+function noopHandle(): SubscriptionHandle {
+  return { close: () => {}, send: () => {} };
+}
+
 export function subscribeGraphQL(
   endpoint: string,
   query: string,
@@ -16,7 +23,14 @@ export function subscribeGraphQL(
   headers: Record<string, string> | undefined,
   onMessage: (msg: SubscriptionMessage) => void,
 ): SubscriptionHandle {
-  const wsUrl = endpoint.replace(/^http/i, "ws");
+  // Validation de l'URL (mêmes règles que pour une requête : schéma + format,
+  // refus du mixed content) — l'erreur est remontée via onMessage.
+  const validated = validateSubscriptionEndpoint(endpoint);
+  if (!validated.ok) {
+    onMessage({ type: "error", payload: validated.error });
+    return noopHandle();
+  }
+  const wsUrl = validated.url;
 
   // Browsers don't allow custom subprotocols alongside header authorization,
   // so we send headers as connection_init payload (graphql-ws spec).
@@ -25,7 +39,16 @@ export function subscribeGraphQL(
     initPayload.headers = headers;
   }
 
-  const ws = new WebSocket(wsUrl, "graphql-transport-ws");
+  let ws: WebSocket;
+  try {
+    ws = new WebSocket(wsUrl, "graphql-transport-ws");
+  } catch {
+    onMessage({
+      type: "error",
+      payload: "Connexion WebSocket impossible : URL invalide pour les subscriptions.",
+    });
+    return noopHandle();
+  }
 
   let operationId: string | null = null;
   let ackReceived = false;
@@ -55,7 +78,11 @@ export function subscribeGraphQL(
   };
 
   ws.onerror = () => {
-    onMessage({ type: "error", payload: "WebSocket error" });
+    onMessage({
+      type: "error",
+      payload:
+        "Connexion WebSocket impossible : vérifiez que le serveur GraphQL accepte les subscriptions (protocole graphql-ws) et que l'URL est correcte.",
+    });
   };
 
   // Send subscribe after connection_ack (per graphql-ws spec)

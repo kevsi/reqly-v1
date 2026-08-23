@@ -132,6 +132,7 @@ interface ScriptCodeMirrorProps {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
   minHeight?: string;
 }
 
@@ -139,6 +140,7 @@ function ScriptCodeMirror({
   value,
   onChange,
   placeholder,
+  ariaLabel,
   minHeight = "132px",
 }: ScriptCodeMirrorProps) {
   const { theme: appTheme } = useTheme();
@@ -156,8 +158,9 @@ function ScriptCodeMirror({
         "&": { fontSize: "13px", fontFamily: "var(--font-mono, monospace)" },
         ".cm-scroller": { overflow: "auto" },
       }),
+      ...(ariaLabel ? [EditorView.contentAttributes.of({ "aria-label": ariaLabel })] : []),
     ],
-    [],
+    [ariaLabel],
   );
 
   const handleChange = useCallback(

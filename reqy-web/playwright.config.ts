@@ -22,6 +22,8 @@ export default defineConfig({
     port: 3000,
     reuseExistingServer: process.env.CI !== "true",
     cwd: __dirname,
-    timeout: 120000,
+    // The webServer command performs a full production build before starting Next.
+    // Keep the gate above the observed build time on CI and developer machines.
+    timeout: 360000,
   },
 });

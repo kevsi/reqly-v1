@@ -13,6 +13,7 @@
  */
 
 import type { Assertion } from "@/lib/test-runner/types";
+import { maskSensitivePayload } from "../prompt";
 import {
   loadAIProvider,
   loadApiKey,
@@ -60,7 +61,10 @@ function buildPrompt(input: ProposeCorrectionInput): string {
   const status = input.response.status ?? "unknown";
   let bodyStr: string;
   try {
-    bodyStr = input.response.body !== undefined ? JSON.stringify(input.response.body) : "none";
+    bodyStr =
+      input.response.body !== undefined
+        ? JSON.stringify(maskSensitivePayload(input.response.body))
+        : "none";
   } catch {
     bodyStr = String(input.response.body);
   }

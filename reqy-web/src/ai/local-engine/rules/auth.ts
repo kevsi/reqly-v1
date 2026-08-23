@@ -160,7 +160,7 @@ export const authRules: Rule[] = [
     id: "auth.403.admin",
     category: "auth",
     severity: "error",
-    match: (ctx) => isStatus(ctx, 403) && /\/admin\//i.test(ctx.request.url),
+    match: (ctx) => isStatus(ctx, 403) && /\/admin(?:\/|\.|$)/i.test(ctx.request.url),
     build: () => ({
       severity: "error",
       category: "auth",

@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+﻿import { test, expect, type Page } from "@playwright/test";
+import { mockHttpbin } from "./helpers/httpbin";
 
 /**
  * Seed IndexedDB with a collection containing requests and optionally a folder.
@@ -218,8 +219,9 @@ async function simulateDrag(
   await page.waitForTimeout(500);
 }
 
-test.describe("Collections — Drag & Drop (Session 3)", () => {
+test.describe("Collections â€” Drag & Drop (Session 3)", () => {
   test("Ctrl+Drag duplicates a request within a collection", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/collections");
     await seedIndexedDB(page);
     await page.reload();
@@ -256,6 +258,7 @@ test.describe("Collections — Drag & Drop (Session 3)", () => {
   });
 
   test("folder drop zone accepts dragged requests", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/collections");
     await seedIndexedDB(page, { folders: true });
     await page.reload();
@@ -278,7 +281,7 @@ test.describe("Collections — Drag & Drop (Session 3)", () => {
     // Drag "Create Post" onto the folder drop zone
     await simulateDrag(page, page.getByTestId("drag-handle-req-b"), folderDrop);
 
-    // The drag completed without error — both items still visible
+    // The drag completed without error â€” both items still visible
     await expect(page.getByText("Get Users", { exact: false }).first()).toBeVisible({
       timeout: 5_000,
     });
@@ -286,6 +289,7 @@ test.describe("Collections — Drag & Drop (Session 3)", () => {
   });
 
   test("drag handle is present on each request row", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/collections");
     await seedIndexedDB(page);
     await page.reload();
@@ -300,6 +304,7 @@ test.describe("Collections — Drag & Drop (Session 3)", () => {
   });
 
   test("folder with folder-flagged request displays correctly", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/collections");
     await seedIndexedDB(page, { folders: true });
     await page.reload();

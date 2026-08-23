@@ -13,6 +13,7 @@ interface FakeWebSocket {
   onmessage: WsListener;
   readyState: number;
   url: string;
+  protocols?: string | string[];
   close: ReturnType<typeof vi.fn>;
   _triggerOpen: () => void;
   _triggerClose: (code?: number) => void;
@@ -26,7 +27,7 @@ const CLOSED = 3;
 let fakeWsInstances: FakeWebSocket[] = [];
 let originalWs: typeof globalThis.WebSocket | undefined;
 
-function createFakeWs(url: string): FakeWebSocket {
+function createFakeWs(url: string, protocols?: string | string[]): FakeWebSocket {
   const instance: FakeWebSocket = {
     onopen: null,
     onclose: null,
@@ -34,6 +35,7 @@ function createFakeWs(url: string): FakeWebSocket {
     onmessage: null,
     readyState: OPEN,
     url,
+    protocols,
     close: vi.fn(() => {
       instance.readyState = CLOSED;
       instance.onclose?.({ code: 1000, reason: "", wasClean: true });
@@ -61,11 +63,17 @@ beforeEach(() => {
   fakeWsInstances = [];
   vi.stubGlobal(
     "WebSocket",
-    vi.fn((url: string) => {
-      const inst = createFakeWs(url);
+    vi.fn((url: string, protocols?: string | string[]) => {
+      const inst = createFakeWs(url, protocols);
       fakeWsInstances.push(inst);
       return inst;
     }),
+  );
+  // Le flux ticket est asynchrone : on neutralise fetch pour que
+  // `refreshProtocols` retombe immédiatement sur le token en subprotocol.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new TypeError("fetch disabled in sync-ws tests")),
   );
   vi.useFakeTimers();
 });
@@ -74,6 +82,7 @@ afterEach(() => {
   if (originalWs) {
     vi.stubGlobal("WebSocket", originalWs);
   }
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -83,24 +92,49 @@ function currentWs(): FakeWebSocket {
   return fakeWsInstances[fakeWsInstances.length - 1];
 }
 
+/** Laisse les microtasks du flux ticket/connect s'exécuter. */
+async function flushAsync(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("connectSyncWs", () => {
-  it("connects to the correct WS URL (http → ws conversion)", () => {
+  it("connects to the correct WS URL (http → ws conversion)", async () => {
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000" });
+    await flushAsync();
 
     const mockWs = vi.mocked(globalThis.WebSocket);
     expect(mockWs).toHaveBeenCalledWith("ws://localhost:4000/api/sync/ws?workspaceId=ws-1");
   });
 
-  it("converts https to wss", () => {
+  it("converts https to wss", async () => {
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "https://sync.example.com" });
+    await flushAsync();
 
     const mockWs = vi.mocked(globalThis.WebSocket);
     expect(mockWs).toHaveBeenCalledWith("wss://sync.example.com/api/sync/ws?workspaceId=ws-1");
   });
 
-  it("calls onChange when a 'change' message is received", () => {
+  it("sends the Tauri token as a subprotocol, never in the URL", async () => {
+    connectSyncWs({
+      workspaceId: "ws-1",
+      syncUrl: "https://sync.example.com",
+      token: "signed-session-token",
+    });
+    await flushAsync();
+
+    const mockWs = vi.mocked(globalThis.WebSocket);
+    expect(mockWs).toHaveBeenCalledWith("wss://sync.example.com/api/sync/ws?workspaceId=ws-1", [
+      "reqly-bearer",
+      "signed-session-token",
+    ]);
+    expect(mockWs.mock.calls[0]?.[0]).not.toContain("signed-session-token");
+  });
+
+  it("calls onChange when a 'change' message is received", async () => {
     const onChange = vi.fn();
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000", onChange });
+    await flushAsync();
 
     const ws = currentWs();
     ws._triggerOpen();
@@ -109,9 +143,10 @@ describe("connectSyncWs", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call onChange for a 'hello' message", () => {
+  it("does not call onChange for a 'hello' message", async () => {
     const onChange = vi.fn();
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000", onChange });
+    await flushAsync();
 
     const ws = currentWs();
     ws._triggerOpen();
@@ -120,9 +155,10 @@ describe("connectSyncWs", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("calls onError when an 'error' message is received", () => {
+  it("calls onError when an 'error' message is received", async () => {
     const onError = vi.fn();
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000", onError });
+    await flushAsync();
 
     const ws = currentWs();
     ws._triggerMessage(JSON.stringify({ type: "error", payload: "Session expired" }));
@@ -130,8 +166,9 @@ describe("connectSyncWs", () => {
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "Session expired" }));
   });
 
-  it("reconnects on close with exponential backoff", () => {
+  it("reconnects on close with exponential backoff", async () => {
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000" });
+    await flushAsync();
 
     // First connection
     const ws1 = currentWs();
@@ -144,6 +181,7 @@ describe("connectSyncWs", () => {
 
     // Advance time by the first reconnect delay
     vi.advanceTimersByTime(1000);
+    await flushAsync();
     expect(mockWs).toHaveBeenCalledTimes(2);
 
     // Second close triggers reconnect after 2s (doubled)
@@ -152,11 +190,13 @@ describe("connectSyncWs", () => {
     ws2._triggerClose(1006);
 
     vi.advanceTimersByTime(2000);
+    await flushAsync();
     expect(mockWs).toHaveBeenCalledTimes(3);
   });
 
-  it("does not reconnect after explicit disconnect", () => {
+  it("does not reconnect after explicit disconnect", async () => {
     const controller = connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000" });
+    await flushAsync();
 
     const ws = currentWs();
     ws._triggerOpen();
@@ -170,8 +210,9 @@ describe("connectSyncWs", () => {
     expect(mockWs).toHaveBeenCalledTimes(1);
   });
 
-  it("isConnected returns true after open, false after close", () => {
+  it("isConnected returns true after open, false after close", async () => {
     const controller = connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000" });
+    await flushAsync();
 
     expect(controller.isConnected()).toBe(false);
 
@@ -183,9 +224,10 @@ describe("connectSyncWs", () => {
     expect(controller.isConnected()).toBe(false);
   });
 
-  it("handles multiple change messages", () => {
+  it("handles multiple change messages", async () => {
     const onChange = vi.fn();
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000", onChange });
+    await flushAsync();
 
     const ws = currentWs();
     ws._triggerOpen();
@@ -197,10 +239,11 @@ describe("connectSyncWs", () => {
     expect(onChange).toHaveBeenCalledTimes(3);
   });
 
-  it("ignores malformed JSON messages", () => {
+  it("ignores malformed JSON messages", async () => {
     const onChange = vi.fn();
     const onError = vi.fn();
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000", onChange, onError });
+    await flushAsync();
 
     const ws = currentWs();
     ws._triggerMessage("not json");
@@ -209,8 +252,9 @@ describe("connectSyncWs", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("caps reconnect delay at MAX_RECONNECT_DELAY_MS (30s)", () => {
+  it("caps reconnect delay at MAX_RECONNECT_DELAY_MS (30s)", async () => {
     connectSyncWs({ workspaceId: "ws-1", syncUrl: "http://localhost:4000" });
+    await flushAsync();
 
     // Simulate many disconnections
     for (let i = 0; i < 10; i++) {
@@ -218,6 +262,7 @@ describe("connectSyncWs", () => {
       ws._triggerOpen();
       ws._triggerClose(1006);
       vi.advanceTimersByTime(31000); // more than enough for any delay
+      await flushAsync();
     }
 
     // After 10 reconnects, each delay should not exceed 30s

@@ -58,7 +58,7 @@ import {
   saveAIProvider,
   saveApiKey,
 } from "@/lib/config";
-import { REQLY_TOOLS, executeToolCall, maskSensitiveObject } from "@/lib/llm-tools";
+import { REQLY_TOOLS, executeAuthorizedToolCall, maskSensitiveObject } from "@/lib/llm-tools";
 import type { ToolCall, ToolResult } from "@/lib/llm-tools";
 import {
   AssistantStepsRenderer,
@@ -138,6 +138,7 @@ export function AIModal(props: AIModalProps) {
     toolCallsThisTurn: Array<{ callId: string; name: string; arguments: string }>;
     results: ToolResult[];
     turnSteps: AssistantStep[];
+    nextIndex: number;
     reasoningContent?: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -333,59 +334,56 @@ export function AIModal(props: AIModalProps) {
     });
     setSteps((prev) => [...prev, ...turnSteps]);
 
-    // Exécuter les tools séquentiellement
+    // Le runtime partagé doit décider avant chaque effet de bord. On suspend
+    // avant le premier appel `ask`, puis on reprend exactement à cet index.
     const results: ToolResult[] = [];
+    let confirmIdx = -1;
     for (let i = 0; i < toolCallsThisTurn.length; i++) {
       const tc = toolCallsThisTurn[i];
-      try {
-        const result = await executeToolCall({
-          id: tc.callId,
-          name: tc.name,
-          arguments: tc.arguments,
-        });
-        results.push(result);
+      const result = await executeAuthorizedToolCall(
+        { id: tc.callId, name: tc.name, arguments: tc.arguments },
+        { approval: "none" },
+      );
+      results[i] = result;
+      if (result.requireConfirmation) {
+        confirmIdx = i;
         setSteps((prev) =>
           prev.map((s) =>
             s.id === turnSteps[i]?.id
-              ? { ...s, status: result.error ? ("error" as const) : ("done" as const) }
+              ? {
+                  ...s,
+                  status: "awaiting_confirmation" as const,
+                  label: `⚠ ${tc.name} — confirmation requise`,
+                }
               : s,
           ),
         );
-      } catch (e) {
-        results.push({
-          callId: tc.callId,
-          name: tc.name,
-          content: "",
-          error: e instanceof Error ? e.message : typeof e === "string" ? e : "Erreur inconnue",
-        });
-        setSteps((prev) =>
-          prev.map((s) => (s.id === turnSteps[i]?.id ? { ...s, status: "error" as const } : s)),
-        );
+        break;
       }
-    }
-
-    // requireConfirmation → suspendre
-    const confirmIdx = results.findIndex((r) => r.requireConfirmation);
-    if (confirmIdx !== -1 && confirmIdx < toolCallsThisTurn.length) {
-      const targetStepId = turnSteps[confirmIdx]?.id;
-      const targetTc = toolCallsThisTurn[confirmIdx];
       setSteps((prev) =>
         prev.map((s) =>
-          s.id === targetStepId
+          s.id === turnSteps[i]?.id
             ? {
                 ...s,
-                status: "awaiting_confirmation" as const,
-                label: `⚠ ${targetTc.name} — confirmation requise`,
+                status: result.error ? ("error" as const) : ("done" as const),
+                label: result.error ? `❌ ${tc.name}` : `✅ ${tc.name}`,
               }
             : s,
         ),
       );
+    }
+
+    // Confirmation requise : rien après cet index n’a encore été exécuté.
+    if (confirmIdx !== -1) {
+      const targetStepId = turnSteps[confirmIdx]?.id;
+      const targetTc = toolCallsThisTurn[confirmIdx];
       setPendingConfirmation({
         stepId: targetStepId,
         toolCall: { callId: targetTc.callId, name: targetTc.name, arguments: targetTc.arguments },
         toolCallsThisTurn,
         results,
         turnSteps,
+        nextIndex: confirmIdx,
         ...(reasoningThisTurn ? { reasoningContent: reasoningThisTurn } : {}),
       });
       setLlmLoading(false);
@@ -423,7 +421,8 @@ export function AIModal(props: AIModalProps) {
       const pending = pendingConfirmation;
       if (!pending || pending.stepId !== stepId) return;
 
-      const { toolCall, toolCallsThisTurn, results, reasoningContent } = pending;
+      const { toolCall, toolCallsThisTurn, results, turnSteps, nextIndex, reasoningContent } =
+        pending;
       setPendingConfirmation(null);
 
       // Marquer l'étape "en cours" pendant la ré-exécution
@@ -432,13 +431,20 @@ export function AIModal(props: AIModalProps) {
       );
 
       try {
-        const result = await executeToolCall(
-          { id: toolCall.callId, name: toolCall.name, arguments: toolCall.arguments },
-          confirmed,
-        );
+        const result = confirmed
+          ? await executeAuthorizedToolCall(
+              { id: toolCall.callId, name: toolCall.name, arguments: toolCall.arguments },
+              { approval: "user" },
+            )
+          : ({
+              callId: toolCall.callId,
+              name: toolCall.name,
+              content: "",
+              error: "Action annulée par l'utilisateur",
+            } satisfies ToolResult);
 
-        // Vérifier result.error après exécution confirmée
-        const hasError = !confirmed ? false : !!result.error;
+        results[nextIndex] = result;
+        const hasError = !!result.error;
         setSteps((prev) =>
           prev.map((s) =>
             s.id === stepId
@@ -455,20 +461,72 @@ export function AIModal(props: AIModalProps) {
           ),
         );
 
-        // Si annulé, propager error: "Action annulée par l'utilisateur"
-        const finalResult: ToolResult = confirmed
-          ? result
-          : {
-              callId: toolCall.callId,
-              name: toolCall.name,
+        if (!confirmed) {
+          for (let i = nextIndex + 1; i < toolCallsThisTurn.length; i += 1) {
+            results[i] = {
+              callId: toolCallsThisTurn[i].callId,
+              name: toolCallsThisTurn[i].name,
               content: "",
               error: "Action annulée par l'utilisateur",
             };
+            setSteps((prev) =>
+              prev.map((s) =>
+                s.id === turnSteps[i]?.id
+                  ? {
+                      ...s,
+                      status: "error" as const,
+                      label: `⛔ ${toolCallsThisTurn[i].name} (annulé)`,
+                    }
+                  : s,
+              ),
+            );
+          }
+        } else {
+          for (let i = nextIndex + 1; i < toolCallsThisTurn.length; i += 1) {
+            const nextTc = toolCallsThisTurn[i];
+            const nextResult = await executeAuthorizedToolCall(
+              { id: nextTc.callId, name: nextTc.name, arguments: nextTc.arguments },
+              { approval: "none" },
+            );
+            results[i] = nextResult;
+            if (nextResult.requireConfirmation) {
+              setSteps((prev) =>
+                prev.map((s) =>
+                  s.id === turnSteps[i]?.id
+                    ? {
+                        ...s,
+                        status: "awaiting_confirmation" as const,
+                        label: `⚠ ${nextTc.name} — confirmation requise`,
+                      }
+                    : s,
+                ),
+              );
+              setPendingConfirmation({
+                stepId: turnSteps[i].id,
+                toolCall: nextTc,
+                toolCallsThisTurn,
+                results,
+                turnSteps,
+                nextIndex: i,
+                ...(reasoningContent ? { reasoningContent } : {}),
+              });
+              setLlmLoading(false);
+              return;
+            }
+            setSteps((prev) =>
+              prev.map((s) =>
+                s.id === turnSteps[i]?.id
+                  ? {
+                      ...s,
+                      status: nextResult.error ? ("error" as const) : ("done" as const),
+                      label: nextResult.error ? `❌ ${nextTc.name}` : `✅ ${nextTc.name}`,
+                    }
+                  : s,
+              ),
+            );
+          }
+        }
 
-        // Remplacer le placeholder requireConfirmation par le vrai résultat
-        const updatedResults = results.map((r) => (r.requireConfirmation ? finalResult : r));
-
-        // Pousser ce tour dans l'historique
         previousTurnsRef.current = [
           ...previousTurnsRef.current,
           {
@@ -477,20 +535,19 @@ export function AIModal(props: AIModalProps) {
               name: tc.name,
               arguments: tc.arguments,
             })),
-            toolResults: updatedResults,
+            toolResults: results,
             ...(reasoningContent ? { reasoningContent } : {}),
           },
         ];
         turnCountRef.current += 1;
 
-        // Limite de tours atteinte
         if (turnCountRef.current >= MAX_TOOL_TURNS) {
           setLlmLoading(false);
-          setLlmError("L'IA a atteint le nombre maximal de tours autorisés.");
+          setLlmError("L'assistant a atteint le nombre maximal de tours autorisés.");
           return;
         }
 
-        // Reprendre la boucle multi-turn
+        setLlmLoading(true);
         runOneTurn();
       } catch (e) {
         setSteps((prev) =>

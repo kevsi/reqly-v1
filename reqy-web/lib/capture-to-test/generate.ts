@@ -1,25 +1,10 @@
 import { inferJsonSchema } from "@/lib/schema-diff/infer";
 import type { Assertion } from "@/lib/test-runner/types";
 import type { HttpMethod } from "@/lib/types";
-
-/**
- * Mirrors the Rust `CapturedRequest` struct in `src-tauri/src/capture.rs`
- * (serde `rename_all = "camelCase"`), so the frontend can consume the
- * `get_captured_session` command result directly.
- */
-export interface CapturedRequest {
-  id: string;
-  method: string;
-  url: string;
-  headers: Array<[string, string]>;
-  body: string | null;
-  timestamp: number;
-  status: number | null;
-  responseHeaders: Array<[string, string]> | null;
-  responseBody: string | null;
-  durationMs: number | null;
-  error: string | null;
-}
+// Import canonical CapturedRequest from tauri lib (single source of truth)
+// headers shape: Array<[string, string]> — mirrors Rust serde camelCase output
+export type { CapturedRequest } from "@/lib/tauri";
+import type { CapturedRequest } from "@/lib/tauri";
 
 /** A request ready to be saved into a collection (app `RequestItem` shape). */
 export interface GeneratedRequest {

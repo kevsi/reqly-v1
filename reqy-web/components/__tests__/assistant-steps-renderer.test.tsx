@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import {
   AssistantStepsRenderer,
   buildStep,
+  stripTrailingEllipsis,
   type AssistantStep,
 } from "@/src/ai/components/assistant-steps-renderer";
 import { Brain, Play } from "lucide-react";
@@ -17,7 +18,7 @@ function makeMockSteps(): AssistantStep[] {
   return [
     buildStep({
       kind: "thinking",
-      label: "Through…",
+      label: "Through",
       status: "done",
       icon: Brain,
       detail: "Analyse de la demande utilisateur",
@@ -42,11 +43,17 @@ function makeMockSteps(): AssistantStep[] {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("AssistantStepsRenderer", () => {
+  it("normalise les ellipses ajoutées aux labels de statut", () => {
+    expect(stripTrailingEllipsis("Analyse en cours...")).toBe("Analyse en cours");
+    expect(stripTrailingEllipsis("Analyse en cours…")).toBe("Analyse en cours");
+    expect(stripTrailingEllipsis("Analyse en cours")).toBe("Analyse en cours");
+  });
+
   it("affiche toutes les étapes avec leurs libellés en mode timeline", () => {
     const steps = makeMockSteps();
     render(<AssistantStepsRenderer steps={steps} mode="timeline" />);
 
-    expect(screen.getByText("Through…")).toBeDefined();
+    expect(screen.getByText("Through")).toBeDefined();
     expect(screen.getByText('Création de la collection "API Users"')).toBeDefined();
     expect(screen.getByText("Exécution de la requête GET /users")).toBeDefined();
   });
@@ -76,14 +83,14 @@ describe("AssistantStepsRenderer", () => {
     const steps = [
       buildStep({
         kind: "thinking",
-        label: "Through...",
+        label: "Through",
         status: "done",
         icon: Brain,
         detail: "Analyse détaillée du contexte",
       }),
       buildStep({
         kind: "tool_call",
-        label: "Création...",
+        label: "Création",
         status: "done",
         icon: Play,
         detail: 'POST /collections payload: {name: "API Users"}',
@@ -92,20 +99,20 @@ describe("AssistantStepsRenderer", () => {
     render(<AssistantStepsRenderer steps={steps} mode="timeline" />);
 
     // En mode timeline, les enfants sont visibles par défaut
-    expect(screen.getByText("Création...")).toBeDefined();
+    expect(screen.getByText("Création")).toBeDefined();
   });
 
   it("l'étape active (pending) est visible en mode sequential", () => {
     const steps = [
       buildStep({
         kind: "thinking",
-        label: "En cours…",
+        label: "En cours",
         status: "pending",
         icon: Brain,
       }),
     ];
     render(<AssistantStepsRenderer steps={steps} />);
-    const btn = screen.getByText("En cours…");
+    const btn = screen.getByText("En cours");
     // Vérifie que le bouton a la classe text-foreground (donc visible, pas atténué)
     expect(btn.className).toContain("text-foreground");
   });
@@ -126,22 +133,22 @@ describe("AssistantStepsRenderer", () => {
 
   it("en mode sequential, seule l'étape active est visible", () => {
     const steps = [
-      buildStep({ kind: "thinking", label: "Through…", status: "done" }),
-      buildStep({ kind: "tool_call", label: "Création…", status: "done" }),
-      buildStep({ kind: "result", label: "Exécution…", status: "pending" }),
+      buildStep({ kind: "thinking", label: "Through", status: "done" }),
+      buildStep({ kind: "tool_call", label: "Création", status: "done" }),
+      buildStep({ kind: "result", label: "Exécution", status: "pending" }),
     ];
     render(<AssistantStepsRenderer steps={steps} />);
 
     // Les étapes "done" ne doivent PAS être visibles
-    expect(screen.queryByText("Through…")).toBeNull();
-    expect(screen.queryByText("Création…")).toBeNull();
+    expect(screen.queryByText("Through")).toBeNull();
+    expect(screen.queryByText("Création")).toBeNull();
     // Seule l'étape "pending" est visible
-    expect(screen.getByText("Exécution…")).toBeDefined();
+    expect(screen.getByText("Exécution")).toBeDefined();
   });
 
   it("en mode sequential, toutes les étapes done ne montrent rien sans finalText", () => {
     const steps = [
-      buildStep({ kind: "thinking", label: "Through…", status: "done" }),
+      buildStep({ kind: "thinking", label: "Through", status: "done" }),
       buildStep({ kind: "result", label: "Terminé", status: "done" }),
     ];
     const { container } = render(<AssistantStepsRenderer steps={steps} />);
@@ -151,8 +158,8 @@ describe("AssistantStepsRenderer", () => {
 
   it("se replie automatiquement en une ligne résumée quand tout est terminé (collapsible)", () => {
     const steps = [
-      buildStep({ kind: "thinking", label: "Through…", status: "done" }),
-      buildStep({ kind: "tool_call", label: "Création…", status: "done" }),
+      buildStep({ kind: "thinking", label: "Through", status: "done" }),
+      buildStep({ kind: "tool_call", label: "Création", status: "done" }),
     ];
     render(<AssistantStepsRenderer steps={steps} mode="timeline" collapsible />);
 
@@ -160,9 +167,9 @@ describe("AssistantStepsRenderer", () => {
     expect(screen.getByTestId("ai-steps-toggle")).toBeDefined();
     expect(screen.getByText(/exécution/i)).toBeDefined();
     // Le badge du tool_call est visible dans le collapsed summary
-    expect(screen.getByText("Création…")).toBeDefined();
+    expect(screen.getByText("Création")).toBeDefined();
 
-    // Un clic rouvre la timeline : Création... apparaît dans le step row (en plus du badge)
+    // Un clic rouvre la timeline : Création apparaît dans le step row (en plus du badge)
     expect(screen.getByTestId("ai-steps-toggle").getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(screen.getByTestId("ai-steps-toggle"));
     expect(screen.getByTestId("ai-steps-toggle").getAttribute("aria-expanded")).toBe("true");
@@ -170,13 +177,13 @@ describe("AssistantStepsRenderer", () => {
 
   it("ne replie pas pendant l'exécution (collapsible mais pas terminé)", () => {
     const steps = [
-      buildStep({ kind: "thinking", label: "Through…", status: "done" }),
-      buildStep({ kind: "tool_call", label: "Création…", status: "pending" }),
+      buildStep({ kind: "thinking", label: "Through", status: "done" }),
+      buildStep({ kind: "tool_call", label: "Création", status: "pending" }),
     ];
     render(<AssistantStepsRenderer steps={steps} mode="timeline" collapsible />);
 
     // L'étape en cours reste visible, pas de toggle résumé
-    expect(screen.getByText("Création…")).toBeDefined();
+    expect(screen.getByText("Création")).toBeDefined();
     expect(screen.queryByTestId("ai-steps-toggle")).toBeNull();
   });
 });

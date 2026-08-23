@@ -65,6 +65,11 @@ describe("buildSdkManifests", () => {
     expect(files["Package.swift"]).toContain("swift-tools-version");
   });
 
+  it("derives a valid Swift package name from a slugified API name", () => {
+    const files = buildSdkManifests({ generator: "swift5", apiName: "My_API v2" });
+    expect(files["Package.swift"]).toContain('name: "ReqlyMyApiV2Client"');
+  });
+
   it("emits a gemspec for ruby", () => {
     const files = buildSdkManifests({ generator: "ruby", apiName: "General" });
     expect(files["reqly_client.gemspec"]).toContain("reqly_general_client");

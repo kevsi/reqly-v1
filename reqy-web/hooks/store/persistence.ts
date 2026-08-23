@@ -204,6 +204,33 @@ export async function loadFromStorage(): Promise<RequestStore> {
 const SENSITIVE_VAR_PATTERN =
   /key|token|secret|password|passwd|credential|api_key|apikey|auth|jwt|bearer|private/i;
 
+// Aligné sur le sanitiser sync (store-sync.ts) : toute valeur d'en-tête
+// sensible (authorization, cookie, proxy-authorization, tokens…) est retirée
+// AVANT écriture sur disque (IndexedDB / Tauri FS).
+const SENSITIVE_HEADER_PATTERN =
+  /authorization|api[-_]?key|token|secret|password|passwd|credential|cookie|private[-_]?key|bearer/i;
+
+function sanitizeRequestEntity<T extends { authToken?: string; headers?: Record<string, string> }>(
+  req: T,
+): T {
+  // Un brouillage du token : toute valeur présente est vidée ; une valeur
+  // absente (undefined) est conservée telle quelle.
+  let authToken: string | undefined;
+  if (req.authToken) {
+    authToken = "";
+  } else {
+    authToken = req.authToken;
+  }
+
+  return {
+    ...req,
+    authToken,
+    headers: Object.fromEntries(
+      Object.entries(req.headers ?? {}).filter(([name]) => !SENSITIVE_HEADER_PATTERN.test(name)),
+    ),
+  };
+}
+
 function sanitizeStore(store: RequestStore): RequestStore {
   return {
     ...store,
@@ -217,16 +244,24 @@ function sanitizeStore(store: RequestStore): RequestStore {
     })),
     collections: store.collections.map((col) => ({
       ...col,
-      requests: col.requests.map((req) => ({
-        ...req,
-        authToken: req.authToken ? "" : req.authToken,
-        headers: Object.fromEntries(
-          Object.entries(req.headers ?? {}).filter(
-            ([k]) => !/^authorization$/i.test(k) && !/^x-api-key$/i.test(k),
-          ),
-        ),
-      })),
+      requests: col.requests.map((req) => sanitizeRequestEntity(req)),
     })),
+    // L'historique est persisté verbatim aujourd'hui : assainir headers +
+    // tokens comme pour les collections (corps laissé intact — contenu
+    // saisi par l'utilisateur, pas du trafic capturé).
+    history: (store.history ?? []).map((h) => sanitizeRequestEntity(h)),
+    collectionHistory: (store.collectionHistory ?? []).map((h) => sanitizeRequestEntity(h)),
+    currentRequest: store.currentRequest ? sanitizeRequestEntity(store.currentRequest) : null,
+    lastResponse: store.lastResponse
+      ? {
+          ...store.lastResponse,
+          headers: Object.fromEntries(
+            Object.entries(store.lastResponse.headers ?? {}).filter(
+              ([name]) => !SENSITIVE_HEADER_PATTERN.test(name),
+            ),
+          ),
+        }
+      : null,
   };
 }
 
@@ -262,10 +297,11 @@ export function createPersistence(): PersistenceInstance {
         await storageAdapter.save(STORAGE_KEY, JSON.stringify(sanitizeStore(store)));
         return;
       } catch (e) {
-        console.warn(
-          `[storage-adapter] save failed (attempt ${attempt + 1}/${MAX_SAVE_RETRIES}):`,
-          e,
-        );
+        console.warn("[storage-adapter] save failed:", {
+          attempt: attempt + 1,
+          maxRetries: MAX_SAVE_RETRIES,
+          error: e,
+        });
         if (attempt < MAX_SAVE_RETRIES - 1) {
           await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 200));
         }

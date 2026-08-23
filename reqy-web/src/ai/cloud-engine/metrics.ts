@@ -21,6 +21,64 @@ interface Buffer {
 
 const buffers = new Map<string, Buffer>();
 
+export type AICallOutcome = "success" | "error" | "timeout";
+export interface AICallEvent {
+  provider: string;
+  model: string;
+  outcome: AICallOutcome;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+const AI_CALL_EVENT_CAPACITY = 1000;
+const aiCallEvents: AICallEvent[] = [];
+
+/** Record bounded, secret-free metadata for one LLM call. */
+export function recordAICall(event: AICallEvent): void {
+  if (!Number.isFinite(event.durationMs) || event.durationMs < 0) return;
+  aiCallEvents.push({
+    provider: event.provider,
+    model: event.model,
+    outcome: event.outcome,
+    durationMs: event.durationMs,
+    inputTokens: Number.isFinite(event.inputTokens) ? Math.max(0, event.inputTokens) : 0,
+    outputTokens: Number.isFinite(event.outputTokens) ? Math.max(0, event.outputTokens) : 0,
+  });
+  if (aiCallEvents.length > AI_CALL_EVENT_CAPACITY) aiCallEvents.shift();
+}
+
+export interface AICallStats {
+  count: number;
+  successes: number;
+  errors: number;
+  timeouts: number;
+  avgDurationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export function getAICallStats(filter?: { provider?: string; model?: string }): AICallStats {
+  const events = aiCallEvents.filter(
+    (event) =>
+      (!filter?.provider || event.provider === filter.provider) &&
+      (!filter?.model || event.model === filter.model),
+  );
+  const duration = events.reduce((sum, event) => sum + event.durationMs, 0);
+  return {
+    count: events.length,
+    successes: events.filter((event) => event.outcome === "success").length,
+    errors: events.filter((event) => event.outcome === "error").length,
+    timeouts: events.filter((event) => event.outcome === "timeout").length,
+    avgDurationMs: events.length ? duration / events.length : 0,
+    inputTokens: events.reduce((sum, event) => sum + event.inputTokens, 0),
+    outputTokens: events.reduce((sum, event) => sum + event.outputTokens, 0),
+  };
+}
+
+export function resetAICallEvents(): void {
+  aiCallEvents.length = 0;
+}
+
 function getBuffer(label: string, capacity: number): Buffer {
   let buf = buffers.get(label);
   if (!buf) {
@@ -31,7 +89,11 @@ function getBuffer(label: string, capacity: number): Buffer {
 }
 
 /** Record a latency sample in milliseconds. */
-export function recordLatency(label: string, ms: number, options: { capacity?: number } = {}): void {
+export function recordLatency(
+  label: string,
+  ms: number,
+  options: { capacity?: number } = {},
+): void {
   if (!Number.isFinite(ms) || ms < 0) return;
   const buf = getBuffer(label, options.capacity ?? DEFAULT_CAPACITY);
   buf.values[buf.cursor] = ms;
@@ -84,11 +146,11 @@ export function resetAllLatency(): void {
 
 /** Convenience: time an async function and record the elapsed ms. */
 export async function timeAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  const start = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const start = typeof performance !== "undefined" ? performance.now() : Date.now();
   try {
     return await fn();
   } finally {
-    const end = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const end = typeof performance !== "undefined" ? performance.now() : Date.now();
     recordLatency(label, end - start);
   }
 }

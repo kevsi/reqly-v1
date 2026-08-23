@@ -27,7 +27,8 @@
     "regenerate": "Regenerate response",
     "messageCopied": "Message copied",
     "messageCopiedDesc": "The content was copied to the clipboard.",
-    "copyFailed": "Failed to copy the message."
+    "copyFailed": "Failed to copy the message.",
+    "discard": "Discard"
   },
   "settings": {
     "sidebar": {
@@ -83,6 +84,7 @@
       "save": "Save",
       "activeProvider": "Active provider:",
       "configured": "Configured",
+      "desktopOnly": "Desktop app required",
       "providers": {
         "openai": {
           "description": "GPT-4, GPT-4o, GPT-4o Mini"
@@ -129,7 +131,11 @@
         "keyStoredLocal": "The key is stored locally and used only by the AI assistant.",
         "deleteConfig": "Delete configuration",
         "test": "Test",
-        "testing": "Testing…"
+        "testing": "Testing…",
+        "hideKey": "Hide key",
+        "showKey": "Show key",
+        "confirmDelete": "Confirm deletion?",
+        "incompleteForm": "Complete the required fields before saving."
       },
       "models": {
         "title": "Model",
@@ -244,6 +250,7 @@
       "description": "Connect your third-party services to import and sync your data.",
       "manage": "Manage",
       "connect": "Connect",
+      "webOnly": "Web only",
       "postman": {
         "description": "Postman collection import and export.",
         "instructions": "Go to go.postman.co → Settings → API Keys → Generate API Key. Copy the key (it starts with PMAK-)."
@@ -413,6 +420,12 @@
   "language": {},
   "runner": {
     "title": "Runner",
+    "runSequence": "Run Sequence",
+    "executionMode": "Execution mode",
+    "stopOnError": "Stop run if an error occurs",
+    "avgLatency": "Avg Latency",
+    "errorRate": "Error Rate",
+    "minMax": "Min / Max",
     "tabs": {
       "scrollLeft": "Scroll left",
       "scrollRight": "Scroll right",
@@ -441,6 +454,7 @@
     "requestCount_other": "{{count}} requests",
     "running": "Running…",
     "runCollection": "Run collection",
+    "scriptsDisabledServer": "Scripts were disabled on the server runner (pre/post scripts ignored)",
     "selectCollectionFirst": "Select a collection first",
     "dataset": "Dataset",
     "optional": "(optional)",
@@ -539,7 +553,14 @@
   },
   "collections": {
     "title": "Collections",
-    "description": "Manage your request groups and export them as OpenAPI.",
+    "description": "Manage your request groups and export them to OpenAPI.",
+    "collectionEmpty": "Collection \"{{name}}\" is empty.",
+    "sync": {
+      "conflictTitle": "Sync conflict",
+      "conflictBody": "{{count}} change(s) conflicted with the server. The server version was applied.",
+      "pushFailedTitle": "Sync failed",
+      "pushFailedBody": "Changes could not be sent. Check your connection and try again."
+    },
     "import": "Import",
     "export": "Export",
     "importFromPostman": "Import from Postman",
@@ -555,6 +576,8 @@
       "new": "New",
       "copySuffix": " (copy)",
       "importedCollection": "Collection imported",
+      "importTooLarge": "File too large",
+      "importTooLargeHint": "Maximum size: {{size}} MB",
       "collectionsImported": "{{count}} collections imported",
       "unknownFormat": "Unrecognized format",
       "invalidJson": "Invalid JSON file",
@@ -606,6 +629,8 @@
     "row": {
       "renameFolder": "Rename folder",
       "deleteFolder": "Delete folder",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
       "newFolderName": "New folder name:",
       "deleteFolderConfirm": "Delete folder “{{name}}”? Requests will move to the collection root.",
       "addRequest": "Add request",
@@ -619,17 +644,22 @@
       "delete": "Delete",
       "dragLabel": "Drag {{name}}",
       "loadAndSend": "Load & send",
-      "removeRequest": "Remove request"
+      "removeRequest": "Remove request",
+      "deleteRequest": "Delete request \"{{name}}\"?"
     },
     "folder": {
       "namePlaceholder": "Folder name",
       "create": "Create folder",
       "new": "New folder",
       "moveFolder": "Move folder to...",
-      "moveRequest": "Move request to..."
+      "moveRequest": "Move request to...",
+      "requestMoved": "Request moved",
+      "requestsReordered": "Requests reordered",
+      "foldersReordered": "Folders reordered"
     },
     "toast": {
       "postmanImported": "Postman collection imported: {{name}}",
+      "postmanSkipped": "{{count}} request(s) skipped (invalid format)",
       "postmanRenamed": "Renamed from “{{old}}” (name conflict).",
       "postmanNotConnected": "Postman not connected",
       "noCollectionSelected": "No collection selected",
@@ -638,6 +668,8 @@
       "postmanExportError": "Error while exporting to Postman",
       "postmanExportSuccess": "Export to Postman successful",
       "postmanCollectionCreated": "Collection created in Postman",
+      "postmanExportUid": "Collection created in Postman — UID: {{uid}}",
+      "postmanExportConnectFirst": "Connect your Postman account and try the export again.",
       "postmanExportFailed": "Unable to export to Postman",
       "requestLoaded": "Request loaded in the editor",
       "requestLoadedAndSent": "“{{name}}” loaded and sent",
@@ -710,7 +742,46 @@
     "exportPlaceholder": "Export",
     "exportCurl": "cURL",
     "exportFetch": "Fetch",
-    "sizeLabel": "Size: {{size}}"
+    "sizeLabel": "Size: {{size}}",
+    "executionFailed": "Request failed",
+    "missingUrl": "Missing URL",
+    "missingUrlHint": "Enter a valid URL before sending the request.",
+    "unresolvedVariables": "Unresolved variables",
+    "unresolvedVariablesHint": "Resolve all {{placeholders}} before sending the request.",
+    "preScriptCrashed": "Pre-request script crashed",
+    "preScriptError": "Pre-request script error",
+    "preScriptOutput": "Pre-request script",
+    "postScriptCrashed": "Post-response script crashed",
+    "postScriptError": "Post-response script error",
+    "postScriptOutput": "Post-response script",
+    "saved": "\"{{name}}\" saved",
+    "savedInCollection": "\"{{name}}\" saved in {{collection}}",
+    "theCollection": "the collection",
+    "responseDownloaded": "Response downloaded",
+    "createdInCollection": "New request created in collection",
+    "loadedInEditor": "Request loaded in editor",
+    "sendingCollection": "Sending collection request…",
+    "sentCollection": "Collection request sent",
+    "loadedCollection": "Collection request loaded in editor",
+    "cancel": "Cancel",
+    "cancelled": "Request cancelled",
+    "followRedirects": "Follow redirects",
+    "followRedirectsHint": "Automatically follow HTTP redirects (3xx)",
+    "invalidVariableSyntax": "Invalid variable syntax",
+    "enterUrlHint": "Enter a valid URL to enable sending.",
+    "nothingToDownload": "Nothing to download",
+    "nothingToDownloadHint": "The response is empty.",
+    "transferTimeout": "The request timed out.",
+    "transferTimeoutHint": "The server did not respond within 30 seconds. Check the network or increase the timeout.",
+    "transferHint": "Check the URL, your network connection, or whether a firewall is blocking the request.",
+    "transferBlocked": "Blocked destination (private or internal IP).",
+    "transferDns": "DNS resolution failed.",
+    "transferRateLimit": "Too many requests. Try again in a minute.",
+    "transferBodyTooLarge": "Request body too large (max 10 MB).",
+    "transferInvalid": "Invalid URL or request.",
+    "transferDefault": "The network request failed.",
+    "transferTarget": "Target: {{url}}",
+    "sending": "Sending…"
   },
   "response": {
     "noCookies": "No cookies received (no Set-Cookie header)",
@@ -736,6 +807,7 @@
     "export": "Export",
     "diff": "Diff",
     "snapshots": "Snapshots",
+    "truncated": "Response truncated (5 MB limit)",
     "headersCount_one": "{{count}} header",
     "headersCount_other": "{{count}} headers",
     "noHeadersYet": "Headers will appear after running a request",
@@ -989,7 +1061,67 @@
     "forcePushTitle": "Force push?",
     "forcePushDesc": "This will <1>overwrite remote history</1> for branch <2>{{branch}}</2> on <3>{{remote}}</3>.",
     "cleanTitle": "Working tree clean",
-    "cleanDescription": "No changes to commit"
+    "cleanDescription": "No changes to commit",
+    "branchCreate": "Create branch",
+    "branchCreateTitle": "Create branch",
+    "branchDelete": "Delete branch",
+    "branchNamePlaceholder": "Branch name",
+    "branchNew": "New branch",
+    "commitAuthorEmail": "Author email",
+    "commitAuthorEmailPlaceholder": "author@example.com",
+    "commitAuthorName": "Author name",
+    "commitAuthorNamePlaceholder": "Author name",
+    "conflictActionRequired": "Action required",
+    "conflictDescription": "This file is in conflict.",
+    "conflictResolve": "Resolve",
+    "diffComputing": "Computing diff…",
+    "diffLayout1": "Unified",
+    "diffLayout2": "Split",
+    "diffLayout3": "Split + preview",
+    "diffLines": "lines",
+    "diffNoDifferences": "No differences",
+    "diffPanel1": "Unified view",
+    "diffPanel2": "Split view",
+    "diffPanel3": "Split with preview",
+    "diffPreview": "Preview",
+    "remoteAdd": "Add remote",
+    "remoteAddDialogTitle": "Add remote",
+    "remoteAddShort": "Add",
+    "remoteClone": "Clone",
+    "remoteCloneAuth": "Authentication",
+    "remoteCloneDestRequired": "Destination folder required",
+    "remoteClonePassword": "Password",
+    "remoteCloneTitle": "Clone repository",
+    "remoteCloneUrlRequired": "Repository URL required",
+    "remoteCloneUsername": "Username",
+    "remoteCloning": "Cloning…",
+    "remoteConnected": "Remote connected",
+    "remoteFetchingBranches": "Fetching branches…",
+    "remoteForcePush": "Force push",
+    "remoteInProgress": "Operation in progress…",
+    "remoteNamePlaceholder": "Remote name (e.g. origin)",
+    "remoteNoRemote": "No remote configured",
+    "remoteUrlPlaceholder": "https://github.com/user/repo.git",
+    "remotes": "Remotes",
+    "stash": "Stash",
+    "stashApply": "Apply",
+    "stashDrop": "Drop",
+    "stashEmpty": "No stashes",
+    "stashMessagePlaceholder": "Stash message",
+    "stashPop": "Pop",
+    "stashSaveAction": "Stash changes",
+    "statusDeleted": "Deleted",
+    "statusModified": "Modified",
+    "statusNew": "New",
+    "statusStaged": "Staged",
+    "statusViewDiff": "View diff",
+    "conflictTitle_one": "1 conflict to resolve",
+    "conflictTitle_other": "{{count}} conflicts to resolve",
+    "diffMoreLines_one": "{{count}} more line",
+    "diffMoreLines_other": "{{count}} more lines",
+    "remoteAvailableBranches_one": "{{count}} available branch",
+    "remoteAvailableBranches_other": "{{count}} available branches",
+    "selectFolderModalTitle": "Open or create a project directory"
   },
   "env": {
     "selectorAria": "Select environment",
@@ -1255,7 +1387,18 @@
     "noEvents": "No events yet",
     "noEventsHint": "Connect to an SSE endpoint to start receiving events",
     "variableDesc": "variable",
-    "headerDesc": "header"
+    "headerDesc": "header",
+    "errorHint": "Check the URL, authentication, and that the server allows CORS.",
+    "pause": "Pause",
+    "resume": "Resume",
+    "eventsPerSec": "{{rate}} ev/s",
+    "statsReconnects_one": "{{count}} reconnection",
+    "statsReconnects_other": "{{count}} reconnections"
+  },
+  "offline": {
+    "replayTitle": "Reconnection",
+    "replayBody": "{{replayed}} request(s) replayed, {{succeeded}} succeeded.",
+    "replayNotificationTitle": "Requests replayed"
   },
   "workspace": {
     "workspace": "Workspace",
@@ -1323,7 +1466,8 @@
     "routesLabel": "Routes",
     "portLabel": "Port",
     "addProject": "Add project",
-    "analyze": "Analyze"
+    "analyze": "Analyze",
+    "resultTitle": "Analysis result"
   },
   "routeModal": {
     "collectionName": "Collection {{framework}} · {{name}}",
@@ -1357,7 +1501,11 @@
     "public": "public",
     "confidence": "confidence",
     "middleware": "Middleware",
-    "detection": "Detection"
+    "detection": "Detection",
+    "clearSearch": "Clear search",
+    "close": "Close",
+    "resetFilters": "Reset filters",
+    "usedByFrontend": "Used by frontend"
   },
   "importExport": {
     "common": {
@@ -1735,7 +1883,10 @@
     "executedDesc_one": "{{count}} request completed",
     "executedDesc_other": "{{count}} requests completed",
     "executionFailed": "Execution failed",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "defaultName": "New chain",
+    "executing": "Executing…",
+    "stepFailed": "Failed steps: {{names}}"
   },
   "ai": {
     "code": {
@@ -1814,7 +1965,9 @@
       "thinking": "Thinking…",
       "toolCall": "Executing: {{detail}}",
       "executing": "Executing…",
-      "done": "Done"
+      "done": "Done",
+      "inProgress": "In progress",
+      "waiting": "Waiting"
     },
     "modal": {
       "responseHeaders": "Response headers",
@@ -1985,5 +2138,72 @@
         "fix": "Reduce the payload size (pagination, sub-resources)"
       }
     }
+  },
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "capturePage": {
+    "allMethods": "All methods",
+    "awaitingTraffic": "Awaiting traffic…",
+    "bodyPayload": "Body",
+    "browserMode": "Browser mode",
+    "bundlePreview": "Bundle preview",
+    "captures": "Captures",
+    "changePort": "Change port",
+    "clear": "Clear",
+    "collectionName": "Collection name",
+    "copied": "Copied",
+    "copyAll": "Copy all",
+    "copyBody": "Copy body",
+    "copyCommand": "Copy command",
+    "copyUrl": "Copy URL",
+    "curl": "cURL",
+    "curlCommand": "cURL command",
+    "deleteSession": "Delete session",
+    "description": "Capture traffic",
+    "diskDb": "Disk storage",
+    "duration": "Duration",
+    "exportHar": "Export HAR",
+    "exportMocks": "Export mocks",
+    "exportOpenApi": "Export OpenAPI",
+    "fullUrl": "Full URL",
+    "generateSuite": "Generate test suite",
+    "generatorExporters": "Generator exporters",
+    "group": "Group",
+    "headers": "Headers",
+    "listeningActive": "Active listening",
+    "method": "Method",
+    "noRequestBody": "No request body",
+    "noRequestHeaders": "No request headers",
+    "noResponseBody": "No response body",
+    "noResponseHeaders": "No response headers",
+    "noSessionsExport": "No sessions to export.",
+    "noSessionsGenerate": "No sessions to convert.",
+    "overview": "Overview",
+    "persistence": "Persistence",
+    "proxyStopped": "Proxy stopped",
+    "redactExports": "Redact secrets in exports",
+    "refresh": "Refresh",
+    "renameSave": "Rename and save",
+    "replay": "Replay",
+    "requestBodyPayload": "Request body",
+    "requestDetails": "Request details",
+    "requestHeaders": "Request headers",
+    "responseBodyPayload": "Response body",
+    "responseHeaders": "Response headers",
+    "saveToWorkspace": "Save to workspace",
+    "searchUrl": "Search by URL…",
+    "sessionControl": "Session control",
+    "startCapture": "Start capture",
+    "startProxy": "Start proxy",
+    "statusCode": "Status code",
+    "stopProxy": "Stop proxy",
+    "timestamp": "Timestamp",
+    "title": "Capture",
+    "trafficList": "Traffic list",
+    "transferError": "Transfer error"
+  },
+  "requestUnsaved": {
+    "title": "Unsaved changes",
+    "description": "\"{{name}}\" is not saved."
   }
 }

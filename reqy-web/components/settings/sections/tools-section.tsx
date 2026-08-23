@@ -64,7 +64,11 @@ function useToolStatus(toolId: string, refreshKey = 0): ConnectionStatus {
   const storeStatus = useToolConnections((s) => (isOAuthTool(toolId) ? s[toolId] : "loading"));
   const setStoreStatus = useToolConnections((s) => s.setStatus);
   const [status, setStatus] = useState<ConnectionStatus>("loading");
+  // Postman/Jina rely on Next.js API routes that do not exist in the static
+  // desktop build: mark them unavailable instead of a doomed fetch.
+  const desktopUnavailable = !isOAuthTool(toolId) && isTauriAvailable();
   useEffect(() => {
+    if (desktopUnavailable) return;
     let cancelled = false;
     // GitHub/GitLab in the desktop app: the encrypted secure store is the
     // source of truth (the Next.js status routes don't exist in the static
@@ -103,7 +107,8 @@ function useToolStatus(toolId: string, refreshKey = 0): ConnectionStatus {
     return () => {
       cancelled = true;
     };
-  }, [toolId, refreshKey, setStoreStatus]);
+  }, [toolId, refreshKey, setStoreStatus, desktopUnavailable]);
+  if (desktopUnavailable) return "unavailable";
   return isOAuthTool(toolId) ? storeStatus : status;
 }
 
@@ -140,6 +145,10 @@ function ToolRow({
       <div className="flex items-center gap-3 shrink-0">
         {status === "loading" ? (
           <span className="size-2 animate-pulse rounded-full bg-muted-foreground/30" />
+        ) : status === "unavailable" ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {t("settings.integrations.webOnly")}
+          </span>
         ) : (
           <span
             className={cn(
@@ -161,11 +170,14 @@ function ToolRow({
         <Button
           size="sm"
           variant={status === "connected" ? "outline" : "default"}
+          disabled={status === "unavailable"}
           onClick={() => onAssociate(status === "connected")}
         >
-          {status === "connected"
-            ? t("settings.integrations.manage")
-            : t("settings.integrations.connect")}
+          {status === "unavailable"
+            ? t("settings.integrations.webOnly")
+            : status === "connected"
+              ? t("settings.integrations.manage")
+              : t("settings.integrations.connect")}
         </Button>
       </div>
     </div>

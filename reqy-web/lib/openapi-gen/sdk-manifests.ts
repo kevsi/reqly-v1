@@ -225,7 +225,13 @@ dependencies {
 
   if (g === "swift5") {
     const swiftName =
-      "Reqly" + slugify(apiName).replace(/-_./g, "-").split("-").filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join("") + "Client";
+      "Reqly" +
+      slugify(apiName)
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean)
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join("") +
+      "Client";
     const pkg = `// swift-tools-version:5.9
 import PackageDescription
 

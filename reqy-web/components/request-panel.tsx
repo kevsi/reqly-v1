@@ -53,6 +53,9 @@ interface RequestPanelProps {
   onPostResponseScriptChange?: (script: string) => void;
   onRunTests?: () => void;
   onSend: () => Promise<void>;
+  onCancel?: () => void;
+  followRedirects?: boolean;
+  onFollowRedirectsChange?: (follow: boolean) => void;
   isLoading?: boolean;
   variableNames?: string[];
   /** History URLs for autocomplete (deduplicated most recent first). */
@@ -150,6 +153,9 @@ export function RequestPanel({
   onPostResponseScriptChange,
   onRunTests,
   onSend,
+  onCancel,
+  followRedirects,
+  onFollowRedirectsChange,
   isLoading,
   variableNames,
   historyUrls: historyUrlsProp,
@@ -304,6 +310,7 @@ export function RequestPanel({
   }, [environmentVariableNames, t]);
 
   const hasUrl = url.trim().length > 0;
+  const hasPathVariables = pathParams.length > 0 || /(^|\/):[A-Za-z_][\w-]*/.test(url);
 
   return (
     <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
@@ -329,6 +336,9 @@ export function RequestPanel({
           isLoading={isLoading}
           urlAutocompleteGroups={urlAutocompleteGroups}
           hasUrl={hasUrl}
+          onCancel={onCancel}
+          followRedirects={followRedirects}
+          onFollowRedirectsChange={onFollowRedirectsChange}
         />
         {onExport && (
           <div className="mt-1 flex justify-end">
@@ -351,30 +361,32 @@ export function RequestPanel({
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         <Accordion type="multiple" className="space-y-1">
           {/* Path Variables - detected from :param patterns in the URL */}
-          <AccordionItem value="path-vars" className="border border-border rounded-lg px-4 ">
-            <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
-              <span className="flex items-center gap-2">
-                {t("request.pathVariables")}
-                {(pathParams?.length ?? 0) > 0 && (
-                  <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
-                    {pathParams?.length ?? 0}
-                  </span>
-                )}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <KeyValueEditor
-                pairs={pathParams ?? []}
-                onChange={onPathParamsChange}
-                keyPlaceholder=":param"
-                valuePlaceholder={t("request.kvValue")}
-                addLabel={t("request.addPathVariable")}
-                emptyLabel={t("request.noPathParams")}
-                showToggle
-                valueSuggestions={valueVarSuggestions}
-              />
-            </AccordionContent>
-          </AccordionItem>
+          {hasPathVariables && (
+            <AccordionItem value="path-vars" className="border border-border rounded-lg px-4 ">
+              <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+                <span className="flex items-center gap-2">
+                  {t("request.pathVariables")}
+                  {(pathParams?.length ?? 0) > 0 && (
+                    <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
+                      {pathParams?.length ?? 0}
+                    </span>
+                  )}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <KeyValueEditor
+                  pairs={pathParams ?? []}
+                  onChange={onPathParamsChange}
+                  keyPlaceholder=":param"
+                  valuePlaceholder={t("request.kvValue")}
+                  addLabel={t("request.addPathVariable")}
+                  emptyLabel={t("request.noPathParams")}
+                  showToggle
+                  valueSuggestions={valueVarSuggestions}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          )}
 
           {/* Query Params */}
           <AccordionItem value="query-params" className="border border-border rounded-lg px-4 ">

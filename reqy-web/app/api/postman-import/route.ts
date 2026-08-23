@@ -7,6 +7,7 @@ import {
   postmanImportResponseSchema,
 } from "@/lib/import-schemas";
 import { postmanFetchJson, PostmanApiError, extractPostmanCollection } from "@/lib/postman";
+import { getApiKeyFromRequest } from "../postman-auth/cookies";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: formatZodError(bodyResult.error) }, { status: 400 });
   }
   const { collectionId } = bodyResult.data;
-  const apiKey = request.cookies.get("postman_api_key")?.value;
+  const apiKey = getApiKeyFromRequest(request);
 
   if (!apiKey) {
     return NextResponse.json({ message: "Non connecté à Postman" }, { status: 401 });

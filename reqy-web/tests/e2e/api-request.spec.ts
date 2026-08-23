@@ -1,11 +1,16 @@
 import { test, expect } from "@playwright/test";
+import { mockHttpbin } from "./helpers/httpbin";
 
 test.describe("API Request flows", () => {
   test("sends a GET request and displays response", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
 
     // Wait for the app to load
     await page.waitForSelector('[role="tab"]', { timeout: 10_000 });
+    await expect(page.getByTestId("store-ready")).toHaveAttribute("data-ready", "true", {
+      timeout: 10_000,
+    });
 
     // Enter URL
     const urlInput = page.getByTestId("url-input").first();
@@ -25,9 +30,13 @@ test.describe("API Request flows", () => {
   });
 
   test("sends a POST request with JSON body", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
 
     await page.waitForSelector('[role="tab"]', { timeout: 10_000 });
+    await expect(page.getByTestId("store-ready")).toHaveAttribute("data-ready", "true", {
+      timeout: 10_000,
+    });
 
     // Change method to POST
     const methodSelect = page.getByTestId("method-selector").first();
@@ -63,39 +72,48 @@ test.describe("API Request flows", () => {
   });
 
   test("adds headers and query params", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
 
     await page.waitForSelector('[role="tab"]', { timeout: 10_000 });
+    await expect(page.getByTestId("store-ready")).toHaveAttribute("data-ready", "true", {
+      timeout: 10_000,
+    });
 
     // Enter URL with query param
     const urlInput = page.getByTestId("url-input").first();
     await urlInput.fill("https://httpbin.org/get");
 
-    // Add a query param
-    const addParamButton = page.getByRole("button", { name: /add param|ajouter param/i }).first();
-    if (await addParamButton.isVisible().catch(() => false)) {
-      await addParamButton.click();
-      const keyInputs = await page.locator('input[placeholder*="key"]').all();
-      const valueInputs = await page.locator('input[placeholder*="value"]').all();
-      if (keyInputs.length > 0 && valueInputs.length > 0) {
-        await keyInputs[0].fill("foo");
-        await valueInputs[0].fill("bar");
-      }
-    }
+    // Add a query param (expand the Query Params accordion first)
+    const requestPanel = page.getByTestId("request-tabs");
+    await requestPanel
+      .getByRole("button", { name: /query params|paramètres de requête/i })
+      .first()
+      .click();
+    const addParamButton = requestPanel
+      .getByRole("button", { name: /add param|ajouter param/i })
+      .first();
+    await addParamButton.click();
+    const keyInput = requestPanel.locator('input[placeholder*="key" i]').first();
+    const valueInput = requestPanel.locator('input[placeholder*="value" i]').first();
+    await expect(keyInput).toBeVisible();
+    await keyInput.fill("foo");
+    await valueInput.fill("bar");
 
-    // Add a header
-    const addHeaderButton = page
+    // Add a header (expand the Headers accordion first)
+    await requestPanel
+      .getByRole("button", { name: /^headers$|^en-têtes$/i })
+      .first()
+      .click();
+    const addHeaderButton = requestPanel
       .getByRole("button", { name: /add header|ajouter header/i })
       .first();
-    if (await addHeaderButton.isVisible().catch(() => false)) {
-      await addHeaderButton.click();
-      const headerKeyInputs = await page.locator('input[placeholder*="header"]').all();
-      const headerValueInputs = await page.locator('input[placeholder*="value"]').all();
-      if (headerKeyInputs.length > 0 && headerValueInputs.length > 0) {
-        await headerKeyInputs[0].fill("X-Custom-Header");
-        await headerValueInputs[0].fill("test-value");
-      }
-    }
+    await addHeaderButton.click();
+    const headerKeyInput = requestPanel.locator('input[placeholder*="key" i]').nth(1);
+    const headerValueInput = requestPanel.locator('input[placeholder*="value" i]').nth(1);
+    await expect(headerKeyInput).toBeVisible();
+    await headerKeyInput.fill("X-Custom-Header");
+    await headerValueInput.fill("test-value");
 
     // Click Send (wait for url to be accepted — the send button was disabled before)
     const sendButton = page.getByTestId("send-button").first();

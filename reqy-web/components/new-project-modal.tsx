@@ -1,7 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, FolderOpen, Sparkles, Code2, AlertCircle } from "lucide-react";
+import { useState, useCallback } from "react";
+import {
+  Loader2,
+  FolderOpen,
+  Sparkles,
+  Code2,
+  AlertCircle,
+  CheckCircle2,
+  FileSearch,
+  Link2,
+  Braces,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -10,9 +20,10 @@ import { isTauriAvailable } from "@/lib/tauri";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { AnalysisMode, SavedProject } from "@/lib/config";
 import { loadApiKey, loadAIProvider } from "@/lib/config";
-import { analyzeProject } from "../lib/project-analyzer";
+import { analyzeProject, type AnalysisStage } from "../lib/project-analyzer";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 interface NewProjectModalProps {
   open: boolean;
@@ -20,12 +31,22 @@ interface NewProjectModalProps {
   onAdd: (p: SavedProject) => void;
 }
 
+const STAGE_ORDER: AnalysisStage[] = ["scan", "correlate", "ai", "finalize"];
+
+const STAGE_ICONS: Record<AnalysisStage, typeof FileSearch> = {
+  scan: FileSearch,
+  correlate: Link2,
+  ai: Sparkles,
+  finalize: Braces,
+};
+
 export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<AnalysisMode>("static");
   const [folderPath, setFolderPath] = useState("");
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState("");
+  const [stage, setStage] = useState<AnalysisStage | null>(null);
+  const [doneStages, setDoneStages] = useState<AnalysisStage[]>([]);
   const [analysisResult, setAnalysisResult] = useState<SavedProject | null>(null);
 
   const pickFolder = async () => {
@@ -36,6 +57,7 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
         if (selected && typeof selected === "string") {
           setFolderPath(selected);
           setAnalysisResult(null);
+          setDoneStages([]);
         }
       } catch {
         toast({ title: t("newProject.pickerError"), variant: "destructive" });
@@ -47,6 +69,11 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       });
     }
   };
+
+  const handleStage = useCallback((s: AnalysisStage) => {
+    setStage(s);
+    setDoneStages((prev) => (prev.includes(s) ? prev : [...prev, s]));
+  }, []);
 
   const analyze = async () => {
     if (!folderPath) {
@@ -64,21 +91,19 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       return;
     }
     setLoading(true);
+    setDoneStages([]);
+    setStage(null);
     try {
-      setStep(t("newProject.analyzing"));
       const result = await analyzeProject(
         folderPath,
         mode,
         aiProvider,
         mode === "ai" ? aiKey : undefined,
+        handleStage,
       );
+      setDoneStages((prev) => [...new Set([...prev, ...STAGE_ORDER])]);
+      setStage("finalize");
       setAnalysisResult(result);
-      toast({
-        title: t("newProject.languageDetected", {
-          language: result.language ?? t("newProject.unknown"),
-        }),
-        meta: { event: "projectAdd" },
-      });
     } catch (err) {
       toast({
         title: t("newProject.error", { error: String(err) }),
@@ -87,24 +112,24 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
       });
     } finally {
       setLoading(false);
-      setStep("");
+      setStage(null);
     }
   };
 
   const handlePrimaryAction = async () => {
     if (analysisResult) {
       onAdd(analysisResult);
-      toast({
-        title: t("newProject.routesDetected", { count: analysisResult.routes.length }),
-        meta: { event: "projectAdd" },
-      });
       onClose();
       setFolderPath("");
       setAnalysisResult(null);
+      setDoneStages([]);
       return;
     }
     await analyze();
   };
+
+  const visibleStages: AnalysisStage[] =
+    mode === "ai" ? STAGE_ORDER : STAGE_ORDER.filter((s) => s !== "ai");
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -122,6 +147,7 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
             value={mode}
             onValueChange={(value) => value && setMode(value as AnalysisMode)}
             className="grid grid-cols-2"
+            disabled={loading}
           >
             <ToggleGroupItem value="static" className="gap-2">
               <Code2 /> {t("newProject.staticParser")}
@@ -147,12 +173,20 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
               onChange={(e) => {
                 setFolderPath(e.target.value);
                 setAnalysisResult(null);
+                setDoneStages([]);
               }}
               readOnly={isTauriAvailable()}
+              disabled={loading}
               placeholder={t("newProject.folderPathPlaceholder")}
               className="flex-1 text-sm"
             />
-            <Button variant="outline" size="sm" onClick={pickFolder} className="shrink-0 gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={pickFolder}
+              disabled={loading}
+              className="shrink-0 gap-1.5"
+            >
               <FolderOpen className="size-4" /> {t("newProject.browse")}
             </Button>
           </div>
@@ -163,23 +197,82 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
             </p>
           )}
 
-          {analysisResult && (
-            <div className="rounded-2xl border border-border/50 bg-muted/10 p-4 text-sm text-foreground">
-              <p>
-                <strong>{t("newProject.languageLabel")} :</strong>{" "}
-                {analysisResult.language ?? t("newProject.unknown")}
+          {/* Analysis in progress: staged stepper */}
+          {loading && (
+            <div className="rounded-xl border border-border/60 bg-muted/5 p-4">
+              <p className="mb-3 text-sm font-medium text-foreground">
+                {t("newProject.analyzing")}
               </p>
-              <p>
-                <strong>{t("newProject.frameworkLabel")} :</strong> {analysisResult.framework}
+              <div className="space-y-2">
+                {visibleStages.map((s) => {
+                  const Icon = STAGE_ICONS[s];
+                  const isDone = doneStages.includes(s);
+                  const isActive = stage === s && !isDone;
+                  return (
+                    <div key={s} className="flex items-center gap-2.5">
+                      <div
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                          isDone
+                            ? "border-success/40 bg-success/10 text-success"
+                            : isActive
+                              ? "border-primary/40 bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground/40",
+                        )}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 className="size-3" />
+                        ) : (
+                          <Icon className={cn("size-3", isActive && "animate-pulse")} />
+                        )}
+                      </div>
+                      <span
+                        className={cn(
+                          "text-sm",
+                          isDone
+                            ? "text-foreground"
+                            : isActive
+                              ? "text-foreground font-medium"
+                              : "text-muted-foreground/50",
+                        )}
+                      >
+                        {t(`newProject.stage.${s}`)}
+                      </span>
+                      {isActive && <Loader2 className="ml-auto size-3 animate-spin text-primary" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Compact summary after analysis — full result opens in RouteModal */}
+          {analysisResult && !loading && (
+            <div className="rounded-xl border border-border/60 bg-muted/5 p-4">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-success">
+                <CheckCircle2 className="size-3.5" />
+                {t("newProject.resultTitle")}
               </p>
-              <p>
-                <strong>{t("newProject.routesLabel")} :</strong> {analysisResult.routes.length}
-              </p>
-              {analysisResult.port && (
-                <p>
-                  <strong>{t("newProject.portLabel")} :</strong> {analysisResult.port}
+              <div className="space-y-1 text-sm">
+                <p className="text-foreground">
+                  <span className="text-muted-foreground">{t("newProject.languageLabel")} :</span>{" "}
+                  <strong>{analysisResult.language ?? t("newProject.unknown")}</strong>
                 </p>
-              )}
+                <p className="text-foreground">
+                  <span className="text-muted-foreground">{t("newProject.frameworkLabel")} :</span>{" "}
+                  <strong>{analysisResult.framework}</strong>
+                </p>
+                <p className="text-foreground">
+                  <span className="text-muted-foreground">{t("newProject.routesLabel")} :</span>{" "}
+                  <strong>{analysisResult.routes.length}</strong>
+                </p>
+                {analysisResult.port && (
+                  <p className="text-foreground">
+                    <span className="text-muted-foreground">{t("newProject.portLabel")} :</span>{" "}
+                    <strong>{analysisResult.port}</strong>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -190,11 +283,11 @@ export function NewProjectModal({ open, onClose, onAdd }: NewProjectModalProps) 
           >
             {loading ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> {step || t("newProject.analyzing")}
+                <Loader2 className="size-4 animate-spin" /> {t("newProject.analyzing")}
               </>
             ) : analysisResult ? (
               <>
-                <Sparkles className="size-4" /> {t("newProject.addProject")}
+                <CheckCircle2 className="size-4" /> {t("newProject.addProject")}
               </>
             ) : (
               <>

@@ -37,7 +37,7 @@ COPY reqy-web reqy-web
 ARG NEXT_PUBLIC_SYNC_URL
 # AUTH_SIGNING_SECRET is a runtime secret — never pass as a build-arg.
 # Inject it at container runtime via: docker run -e AUTH_SIGNING_SECRET=...
-# (or via Fly secrets / k8s secrets). NEXT_PUBLIC_* vars ARE needed at
+# (or via AWS Secrets Manager/SSM or the container orchestrator). NEXT_PUBLIC_* vars ARE needed at
 # build-time because Next.js inlines them into the client bundle.
 ENV NEXT_PUBLIC_SYNC_URL=$NEXT_PUBLIC_SYNC_URL \
     NODE_ENV=production
@@ -79,5 +79,8 @@ COPY --from=builder /app/reqy-web/package.json ./reqy-web/package.json
 WORKDIR /app/reqy-web
 
 EXPOSE 3000
+
+# Exécution non-root (sécurité)
+USER node
 
 CMD ["pnpm", "start"]

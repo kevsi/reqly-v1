@@ -2,6 +2,7 @@ import type {
   Collection,
   Environment,
   CollectionFolder,
+  RequestItem,
   RequestStore,
 } from "@/hooks/request-types";
 import { pollAllSyncChanges } from "@/lib/sync-client";
@@ -24,6 +25,43 @@ export interface LocalPushChange {
   updatedBy: string;
   baseVersion?: number;
   deleted?: boolean;
+}
+
+const SENSITIVE_NAME =
+  /authorization|api[-_]?key|token|secret|password|passwd|credential|cookie|private[-_]?key|bearer/i;
+
+function sanitizeRequest(request: RequestItem): RequestItem {
+  return {
+    ...request,
+    authToken: request.authToken ? "" : request.authToken,
+    headers: Object.fromEntries(
+      Object.entries(request.headers ?? {}).filter(([name]) => !SENSITIVE_NAME.test(name)),
+    ),
+  };
+}
+
+function sanitizeSyncData(
+  entityType: "collection" | "environment" | "folder",
+  data: Collection | Environment | CollectionFolder,
+): Collection | Environment | CollectionFolder {
+  if (entityType === "collection") {
+    const collection = data as Collection;
+    return {
+      ...collection,
+      requests: collection.requests.map(sanitizeRequest),
+    };
+  }
+  if (entityType === "environment") {
+    const environment = data as Environment;
+    return {
+      ...environment,
+      variables: environment.variables.map((variable) => ({
+        ...variable,
+        value: SENSITIVE_NAME.test(variable.key) ? "" : variable.value,
+      })),
+    };
+  }
+  return data;
 }
 
 /**
@@ -59,7 +97,7 @@ export function computePushChanges(
         changes.push({
           entityType,
           id: e.id,
-          data: getData(e),
+          data: sanitizeSyncData(entityType, getData(e)),
           updatedAt: e.updatedAt,
           updatedBy: e.updatedBy ?? "unknown",
         });
@@ -71,7 +109,7 @@ export function computePushChanges(
         changes.push({
           entityType,
           id: e.id,
-          data: getData(e),
+          data: sanitizeSyncData(entityType, getData(e)),
           updatedAt: now,
           updatedBy: e.updatedBy ?? "unknown",
           deleted: true,
@@ -104,7 +142,7 @@ export function mergeChangesIntoStore(store: RequestStore, changes: SyncChange[]
 
   for (const change of changes) {
     if (change.entityType === "collection") {
-      const incoming = change.data as Collection;
+      const incoming = sanitizeSyncData("collection", change.data) as Collection;
       const idx = collections.findIndex((c) => c.id === change.id);
       if (change.deleted) {
         collections = collections.filter((c) => c.id !== change.id);
@@ -114,7 +152,7 @@ export function mergeChangesIntoStore(store: RequestStore, changes: SyncChange[]
         collections[idx] = incoming;
       }
     } else if (change.entityType === "environment") {
-      const incoming = change.data as Environment;
+      const incoming = sanitizeSyncData("environment", change.data) as Environment;
       const idx = environments.findIndex((e) => e.id === change.id);
       if (change.deleted) {
         environments = environments.filter((e) => e.id !== change.id);

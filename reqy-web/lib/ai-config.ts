@@ -12,6 +12,7 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
   "opencode-zen": "gpt-5",
   custom: "gpt-4o-mini",
   grok: "grok-2",
+  // Embedding-only model used by /api/embed; not an AIProvider selectable in the UI or proxy-ai.
   jina: "jina-embeddings-v3",
 };
 

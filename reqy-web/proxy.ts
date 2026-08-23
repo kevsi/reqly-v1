@@ -5,6 +5,7 @@ const PROTECTED_PREFIXES = [
   "/api/proxy",
   "/api/proxy-ai",
   "/api/proxy-models",
+  "/api/proxy-sse",
   "/api/test-runner/",
   "/api/postman-import",
   "/api/postman-export",
@@ -12,6 +13,7 @@ const PROTECTED_PREFIXES = [
   "/api/embed",
   "/api/capture",
   "/api/git/proxy",
+  "/api/gitlab-api",
 ];
 
 function isExempt(pathname: string): boolean {

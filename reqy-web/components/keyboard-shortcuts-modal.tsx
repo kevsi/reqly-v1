@@ -108,8 +108,11 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
         <div className="flex items-center justify-between pt-4 border-t text-xs text-muted-foreground">
           <p>{t("settings.keyboard.closeHint", { key: isMac ? "⌘" : "Ctrl" })}</p>
           <button
+            type="button"
             onClick={() => onOpenChange(false)}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t("common.close")}
+            title={t("common.close")}
           >
             <X className="size-4" />
           </button>

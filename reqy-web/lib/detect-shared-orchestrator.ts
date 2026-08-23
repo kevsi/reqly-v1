@@ -258,6 +258,47 @@ export async function matchFramework(
   return enhanceDetectionResults(routes, content, framework);
 }
 
+// ── Merge tree-sitter AST routes with enriched regex/AST detection ────────
+
+export function enrichTreeSitterRoutes(
+  tsRoutes: DetectedRoute[],
+  regexRoutes: DetectedRoute[],
+): DetectedRoute[] {
+  const enriched = new Map<string, DetectedRoute>();
+  for (const r of regexRoutes) enriched.set(`${r.method}|${r.path}`, r);
+
+  const seen = new Set<string>();
+  const merged: DetectedRoute[] = [];
+
+  for (const tr of tsRoutes) {
+    const key = `${tr.method}|${tr.path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const rich = enriched.get(key);
+    if (rich) {
+      if (!rich.controller && tr.controller) rich.controller = tr.controller;
+      if (tr.authRequired && !rich.authRequired) {
+        rich.authRequired = true;
+        if (!rich.authType) rich.authType = "middleware";
+        if (!rich.reasonings) rich.reasonings = [];
+        rich.reasonings.push("Auth signal via AST route analysis");
+      }
+      merged.push(rich);
+    } else {
+      merged.push(tr);
+    }
+  }
+
+  for (const r of regexRoutes) {
+    const key = `${r.method}|${r.path}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(r);
+    }
+  }
+  return merged;
+}
+
 // ── Main detectRoutes entry point ─────────────────────────────────────────
 
 export async function detectRoutes(
@@ -265,35 +306,35 @@ export async function detectRoutes(
   filePath: string,
   framework: string,
 ): Promise<DetectedRoute[]> {
+  let tsRoutes: DetectedRoute[] = [];
   try {
     await ensureTreeSitterLoaded();
-    const tsRoutes = await detectRoutesWithTreeSitter!(content, filePath, framework);
-    if (tsRoutes.length > 0) {
-      return tsRoutes.map((r) => {
-        const route = makeRoute(r.method, r.path, r.name || "");
-        if (r.controller) route.controller = r.controller;
-        if (r.authRequired) {
-          route.authRequired = true;
-          route.authType = "jwt";
-        }
-        return route;
-      });
-    }
-    console.debug(`[tree-sitter] no routes for ${filePath} (${framework}) — falling back to regex`);
+    const raw = await detectRoutesWithTreeSitter!(content, filePath, framework);
+    tsRoutes = raw.map((r) => {
+      const route = makeRoute(r.method, r.path, r.name || "");
+      if (r.controller) route.controller = r.controller;
+      if (r.authRequired) route.authRequired = true;
+      return route;
+    });
   } catch (e) {
     console.debug(
       `[tree-sitter] unavailable for ${filePath} (${framework}): ${e instanceof Error ? e.message : e}`,
     );
   }
 
-  const raw = await matchFramework(content, framework, filePath);
-  const seen = new Set<string>();
-  return raw.filter((r) => {
-    const key = `${r.method}|${r.path}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const regexRoutes = await matchFramework(content, framework, filePath);
+
+  if (tsRoutes.length === 0) {
+    const seen = new Set<string>();
+    return regexRoutes.filter((r) => {
+      const key = `${r.method}|${r.path}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  return enrichTreeSitterRoutes(tsRoutes, regexRoutes);
 }
 
 // ── Frontend API call scanning ──────────────────────────────────────────

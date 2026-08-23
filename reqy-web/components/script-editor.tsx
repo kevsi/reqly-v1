@@ -32,6 +32,7 @@ export function ScriptEditor({
           value={preRequestScript ?? ""}
           onChange={onPreChange}
           placeholder="// pm.environment.set('token', 'abc123')"
+          ariaLabel="Pre-request script (JS, sandboxed)"
         />
       </div>
       <div>
@@ -42,6 +43,7 @@ export function ScriptEditor({
           value={postResponseScript ?? ""}
           onChange={onPostChange}
           placeholder="// pm.expect(pm.response.code).to.equal(200)"
+          ariaLabel="Post-response script (JS, sandboxed)"
         />
       </div>
     </div>

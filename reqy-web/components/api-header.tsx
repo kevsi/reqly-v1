@@ -15,7 +15,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -189,7 +188,6 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                aria-label={t("header.notifications")}
                 className="group/notif relative flex size-9 items-center justify-center rounded-lg text-muted-foreground/70 transition-all duration-200 hover:bg-accent hover:text-foreground border border-transparent hover:border-border"
                 title={
                   notifications && notifications.some((n) => !n.read)
@@ -249,15 +247,18 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
               ) : (
                 <div className="max-h-[280px] overflow-y-auto">
                   {notifications.map((n) => (
-                    <DropdownMenuItem
+                    <div
                       key={n.id}
-                      onClick={() => markNotificationRead(n.id)}
-                      className="group flex flex-col items-start gap-1.5 px-4 py-3 border-b border-border last:border-b-0 relative"
+                      className="group flex items-start gap-2 border-b border-border px-3 py-3 last:border-b-0"
                     >
-                      <div className="flex items-center justify-between w-full">
+                      <button
+                        type="button"
+                        onClick={() => markNotificationRead(n.id)}
+                        className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
                         <span
                           className={cn(
-                            "text-sm",
+                            "block break-words text-sm",
                             !n.read
                               ? "font-semibold text-foreground"
                               : "font-medium text-muted-foreground",
@@ -265,29 +266,28 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
                         >
                           {n.title}
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-muted-foreground/60">
-                            {new Date(n.createdAt).toLocaleTimeString()}
+                        {n.body && (
+                          <span className="mt-1 block break-words text-xs leading-relaxed text-muted-foreground/80">
+                            {n.body}
                           </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPendingRemoveNotifId(n.id);
-                            }}
-                            className="shrink-0 rounded-md p-0.5 text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-foreground transition-all duration-200"
-                            title={t("common.delete")}
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      {n.body && (
-                        <div className="text-xs text-muted-foreground/80 leading-relaxed">
-                          {n.body}
-                        </div>
-                      )}
-                      {!n.read && <span className="mt-1 size-1.5 rounded-full bg-primary" />}
-                    </DropdownMenuItem>
+                        )}
+                        <span className="mt-1.5 block text-[11px] text-muted-foreground/60">
+                          {new Date(n.createdAt).toLocaleTimeString()}
+                          {!n.read && (
+                            <span className="ml-2 inline-block size-1.5 rounded-full bg-primary align-middle" />
+                          )}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingRemoveNotifId(n.id)}
+                        className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={t("common.delete")}
+                        title={t("common.delete")}
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

@@ -39,6 +39,7 @@ import { createDatasetsMutations } from "@/hooks/store/datasets";
 import { createAiActionsMutations } from "@/hooks/store/ai-actions";
 import { createPreferencesMutations } from "@/hooks/store/preferences";
 import { WORKSPACE_PERSONAL_ID } from "@/hooks/store/types";
+import { migrateItemAssertions } from "@/lib/test-runner/migration";
 
 // ── Persistence (module-level singleton) ────────────────────────────────
 
@@ -148,6 +149,17 @@ export const requestStore = create<RequestStoreState>()((set, get) => {
   // Init store
   async function initStore() {
     let loaded = await persistence.loadInitial();
+
+    // Migrate legacy assertions -> runnerAssertions across all collections
+    if (loaded.collections && loaded.collections.length > 0) {
+      loaded = {
+        ...loaded,
+        collections: loaded.collections.map((col) => ({
+          ...col,
+          requests: (col.requests || []).map((r) => migrateItemAssertions(r)),
+        })),
+      };
+    }
 
     const hasDraftsCollection = loaded.collections.some((c) => c.name === "Drafts");
     if (!hasDraftsCollection) {

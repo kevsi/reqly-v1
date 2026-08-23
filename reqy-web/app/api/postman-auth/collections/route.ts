@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
 import { postmanFetchJson, PostmanApiError } from "@/lib/postman";
+import { getApiKeyFromRequest } from "../cookies";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
-  const apiKey = request.cookies.get("postman_api_key")?.value;
+  const apiKey = getApiKeyFromRequest(request);
   if (!apiKey) {
     return NextResponse.json({ message: "Non connecté à Postman" }, { status: 401 });
   }

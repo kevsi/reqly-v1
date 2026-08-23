@@ -28,6 +28,57 @@ function headersToRecord(
   return record;
 }
 
+// ── Redaction des identifiants dans les exports ───────────────────────────
+// Option proposée à l'export : les valeurs des en-têtes sensibles (auth,
+// cookies, tokens…) sont remplacées par [REDACTED] pour pouvoir partager
+// un HAR/mock sans fuiter de secrets.
+
+const SENSITIVE_HEADER_NAMES = [
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "api-key",
+  "x-auth-token",
+  "x-access-token",
+  "x-refresh-token",
+  "x-session-token",
+  "x-csrf-token",
+  "credentials",
+];
+
+function isSensitiveHeaderName(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (SENSITIVE_HEADER_NAMES.includes(lower)) return true;
+  return (
+    lower.includes("authorization") ||
+    lower.includes("auth-token") ||
+    lower.includes("access-token") ||
+    lower.includes("refresh-token") ||
+    lower.includes("session-token") ||
+    lower.includes("secret") ||
+    lower.includes("password") ||
+    lower.endsWith("-key")
+  );
+}
+
+function redactHeaderPairs(
+  headers: Array<[string, string]> | null | undefined,
+): Array<[string, string]> | undefined {
+  if (!headers) return headers ?? undefined;
+  return headers.map(([k, v]) => [k, isSensitiveHeaderName(k) ? "[REDACTED]" : v]);
+}
+
+/** Copie d'une session avec les en-têtes sensibles masqués (pour export). */
+export function redactCapturedSession(session: CapturedRequest): CapturedRequest {
+  return {
+    ...session,
+    headers: redactHeaderPairs(session.headers) ?? session.headers,
+    responseHeaders: redactHeaderPairs(session.responseHeaders) ?? session.responseHeaders,
+  };
+}
+
 /**
  * Export captured requests as HAR 1.2 JSON structure
  */
@@ -113,7 +164,7 @@ export function exportCaptureAsOpenApi(
   const paths: Record<string, Record<string, object>> = {};
 
   for (const s of sessions) {
-    let pathname = "/";
+    let pathname: string;
     try {
       const urlObj = new URL(s.url);
       pathname = urlObj.pathname || "/";
@@ -195,21 +246,38 @@ export function exportCaptureAsOpenApi(
 }
 
 /**
+ * Échappe une valeur pour une chaîne cURL entre guillemets doubles :
+ * `"`, `\`, `$`, `` ` `` et saut de ligne — sinon un trafic capturé malveillant
+ * pourrait exécuter des commandes une fois le cURL collé dans un shell.
+ */
+function escapeCurlDoubleQuoted(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/`/g, "\\`")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+}
+
+/**
  * Generate a cURL command string from a captured request
  */
 export function capturedToCurl(session: CapturedRequest): string {
-  const parts: string[] = [`curl -X ${session.method.toUpperCase()} "${session.url}"`];
+  const parts: string[] = [
+    `curl -X ${session.method.toUpperCase()} "${escapeCurlDoubleQuoted(session.url)}"`,
+  ];
 
   if (session.headers) {
     for (const [key, val] of session.headers) {
       if (key && !key.startsWith(":")) {
-        parts.push(`-H "${key}: ${val.replace(/"/g, '\\"')}"`);
+        parts.push(`-H "${key}: ${escapeCurlDoubleQuoted(val)}"`);
       }
     }
   }
 
   if (session.body) {
-    parts.push(`--data "${session.body.replace(/"/g, '\\"')}"`);
+    parts.push(`--data "${escapeCurlDoubleQuoted(session.body)}"`);
   }
 
   return parts.join(" \\\n  ");

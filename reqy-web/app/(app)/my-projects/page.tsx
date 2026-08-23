@@ -39,9 +39,11 @@ const MyProjectsPage: React.FC = () => {
   const handleAddProject = useCallback(
     (newProject: SavedProject) => {
       addProject(newProject);
+      setSelectedProjectLocal(newProject);
+      setSelectedProject(newProject.id);
       setIsModalOpen(false);
     },
-    [addProject],
+    [addProject, setSelectedProject],
   );
 
   const handleGithubImport = useCallback(
@@ -80,6 +82,7 @@ const MyProjectsPage: React.FC = () => {
           framework: analysisResult.framework,
           language: analysisResult.language,
           port: analysisResult.port,
+          warnings: analysisResult.warnings,
           analyzedAt: new Date().toISOString(),
         };
         updateProject(projectId, {
@@ -87,6 +90,7 @@ const MyProjectsPage: React.FC = () => {
           framework: updatedProject.framework,
           language: updatedProject.language,
           port: updatedProject.port,
+          warnings: updatedProject.warnings,
           analyzedAt: updatedProject.analyzedAt,
         });
         if (selectedProject?.id === projectId) {

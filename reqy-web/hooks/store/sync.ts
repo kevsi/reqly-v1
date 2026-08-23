@@ -12,6 +12,8 @@
  */
 
 import type { RequestStore } from "@/hooks/request-types";
+import { toast } from "@/hooks/use-toast";
+import i18n from "@/src/i18n";
 import { getPublicEnv } from "@/lib/env";
 import {
   mergeChangesIntoStore,
@@ -23,6 +25,7 @@ import { pushChanges } from "@/lib/sync-client";
 import { connectSyncWs, type SyncWsController } from "@/lib/sync/sync-ws";
 import { syncCursors } from "./persistence";
 import { WORKSPACE_PERSONAL_ID } from "./types";
+import { useSessionStore } from "@/lib/session-store";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -53,9 +56,11 @@ export interface SyncEngine {
 
 export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
   const { get, commit } = deps;
+  const t = (key: string, options?: Record<string, unknown>) => i18n.t(key, options);
 
   // ── Push tracking ──────────────────────────────────────────────────
   const lastPushed: Record<string, Pick<RequestStore, "collections" | "environments">> = {};
+  let lastPushErrorToastAt = 0;
   let pushTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── WebSocket ──────────────────────────────────────────────────────
@@ -78,7 +83,8 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     const syncUrl = getPublicEnv().NEXT_PUBLIC_SYNC_URL;
     if (!syncUrl) return { applied: 0 };
     const since = syncCursors.load()[workspaceId] ?? 0;
-    const res = await pullAndMerge(workspaceId, since, { apply: mergeRemote });
+    const token = useSessionStore.getState().token ?? undefined;
+    const res = await pullAndMerge(workspaceId, since, { token, apply: mergeRemote });
     // Advance the cursor using the server clock so changes that landed
     // between server-now and client-now are not skipped forever (a client
     // clock running ahead of the server would otherwise cause silent loss).
@@ -103,20 +109,36 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       const base = lastPushed[workspaceId] ?? { collections: [], environments: [] };
       const changes = computePushChanges(base, snapshot);
       if (changes.length === 0) return;
-      pushChanges(workspaceId, changes)
+      pushChanges(workspaceId, changes, {
+        token: useSessionStore.getState().token ?? undefined,
+      })
         .then((res) => {
           if (res.conflicts.length === 0) {
             lastPushed[workspaceId] = snapshot;
           } else {
             deps.addNotification?.({
-              title: "Sync Conflict",
-              body: `${res.conflicts.length} change(s) conflicted with the server. Server version applied.`,
+              title: t("collections.sync.conflictTitle"),
+              body: t("collections.sync.conflictBody", { count: res.conflicts.length }),
               type: "warning",
             });
             void pullWorkspace(workspaceId);
           }
         })
-        .catch((e) => console.warn("[sync] push failed:", e));
+        .catch((e) => {
+          console.warn("[sync] push failed:", e);
+          // Feedback utilisateur (débouncé : une notification par échec, pas
+          // un spam à chaque retry de 500 ms).
+          const now = Date.now();
+          if (now - lastPushErrorToastAt > 10_000) {
+            lastPushErrorToastAt = now;
+            toast({
+              title: t("collections.sync.pushFailedTitle"),
+              description: t("collections.sync.pushFailedBody"),
+              variant: "destructive",
+              meta: { event: "sync" },
+            } as Parameters<typeof toast>[0]);
+          }
+        });
     }, 500);
   }
 
@@ -142,6 +164,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     syncWsController = connectSyncWs({
       workspaceId,
       syncUrl,
+      token: useSessionStore.getState().token ?? undefined,
       onChange: () => {
         // Broadcast hint: pull the latest changes
         void pullWorkspace(workspaceId);
@@ -211,6 +234,14 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
           : (allWorkspaces[0]?.id ?? WORKSPACE_PERSONAL_ID),
       }));
     } catch (e) {
+      const status = e instanceof Error && /API returned (\d+)/.exec(e.message)?.[1];
+      const isUnauthorized = status === "401";
+      const title = isUnauthorized ? "Connexion requise" : "Synchronisation indisponible";
+      const body = isUnauthorized
+        ? "Les workspaces distants ne sont pas accessibles. Connectez-vous pour synchroniser vos données. Les données locales restent disponibles."
+        : "Les workspaces distants n'ont pas pu être chargés. Les données locales restent disponibles. Réessayez plus tard.";
+      deps.addNotification?.({ title, body, type: "warning" });
+      toast({ title, description: body });
       console.warn("[workspaces] API fetch failed, using local workspaces:", e);
     }
   };

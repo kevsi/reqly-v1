@@ -77,6 +77,11 @@ function groupSteps(steps: AssistantStep[]): GroupedStep[] {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/** Évite la répétition visuelle des points lorsque le modèle les ajoute au label. */
+export function stripTrailingEllipsis(label: string): string {
+  return label.replace(/\s*(?:…|\.{3})\s*$/u, "").trimEnd();
+}
+
 const TOOL_ICONS: Record<string, LucideIcon> = {
   list_collections: List,
   list_requests: List,
@@ -149,6 +154,7 @@ function ThinkingRow({
   onToggle?: () => void;
 }) {
   const isActive = step.status === "pending";
+  const displayLabel = stripTrailingEllipsis(step.label);
   return (
     <div
       role={hasChildren ? "button" : undefined}
@@ -180,15 +186,9 @@ function ThinkingRow({
           isActive ? "text-foreground/70 italic" : "text-muted-foreground",
         )}
       >
-        {step.label}
+        {displayLabel}
       </span>
-      {isActive && (
-        <span className="flex shrink-0 items-center gap-0.5">
-          <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:0ms]" />
-          <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:120ms]" />
-          <span className="size-1 rounded-full bg-primary/50 animate-bounce [animation-delay:240ms]" />
-        </span>
-      )}
+      {isActive && <Loader2 className="size-3 shrink-0 animate-spin text-primary/65" aria-hidden />}
       {hasChildren && !isActive && (
         <ChevronDown
           className={cn(
@@ -217,6 +217,7 @@ function ToolRow({
 }) {
   const { t } = useTranslation();
   const parsed = parseToolLabel(step.label);
+  const displayLabel = stripTrailingEllipsis(step.label);
   const ToolIcon = (parsed ? (TOOL_ICONS[parsed.name] ?? Wrench) : Wrench) as LucideIcon;
 
   const isActive = step.status === "pending";
@@ -232,7 +233,13 @@ function ToolRow({
     isActive && "bg-primary/10 text-primary ring-primary/25",
   );
 
-  const statusLabel = isDone ? "fait" : isError ? "erreur" : isAwaiting ? "en attente" : "…";
+  const statusLabel = isDone
+    ? t("ai.steps.done")
+    : isError
+      ? t("common.error")
+      : isAwaiting
+        ? t("ai.steps.waiting")
+        : t("ai.steps.inProgress");
   const statusCls = cn(
     "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
     isDone && "bg-success/10 text-success ring-success/25",
@@ -284,11 +291,12 @@ function ToolRow({
                 )}
               </>
             ) : (
-              <span className="text-sm text-foreground">{step.label}</span>
+              <span className="text-sm text-foreground">{displayLabel}</span>
             )}
           </div>
-          <span className={statusLabel !== "…" || isActive ? statusCls : "hidden"}>
-            {isActive ? <Loader2 className="size-2.5 animate-spin" /> : statusLabel}
+          <span className={cn(statusCls, "inline-flex items-center gap-1")}>
+            {isActive && <Loader2 className="size-2.5 animate-spin" />}
+            {!isActive && statusLabel}
           </span>
         </div>
 
@@ -573,7 +581,7 @@ export function AssistantStepsRenderer({
   // Mini badges for collapsed summary: group by tool name
   const toolCounts = toolSteps.reduce<Record<string, number>>((acc, s) => {
     const parsed = parseToolLabel(s.label);
-    const key = parsed?.name ?? s.label;
+    const key = parsed?.name ?? stripTrailingEllipsis(s.label);
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
@@ -606,7 +614,9 @@ export function AssistantStepsRenderer({
                 key={name}
                 className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border/50"
               >
-                {count > 1 ? `${name} ×${count}` : name}
+                {count > 1
+                  ? `${stripTrailingEllipsis(name)} ×${count}`
+                  : stripTrailingEllipsis(name)}
               </span>
             ))}
           <ChevronDown

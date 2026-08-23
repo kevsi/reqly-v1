@@ -5,6 +5,7 @@ import {
   authResendCode,
   authLogin,
   authLogout,
+  authMe,
   type AuthUser,
   type SignupResult,
 } from "@/lib/auth-client";
@@ -46,7 +47,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   ...initialState(),
 
   restore: async () => {
-    // Token is memory-only, so there is nothing to restore on page load.
+    // Check for auth_session cookie (set by OAuth callback or previous login)
+    const cookieMatch = document.cookie.match(/auth_session=([^;]+)/);
+    if (cookieMatch) {
+      try {
+        const user = await authMe(cookieMatch[1]);
+        set({ user, token: cookieMatch[1], status: "authenticated" });
+        return;
+      } catch {
+        // Cookie is invalid or expired — clear it
+        document.cookie = "auth_session=; path=/; max-age=0";
+      }
+    }
+    // No valid session — memory-only token approach
     set({ user: null, token: null, status: "unauthenticated" });
   },
 

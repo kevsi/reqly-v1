@@ -755,8 +755,8 @@ export default function DashboardPage() {
               </span>
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-auto">
-            <div className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-2 border-b border-border bg-muted/30 sticky top-0">
+          <div className="overflow-x-auto">
+            <div className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-2 border-b border-border bg-muted/30 sticky top-0 min-w-[500px]">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {t("dashboard.method")}
               </span>
@@ -779,7 +779,7 @@ export default function DashboardPage() {
                 .map((request, i) => (
                   <div
                     key={`${request.endpoint}-${request.timestamp}-${i}`}
-                    className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center hover:bg-muted/20 transition-colors"
+                    className="grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center hover:bg-muted/20 transition-colors min-w-[500px]"
                   >
                     <span
                       className={cn(
@@ -790,7 +790,7 @@ export default function DashboardPage() {
                     >
                       {request.method}
                     </span>
-                    <span className="font-mono text-xs text-foreground truncate">
+                    <span className="font-mono text-xs text-foreground truncate min-w-0">
                       {request.endpoint}
                     </span>
                     <span

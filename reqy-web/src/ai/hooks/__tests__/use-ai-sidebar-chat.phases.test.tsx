@@ -9,15 +9,15 @@ vi.mock("@/src/ai/cloud-engine/llm", () => ({
 }));
 vi.mock("@/lib/llm-tools", () => ({
   REQLY_TOOLS: [],
-  executeToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),
+  executeAuthorizedToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),
   maskSensitiveObject: (o: unknown) => o,
 }));
 
-import { executeToolCall } from "@/lib/llm-tools";
+import { executeAuthorizedToolCall } from "@/lib/llm-tools";
 
 describe("useAiSidebarChat — phases tool_calling → awaiting_response → streaming → done", () => {
   beforeEach(() => {
-    vi.mocked(executeToolCall).mockClear();
+    vi.mocked(executeAuthorizedToolCall).mockClear();
     vi.mocked(streamLLM).mockReset();
   });
 

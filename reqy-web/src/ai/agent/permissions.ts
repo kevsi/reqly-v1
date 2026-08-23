@@ -3,9 +3,8 @@ import type { ToolPermission } from "./types";
 
 const PERMISSIONS_KEY = "ai-tool-permissions";
 
-// Audit complet de REQLY_TOOLS (lib/llm-tools.ts) : tout outil qui modifie l'état
-// (création/renommage/suppression/exécution/délégation) DOIT être listé ici,
-// sinon il héritera silencieusement de "allow". `delegate` est ajouté en Task 8.
+// Un outil absent des listes est refusé par défaut afin qu'un ajout futur ne
+// puisse pas hériter silencieusement d'une autorisation.
 const SIDE_EFFECT_TOOLS = new Set([
   "create_collection",
   "create_request",
@@ -26,10 +25,20 @@ const SIDE_EFFECT_TOOLS = new Set([
   "archive_workspace",
   "unarchive_workspace",
   "clear_workspace_cache",
+  // Actions du dispatcher JSON historique.
+  "legacy_fill_request",
+  "legacy_add_assertions",
+  "legacy_create_variable",
+  "legacy_apply_fix",
+  "legacy_generate_doc",
+  "legacy_execute_request",
+  "legacy_run_batch",
 ]);
 
 const READ_ONLY_TOOLS = new Set([
   "list_collections",
+  "list_requests",
+  "list_environments",
   "get_request_context",
   "search_requests",
   "explain_response",
@@ -42,6 +51,34 @@ const READ_ONLY_TOOLS = new Set([
   "get_workspace_stats",
 ]);
 
+// Ces outils ne peuvent jamais recevoir allow persistant ni autoApply.
+const HIGH_IMPACT_TOOLS = new Set([
+  "execute_request",
+  "run_collection",
+  "delete_collection",
+  "delete_request",
+  "import_collection",
+  "update_environment_variable",
+  "delegate",
+  "switch_workspace",
+  "duplicate_workspace",
+  "archive_workspace",
+  "clear_workspace_cache",
+  "move_request",
+  "legacy_execute_request",
+  "legacy_run_batch",
+]);
+
+export type ApprovalSource = "none" | "user" | "plan" | "code" | "autoApply";
+
+export interface ToolAuthorizationDecision {
+  tool: string;
+  permission: ToolPermission;
+  allowed: boolean;
+  requiresConfirmation: boolean;
+  reason: string;
+}
+
 export function isSideEffectTool(name: string): boolean {
   return SIDE_EFFECT_TOOLS.has(name);
 }
@@ -50,8 +87,14 @@ export function isReadOnlyTool(name: string): boolean {
   return READ_ONLY_TOOLS.has(name);
 }
 
+export function isHighImpactTool(name: string): boolean {
+  return HIGH_IMPACT_TOOLS.has(name);
+}
+
 export function defaultPermission(name: string): ToolPermission {
-  return isSideEffectTool(name) ? "ask" : "allow";
+  if (isReadOnlyTool(name)) return "allow";
+  if (isSideEffectTool(name)) return "ask";
+  return "deny";
 }
 
 export function loadPermissions(): Record<string, ToolPermission> {
@@ -62,11 +105,108 @@ export function loadPermissions(): Record<string, ToolPermission> {
   }
 }
 
-export function savePermission(name: string, perm: ToolPermission): void {
+export function canSavePermission(name: string, perm: ToolPermission): boolean {
+  return !(isHighImpactTool(name) && perm === "allow");
+}
+
+export function savePermission(name: string, perm: ToolPermission): boolean {
+  if (!canSavePermission(name, perm)) return false;
   const next = { ...loadPermissions(), [name]: perm };
   void persistence.setItem(PERMISSIONS_KEY, next);
+  return true;
 }
 
 export function getPermission(name: string): ToolPermission {
   return loadPermissions()[name] ?? defaultPermission(name);
+}
+
+function isExplicitApproval(source: ApprovalSource): boolean {
+  return source === "user" || source === "plan" || source === "code";
+}
+
+/** Décision unique utilisée par toutes les surfaces IA avant un effet de bord. */
+export function authorizeToolCall(
+  name: string,
+  approvalSource: ApprovalSource = "none",
+): ToolAuthorizationDecision {
+  const permission = getPermission(name);
+
+  if (!isSideEffectTool(name) && !isReadOnlyTool(name)) {
+    return {
+      tool: name,
+      permission: "deny",
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "Outil non classifié : refusé par défaut.",
+    };
+  }
+
+  if (permission === "deny") {
+    return {
+      tool: name,
+      permission,
+      allowed: false,
+      requiresConfirmation: false,
+      reason: "Outil refusé par la politique de permissions.",
+    };
+  }
+
+  if (isHighImpactTool(name)) {
+    if (isExplicitApproval(approvalSource)) {
+      return {
+        tool: name,
+        permission,
+        allowed: true,
+        requiresConfirmation: false,
+        reason: "Approbation explicite reçue.",
+      };
+    }
+    return {
+      tool: name,
+      permission,
+      allowed: false,
+      requiresConfirmation: true,
+      reason: "Une approbation explicite est obligatoire pour cet outil.",
+    };
+  }
+
+  if (
+    permission === "allow" ||
+    isExplicitApproval(approvalSource) ||
+    approvalSource === "autoApply"
+  ) {
+    return {
+      tool: name,
+      permission,
+      allowed: true,
+      requiresConfirmation: false,
+      reason: "Outil autorisé par la politique courante.",
+    };
+  }
+
+  return {
+    tool: name,
+    permission,
+    allowed: false,
+    requiresConfirmation: true,
+    reason: "Une confirmation est requise pour cet effet de bord.",
+  };
+}
+
+// Compatibilité avec les consommateurs locaux qui utilisaient encore le booléen
+// `confirmed`; les nouveaux appels doivent utiliser authorizeToolCall.
+export type AuthorizationDecision =
+  { allowed: true } | { allowed: false; reason: "denied" | "confirmation_required" };
+
+export function authorizeTool(name: string, confirmed: boolean): AuthorizationDecision {
+  const decision = authorizeToolCall(name, confirmed ? "user" : "none");
+  if (decision.allowed) return { allowed: true };
+  return {
+    allowed: false,
+    reason: decision.requiresConfirmation ? "confirmation_required" : "denied",
+  };
+}
+
+export function getPermissionToolNames(): string[] {
+  return [...SIDE_EFFECT_TOOLS, ...READ_ONLY_TOOLS];
 }

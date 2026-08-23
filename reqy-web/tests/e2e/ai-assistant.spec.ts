@@ -3,6 +3,9 @@ import { test, expect } from "@playwright/test";
 test.describe("AI Assistant sidebar", () => {
   test("can open and close sidebar via header toggle + Cmd+I", async ({ page }) => {
     await page.goto("/");
+    await expect(page.getByTestId("store-ready")).toHaveAttribute("data-ready", "true", {
+      timeout: 10000,
+    });
     await expect(page.locator("body")).toBeVisible({ timeout: 10000 });
 
     // Open via header toggle button (Sparkles icon)

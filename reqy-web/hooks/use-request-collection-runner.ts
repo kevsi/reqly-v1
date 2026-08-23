@@ -5,10 +5,12 @@ import { toast } from "@/hooks/use-toast";
 import { fireSystemNotification, pushInAppNotification } from "@/lib/system-notifications";
 import { useRequestStore, type Collection, type RequestItem } from "@/hooks/use-request-store";
 import { type RequestTab } from "@/lib/request-executor";
-import { generateRequestTabId, headersArrayToRecord } from "@/lib/request-tab-utils";
+import { generateRequestTabId } from "@/lib/request-tab-utils";
 import type { RequestTabsState } from "@/hooks/use-request-tabs-state";
 import { runCollection as runCollectionWithRunner } from "@/lib/test-runner/runner";
+import { createRunnerExecutor } from "@/lib/test-runner/executor";
 import type { AssertionResult } from "@/lib/test-runner/types";
+import { isTauriInvokeError, type TauriErrorPayload } from "@/lib/tauri";
 
 // Contrats de callbacks issus de useRequestExecutionCore : leurs types précis
 // (RequestItem/HistoryItem + résultat d'exécution) ne couvrent pas les shapes
@@ -54,8 +56,16 @@ export function useRequestCollectionRunner(
       // Build a minimal environment from the active environment variables.
       // The runner context requires a synchronous log function.
       const logs: string[] = [];
+      const storeState = useRequestStore.getState();
+      const activeEnv = storeState.environments.find(
+        (e) => e.id === storeState.activeEnvironmentId,
+      );
+      const environment: Record<string, string> = {};
+      for (const v of activeEnv?.variables ?? []) {
+        if (v.enabled !== false && v.key.trim() !== "") environment[v.key.trim()] = v.value;
+      }
       const runnerCtx = {
-        environment: {} as Record<string, string>,
+        environment,
         iterationData: {} as Record<string, string>,
         iterationIndex: 0,
         log: (msg: string) => {
@@ -65,64 +75,31 @@ export function useRequestCollectionRunner(
       };
 
       try {
-        const report = await runCollectionWithRunner(collection, runnerCtx, {
-          executor: async (req) => {
-            const backgroundTab = {
-              ...activeTab,
-              ...buildTabFromRequest({
-                ...(collection.requests.find((r) => r.method === req.method && r.url === req.url) ??
-                  {}),
-                method: req.method,
-                url: req.url,
-                // req.headers is already a Record (headersToRecord ran in the
-                // runner); buildTabFromRequest converts it back to Header[]
-                // itself — passing an array here would corrupt the headers.
-                headers: req.headers ?? {},
-                body:
-                  typeof req.body === "string"
-                    ? req.body
-                    : req.body
-                      ? JSON.stringify(req.body)
-                      : "",
-              }),
-            } as RequestTab;
-
-            const result = await executeRequestWrapper(backgroundTab, false);
-            if (!result) {
-              return { statusCode: 0, responseTimeMs: 0, body: null, headers: {} };
-            }
-
-            let parsedBody: unknown = result.responseBody ?? "";
-            if (typeof result.responseBody === "string") {
-              try {
-                parsedBody = JSON.parse(result.responseBody);
-              } catch {
-                /* keep string */
-              }
-            }
-
-            addHistoryAndNotify({
-              name: backgroundTab.name,
-              method: backgroundTab.method,
-              url: backgroundTab.url,
-              endpoint: backgroundTab.endpoint,
-              headers: headersArrayToRecord(backgroundTab.headers),
-              body: backgroundTab.body,
-              queryParams: backgroundTab.queryParams,
-              responseStatus: result.responseStatus,
-              responseTime: result.responseTime,
-              responseSize: result.responseSize,
-              responseBody: result.responseBody,
-            });
-
-            return {
-              statusCode: result.responseStatus ?? 0,
-              responseTimeMs: result.responseTime ?? 0,
-              body: parsedBody,
-              headers: result.responseHeaders ?? {},
-            };
-          },
+        const executor = createRunnerExecutor({
+          workspaceId: useRequestStore.getState().activeWorkspaceId,
         });
+        const report = await runCollectionWithRunner(collection, runnerCtx, {
+          executor,
+        });
+
+        for (const r of report.results) {
+          const reqItem = collection.requests.find((item) => item.id === r.requestId);
+          if (reqItem) {
+            addHistoryAndNotify({
+              name: reqItem.name,
+              method: reqItem.method,
+              url: reqItem.url,
+              endpoint: reqItem.endpoint,
+              headers: reqItem.headers ?? {},
+              body: reqItem.body,
+              queryParams: reqItem.queryParams,
+              responseStatus: r.statusCode,
+              responseTime: r.responseTimeMs,
+              responseSize: typeof r.assertionResults === "object" ? "—" : "0 B",
+              responseBody: typeof r.error === "string" ? r.error : "",
+            });
+          }
+        }
 
         for (const r of report.results) {
           const passCount = r.assertionResults.filter((a) => a.passed).length;
@@ -137,7 +114,11 @@ export function useRequestCollectionRunner(
         console.error("[runCollectionBackground] failed", err);
         toast({
           title: `Background run of "${collection.name}" failed`,
-          description: err instanceof Error ? err.message : String(err),
+          description: isTauriInvokeError(err)
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : String(err),
           variant: "destructive",
           meta: { event: "collectionComplete" },
         });
@@ -162,14 +143,7 @@ export function useRequestCollectionRunner(
         window.setTimeout(() => setCollectionRequestStatus(null), 8000);
       }
     },
-    [
-      activeTab,
-      buildTabFromRequest,
-      executeRequestWrapper,
-      addHistoryAndNotify,
-      setCollectionRequestStatus,
-      setCollectionRunLogs,
-    ],
+    [addHistoryAndNotify, setCollectionRequestStatus, setCollectionRunLogs],
   );
 
   const runCollection = useCallback(
@@ -197,6 +171,7 @@ export function useRequestCollectionRunner(
       status?: number;
       time?: number;
       error?: string;
+      transportError?: TauriErrorPayload | null;
       assertionResults?: AssertionResult[];
     }> => {
       void index;
@@ -211,9 +186,11 @@ export function useRequestCollectionRunner(
         if (!result) return { success: false, error: `"${request.name}" → failed` };
 
         return {
-          success: true,
+          success: !result.transportError,
           status: result.responseStatus ?? 0,
           time: result.responseTime ?? 0,
+          error: result.transportError?.message,
+          transportError: result.transportError ?? null,
           assertionResults: result.testResults
             ? result.testResults.map(
                 (tr: { type: string; expected: unknown; passed: boolean; message?: string }) => ({
@@ -233,12 +210,20 @@ export function useRequestCollectionRunner(
         setTabs((currentTabs) => currentTabs.filter((t) => t.id !== newTab.id));
         toast({
           title: "Batch request failed",
-          description: err instanceof Error ? err.message : String(err),
+          description: isTauriInvokeError(err)
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : String(err),
           variant: "destructive",
         });
         return {
           success: false,
-          error: err instanceof Error ? err.message : String(err),
+          error: isTauriInvokeError(err)
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : String(err),
         };
       }
     },

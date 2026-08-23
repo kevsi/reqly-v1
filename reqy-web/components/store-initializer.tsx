@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { requestStore } from "@/hooks/use-request-store";
+import { requestStore, useRequestStore } from "@/hooks/use-request-store";
 import { persistence } from "@/lib/persistence";
 
 export function StoreInitializer() {
+  const isLoaded = useRequestStore((state) => state.isLoaded);
+
   useEffect(() => {
     // Wait for the persistence layer to finish loading from IndexedDB (with
     // a localStorage migration if needed) BEFORE initialising the store.
@@ -55,5 +57,5 @@ export function StoreInitializer() {
     };
   }, []);
 
-  return null;
+  return <span data-testid="store-ready" data-ready={isLoaded ? "true" : "false"} hidden />;
 }

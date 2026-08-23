@@ -317,8 +317,9 @@ describe("request-executor", () => {
         activeWorkspaceId: null,
       });
 
-      expect(result.responseBody).toContain("Network failure");
+      expect(result.responseBody).toBe("");
       expect(result.responseStatus).toBe(0);
+      expect(result.transportError?.detail).toContain("Network failure");
     });
 
     it("executes even when restored tab has undefined authToken/header fields", async () => {

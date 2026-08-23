@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Terminal, Code, Copy, Check, Loader2, Play, Braces, X } from "lucide-react";
+import { Terminal, Code, Copy, Check, Loader2, Play, Braces, X, Route, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeUrl as canonicalNormalizeUrl } from "@/lib/request-executor";
 import type { HttpMethod } from "@/lib/types";
@@ -36,6 +36,9 @@ export interface RequestPanelUrlBarProps {
   onAuthChange: (type: AuthType, token: string) => void;
   variableNames?: string[];
   onSend: () => Promise<void>;
+  onCancel?: () => void;
+  followRedirects?: boolean;
+  onFollowRedirectsChange?: (follow: boolean) => void;
   isLoading?: boolean;
   urlAutocompleteGroups: AutocompleteGroup[];
   hasUrl: boolean;
@@ -57,6 +60,9 @@ export function RequestPanelUrlBar({
   onAuthChange,
   variableNames,
   onSend,
+  onCancel,
+  followRedirects,
+  onFollowRedirectsChange,
   isLoading,
   urlAutocompleteGroups,
   hasUrl,
@@ -156,7 +162,7 @@ ${bodyPart}})
   return (
     <>
       {/* URL Bar */}
-      <div className="flex items-center gap-1.5 rounded-lg border border-input/50 px-2.5 py-1 transition-all duration-200">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-input/50 px-2.5 py-1 transition-all duration-200 sm:flex-nowrap">
         {/* Method select */}
         <Select value={method} onValueChange={(value) => onMethodChange(value as HttpMethod)}>
           <SelectTrigger
@@ -183,7 +189,7 @@ ${bodyPart}})
         </Select>
 
         {/* URL Input with autocomplete */}
-        <div className="relative flex-1">
+        <div className="relative order-5 min-w-0 basis-full flex-1 sm:order-none sm:basis-auto">
           <AutocompleteInput
             ref={urlInputRef}
             data-testid="url-input"
@@ -217,8 +223,11 @@ ${bodyPart}})
                   {t("request.curlPaste")}
                 </span>
                 <button
+                  type="button"
                   onClick={() => setCurlImportOpen(false)}
-                  className="rounded p-0.5 text-muted-foreground/50 hover:text-foreground transition-colors"
+                  className="flex size-8 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={t("common.close")}
+                  title={t("common.close")}
                 >
                   <X className="size-3.5" />
                 </button>
@@ -323,13 +332,33 @@ ${bodyPart}})
               }}
             >
               <option value="" disabled>
-                Variables
+                {t("request.variables")}
               </option>
               {variableNames.map((n) => (
                 <option key={n} value={n}>{`{{${n}}}`}</option>
               ))}
             </select>
           </div>
+        )}
+
+        {/* Follow redirects toggle (web proxy mode) */}
+        {onFollowRedirectsChange && (
+          <button
+            type="button"
+            data-testid="follow-redirects-toggle"
+            onClick={() => onFollowRedirectsChange(!followRedirects)}
+            title={t("request.followRedirectsHint")}
+            aria-pressed={followRedirects}
+            className={cn(
+              "flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center rounded-md border transition-all duration-200",
+              followRedirects
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-input/50 bg-muted/30 text-muted-foreground/50 hover:text-foreground hover:border-muted-foreground/30",
+            )}
+          >
+            <Route className="size-3.5" />
+            <span className="sr-only">{t("request.followRedirects")}</span>
+          </button>
         )}
 
         <Button
@@ -351,8 +380,23 @@ ${bodyPart}})
           ) : (
             <Play className="size-3.5 fill-current" />
           )}
-          <span>{isLoading ? "Sending..." : "Send"}</span>
+          <span>{isLoading ? t("request.sending") : t("request.send")}</span>
         </Button>
+
+        {/* Cancel in-flight request */}
+        {isLoading && onCancel && (
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="cancel-request-button"
+            onClick={onCancel}
+            className="h-7 shrink-0 gap-1.5 px-2.5 text-xs font-semibold border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+            title={t("request.cancel")}
+          >
+            <Square className="size-3 fill-current" />
+            {t("request.cancel")}
+          </Button>
+        )}
       </div>
 
       {/* Variables in URL */}
@@ -372,15 +416,13 @@ ${bodyPart}})
           })}
           {url.match(/\{\{[^}]+\}\}/g)?.some((m) => !m.match(/^\{\{\s*\w+\s*\}\}$/)) && (
             <span className="text-[11px] font-medium text-warning bg-warning/10 px-2 py-0.5 rounded-md">
-              Invalid variable syntax
+              {t("request.invalidVariableSyntax")}
             </span>
           )}
         </div>
       )}
       {!hasUrl && (
-        <p className="mt-1 px-2.5 text-xs text-muted-foreground/70">
-          Enter a valid URL to enable sending.
-        </p>
+        <p className="mt-1 px-2.5 text-xs text-muted-foreground/70">{t("request.enterUrlHint")}</p>
       )}
 
       {/* Export row */}

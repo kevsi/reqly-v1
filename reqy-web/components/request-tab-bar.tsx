@@ -138,10 +138,31 @@ export function RequestTabBar({
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onSelectTab(tab.id);
+                } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  const direction = e.key === "ArrowRight" ? 1 : -1;
+                  const currentIndex = tabs.findIndex((item) => item.id === tab.id);
+                  const nextTab = tabs[(currentIndex + direction + tabs.length) % tabs.length];
+                  onSelectTab(nextTab.id);
+                  requestAnimationFrame(() => {
+                    tabListRef.current
+                      ?.querySelector<HTMLElement>(`[data-tab-id="${nextTab.id}"]`)
+                      ?.focus();
+                  });
+                } else if (e.key === "Home" || e.key === "End") {
+                  e.preventDefault();
+                  const nextTab = e.key === "Home" ? tabs[0] : tabs[tabs.length - 1];
+                  onSelectTab(nextTab.id);
+                  requestAnimationFrame(() => {
+                    tabListRef.current
+                      ?.querySelector<HTMLElement>(`[data-tab-id="${nextTab.id}"]`)
+                      ?.focus();
+                  });
                 }
               }}
+              data-tab-id={tab.id}
               className={cn(
-                "group relative flex shrink-0 cursor-pointer items-center gap-2.5 rounded-t-md px-5 py-3 text-sm transition-all duration-150",
+                "group relative flex shrink-0 cursor-pointer items-center gap-2.5 rounded-t-md px-5 py-3 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 activeTabId === tab.id
                   ? "bg-background text-foreground"
                   : "text-muted-foreground/60 hover:bg-muted/20 hover:text-foreground/80",
@@ -185,10 +206,11 @@ export function RequestTabBar({
                 type="button"
                 onClick={(e) => onCloseTab(tab.id, e)}
                 className={cn(
-                  "ml-0.5 rounded p-0.5 transition-all duration-150 hover:bg-muted-foreground/10 group-hover:opacity-100 hover:scale-110",
+                  "ml-0.5 flex size-7 shrink-0 items-center justify-center rounded transition-all duration-150 hover:bg-muted-foreground/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 hover:scale-110",
                   activeTabId === tab.id ? "opacity-30" : "opacity-0",
                 )}
                 data-testid="tabbar-close-tab"
+                aria-label={t("runner.tabs.close")}
               >
                 <X className="size-3 text-muted-foreground/50 hover:text-foreground" />
               </button>

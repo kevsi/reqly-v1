@@ -70,6 +70,41 @@ export function evaluateAssertions(
 
     if (a.type === "schema") {
       result = evaluateSchemaAssertion(a.schema, ctx.body);
+    } else if (a.type === "header") {
+      const headerName = a.name.toLowerCase();
+      const headerEntry = Object.entries(response.headers ?? {}).find(
+        ([k]) => k.toLowerCase() === headerName,
+      );
+      const actualValue = headerEntry ? headerEntry[1] : undefined;
+      if (a.operator === "exists") {
+        const passed = actualValue !== undefined;
+        result = {
+          passed,
+          actualValue,
+          error: passed ? undefined : `Header "${a.name}" missing from response`,
+        };
+      } else if (a.operator === "equals") {
+        const passed = actualValue === a.value;
+        result = {
+          passed,
+          actualValue,
+          error: passed
+            ? undefined
+            : `Expected header "${a.name}" to equal "${a.value}", got "${actualValue}"`,
+        };
+      } else {
+        // contains
+        const passed =
+          typeof actualValue === "string" &&
+          actualValue.toLowerCase().includes((a.value ?? "").toLowerCase());
+        result = {
+          passed,
+          actualValue,
+          error: passed
+            ? undefined
+            : `Expected header "${a.name}" to contain "${a.value}", got "${actualValue}"`,
+        };
+      }
     } else {
       result = evaluateStructuredAssertion(
         normalize(a) as unknown as Parameters<typeof evaluateStructuredAssertion>[0],

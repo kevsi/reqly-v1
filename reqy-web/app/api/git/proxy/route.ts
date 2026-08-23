@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { isPrivateHost, isBlockedIp } from "@/lib/security/ssrf";
+import { isBlockedIp } from "@/lib/security/ssrf";
 import { resolveCached } from "@/lib/security/dns-cache";
 import { getServerEnv } from "@/lib/env";
 import { isIP } from "node:net";
@@ -28,6 +28,71 @@ function validateGitUrl(rawUrl: string): { valid: boolean; parsed?: URL; error?:
   return { valid: true, parsed };
 }
 
+/**
+ * Construit un header `Authorization` Basic à partir du token OAuth stocké
+ * dans le cookie HttpOnly du fournisseur (github_token / gitlab_token).
+ * Retourne `null` si aucun token n'est présent.
+ */
+function injectOAuthAuthHeader(
+  request: NextRequest,
+  isGithub: boolean,
+  isGitlab: boolean,
+): string | null {
+  const githubToken = isGithub ? request.cookies.get("github_token")?.value : undefined;
+  if (githubToken) {
+    // GitHub: le PAT se passe avec n'importe quel username (x-access-token).
+    return `Basic ${Buffer.from(`x-access-token:${githubToken}`).toString("base64")}`;
+  }
+  const gitlabToken = isGitlab ? request.cookies.get("gitlab_token")?.value : undefined;
+  if (gitlabToken) {
+    // GitLab: username "oauth2" + token en password est le format recommandé.
+    return `Basic ${Buffer.from(`oauth2:${gitlabToken}`).toString("base64")}`;
+  }
+  return null;
+}
+
+/**
+ * Vérifie qu'un header Location de redirect est sûr à forwarder au client :
+ * schéma http/https + hôte résolu non privé (IP littérale OU DNS).
+ */
+async function isSafeRedirectLocation(location: string, baseUrl: URL): Promise<boolean> {
+  let locUrl: URL;
+  try {
+    locUrl = new URL(location, baseUrl);
+  } catch {
+    return false;
+  }
+  if (!["http:", "https:"].includes(locUrl.protocol)) return false;
+  if (isIP(locUrl.hostname)) return !isBlockedIp(locUrl.hostname);
+  // Hostname : résoudre le DNS sinon un domaine public pourrait pointer vers
+  // une IP interne au moment où le navigateur suit le redirect.
+  const address = await resolveCached(locUrl.hostname);
+  if (!address || isBlockedIp(address)) return false;
+  return true;
+}
+
+/** CORS : refléter uniquement les origines connues de l'app (jamais `*`). */
+function allowedCorsOrigin(origin: string | null): string | null {
+  if (!origin) return null;
+  const allowed = new Set<string>([
+    "https://tauri.localhost",
+    "http://tauri.localhost",
+    "tauri://localhost",
+  ]);
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    try {
+      allowed.add(new URL(process.env.NEXT_PUBLIC_APP_URL).origin);
+    } catch {
+      // ignore invalid config
+    }
+  }
+  if (process.env.NODE_ENV === "development") {
+    allowed.add("http://localhost:3000");
+    allowed.add("http://127.0.0.1:3000");
+  }
+  return allowed.has(origin) ? origin : null;
+}
+
 export async function GET(request: NextRequest) {
   return handleGitProxy(request, "GET");
 }
@@ -51,7 +116,7 @@ async function handleGitProxy(request: NextRequest, method: "GET" | "POST") {
     return NextResponse.json({ error: urlValidation.error, code: "INVALID_URL" }, { status: 400 });
   }
 
-  let parsedUrl = urlValidation.parsed;
+  const parsedUrl = urlValidation.parsed;
   let targetUrl = parsedUrl.href;
   let hostOverride: string | undefined;
 
@@ -109,18 +174,59 @@ async function handleGitProxy(request: NextRequest, method: "GET" | "POST") {
     headersToSend.set("User-Agent", "git/reqly-proxy");
   }
 
+  // ── Auth helper : injecter le token OAuth (cookie HttpOnly) du fournisseur ──
+  // Évite la boîte de dialogue d'authentification native du navigateur quand
+  // le dépôt distant exige une authentification. Un Authorization fourni par
+  // le client (via l'UI "Authentification Git") a toujours la priorité.
+  if (!headersToSend.has("authorization")) {
+    const host = parsedUrl.hostname.toLowerCase();
+    // Comparaison d'hôte STRICTE : un `includes` permettrait d'envoyer le
+    // token GitLab à `gitlab.evil.com` / `evil-gitlab.com` (exfiltration).
+    const isGithub = host === "github.com" || host.endsWith(".github.com");
+    const isGitlab = host === "gitlab.com" || host.endsWith(".gitlab.com");
+    const injected = injectOAuthAuthHeader(request, isGithub, isGitlab);
+    if (injected) {
+      headersToSend.set("Authorization", injected);
+    }
+  }
+
   try {
+    // Limite de taille du body (packs git) — évite l'épuisement mémoire.
+    const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10 MB
     let bodyToSend: ArrayBuffer | undefined = undefined;
     if (method === "POST") {
+      const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
+      if (Number.isFinite(contentLength) && contentLength > MAX_BODY_SIZE) {
+        return NextResponse.json(
+          { error: "Corps de requête trop volumineux (max 10 MB)", code: "BODY_TOO_LARGE" },
+          { status: 413 },
+        );
+      }
       bodyToSend = await request.arrayBuffer();
+      if (bodyToSend.byteLength > MAX_BODY_SIZE) {
+        return NextResponse.json(
+          { error: "Corps de requête trop volumineux (max 10 MB)", code: "BODY_TOO_LARGE" },
+          { status: 413 },
+        );
+      }
     }
 
-    const upstreamRes = await fetch(targetUrl, {
-      method,
-      headers: headersToSend,
-      body: bodyToSend,
-      redirect: "manual",
-    });
+    // Timeout upstream : un serveur lent ne doit pas retenir le worker.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
+    let upstreamRes: Response;
+    try {
+      upstreamRes = await fetch(targetUrl, {
+        method,
+        headers: headersToSend,
+        body: bodyToSend,
+        redirect: "manual",
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     // Transmettre la réponse binaire/texte avec les en-têtes appropriés
     const responseHeaders = new Headers();
@@ -131,17 +237,32 @@ async function handleGitProxy(request: NextRequest, method: "GET" | "POST") {
       "content-encoding",
       "git-protocol",
       "location",
-      "www-authenticate",
+      // "www-authenticate" est volontairement absent : forwarder cet en-tête
+      // déclenche la boîte de dialogue d'authentification native du navigateur
+      // (formulaire "incompréhensible") au lieu d'une erreur propre.
     ];
 
-    upstreamRes.headers.forEach((val, key) => {
-      if (allowedResponseHeaders.includes(key.toLowerCase())) {
-        responseHeaders.set(key, val);
+    for (const key of upstreamRes.headers.keys()) {
+      const k = key.toLowerCase();
+      if (!allowedResponseHeaders.includes(k)) continue;
+      const val = upstreamRes.headers.get(key) as string;
+      // Location : ne forwarder que si la cible est publique (http/https +
+      // IP résolue non privée). Sinon le navigateur suivrait le redirect en
+      // direct vers une adresse interne, hors du contrôle du proxy.
+      if (k === "location" && !allowLocal && !(await isSafeRedirectLocation(val, parsedUrl))) {
+        continue;
       }
-    });
+      responseHeaders.set(key, val);
+    }
 
-    // CORS Headers pour le client web
-    responseHeaders.set("Access-Control-Allow-Origin", "*");
+    // CORS Headers pour le client web — origine reflétée uniquement si elle
+    // appartient à l'app (jamais `*`, sinon n'importe quel site peut lire
+    // les réponses du proxy).
+    const corsOrigin = allowedCorsOrigin(request.headers.get("origin"));
+    responseHeaders.set("Access-Control-Allow-Origin", corsOrigin ?? "null");
+    if (corsOrigin) {
+      responseHeaders.set("Vary", "Origin");
+    }
     responseHeaders.set(
       "Access-Control-Allow-Headers",
       "Content-Type, Authorization, Git-Protocol, User-Agent",
@@ -166,11 +287,12 @@ async function handleGitProxy(request: NextRequest, method: "GET" | "POST") {
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const corsOrigin = allowedCorsOrigin(request.headers.get("origin"));
   return new NextResponse(null, {
     status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsOrigin ?? "null",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, Git-Protocol, User-Agent",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     },

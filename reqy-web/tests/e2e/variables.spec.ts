@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { mockHttpbin } from "./helpers/httpbin";
 
 test.describe("Environment Variables flows", () => {
   test("creates a variable and uses it in a request URL", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
 
     await page.waitForSelector('[role="tab"]', { timeout: 10_000 });
@@ -12,14 +14,13 @@ test.describe("Environment Variables flows", () => {
         name: /environments|environment|environnements|environnement|variables/i,
       })
       .first();
-    if (await envButton.isVisible().catch(() => false)) {
+    if (await envButton.isVisible()) {
       await envButton.click();
       const manageOption = page.getByRole("menuitem", {
         name: /manage environment|gérer les environnements/i,
       });
-      if (await manageOption.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await manageOption.click();
-      }
+      await expect(manageOption).toBeVisible({ timeout: 3000 });
+      await manageOption.click();
     } else {
       // Try sidebar
       await page

@@ -40,7 +40,16 @@ export type BrunoParseResult = BrunoParseError | BrunoParseSuccess;
  * - A Bruno JSON bundle (bruno.json with embedded requests)
  * - A JSON file containing an array of .bru-style objects
  */
+/** Taille maximale acceptée pour une collection Bruno importée (anti-DoS). */
+export const MAX_BRUNO_IMPORT_BYTES = 10 * 1024 * 1024; // 10 Mo
+
 export function parseBrunoCollection(contents: string, fileName?: string): BrunoParseResult {
+  if (new TextEncoder().encode(contents).length > MAX_BRUNO_IMPORT_BYTES) {
+    return {
+      success: false,
+      error: `Fichier trop volumineux (max ${MAX_BRUNO_IMPORT_BYTES / (1024 * 1024)} Mo)`,
+    };
+  }
   try {
     // Try JSON first (Bruno bundle format)
     const parsed = tryParseJson(contents);

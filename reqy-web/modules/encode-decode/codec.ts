@@ -113,7 +113,10 @@ export function decode(mode: CodecMode, input: string): string {
 }
 
 /** Apply the mode; returns { ok } or a human-readable error. */
-export function transform(mode: CodecMode, input: string): { ok: true; output: string } | { ok: false; error: string } {
+export function transform(
+  mode: CodecMode,
+  input: string,
+): { ok: true; output: string } | { ok: false; error: string } {
   try {
     const fn = ENCODE_MODES.includes(mode) ? encode : decode;
     return { ok: true, output: fn(mode, input) };
@@ -164,16 +167,14 @@ function csvCell(value: string): string {
 export function jsonToCsv(input: string): string {
   const data = JSON.parse(input) as unknown;
   if (!Array.isArray(data) || data.length === 0) {
-    throw new Error("Attendu un tableau JSON non vide (ex: [{\"id\":1,\"nom\":\"A\"}])");
+    throw new Error('Attendu un tableau JSON non vide (ex: [{"id":1,"nom":"A"}])');
   }
   const rows: unknown[] = data;
   const keys = Array.from(new Set(rows.flatMap((r) => Object.keys(r as Record<string, unknown>))));
   const lines = [keys.join(",")];
   for (const row of rows) {
     lines.push(
-      keys
-        .map((k) => csvCell(String((row as Record<string, unknown>)[k] ?? "")))
-        .join(","),
+      keys.map((k) => csvCell(String((row as Record<string, unknown>)[k] ?? ""))).join(","),
     );
   }
   return lines.join("\n");
@@ -367,7 +368,10 @@ export function decodeJwt(token: string): DecodedJwt {
   const header = b64urlToJson(parts[0]);
   const payload = b64urlToJson(parts[1]);
   if (!header || !payload) {
-    return { ok: false, error: "Impossible de décoder header/payload : ce n'est pas un JWT valide." };
+    return {
+      ok: false,
+      error: "Impossible de décoder header/payload : ce n'est pas un JWT valide.",
+    };
   }
   const exp = typeof payload.exp === "number" ? payload.exp : undefined;
   return {
@@ -406,7 +410,9 @@ export async function verifyJwt(token: string, secret: string): Promise<JwtVerif
   if (!sha) {
     return {
       valid: false,
-      error: alg ? `Algorithme ${alg} non supporté (HMAC HS256/384/512 uniquement).` : "Algorithme absent du header.",
+      error: alg
+        ? `Algorithme ${alg} non supporté (HMAC HS256/384/512 uniquement).`
+        : "Algorithme absent du header.",
     };
   }
   try {
@@ -431,12 +437,10 @@ export async function verifyJwt(token: string, secret: string): Promise<JwtVerif
 
 // ── generators ───────────────────────────────────────────────────────────
 
+import { uuidV4 as generateUuidV4 } from "@/lib/utils";
+
 export function uuidv4(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  return bytesToHex(b).replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-$3-$4-$5");
+  return generateUuidV4();
 }
 
 export function randomHexBytes(n: number): string {
@@ -450,4 +454,3 @@ export function randomBase64(n = 16): string {
   for (const byte of b) bin += String.fromCharCode(byte);
   return btoa(bin);
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import type { PendingCollectionRequest } from "@/lib/request-bridge";
 import {
   getAndClearPendingCollectionRequest,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/request-bridge";
 
 import { toast } from "@/hooks/use-toast";
+import { isTauriInvokeError } from "@/lib/tauri";
 import { pushInAppNotification } from "@/lib/system-notifications";
 
 import { invokeTauriFetch, isTauriAvailable } from "@/lib/tauri";
@@ -27,6 +29,7 @@ import { useRequestAiEngine } from "@/hooks/use-request-ai-engine";
 import { useRequestCollectionRunner } from "@/hooks/use-request-collection-runner";
 
 export function useRequestTabExecution(state: RequestTabsState) {
+  const { t } = useTranslation();
   const {
     tabs,
     setTabs,
@@ -51,7 +54,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
   const { collections, history, addRequestToCollection, updateRequestById, variableMappings } =
     useRequestStore();
 
-  const { buildTabFromRequest, executeRequestWrapper, sendSpecificRequest } =
+  const { buildTabFromRequest, executeRequestWrapper, sendSpecificRequest, cancelRequest } =
     useRequestExecutionCore(state);
 
   const { aiEngine, handleAnalyzeRequest, handleGenerateTests, handleGenerateFollowUp } =
@@ -116,7 +119,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
         datasetKey: activeTab.datasetKey,
       });
       flashSavedIndicator();
-      toast({ title: `"${activeTab.name}" saved` });
+      toast({ title: t("request.saved", { name: activeTab.name }) });
       return;
     }
 
@@ -130,6 +133,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
     setSaveModalName,
     setSaveModalCollectionId,
     setSaveModalOpen,
+    t,
   ]);
 
   const handleSaveDialogSubmit = useCallback(() => {
@@ -167,7 +171,12 @@ export function useRequestTabExecution(state: RequestTabsState) {
         datasetKey: activeTab.datasetKey,
       });
       const targetCollection = collections.find((c) => c.id === targetCollectionId);
-      toast({ title: `"${saveModalName}" saved in ${targetCollection?.name || "la collection"}` });
+      toast({
+        title: t("request.savedInCollection", {
+          name: saveModalName,
+          collection: targetCollection?.name || t("request.theCollection"),
+        }),
+      });
     }
 
     setTabs((cur) =>
@@ -189,6 +198,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
     setTabs,
     setSaveModalOpen,
     flashSavedIndicator,
+    t,
   ]);
 
   const exportActiveRequest = useCallback(async () => {
@@ -226,9 +236,9 @@ export function useRequestTabExecution(state: RequestTabsState) {
 
       setTabs((cur) => [...cur, newTab]);
       setActiveTabId(newTab.id);
-      toast({ title: "New request created in collection" });
+      toast({ title: t("request.createdInCollection") });
     },
-    [addRequestToCollection, setTabs, setActiveTabId],
+    [addRequestToCollection, setTabs, setActiveTabId, t],
   );
 
   const sendRequest = useCallback(async () => {
@@ -239,12 +249,16 @@ export function useRequestTabExecution(state: RequestTabsState) {
     } catch (err) {
       console.error("[sendRequest]", err);
       toast({
-        title: "Request failed",
-        description: err instanceof Error ? err.message : String(err),
+        title: t("request.executionFailed"),
+        description: isTauriInvokeError(err)
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err),
         variant: "destructive",
       });
     }
-  }, [tabs, activeTabId, sendSpecificRequest]);
+  }, [tabs, activeTabId, sendSpecificRequest, t]);
 
   const sendAndSave = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -255,12 +269,16 @@ export function useRequestTabExecution(state: RequestTabsState) {
     } catch (err) {
       console.error("[sendAndSave]", err);
       toast({
-        title: "Request failed",
-        description: err instanceof Error ? err.message : String(err),
+        title: t("request.executionFailed"),
+        description: isTauriInvokeError(err)
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err),
         variant: "destructive",
       });
     }
-  }, [tabs, activeTabId, saveActiveTab, sendSpecificRequest]);
+  }, [tabs, activeTabId, saveActiveTab, sendSpecificRequest, t]);
 
   const sendAndDownload = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -275,17 +293,27 @@ export function useRequestTabExecution(state: RequestTabsState) {
         a.download = `${tab.name.replace(/\s+/g, "_")}_response.json`;
         a.click();
         URL.revokeObjectURL(url);
-        toast({ title: "Response downloaded" });
+        toast({ title: t("request.responseDownloaded") });
+      } else {
+        toast({
+          title: t("request.nothingToDownload"),
+          description: t("request.nothingToDownloadHint"),
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("[sendAndDownload]", err);
       toast({
-        title: "Request failed",
-        description: err instanceof Error ? err.message : String(err),
+        title: t("request.executionFailed"),
+        description: isTauriInvokeError(err)
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err),
         variant: "destructive",
       });
     }
-  }, [tabs, activeTabId, sendSpecificRequest]);
+  }, [tabs, activeTabId, sendSpecificRequest, t]);
 
   const loadRequestIntoActiveTab = useCallback(
     (request: RequestItem | HistoryItem) => {
@@ -304,13 +332,17 @@ export function useRequestTabExecution(state: RequestTabsState) {
       } catch (err) {
         console.error("[loadAndSendRequest]", err);
         toast({
-          title: "Request failed",
-          description: err instanceof Error ? err.message : String(err),
+          title: t("request.executionFailed"),
+          description: isTauriInvokeError(err)
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : String(err),
           variant: "destructive",
         });
       }
     },
-    [tabs, activeTabId, buildTabFromRequest, sendSpecificRequest, setTabs],
+    [tabs, activeTabId, buildTabFromRequest, sendSpecificRequest, setTabs, t],
   );
 
   useEffect(() => {
@@ -348,23 +380,23 @@ export function useRequestTabExecution(state: RequestTabsState) {
 
     if (pendingRequest.sendImmediately) {
       statusImmediate = window.setTimeout(
-        () => setCollectionRequestStatus("Sending Collections request…"),
+        () => setCollectionRequestStatus(t("request.sendingCollection")),
         0,
       );
       void (async () => {
         await sendSpecificRequest(tab);
         statusSentImmediate = window.setTimeout(
-          () => setCollectionRequestStatus("Collection request sent"),
+          () => setCollectionRequestStatus(t("request.sentCollection")),
           0,
         );
         cleanupTimeout = window.setTimeout(() => setCollectionRequestStatus(null), 6000);
       })();
     } else {
       statusImmediate = window.setTimeout(
-        () => setCollectionRequestStatus("Collection request loaded in editor"),
+        () => setCollectionRequestStatus(t("request.loadedCollection")),
         0,
       );
-      toast({ title: "Requête chargée dans l'éditeur" });
+      toast({ title: t("request.loadedInEditor") });
       cleanupTimeout = window.setTimeout(() => setCollectionRequestStatus(null), 6000);
     }
 
@@ -382,6 +414,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
     runCollectionBackground,
     sendSpecificRequest,
     setCollectionRequestStatus,
+    t,
   ]);
 
   useEffect(() => {
@@ -431,14 +464,13 @@ export function useRequestTabExecution(state: RequestTabsState) {
       try {
         const { replayed, succeeded } = await replayPending({ execute: resend });
         if (replayed === 0) return;
-        const noun = replayed > 1 ? "requêtes" : "requête";
         toast({
-          title: "Reconnexion",
-          description: `${replayed} ${noun} rejouée${replayed > 1 ? "s" : ""}, ${succeeded} réussie${succeeded > 1 ? "s" : ""}.`,
+          title: t("offline.replayTitle"),
+          description: t("offline.replayBody", { replayed, succeeded }),
         });
         pushInAppNotification({
-          title: "Requêtes rejouées",
-          body: `${replayed} requête(s) rejouée(s), ${succeeded} réussie(s).`,
+          title: t("offline.replayNotificationTitle"),
+          body: t("offline.replayBody", { replayed, succeeded }),
           type: succeeded === replayed ? "success" : "warning",
           event: "offlineReplay",
         });
@@ -449,7 +481,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
 
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, []);
+  }, [t]);
 
   return {
     aiEngine,
@@ -467,6 +499,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
     sendAndDownload,
     loadRequestIntoActiveTab,
     loadAndSendRequest,
+    cancelRequest,
     runCollection,
     handleBatchRunRequest,
     handleAnalyzeRequest,

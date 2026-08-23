@@ -1,22 +1,50 @@
-import * as React from 'react'
+import * as React from "react";
 
-const MOBILE_BREAKPOINT = 768
+const MOBILE_BREAKPOINT = 768;
 
-export function useIsMobile(maxWidth = MOBILE_BREAKPOINT) {
-  const [isMobile, setIsMobile] = React.useState(true)
+function getMediaQuery(maxWidth: number): MediaQueryList | null {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return null;
+  }
+  return window.matchMedia(`(max-width: ${maxWidth}px)`);
+}
 
-  React.useEffect(() => {
-    const mediaQuery = window.matchMedia(`(max-width: ${maxWidth}px)`)
-    const onChange = () => {
-      setIsMobile(mediaQuery.matches)
+function subscribeToViewport(onStoreChange: () => void, maxWidth: number): () => void {
+  const mediaQuery = getMediaQuery(maxWidth);
+  if (!mediaQuery) return () => {};
+
+  const onChange = () => onStoreChange();
+  if (typeof mediaQuery.addEventListener === "function") {
+    mediaQuery.addEventListener("change", onChange);
+  } else {
+    mediaQuery.addListener(onChange);
+  }
+
+  return () => {
+    if (typeof mediaQuery.removeEventListener === "function") {
+      mediaQuery.removeEventListener("change", onChange);
+    } else {
+      mediaQuery.removeListener(onChange);
     }
-    mediaQuery.addEventListener('change', onChange)
-    const mobileTimeout = window.setTimeout(() => setIsMobile(mediaQuery.matches), 0)
-    return () => {
-      mediaQuery.removeEventListener('change', onChange)
-      if (mobileTimeout) window.clearTimeout(mobileTimeout)
-    }
-  }, [maxWidth])
+  };
+}
 
-  return !!isMobile
+function getViewportSnapshot(maxWidth: number): boolean {
+  return getMediaQuery(maxWidth)?.matches ?? false;
+}
+
+function getServerSnapshot(): boolean {
+  // Desktop is the stable SSR fallback. On the client, useSyncExternalStore
+  // reconciles this with the real media query before notifying subscribers.
+  return false;
+}
+
+export function useIsMobile(maxWidth = MOBILE_BREAKPOINT): boolean {
+  const subscribe = React.useCallback(
+    (onStoreChange: () => void) => subscribeToViewport(onStoreChange, maxWidth),
+    [maxWidth],
+  );
+  const getSnapshot = React.useCallback(() => getViewportSnapshot(maxWidth), [maxWidth]);
+
+  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

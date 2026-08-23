@@ -6,12 +6,13 @@
  * Designed to be a long-lived singleton: one connection at a time per
  * active workspace.
  */
-
 export interface SyncWsOptions {
   /** The workspace to subscribe to. */
   workspaceId: string;
   /** HTTP base URL of the sync server (e.g. "http://localhost:4000"). */
   syncUrl: string;
+  /** Direct/Tauri session token, sent as a negotiated subprotocol. */
+  token?: string;
   /** Called when a broadcast change signal is received (hint to re-pull). */
   onChange?: () => void;
   /** Called when a connection-level error occurs (reconnect is automatic). */
@@ -27,23 +28,71 @@ export interface SyncWsController {
   isConnected: () => boolean;
 }
 
+export const SYNC_WS_AUTH_PROTOCOL = "reqly-bearer";
 const INITIAL_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 
-export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
-  const { workspaceId, syncUrl, onChange, onError } = opts;
+/**
+ * Récupère un ticket WS éphémère (30 s, usage unique) auprès du sync server,
+ * pour ne JAMAIS exposer le token de session dans le header
+ * `Sec-WebSocket-Protocol` du handshake (visible dans les logs).
+ * Retourne `null` si le serveur ne supporte pas les tickets (repli : token brut).
+ */
+async function fetchWsTicket(
+  syncUrl: string,
+  workspaceId: string,
+  token: string,
+): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5_000);
+    try {
+      const res = await fetch(
+        `${syncUrl}/api/auth/ws-ticket?workspaceId=${encodeURIComponent(workspaceId)}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) return null;
+      const data = (await res.json()) as { ticket?: string };
+      return typeof data.ticket === "string" && data.ticket ? data.ticket : null;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return null; // repli : token de session en subprotocol
+  }
+}
 
+export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
+  const { workspaceId, syncUrl, token, onChange, onError, onReconnect } = opts;
   let ws: WebSocket | null = null;
   let connected = false;
   let disconnected = false; // true when user explicitly calls disconnect()
+  let hasConnected = false;
   let reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let pongTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Convert HTTP(S) URL to WS(S) URL
+  let protocols: string[] | undefined;
+  // Convert HTTP(S) URL to WS(S) URL. The token is intentionally not put in
+  // this URL; it travels as a short-lived ticket in the subprotocol header.
   const wsProtocol = syncUrl.startsWith("https") ? "wss" : "ws";
   const wsBase = syncUrl.replace(/^https?:\/\//, "");
   const wsUrl = `${wsProtocol}://${wsBase}/api/sync/ws?workspaceId=${encodeURIComponent(workspaceId)}`;
+
+  async function refreshProtocols() {
+    // Ticket neuf à chaque connexion (et toutes les ~25 s pour une session
+    // longue) : un ticket volé dans un log est inutilisable après 30 s.
+    if (token) {
+      const ticket = await fetchWsTicket(syncUrl, workspaceId, token);
+      if (ticket) {
+        protocols = [SYNC_WS_AUTH_PROTOCOL, ticket];
+        return;
+      }
+    }
+    protocols = token ? [SYNC_WS_AUTH_PROTOCOL, token] : undefined;
+  }
 
   function clearPongTimer() {
     if (pongTimer) {
@@ -59,70 +108,73 @@ export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
       reconnectTimer = null;
       connect();
     }, reconnectDelay);
-    // Exponential backoff, capped
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }
 
   function connect() {
     if (disconnected) return;
-
-    try {
-      ws = new WebSocket(wsUrl);
-    } catch (err) {
-      // Synchronous construction failure (e.g. bad URL)
-      onError?.(err instanceof Error ? err : new Error(String(err)));
-      scheduleReconnect();
-      return;
-    }
-
-    ws.onopen = () => {
-      connected = true;
-      reconnectDelay = INITIAL_RECONNECT_DELAY_MS; // reset on success
-      // Reconnect callback if this was a reconnection
-      if (reconnectTimer === null && reconnectDelay > INITIAL_RECONNECT_DELAY_MS) {
-        // (impossible to detect "first connect" vs "reconnect" perfectly,
-        //  so we treat any onopen after a closed connection as reconnect)
+    // Ticket frais à chaque (re)connexion ; rafraîchi aussi en cours de
+    // session longue pour ne jamais dépasser sa durée de vie de 30 s.
+    void refreshProtocols().then(() => {
+      if (disconnected) return;
+      try {
+        ws = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl);
+      } catch (err) {
+        onError?.(err instanceof Error ? err : new Error(String(err)));
+        scheduleReconnect();
+        return;
       }
+      wireEvents(ws);
+      // Session longue : renouvelle le ticket avant expiration.
+      if (protocols?.length === 2 && protocols[1].startsWith("t.")) {
+        const refreshTimer = setInterval(() => {
+          if (ws?.readyState === WebSocket.OPEN) {
+            void refreshProtocols();
+          } else {
+            clearInterval(refreshTimer);
+          }
+        }, 25_000);
+        ws.addEventListener("close", () => clearInterval(refreshTimer), { once: true });
+      }
+    });
+  }
+
+  function wireEvents(socket: WebSocket) {
+    socket.onopen = () => {
+      const wasReconnect = hasConnected;
+      hasConnected = true;
+      connected = true;
+      reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
+      if (wasReconnect) onReconnect?.();
     };
 
-    ws.onmessage = (event: MessageEvent) => {
+    socket.onmessage = (event: MessageEvent) => {
       let data: unknown;
       try {
         data = JSON.parse(event.data as string);
       } catch {
-        return; // ignore malformed messages
-      }
-
-      const msg = data as Record<string, unknown>;
-
-      if (msg.type === "hello") {
-        // Connection confirmed — nothing else to do
         return;
       }
-
+      const msg = data as Record<string, unknown>;
+      if (msg.type === "hello") return;
       if (msg.type === "change") {
-        // Server broadcast: a change was pushed; re-pull
         onChange?.();
         return;
       }
-
       if (msg.type === "error") {
         const payload = typeof msg.payload === "string" ? msg.payload : "WS error";
         onError?.(new Error(payload));
-        return;
       }
     };
 
-    ws.onclose = () => {
+    socket.onclose = () => {
       connected = false;
       clearPongTimer();
-      if (!disconnected) {
-        scheduleReconnect();
-      }
+      if (!disconnected) scheduleReconnect();
     };
 
-    ws.onerror = () => {
-      // onerror is always followed by onclose, so we just handle reconnection there
+    socket.onerror = () => {
+      // onerror is followed by onclose; reconnect there to avoid duplicates.
     };
   }
 
@@ -135,7 +187,7 @@ export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
       }
       clearPongTimer();
       if (ws) {
-        ws.onclose = null; // prevent reconnect
+        ws.onclose = null;
         ws.onerror = null;
         ws.close();
         ws = null;
@@ -145,8 +197,6 @@ export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
     isConnected: () => connected,
   };
 
-  // Start the connection
   connect();
-
   return controller;
 }

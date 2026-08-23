@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -143,18 +150,14 @@ export function ImportPostmanModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md rounded-xl border bg-card p-6 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
+    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
           <div className="flex items-center gap-2">
             <PostmanIcon className="size-10 rounded-full bg-white p-1" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">{t("importExport.postman.importTitle")}</h2>
+            <DialogTitle>{t("importExport.postman.importTitle")}</DialogTitle>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="size-4" />
-          </button>
-        </div>
+        </DialogHeader>
 
         {!isConnected ? (
           <div className="text-center py-8">
@@ -208,7 +211,7 @@ export function ImportPostmanModal({
               </div>
             )}
 
-            <div className="flex gap-2">
+            <DialogFooter>
               <Button
                 onClick={handleImport}
                 disabled={isImporting || !selectedCollectionId}
@@ -231,10 +234,10 @@ export function ImportPostmanModal({
               >
                 {t("common.cancel")}
               </Button>
-            </div>
+            </DialogFooter>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

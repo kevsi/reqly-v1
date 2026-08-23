@@ -54,21 +54,19 @@ export function AiChatMessage({
   const hasLiveSteps =
     isAssistant &&
     (message.steps ?? []).some((s) => s.status === "in_progress" || s.status === "pending");
-  // Tool calls terminés, premier chunk de texte pas encore arrivé : c'est la
-  // fenêtre où la bulle restait vide — on affiche un indicateur « typing ».
+  // La timeline porte déjà le statut lorsqu’une étape active existe.
+  // La bulle ne doit afficher un second indicateur que pendant l’attente initiale,
+  // avant la création de la première étape.
   const isAwaitingResponse =
     isAssistant && message.phase === "awaiting_response" && !message.content;
   const isToolCalling = isAssistant && message.phase === "tool_calling" && !message.content;
-  // Avatar animé pendant le raisonnement, les tool calls et l'attente de réponse.
   const isLive = isAssistant && (hasLiveSteps || isAwaitingResponse || isToolCalling);
-  // La bulle affiche l'indicateur « typing » tant que le contenu est vide et
-  // que l'assistant est encore actif (tool calls ou attente de la réponse).
-  const showTypingInBubble =
-    isAssistant && !message.content && (hasLiveSteps || isToolCalling || isAwaitingResponse);
+  const showLiveStatusInBubble =
+    isAssistant && !message.content && !hasLiveSteps && (isToolCalling || isAwaitingResponse);
   // Pas de bulle pour un message assistant terminé sans contenu (mode plan,
   // erreur déjà visible dans les étapes, etc.) — plus de bulle vide.
   const hasBubbleContent = isAssistant
-    ? showTypingInBubble || !!message.content
+    ? showLiveStatusInBubble || !!message.content
     : !!message.content;
 
   return (
@@ -121,12 +119,10 @@ export function AiChatMessage({
           )}
           aria-hidden
         >
-          {/* Pendant qu'un step est en cours, on affiche 3 points animés sur le robot */}
           {isLive ? (
-            <span className="flex items-center gap-0.5">
-              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
-              <span className="size-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+            <span className="relative flex size-3 items-center justify-center">
+              <span className="absolute size-3 rounded-full border border-current/35" />
+              <span className="size-1.5 rounded-full bg-current" />
             </span>
           ) : isAssistant ? (
             <Bot className="size-3.5" />
@@ -146,31 +142,21 @@ export function AiChatMessage({
             )}
           >
             {isAssistant ? (
-              isAwaitingResponse ? (
-                // Tool calls terminés, premier token pas encore arrivé : points
-                // animés + libellé clair au lieu d'une bulle vide.
+              showLiveStatusInBubble ? (
                 <span
                   className="flex items-center gap-2 py-0.5"
+                  aria-live="polite"
                   aria-label={t("ai.chatMessage.generating")}
                 >
-                  <span className="flex items-center gap-1">
-                    <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:0ms]" />
-                    <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:150ms]" />
-                    <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:300ms]" />
+                  <span className="relative flex size-3 items-center justify-center text-primary">
+                    <span className="absolute size-3 animate-ping rounded-full border border-current/35" />
+                    <span className="size-1.5 rounded-full bg-current" />
                   </span>
-                  <span className="text-xs text-muted-foreground/70">
-                    {t("ai.chatMessage.generating")}
+                  <span className="text-xs text-muted-foreground/75">
+                    {isAwaitingResponse
+                      ? t("ai.chatMessage.generating")
+                      : t("ai.chatMessage.thinking")}
                   </span>
-                </span>
-              ) : showTypingInBubble ? (
-                // Trois petits points animés pendant que l'IA génère sa réponse
-                <span
-                  className="flex items-center gap-1 py-0.5"
-                  aria-label={t("ai.chatMessage.thinking")}
-                >
-                  <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:0ms]" />
-                  <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:150ms]" />
-                  <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce [animation-delay:300ms]" />
                 </span>
               ) : (
                 <ProgressiveMarkdown

@@ -1,6 +1,7 @@
 import type { ContextAttachment } from "./types";
 import { requestStore } from "@/hooks/use-request-store";
 import type { RequestItem } from "@/lib/types";
+import { isSensitiveName, maskSensitivePayload } from "@/src/ai/cloud-engine/prompt";
 
 export function searchContextTargets(query: string): ContextAttachment[] {
   const store = requestStore.getState();
@@ -9,19 +10,37 @@ export function searchContextTargets(query: string): ContextAttachment[] {
 
   for (const c of store.collections) {
     if (c.name.toLowerCase().includes(q)) {
-      out.push({ id: `collection:${c.id}`, type: "collection", refId: c.id, label: c.name, detail: "Collection" });
+      out.push({
+        id: `collection:${c.id}`,
+        type: "collection",
+        refId: c.id,
+        label: c.name,
+        detail: "Collection",
+      });
     }
   }
   for (const c of store.collections) {
     for (const r of c.requests ?? []) {
       if (r.name.toLowerCase().includes(q)) {
-        out.push({ id: `request:${r.id}`, type: "request", refId: r.id, label: r.name, detail: `${r.method} ${r.url ?? ""}` });
+        out.push({
+          id: `request:${r.id}`,
+          type: "request",
+          refId: r.id,
+          label: r.name,
+          detail: `${r.method} ${r.url ?? ""}`,
+        });
       }
     }
   }
   for (const e of store.environments) {
     if (e.name.toLowerCase().includes(q)) {
-      out.push({ id: `environment:${e.id}`, type: "environment", refId: e.id, label: e.name, detail: "Environnement" });
+      out.push({
+        id: `environment:${e.id}`,
+        type: "environment",
+        refId: e.id,
+        label: e.name,
+        detail: "Environnement",
+      });
     }
   }
   return out.slice(0, 12);
@@ -32,10 +51,8 @@ function maskEnvValue(v: string): string {
 }
 
 /** Masque les valeurs de champs dont le nom évoque un secret (clé, token…). */
-const SENSITIVE_FIELD_RE = /(secret|key|token|password|auth|cookie)/i;
-
 function maskFieldValue(key: string, value: string): string {
-  return SENSITIVE_FIELD_RE.test(key) ? "••••••" : value;
+  return isSensitiveName(key) ? "••••••" : value;
 }
 
 /**
@@ -46,6 +63,7 @@ function maskFieldValue(key: string, value: string): string {
 function sanitizeRequestForSnippet(r: RequestItem): Record<string, unknown> {
   const copy: Record<string, unknown> = { ...r };
   if (r.authToken) copy.authToken = "••••••";
+  if (r.body !== undefined) copy.body = maskSensitivePayload(r.body);
   if (r.headers && typeof r.headers === "object") {
     copy.headers = Object.fromEntries(
       Object.entries(r.headers).map(([k, v]) => [k, maskFieldValue(k, v)]),
@@ -66,7 +84,9 @@ export function resolveAttachmentSnippet(a: ContextAttachment): string {
     case "collection": {
       const c = store.collections.find((x) => x.id === a.refId);
       if (!c) return "";
-      const reqs = (c.requests ?? []).map((r) => `- ${r.method} ${r.name} ${r.url ?? ""}`).join("\n");
+      const reqs = (c.requests ?? [])
+        .map((r) => `- ${r.method} ${r.name} ${r.url ?? ""}`)
+        .join("\n");
       return `# Collection: ${c.name}\n${reqs}`;
     }
     case "request": {
@@ -80,14 +100,17 @@ export function resolveAttachmentSnippet(a: ContextAttachment): string {
       const e = store.environments.find((x) => x.id === a.refId);
       if (!e) return "";
       const vars = e.variables
-        .map((v) => `${v.enabled === false ? "(disabled) " : ""}${v.key}=${maskEnvValue(String(v.value))}`)
+        .map(
+          (v) =>
+            `${v.enabled === false ? "(disabled) " : ""}${v.key}=${maskEnvValue(String(v.value))}`,
+        )
         .join("\n");
       return `# Environment: ${e.name}\n${vars}`;
     }
     case "response": {
       const body = store.lastResponse?.body;
-      if (typeof body === "string") return body.slice(0, 4000);
-      return body ? JSON.stringify(body, null, 2) : "";
+      if (typeof body === "string") return String(maskSensitivePayload(body)).slice(0, 4000);
+      return body ? JSON.stringify(maskSensitivePayload(body), null, 2) : "";
     }
     default:
       return "";

@@ -268,9 +268,10 @@ export function WorkspaceSelector() {
                     openRename(w);
                   }}
                   className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-all hover:bg-accent hover:text-foreground",
+                    "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-all hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring",
                     hoveredWsId === w.id ? "opacity-100" : "opacity-0",
                   )}
+                  aria-label={`${t("workspace.renameTooltip")} ${w.name}`}
                   title={t("workspace.renameTooltip")}
                 >
                   <Pencil className="size-3.5" />
@@ -282,10 +283,11 @@ export function WorkspaceSelector() {
                       handleDeleteWorkspace(w, e);
                     }}
                     className={cn(
-                      "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-all hover:bg-destructive/10 hover:text-destructive",
+                      "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-destructive",
                       hoveredWsId === w.id || deletingId === w.id ? "opacity-100" : "opacity-0",
                     )}
                     disabled={deletingId === w.id}
+                    aria-label={`${t("workspace.deleteTooltip")} ${w.name}`}
                     title={t("workspace.deleteTooltip")}
                   >
                     {deletingId === w.id ? (

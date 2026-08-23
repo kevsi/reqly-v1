@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { Geist } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
@@ -40,15 +41,19 @@ import { StoreInitializer } from "@/components/store-initializer";
 import { SessionBootstrap } from "@/components/session-bootstrap";
 import { I18nProvider } from "@/components/i18n-provider";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The CSP nonce comes from proxy.ts. Passing it explicitly to <Script> keeps
+  // the server and client render in sync (hydration) and lets the inline
+  // theme script pass the strict `script-src 'nonce-…'` policy.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
-        <Script id="theme-init" strategy="beforeInteractive">
+        <Script id="theme-init" strategy="beforeInteractive" nonce={nonce} suppressHydrationWarning>
           {`(function(){try{var t=localStorage.getItem("reqly-theme");var v=["light","dark","emerald","ocean","sunset","purple","midnight"];if(!t||!v.includes(t)){t=window.matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"}document.documentElement.classList.add(t);if(t==="midnight"){document.documentElement.classList.add("dark")}var c=t==="dark"||t==="midnight"?"dark":"light";document.documentElement.style.colorScheme=c;var m=document.querySelector("meta[name=theme-color]");if(m){m.content=c==="dark"?"#0d1117":"#ffffff"}}catch(e){}})()`}
         </Script>
         <meta name="color-scheme" content="light dark" />
@@ -58,19 +63,21 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`}
       >
-        <ThemeProvider>
-          <ErrorBoundary>
-            <SidebarProvider>
-              <ClientLayoutShell>
-                <StoreInitializer />
-                <SessionBootstrap />
-                <I18nProvider>{children}</I18nProvider>
-              </ClientLayoutShell>
-            </SidebarProvider>
-            <AiShortcutBridge />
-            <Toaster />
-          </ErrorBoundary>
-        </ThemeProvider>
+        <I18nProvider>
+          <ThemeProvider>
+            <ErrorBoundary>
+              <SidebarProvider>
+                <ClientLayoutShell>
+                  <StoreInitializer />
+                  <SessionBootstrap />
+                  {children}
+                </ClientLayoutShell>
+              </SidebarProvider>
+              <AiShortcutBridge />
+              <Toaster />
+            </ErrorBoundary>
+          </ThemeProvider>
+        </I18nProvider>
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>

@@ -22,19 +22,23 @@ export interface UseProgressiveTextOptions {
  *
  * Aucun « saut » ne se produit en cas de pause du stream : la révélation
  * continue simplement à son rythme jusqu'à épuisement du contenu.
+ *
+ * La boucle tourne TOUJOURS (elle n'est pas désactivée quand le message monte
+ * avec du contenu). `revealed` est initialisé à la longueur du contenu au
+ * montage : un message déjà rempli (historique) s'affiche donc intégralement
+ * sans être « retapé », tout en restant capable de révéler une éventuelle
+ * croissance ultérieure — nécessaire quand la bulle est remontée (ex. clé
+ * d'index qui change) alors que le stream n'est pas terminé.
  */
 export function useProgressiveText(content: string, options?: UseProgressiveTextOptions): string {
   const { delayMs = 20 } = options ?? {};
 
-  // Si le message monte avec un contenu déjà rempli (historique, commande…),
-  // tout est affiché immédiatement ; s'il monte vide (réponse en cours de
-  // génération), la boucle ci-dessous révèle le texte mot à mot.
+  // Initialisé à la longueur du contenu au montage : un message déjà rempli
+  // s'affiche immédiatement en entier ; un message vide est révélé mot à mot.
   const [revealed, setRevealed] = useState(() => content.length);
 
   const contentRef = useRef(content);
   const revealedRef = useRef(revealed);
-  // Message déjà rempli au montage (historique, commande…) : pas de révélation.
-  const mountedWithContent = useRef(content.length > 0);
 
   // Synchronise la ref après chaque rendu (jamais pendant le rendu).
   useEffect(() => {
@@ -43,8 +47,6 @@ export function useProgressiveText(content: string, options?: UseProgressiveText
 
   // Boucle de révélation : un mot (ou un début de ligne) par tick.
   useEffect(() => {
-    if (mountedWithContent.current) return;
-
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const tick = () => {

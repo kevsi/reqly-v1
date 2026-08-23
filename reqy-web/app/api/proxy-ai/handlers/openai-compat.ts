@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { structuredError } from "../lib/errors";
 import { passthroughSSE } from "../lib/sse";
 import { getCustomUrl } from "../lib/url-utils";
+import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
 import { buildOpenAIToolHistory } from "../lib/tool-history";
 import type { PreviousTurn } from "../lib/tool-history";
 
@@ -83,6 +84,7 @@ export async function handleOpenAICompat(
     );
   }
 
+  const dispatcher = body.provider === "custom" ? await createPinnedDispatcher(url) : undefined;
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -96,6 +98,7 @@ export async function handleOpenAICompat(
     // redirect response visible instead of silently hopping hosts. (Ollama
     // already sets redirect:"manual" for the same reason.)
     redirect: "manual",
+    ...(dispatcher ? { dispatcher } : {}),
     body: JSON.stringify({
       model,
       stream: Boolean(body.stream),

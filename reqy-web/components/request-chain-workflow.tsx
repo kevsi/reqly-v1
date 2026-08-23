@@ -27,33 +27,47 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { useRequestStore } from "@/hooks/use-request-store";
+import { useChainsStore, type ChainStep } from "@/hooks/store/chains-store";
 import { toast } from "@/hooks/use-toast";
 
-interface ChainStep {
-  id: string;
-  requestId: string;
-  requestName: string;
-  collectionId: string;
-  extractVariables: Array<{
-    sourcePath: string; // JSONPath pour extraire de la réponse
-    targetVariable: string; // Nom de la variable à créer
-  }>;
-  waitForPrevious: boolean;
-  enabled: boolean;
+export type { ChainStep };
+
+export interface ChainStepResult {
+  stepId: string;
+  name: string;
+  status?: number;
+  durationMs?: number;
+  error?: string;
 }
 
 interface RequestChainProps {
-  onExecute?: (chain: ChainStep[]) => Promise<void>;
+  onExecute?: (chain: ChainStep[]) => Promise<ChainStepResult[]>;
 }
 
 export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
   const { t } = useTranslation();
   const { collections, addVariableMapping, variableMappings } = useRequestStore();
-  const [chain, setChain] = useState<ChainStep[]>([]);
+  const chains = useChainsStore((s) => s.chains);
+  const addChainToStore = useChainsStore((s) => s.addChain);
+  const updateChainInStore = useChainsStore((s) => s.updateChain);
+  const removeChainFromStore = useChainsStore((s) => s.removeChain);
+  const [activeChainId, setActiveChainId] = useState<string | null>(null);
+  const [stepResults, setStepResults] = useState<Record<string, ChainStepResult>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [executing, setExecuting] = useState(false);
+
+  const activeChain = chains.find((c) => c.id === activeChainId) ?? null;
+  const chain = activeChain?.steps ?? [];
+
+  const commitSteps = (steps: ChainStep[]) => {
+    if (activeChainId && chains.some((c) => c.id === activeChainId)) {
+      updateChainInStore(activeChainId, { steps });
+      return;
+    }
+    setActiveChainId(addChainToStore(t("chain.defaultName"), steps));
+  };
 
   const allRequests = useMemo(() => {
     return collections.flatMap((col) =>
@@ -67,7 +81,7 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
 
   const addStep = () => {
     const newStep: ChainStep = {
-      id: `step-${Date.now()}`,
+      id: `step-${uuidV4()}`,
       requestId: "",
       requestName: "",
       collectionId: "",
@@ -75,23 +89,29 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
       waitForPrevious: true,
       enabled: true,
     };
-    setChain([...chain, newStep]);
+    commitSteps([...chain, newStep]);
     setExpanded(new Set([...expanded, newStep.id]));
   };
 
   const removeStep = (stepId: string) => {
-    setChain(chain.filter((s) => s.id !== stepId));
-    const newExpanded = new Set(expanded);
-    newExpanded.delete(stepId);
-    setExpanded(newExpanded);
+    const next = chain.filter((s) => s.id !== stepId);
+    const nextExpanded = new Set(expanded);
+    nextExpanded.delete(stepId);
+    setExpanded(nextExpanded);
+    if (!next.length && activeChainId) {
+      removeChainFromStore(activeChainId);
+      setActiveChainId(null);
+      return;
+    }
+    commitSteps(next);
   };
 
   const updateStep = (stepId: string, updates: Partial<ChainStep>) => {
-    setChain(chain.map((s) => (s.id === stepId ? { ...s, ...updates } : s)));
+    commitSteps(chain.map((s) => (s.id === stepId ? { ...s, ...updates } : s)));
   };
 
   const addExtraction = (stepId: string) => {
-    setChain(
+    commitSteps(
       chain.map((s) =>
         s.id === stepId
           ? {
@@ -107,7 +127,7 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
   };
 
   const removeExtraction = (stepId: string, index: number) => {
-    setChain(
+    commitSteps(
       chain.map((s) =>
         s.id === stepId
           ? {
@@ -125,7 +145,7 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
     field: "sourcePath" | "targetVariable",
     value: string,
   ) => {
-    setChain(
+    commitSteps(
       chain.map((s) =>
         s.id === stepId
           ? {
@@ -179,13 +199,34 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
     }
 
     setExecuting(true);
+    setStepResults({});
     try {
+      let results: ChainStepResult[] = [];
       if (onExecute) {
-        await onExecute(chain);
+        results = await onExecute(chain);
       }
+      setStepResults(Object.fromEntries(results.map((r) => [r.stepId, r])));
+
+      if (results.length === 0) {
+        toast({
+          title: t("chain.empty"),
+          description: t("chain.emptyDesc"),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const failedNames = results
+        .filter((r) => r.error)
+        .map((r) => r.name || r.stepId)
+        .join(", ");
       toast({
         title: t("chain.executed"),
-        description: t("chain.executedDesc", { count: chain.length }),
+        description:
+          failedNames.length > 0
+            ? `${t("chain.executedDesc", { count: results.length })}\n${t("chain.stepFailed", { names: failedNames })}`
+            : t("chain.executedDesc", { count: results.length }),
+        variant: failedNames.length > 0 ? "destructive" : "default",
       });
     } catch (error) {
       toast({
@@ -226,7 +267,7 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
                 {executing ? (
                   <>
                     <PlayCircle className="size-4 mr-2 animate-spin" />
-                    Executing...
+                    {t("chain.executing")}
                   </>
                 ) : (
                   <>
@@ -255,6 +296,7 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
               {chain.map((step, index) => {
                 const isExpanded = expanded.has(step.id);
                 const selectedRequest = allRequests.find((r) => r.id === step.requestId);
+                const stepResult = stepResults[step.id];
 
                 return (
                   <div key={step.id} className="relative">
@@ -283,6 +325,20 @@ export function RequestChainWorkflow({ onExecute }: RequestChainProps) {
                             <Badge variant="outline" className="font-mono">
                               Step {index + 1}
                             </Badge>
+                            {stepResult && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "font-mono",
+                                  stepResult.error
+                                    ? "border-destructive/50 text-destructive"
+                                    : "border-green-600/50 text-green-600 dark:text-green-400",
+                                )}
+                              >
+                                {stepResult.error ? "ERR" : (stepResult.status ?? "?")} ·{" "}
+                                {stepResult.durationMs ?? 0} ms
+                              </Badge>
+                            )}
                             <div className="flex-1">
                               <Select
                                 value={step.requestId}

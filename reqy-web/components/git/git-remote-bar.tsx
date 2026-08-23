@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import {
   Globe,
@@ -14,6 +14,7 @@ import {
   FolderOpen,
   AlertTriangle,
   AlertCircle,
+  CheckCircle2,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,19 +29,25 @@ import {
 
 import { Card } from "@/components/ui/card";
 import { isTauriAvailable } from "@/lib/tauri";
+import { useToolConnections } from "@/hooks/use-tool-connections";
 import type { RemoteInfo } from "@/hooks/use-git";
+import type { GitCredentials } from "@/lib/git/types";
+import { FolderPickerModal } from "@/components/folder-picker-modal";
+import type { PickedFolder } from "@/lib/folder-picker";
 
 interface RemoteBarProps {
   remotes: RemoteInfo[];
   currentBranch: string;
   onAdd: (name: string, url: string) => void;
-  onRemove: (name: string) => void;
-  onPush: (remote: string, branch: string) => void;
-  onForcePush: (remote: string, branch: string) => void;
-  onPull: (remote: string, branch: string) => void;
-  onFetch: (remote: string) => void;
-  onClone: (url: string, destPath: string) => Promise<void>;
+  onRemove: (name: string) => Promise<void>;
+  onPush: (remote: string, branch: string, credentials?: GitCredentials) => Promise<void>;
+  onForcePush: (remote: string, branch: string, credentials?: GitCredentials) => Promise<void>;
+  onPull: (remote: string, branch: string, credentials?: GitCredentials) => Promise<void>;
+  onFetch: (remote: string, credentials?: GitCredentials) => Promise<void>;
+  onClone: (url: string, destPath: string, credentials?: GitCredentials) => Promise<void>;
   onLsRemote?: (url: string) => Promise<string[]>;
+  /** Web uniquement : fournit le handle de destination au backend (clone). */
+  onSetRepoHandle?: (handle: FileSystemDirectoryHandle) => void;
 }
 
 export function GitRemoteBar({
@@ -54,10 +61,14 @@ export function GitRemoteBar({
   onFetch,
   onClone,
   onLsRemote,
+  onSetRepoHandle,
 }: RemoteBarProps) {
   const { t } = useTranslation();
+  const githubConnected = useToolConnections((s) => s.github === "connected");
+  const gitlabConnected = useToolConnections((s) => s.gitlab === "connected");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [folderPickerModalOpen, setFolderPickerModalOpen] = useState(false);
   const [forcePushDialog, setForcePushDialog] = useState<{ remote: string; branch: string } | null>(
     null,
   );
@@ -69,21 +80,58 @@ export function GitRemoteBar({
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [cloneUrlTouched, setCloneUrlTouched] = useState(false);
   const [cloneDestTouched, setCloneDestTouched] = useState(false);
+  const [cloneUsername, setCloneUsername] = useState("");
+  const [clonePassword, setClonePassword] = useState("");
   const [remoteBranches, setRemoteBranches] = useState<string[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [branchesError, setBranchesError] = useState<string | null>(null);
+  // Sur le web, on conserve le handle du dossier sélectionné (permission réutilisable).
+  const cloneDestHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
 
-  const pickCloneDest = async () => {
-    if (isTauriAvailable()) {
-      try {
-        const { open } = await import("@tauri-apps/plugin-dialog");
-        const selected = await open({ directory: true, multiple: false });
-        if (selected && typeof selected === "string") {
-          setCloneDest(selected);
-        }
-      } catch {
-        // fallback: manual input
-      }
+  // ── Feedback par opération (push / fetch / pull / remove) ──────────────
+  type OpState = { status: "loading" | "success" | "error"; message?: string };
+  const [ops, setOps] = useState<Record<string, OpState>>({});
+
+  const setOp = (key: string, state: OpState) => setOps((prev) => ({ ...prev, [key]: state }));
+
+  const runOp = async (key: string, fn: () => Promise<void>) => {
+    setOp(key, { status: "loading" });
+    try {
+      await fn();
+      setOp(key, { status: "success" });
+      window.setTimeout(() => {
+        setOps((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }, 3000);
+    } catch (err) {
+      setOp(key, {
+        status: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+      window.setTimeout(() => {
+        setOps((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }, 6000);
+    }
+  };
+
+  const opFor = (key: string): OpState | undefined => ops[key];
+
+  const pickCloneDest = () => {
+    setFolderPickerModalOpen(true);
+  };
+
+  const handleCloneFolderSelected = (picked: PickedFolder) => {
+    setCloneDest(picked.path ?? picked.name);
+    if (picked.handle) {
+      cloneDestHandleRef.current = picked.handle;
+      onSetRepoHandle?.(picked.handle);
     }
   };
 
@@ -92,7 +140,7 @@ export function GitRemoteBar({
       <div className="flex items-center justify-between px-1">
         <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
           <Globe className="size-3" />
-          Remotes
+          {t("git.remotes")}
         </span>
         <div className="flex gap-1">
           <Button
@@ -102,7 +150,7 @@ export function GitRemoteBar({
             onClick={() => setCloneDialogOpen(true)}
           >
             <GitFork className="size-3" />
-            Clone
+            {t("git.remoteClone")}
           </Button>
           <Button
             variant="ghost"
@@ -111,73 +159,155 @@ export function GitRemoteBar({
             onClick={() => setAddDialogOpen(true)}
           >
             <Plus className="size-3" />
-            Add
+            {t("git.remoteAdd")}
           </Button>
         </div>
       </div>
 
       {remotes.length === 0 ? (
-        <p className="text-[10px] text-muted-foreground/40 px-1">No remotes configured</p>
-      ) : (
-        remotes.map((r) => (
-          <div
-            key={r.name}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50"
+        <div className="flex items-center justify-between px-1 py-0.5">
+          <p className="text-[10px] text-muted-foreground/60 truncate">{t("git.remoteNoRemote")}</p>
+          <Button
+            variant="link"
+            size="sm"
+            className="h-5 px-1 text-[10px] text-primary hover:underline gap-0.5"
+            onClick={() => setAddDialogOpen(true)}
           >
-            <Cloud className="size-3 text-muted-foreground shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-xs font-medium">{r.name}</span>
-              <span className="text-[10px] text-muted-foreground/60 ml-2 truncate">{r.url}</span>
+            {t("git.remoteAddShort")}
+          </Button>
+        </div>
+      ) : (
+        remotes.map((r) => {
+          const host = new URL(r.url).hostname.toLowerCase();
+          const autoAuth =
+            (githubConnected && (host === "github.com" || host.endsWith(".github.com"))) ||
+            (gitlabConnected && (host === "gitlab.com" || host.endsWith(".gitlab.com")));
+          const fetchOp = opFor(`fetch:${r.name}`);
+          const pullOp = opFor(`pull:${r.name}`);
+          const pushOp = opFor(`push:${r.name}`);
+          const removeOp = opFor(`remove:${r.name}`);
+          const activeOp = fetchOp ?? pullOp ?? pushOp ?? removeOp;
+          return (
+            <div
+              key={r.name}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50"
+            >
+              <Cloud className="size-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium">{r.name}</span>
+                  {autoAuth && (
+                    <span className="inline-flex items-center rounded-full bg-success/10 px-1.5 py-0.5 text-[9px] font-medium text-success/80">
+                      {t("git.remoteConnected")}
+                    </span>
+                  )}
+                  {activeOp?.status === "loading" && (
+                    <span className="inline-flex items-center gap-1 text-[9px] text-muted-foreground">
+                      <Loader2 className="size-2.5 animate-spin" /> {t("git.remoteInProgress")}
+                    </span>
+                  )}
+                  {activeOp?.status === "success" && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-success">
+                      <CheckCircle2 className="size-2.5" /> OK
+                    </span>
+                  )}
+                  {activeOp?.status === "error" && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-destructive">
+                      <AlertCircle className="size-2.5" /> Échec
+                    </span>
+                  )}
+                </div>
+                <span className="block text-[10px] text-muted-foreground/60 truncate">{r.url}</span>
+                {activeOp?.status === "error" && activeOp.message && (
+                  <p className="mt-1 rounded border border-destructive/20 bg-destructive/10 px-1.5 py-1 text-[10px] leading-tight break-words text-destructive">
+                    {activeOp.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0"
+                  onClick={() => runOp(`fetch:${r.name}`, () => onFetch(r.name))}
+                  title={t("git.fetch")}
+                  disabled={fetchOp?.status === "loading"}
+                >
+                  {fetchOp?.status === "loading" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : fetchOp?.status === "success" ? (
+                    <CheckCircle2 className="size-4 text-success" />
+                  ) : fetchOp?.status === "error" ? (
+                    <AlertCircle className="size-4 text-destructive" />
+                  ) : (
+                    <Download className="size-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0"
+                  onClick={() => runOp(`pull:${r.name}`, () => onPull(r.name, currentBranch))}
+                  title={t("git.pull")}
+                  disabled={pullOp?.status === "loading"}
+                >
+                  {pullOp?.status === "loading" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : pullOp?.status === "success" ? (
+                    <CheckCircle2 className="size-4 text-success" />
+                  ) : pullOp?.status === "error" ? (
+                    <AlertCircle className="size-4 text-destructive" />
+                  ) : (
+                    <Cloud className="size-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0"
+                  onClick={() => runOp(`push:${r.name}`, () => onPush(r.name, currentBranch))}
+                  title={t("git.push")}
+                  disabled={pushOp?.status === "loading"}
+                >
+                  {pushOp?.status === "loading" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : pushOp?.status === "success" ? (
+                    <CheckCircle2 className="size-4 text-success" />
+                  ) : pushOp?.status === "error" ? (
+                    <AlertCircle className="size-4 text-destructive" />
+                  ) : (
+                    <Upload className="size-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0 text-warning/60 hover:text-warning"
+                  onClick={() => setForcePushDialog({ remote: r.name, branch: currentBranch })}
+                  title={t("git.forcePushTooltip")}
+                >
+                  <AlertTriangle className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0 text-destructive/60"
+                  onClick={() => runOp(`remove:${r.name}`, () => onRemove(r.name))}
+                  title={t("git.remove")}
+                  disabled={removeOp?.status === "loading"}
+                >
+                  {removeOp?.status === "loading" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : removeOp?.status === "error" ? (
+                    <AlertCircle className="size-4 text-destructive" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-0.5 shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="size-6 p-0"
-                onClick={() => onFetch(r.name)}
-                title={t("git.fetch")}
-              >
-                <Download className="size-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="size-6 p-0"
-                onClick={() => onPull(r.name, currentBranch)}
-                title={t("git.pull")}
-              >
-                <Cloud className="size-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="size-6 p-0"
-                onClick={() => onPush(r.name, currentBranch)}
-                title={t("git.push")}
-              >
-                <Upload className="size-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="size-6 p-0 text-warning/60 hover:text-warning"
-                onClick={() => setForcePushDialog({ remote: r.name, branch: currentBranch })}
-                title={t("git.forcePushTooltip")}
-              >
-                <AlertTriangle className="size-2.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="size-6 p-0 text-destructive/60"
-                onClick={() => onRemove(r.name)}
-                title={t("git.remove")}
-              >
-                <Trash2 className="size-3" />
-              </Button>
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
 
       {/* Add remote dialog */}
@@ -194,20 +324,20 @@ export function GitRemoteBar({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Add remote</DialogTitle>
+            <DialogTitle className="text-sm">{t("git.remoteAddDialogTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
               value={remoteName}
               onChange={(e) => setRemoteName(e.target.value)}
-              placeholder="origin"
+              placeholder={t("git.remoteNamePlaceholder")}
               className="text-sm"
             />
             <div className="flex gap-2">
               <Input
                 value={remoteUrl}
                 onChange={(e) => setRemoteUrl(e.target.value)}
-                placeholder="https://github.com/user/repo.git"
+                placeholder={t("git.remoteUrlPlaceholder")}
                 className="text-sm flex-1"
               />
               {remoteUrl.trim() && onLsRemote && (
@@ -244,7 +374,7 @@ export function GitRemoteBar({
             {branchesLoading && (
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Loader2 className="size-3 animate-spin" />
-                Fetching branches…
+                {t("git.remoteFetchingBranches")}
               </div>
             )}
             {branchesError && (
@@ -256,7 +386,7 @@ export function GitRemoteBar({
             {remoteBranches.length > 0 && (
               <div className="space-y-1">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                  Available branches ({remoteBranches.length})
+                  {t("git.remoteAvailableBranches", { count: remoteBranches.length })}
                 </p>
                 <div className="max-h-[120px] overflow-y-auto space-y-0.5 rounded-md border border-border/40 bg-muted/20 p-1">
                   {remoteBranches.map((branch) => (
@@ -279,7 +409,7 @@ export function GitRemoteBar({
               onClick={() => setAddDialogOpen(false)}
               className="text-xs"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -290,7 +420,7 @@ export function GitRemoteBar({
               disabled={!remoteName.trim() || !remoteUrl.trim()}
               className="text-xs"
             >
-              Add
+              {t("git.remoteAdd")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -310,7 +440,7 @@ export function GitRemoteBar({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Clone repository</DialogTitle>
+            <DialogTitle className="text-sm">{t("git.remoteCloneTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             {/* URL */}
@@ -319,15 +449,35 @@ export function GitRemoteBar({
                 value={cloneUrl}
                 onChange={(e) => setCloneUrl(e.target.value)}
                 onBlur={() => setCloneUrlTouched(true)}
-                placeholder="https://github.com/user/repo.git"
+                placeholder={t("git.remoteUrlPlaceholder")}
                 className={`text-sm ${cloneUrlTouched && !cloneUrl.trim() ? "border-destructive/50" : ""}`}
               />
               {cloneUrlTouched && !cloneUrl.trim() && (
                 <p className="flex items-center gap-1 text-[10px] text-destructive/70">
-                  <AlertCircle className="size-2.5" /> Repository URL is required
+                  <AlertCircle className="size-2.5" /> {t("git.remoteCloneUrlRequired")}
                 </p>
               )}
             </div>
+            <details className="rounded-md border border-border/60 px-3 py-2">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                {t("git.remoteCloneAuth")}
+              </summary>
+              <div className="mt-2 space-y-2">
+                <Input
+                  value={cloneUsername}
+                  onChange={(e) => setCloneUsername(e.target.value)}
+                  placeholder={t("git.remoteCloneUsername")}
+                  autoComplete="username"
+                />
+                <Input
+                  type="password"
+                  value={clonePassword}
+                  onChange={(e) => setClonePassword(e.target.value)}
+                  placeholder={t("git.remoteClonePassword")}
+                  autoComplete="current-password"
+                />
+              </div>
+            </details>
             {/* Destination */}
             <div className="space-y-1">
               <div className="flex gap-2">
@@ -339,20 +489,18 @@ export function GitRemoteBar({
                   className={`text-sm flex-1 ${cloneDestTouched && !cloneDest.trim() ? "border-destructive/50" : ""}`}
                   readOnly={isTauriAvailable()}
                 />
-                {isTauriAvailable() && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={pickCloneDest}
-                    className="shrink-0 gap-1"
-                  >
-                    <FolderOpen className="size-3.5" /> Browse
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={pickCloneDest}
+                  className="shrink-0 gap-1"
+                >
+                  <FolderOpen className="size-3.5" /> {t("git.browse")}
+                </Button>
               </div>
               {cloneDestTouched && !cloneDest.trim() && (
                 <p className="flex items-center gap-1 text-[10px] text-destructive/70">
-                  <AlertCircle className="size-2.5" /> Destination path is required
+                  <AlertCircle className="size-2.5" /> {t("git.remoteCloneDestRequired")}
                 </p>
               )}
             </div>
@@ -378,7 +526,7 @@ export function GitRemoteBar({
               disabled={cloneLoading}
               className="text-xs"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -389,7 +537,13 @@ export function GitRemoteBar({
                 setCloneLoading(true);
                 setCloneError(null);
                 try {
-                  await onClone(cloneUrl, cloneDest);
+                  await onClone(
+                    cloneUrl,
+                    cloneDest,
+                    cloneUsername && clonePassword
+                      ? { username: cloneUsername, password: clonePassword }
+                      : undefined,
+                  );
                   setCloneDialogOpen(false);
                   setCloneUrlTouched(false);
                   setCloneDestTouched(false);
@@ -407,7 +561,7 @@ export function GitRemoteBar({
               ) : (
                 <GitFork className="size-3" />
               )}
-              {cloneLoading ? "Cloning…" : "Clone"}
+              {cloneLoading ? t("git.remoteCloning") : t("git.remoteClone")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -450,25 +604,33 @@ export function GitRemoteBar({
               onClick={() => setForcePushDialog(null)}
               className="text-xs"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
               variant="destructive"
               onClick={() => {
                 if (forcePushDialog) {
-                  onForcePush(forcePushDialog.remote, forcePushDialog.branch);
+                  const { remote, branch } = forcePushDialog;
+                  setForcePushDialog(null);
+                  runOp(`push:${remote}`, () => onForcePush(remote, branch));
                 }
-                setForcePushDialog(null);
               }}
               className="text-xs gap-1.5"
             >
               <AlertTriangle className="size-3" />
-              Force push
+              {t("git.remoteForcePush")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Folder Picker Modal */}
+      <FolderPickerModal
+        open={folderPickerModalOpen}
+        onClose={() => setFolderPickerModalOpen(false)}
+        onSelect={handleCloneFolderSelected}
+      />
     </Card>
   );
 }

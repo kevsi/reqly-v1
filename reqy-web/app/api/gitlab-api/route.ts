@@ -12,8 +12,14 @@ import {
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 60 });
 
 function getRateLimitKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  // Mirror /api/proxy: only trust forwarded headers behind a trusted reverse
+  // proxy, otherwise use a shared key so header rotation cannot bypass the
+  // limiter.
+  if (process.env.TRUSTED_PROXY === "true") {
+    const forwarded = request.headers.get("x-forwarded-for");
+    return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
+  }
+  return "unknown";
 }
 
 export async function GET(request: NextRequest) {

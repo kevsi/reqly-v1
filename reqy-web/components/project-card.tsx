@@ -100,6 +100,16 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         <span className="ml-auto">{fmt(project.analyzedAt, i18n.language)}</span>
       </div>
 
+      {/* Analysis warnings — e.g. low-confidence fallback or no manifest */}
+      {project.warnings && project.warnings.length > 0 && (
+        <p
+          className="truncate text-[11px] text-amber-600 dark:text-amber-400"
+          title={project.warnings.join("\n")}
+        >
+          ⚠ {project.warnings[0]}
+        </p>
+      )}
+
       {/* Mode chip */}
       <div
         className={cn(

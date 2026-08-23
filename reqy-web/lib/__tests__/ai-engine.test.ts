@@ -6,6 +6,7 @@ import {
   dispatchAIActions,
 } from "@/src/ai/cloud-engine/actions";
 import type { AIContext, AIAction } from "@/src/ai/cloud-engine/actions";
+import { maskSensitivePayload } from "@/src/ai/cloud-engine/prompt";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,6 +91,18 @@ describe("PROMPTS", () => {
       expect(prompt).toContain("Create a user");
       expect(prompt).toContain("{{API_KEY}}");
     });
+
+    it("masks sensitive environment variable values", () => {
+      const secret = "super-secret-api-value-123";
+      const ctx = {
+        ...mockCtx,
+        environmentVariables: { API_SECRET_KEY: secret },
+      };
+      const prompt = PROMPTS.naturalLanguageToRequest("Create a user", ctx);
+      expect(prompt).not.toContain(secret);
+      expect(prompt).toContain("API_SECRET_KEY");
+      expect(prompt).toContain("[MASKED]");
+    });
   });
 
   describe("debugError", () => {
@@ -117,6 +130,30 @@ describe("PROMPTS", () => {
   });
 });
 
+describe("maskSensitivePayload", () => {
+  it("masks sensitive keys recursively without changing ordinary values", () => {
+    const secret = "sk-live-secret-value";
+    const masked = maskSensitivePayload({
+      Authorization: `Bearer ${secret}`,
+      nested: {
+        apiKey: secret,
+        ordinary: "keep-me",
+      },
+      list: [{ password: secret }, { label: "public" }],
+    }) as Record<string, unknown>;
+
+    expect(JSON.stringify(masked)).not.toContain(secret);
+    expect(masked.Authorization).toBe("••••••");
+    expect((masked.nested as Record<string, unknown>).apiKey).toBe("••••••");
+    expect((masked.nested as Record<string, unknown>).ordinary).toBe("keep-me");
+    expect((masked.list as Array<Record<string, unknown>>)[0].password).toBe("••••••");
+    expect((masked.list as Array<Record<string, unknown>>)[1].label).toBe("public");
+
+    const serialized = maskSensitivePayload(JSON.stringify({ password: secret, ok: true }));
+    expect(String(serialized)).not.toContain(secret);
+    expect(String(serialized)).toContain("••••••");
+  });
+});
 describe("parseAIResponse", () => {
   it("parses valid JSON response", () => {
     const raw = JSON.stringify({
@@ -194,7 +231,7 @@ describe("dispatchAIActions", () => {
     const actions: AIAction[] = [
       { type: "FILL_REQUEST", payload: { method: "POST", url: "/api/test", reason: "Test" } },
     ];
-    await dispatchAIActions(actions, { setRequest });
+    await dispatchAIActions(actions, { setRequest }, undefined, { allowAutoApply: true });
     expect(setRequest).toHaveBeenCalledWith(
       { method: "POST", url: "/api/test", reason: "Test" },
       "Test",
@@ -209,7 +246,7 @@ describe("dispatchAIActions", () => {
         payload: { assertions: [{ label: "Status 200", code: "expect(res.status).toBe(200)" }] },
       },
     ];
-    await dispatchAIActions(actions, { addAssertions });
+    await dispatchAIActions(actions, { addAssertions }, undefined, { allowAutoApply: true });
     expect(addAssertions).toHaveBeenCalled();
     expect(addAssertions.mock.calls[0][0]).toHaveLength(1);
     expect(addAssertions.mock.calls[0][0][0].label).toBe("Status 200");
@@ -240,7 +277,7 @@ describe("dispatchAIActions", () => {
         payload: { name: "user_id", value: "42", description: "User ID" },
       },
     ];
-    await dispatchAIActions(actions, { setVariable });
+    await dispatchAIActions(actions, { setVariable }, undefined, { allowAutoApply: true });
     expect(setVariable).toHaveBeenCalledWith("user_id", "42", "User ID");
   });
 
@@ -258,7 +295,7 @@ describe("dispatchAIActions", () => {
         payload: { name: "user_id", fromResponsePath: "$.data.id" },
       },
     ];
-    await dispatchAIActions(actions, { setVariable }, ctx);
+    await dispatchAIActions(actions, { setVariable }, ctx, { allowAutoApply: true });
     expect(setVariable).toHaveBeenCalledWith("user_id", "99", undefined);
   });
 
@@ -306,7 +343,7 @@ describe("dispatchAIActions", () => {
         payload: { markdown: "# API Docs", title: "My API" },
       },
     ];
-    await dispatchAIActions(actions, { setDoc });
+    await dispatchAIActions(actions, { setDoc }, undefined, { allowAutoApply: true });
     expect(setDoc).toHaveBeenCalledWith("# API Docs", "My API");
   });
 
@@ -322,10 +359,25 @@ describe("dispatchAIActions", () => {
     ];
     await dispatchAIActions(actions, { setRequest, executeRequest, audit }, undefined, {
       allowAutoApply: true,
+      confirmedActions: ["legacy_execute_request"],
     });
     expect(setRequest).toHaveBeenCalled();
     expect(executeRequest).toHaveBeenCalled();
     expect(audit).toHaveBeenCalled();
+  });
+
+  it("blocks legacy EXECUTE_REQUEST even when reason is omitted", async () => {
+    const executeRequest = vi.fn();
+    const notify = vi.fn();
+    const result = await dispatchAIActions(
+      [{ type: "EXECUTE_REQUEST", payload: { method: "GET", url: "https://example.com" } }],
+      { executeRequest, notify },
+      undefined,
+      { allowAutoApply: true },
+    );
+    expect(executeRequest).not.toHaveBeenCalled();
+    expect(result.blocked).toHaveLength(1);
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("legacy_execute_request"));
   });
 
   it("handles unknown action type gracefully", async () => {
@@ -339,7 +391,7 @@ describe("dispatchAIActions", () => {
     const notify = vi.fn();
     const setRequest = vi.fn().mockRejectedValue(new Error("Handler crashed"));
     const actions: AIAction[] = [{ type: "FILL_REQUEST", payload: { url: "/test" } }];
-    await dispatchAIActions(actions, { setRequest, notify });
+    await dispatchAIActions(actions, { setRequest, notify }, undefined, { allowAutoApply: true });
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("FILL_REQUEST handler error"));
   });
 });

@@ -2707,9 +2707,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got text/plain",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 20,
         "size": 100
@@ -2749,9 +2747,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got application/xml",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 23,
         "size": 104
@@ -2791,9 +2787,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got application/x-www-form-urlencoded",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 26,
         "size": 108
@@ -2833,9 +2827,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got text/html",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 29,
         "size": 112
@@ -2875,9 +2867,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got application/yaml",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 32,
         "size": 116
@@ -2917,9 +2907,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got text/plain",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 35,
         "size": 120
@@ -2959,9 +2947,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got application/xml",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 38,
         "size": 124
@@ -3001,9 +2987,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got application/x-www-form-urlencoded",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 41,
         "size": 128
@@ -3043,9 +3027,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got text/html",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 44,
         "size": 102
@@ -3085,9 +3067,7 @@
         "body": {
           "error": "unsupported_media_type",
           "message": "Only application/json is supported, got application/yaml",
-          "supported": [
-            "application/json"
-          ]
+          "supported": ["application/json"]
         },
         "duration": 47,
         "size": 106
@@ -3909,23 +3889,12 @@
           "details": {
             "fields": [
               {
-                "path": [
-                  "address",
-                  "zip"
-                ],
-                "errors": [
-                  "required"
-                ]
+                "path": ["address", "zip"],
+                "errors": ["required"]
               },
               {
-                "path": [
-                  "items",
-                  0,
-                  "quantity"
-                ],
-                "errors": [
-                  "must be positive integer"
-                ]
+                "path": ["items", 0, "quantity"],
+                "errors": ["must be positive integer"]
               }
             ]
           }
@@ -4918,9 +4887,9 @@
       }
     },
     "expected": {
-      "ruleId": "performance.timeout.warning",
-      "severity": "warning",
-      "title": "Réponse lente (> 5s)"
+      "ruleId": "performance.timeout.critical",
+      "severity": "error",
+      "title": "Réponse très lente (> 10s)"
     }
   },
   {
@@ -4951,9 +4920,9 @@
       }
     },
     "expected": {
-      "ruleId": "performance.timeout.warning",
-      "severity": "warning",
-      "title": "Réponse lente (> 5s)"
+      "ruleId": "performance.timeout.critical",
+      "severity": "error",
+      "title": "Réponse très lente (> 10s)"
     }
   },
   {
@@ -4984,9 +4953,9 @@
       }
     },
     "expected": {
-      "ruleId": "performance.timeout.warning",
-      "severity": "warning",
-      "title": "Réponse lente (> 5s)"
+      "ruleId": "performance.timeout.critical",
+      "severity": "error",
+      "title": "Réponse très lente (> 10s)"
     }
   },
   {

@@ -24,6 +24,8 @@ vi.mock("@/hooks/use-request-store", () => ({
       initStore: mockInitStore,
     }),
   },
+  useRequestStore: (selector: (state: { isLoaded: boolean }) => boolean) =>
+    selector({ isLoaded: false }),
 }));
 
 import { StoreInitializer } from "@/components/store-initializer";
@@ -115,6 +117,8 @@ describe("StoreInitializer (Chunk 4: init order)", () => {
           initStore: mockInitStore,
         }),
       },
+      useRequestStore: (selector: (state: { isLoaded: boolean }) => boolean) =>
+        selector({ isLoaded: true }),
     }));
 
     mockWaitForReady.mockResolvedValue(undefined);

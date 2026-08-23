@@ -15,6 +15,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { useRequestTabsState } from "@/hooks/use-request-tabs-state";
 import { useRequestTabExecution } from "@/hooks/use-request-tab-execution";
 import { useRequestStore, type RequestItem } from "@/hooks/use-request-store";
+import { isTauriAvailable } from "@/lib/tauri";
 import { SimpleRequestBuilder } from "@/components/simple-mode/simple-request-builder";
 import { persistence } from "@/lib/persistence";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,7 @@ export function RequestTabsManager() {
     sendRequest,
     sendAndSave,
     sendAndDownload,
+    cancelRequest,
     loadRequestIntoActiveTab,
     loadAndSendRequest,
     runCollection,
@@ -492,6 +494,13 @@ export function RequestTabsManager() {
                     }
                     onRunTests={sendRequest}
                     onSend={sendRequest}
+                    onCancel={cancelRequest}
+                    followRedirects={activeTab.followRedirects}
+                    onFollowRedirectsChange={
+                      isTauriAvailable()
+                        ? undefined
+                        : (follow) => updateTab(activeTab.id, { followRedirects: follow })
+                    }
                     isLoading={isLoading}
                     variableNames={variableMappings
                       .filter((m) => m.enabled && m.name.trim())
@@ -550,11 +559,13 @@ export function RequestTabsManager() {
                       responseTimings={activeTab.responseTimings}
                       responseSize={activeTab.responseSize}
                       responseHeaders={activeTab.responseHeaders}
+                      transportError={activeTab.transportError}
                       responseCookies={activeTab.responseCookies}
                       testResults={activeTab.testResults}
-                      isLoading={isLoading || aiEngine.isLoading}
+                      isLoading={isLoading}
                       aiIsLoading={aiEngine.isLoading}
                       onRun={sendRequest}
+                      onRetry={sendRequest}
                       onRunAndSave={sendAndSave}
                       onRunAndDownload={sendAndDownload}
                       onAnalyze={handleAnalyzeRequest}
@@ -597,29 +608,30 @@ export function RequestTabsManager() {
                   </ErrorBoundary>
                 </div>
 
-                {/* Snapshots — trigger button pinned at bottom of response area */}
-                <div
-                  className="shrink-0 border-t border-border/50 bg-card/40 p-2"
-                  data-testid="rest-snapshot-controls"
-                >
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 w-full gap-1.5 text-xs"
-                    onClick={() => setSnapshotModalOpen(true)}
-                    disabled={!activeTab.responseBody}
+                {/* Snapshots are available only after a response exists. */}
+                {activeTab.responseBody && (
+                  <div
+                    className="shrink-0 border-t border-border/50 bg-card/40 p-2"
+                    data-testid="rest-snapshot-controls"
                   >
-                    <Camera className="size-3.5" />
-                    {t("response.snapshots")}
-                  </Button>
-                  <RestSnapshotModal
-                    open={snapshotModalOpen}
-                    onOpenChange={setSnapshotModalOpen}
-                    responseBody={activeTab.responseBody}
-                    responseStatus={activeTab.responseStatus}
-                    responseHeaders={activeTab.responseHeaders}
-                  />
-                </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 w-full gap-1.5 text-xs"
+                      onClick={() => setSnapshotModalOpen(true)}
+                    >
+                      <Camera className="size-3.5" />
+                      {t("response.snapshots")}
+                    </Button>
+                    <RestSnapshotModal
+                      open={snapshotModalOpen}
+                      onOpenChange={setSnapshotModalOpen}
+                      responseBody={activeTab.responseBody}
+                      responseStatus={activeTab.responseStatus}
+                      responseHeaders={activeTab.responseHeaders}
+                    />
+                  </div>
+                )}
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -714,6 +726,11 @@ export function RequestTabsManager() {
         pendingTab={pendingCloseTab}
         onOpenChange={(open) => !open && setPendingCloseTab(null)}
         onDiscard={() => {
+          if (pendingCloseTab) forceCloseTab(pendingCloseTab.id);
+          setPendingCloseTab(null);
+        }}
+        onSave={() => {
+          saveActiveTab();
           if (pendingCloseTab) forceCloseTab(pendingCloseTab.id);
           setPendingCloseTab(null);
         }}

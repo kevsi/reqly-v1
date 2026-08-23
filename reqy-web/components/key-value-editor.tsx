@@ -91,6 +91,7 @@ export function KeyValueEditor({
                 value={pair.key}
                 onChange={(value) => update(index, "key", value)}
                 placeholder={resolvedKeyPlaceholder}
+                aria-label={`${resolvedKeyPlaceholder} ${index + 1}`}
                 className="flex-1 h-9 border-input bg-muted/20 text-sm transition-all duration-200 focus:bg-muted/40"
                 suggestions={keySuggestions}
                 emptyMessage=""
@@ -101,6 +102,7 @@ export function KeyValueEditor({
                 value={pair.value}
                 onChange={(value) => update(index, "value", value)}
                 placeholder={resolvedValuePlaceholder}
+                aria-label={`${resolvedValuePlaceholder} ${index + 1}`}
                 className="flex-1 h-9 border-input bg-muted/20 text-sm transition-all duration-200 focus:bg-muted/40"
                 suggestions={valueSuggestions}
                 emptyMessage=""
@@ -111,8 +113,9 @@ export function KeyValueEditor({
                 onClick={() => remove(index)}
                 className={cn(
                   "shrink-0 size-8 text-muted-foreground/50 hover:text-destructive",
-                  "opacity-0 group-hover/row:opacity-100 transition-all duration-200",
+                  "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-all duration-200",
                 )}
+                aria-label={`${t("common.delete")} ${index + 1}`}
               >
                 <Trash2 className="size-3.5" />
               </Button>

@@ -7,6 +7,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Clés d'objet dangereuses (prototype pollution). */
+export const UNSAFE_OBJECT_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+
+/** `true` si une clé pourrait polluer le prototype (input non fiable). */
+export function isUnsafeObjectKey(key: string): boolean {
+  return UNSAFE_OBJECT_KEYS.has(key);
+}
+
+/** Generate a UUID v4 (uses crypto.randomUUID when available). */
+export function uuidV4(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+}
+
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -16,11 +38,13 @@ export function interpolate(text: string, variables: EnvironmentVariable[]): str
   let result = text;
   const enabledVars = variables.filter((v) => v.enabled && v.key.trim() !== "");
 
-  // Replace each {{KEY}} with the variable value
+  // Replace each {{KEY}} with the variable value. CR/LF are stripped from
+  // values so an environment variable cannot smuggle extra HTTP headers
+  // (CRLF injection) into requests built from templates.
   enabledVars.forEach((v) => {
     const escapedKey = escapeRegex(v.key.trim());
     const regex = new RegExp(`\\{\\{\\s*${escapedKey}\\s*\\}\\}`, "g");
-    result = result.replace(regex, v.value);
+    result = result.replace(regex, v.value.replace(/[\r\n]/g, " "));
   });
 
   return result;
@@ -41,6 +65,8 @@ export interface ProxySafeResult {
   durationMs?: number;
   encoding?: string;
   error?: string;
+  /** Code machine de l'erreur (ex. RATE_LIMIT_EXCEEDED, BLOCKED_SSRF, TIMEOUT). */
+  code?: string;
 }
 
 export async function parseJsonSafe(response: Response): Promise<ProxySafeResult> {
@@ -63,7 +89,9 @@ export function replaceLocalhostPort(url: string, port: number): string {
 
 export async function downloadJson(data: unknown, filename: string) {
   const content = JSON.stringify(data, null, 2);
-  const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+  // Tauri v1 expose `__TAURI__`, Tauri v2 expose `__TAURI_INTERNALS__`.
+  const isTauri =
+    typeof window !== "undefined" && ("__TAURI__" in window || "__TAURI_INTERNALS__" in window);
 
   if (isTauri) {
     try {
@@ -71,7 +99,7 @@ export async function downloadJson(data: unknown, filename: string) {
       const { writeTextFile } = await import("@tauri-apps/plugin-fs");
 
       const filePath = await save({
-        defaultPath: filename.endsWith(".json") ? filename : `${filename}.json`,
+        defaultPath: filename,
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
 
@@ -89,7 +117,7 @@ export async function downloadJson(data: unknown, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename.endsWith(".json") ? filename : `${filename}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

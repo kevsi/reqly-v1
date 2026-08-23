@@ -168,20 +168,25 @@ export async function importDroppedFolder(
       const opfsRoot = await storage.getDirectory();
       const rootHandle = await opfsRoot.getDirectoryHandle(rootName, { create: true });
 
-      const scanEntry = async (dirEntry: any, targetHandle: FileSystemDirectoryHandle) => {
+      const scanEntry = async (
+        dirEntry: FileSystemDirectoryEntry,
+        targetHandle: FileSystemDirectoryHandle,
+      ) => {
         const reader = dirEntry.createReader();
-        const readEntries = (): Promise<any[]> => new Promise((res) => reader.readEntries(res));
-        let entries: any[] = [];
-        let batch: any[] = [];
-        do {
-          batch = await readEntries();
+        const readEntries = (): Promise<FileSystemEntry[]> =>
+          new Promise((res) => reader.readEntries(res));
+        let entries: FileSystemEntry[] = [];
+        while (true) {
+          const batch = await readEntries();
           entries = entries.concat(batch);
-        } while (batch.length > 0);
+          if (batch.length === 0) break;
+        }
 
         for (const child of entries) {
           if (child.isFile) {
             try {
-              const file: File = await new Promise((res, rej) => child.file(res, rej));
+              const fileEntry = child as FileSystemFileEntry;
+              const file: File = await new Promise((res, rej) => fileEntry.file(res, rej));
               const fileHandle = await targetHandle.getFileHandle(child.name, { create: true });
               const writable = await fileHandle.createWritable();
               await writable.write(file);
@@ -192,12 +197,12 @@ export async function importDroppedFolder(
           } else if (child.isDirectory) {
             if (child.name === ".git" || child.name === "node_modules") continue;
             const subHandle = await targetHandle.getDirectoryHandle(child.name, { create: true });
-            await scanEntry(child, subHandle);
+            await scanEntry(child as FileSystemDirectoryEntry, subHandle);
           }
         }
       };
 
-      await scanEntry(entry, rootHandle);
+      await scanEntry(entry as FileSystemDirectoryEntry, rootHandle);
       return { path: null, handle: rootHandle, name: rootName };
     }
   }

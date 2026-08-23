@@ -12,7 +12,7 @@ import { create } from "zustand";
 
 export type ToolId = "github" | "gitlab";
 
-export type ConnectionStatus = "connected" | "disconnected" | "loading";
+export type ConnectionStatus = "connected" | "disconnected" | "loading" | "unavailable";
 
 interface ToolConnectionsState {
   github: ConnectionStatus;

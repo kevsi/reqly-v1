@@ -82,6 +82,7 @@ export interface CollectionImportData {
   description?: string;
   color: string;
   icon: string;
+  folders?: Array<{ id: string; name: string; parentId?: string | null }>;
   requests: Array<{
     name: string;
     method: string;
@@ -97,6 +98,7 @@ export interface CollectionImportData {
     runnerAssertions?: RequestItem["runnerAssertions"];
     preRequestScript?: string;
     postResponseScript?: string;
+    folderId?: string | null;
   }>;
 }
 

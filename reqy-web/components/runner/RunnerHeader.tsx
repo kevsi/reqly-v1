@@ -10,7 +10,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ListChecks, FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@/lib/utils";
 import { EnvironmentSelector } from "@/components/environment-selector";
 import type { Collection } from "@/hooks/request-types";
 
@@ -32,7 +31,6 @@ export function RunnerHeader({
   onViewReport,
 }: RunnerHeaderProps) {
   const { t } = useTranslation();
-  const selected = collections.find((c) => c.id === selectedId) ?? collections[0] ?? null;
 
   return (
     <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-4">

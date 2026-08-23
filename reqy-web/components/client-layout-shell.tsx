@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { persistence } from "@/lib/persistence";
 import { useCaptureListener } from "@/hooks/use-capture-listener";
+import { useGitHubLoginDeepLink } from "@/hooks/use-github-login-deep-link";
 
 /**
  * Client-side wrapper mounted inside the server `RootLayout` body.
@@ -11,6 +12,7 @@ import { useCaptureListener } from "@/hooks/use-capture-listener";
  */
 export function ClientLayoutShell({ children }: { children: ReactNode }) {
   useCaptureListener();
+  useGitHubLoginDeepLink();
 
   useEffect(() => {
     persistence.waitForReady().catch((err) => {

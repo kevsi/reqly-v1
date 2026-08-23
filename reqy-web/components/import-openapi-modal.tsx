@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -229,50 +228,56 @@ export function ImportOpenApiModal({
 
     return (
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              {spec.title}{" "}
-              <span className="text-sm font-normal text-muted-foreground">v{spec.version}</span>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] p-0 flex flex-col gap-0 overflow-hidden">
+          <DialogHeader className="p-4 border-b shrink-0 bg-card">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <FileText className="h-4 w-4 text-primary shrink-0" />
+              <span className="truncate">{spec.title}</span>
+              <span className="text-xs font-normal text-muted-foreground shrink-0">
+                v{spec.version}
+              </span>
             </DialogTitle>
-            <DialogDescription>
-              {spec.description ||
-                t("importExport.openapi.endpointsDetected", { count: totalEndpoints })}
-            </DialogDescription>
+            {spec.description && (
+              <DialogDescription className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                {spec.description}
+              </DialogDescription>
+            )}
           </DialogHeader>
 
-          <ScrollArea className="flex-1 pr-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {/* Summary */}
-            <div className="mb-4 grid grid-cols-3 gap-3">
-              <div className="rounded-lg border bg-card p-3 text-center">
-                <p className="text-2xl font-bold text-primary">{totalEndpoints}</p>
-                <p className="text-xs text-muted-foreground">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border bg-card p-2.5 text-center">
+                <p className="text-xl font-bold text-primary">{totalEndpoints}</p>
+                <p className="text-[11px] text-muted-foreground">
                   {t("importExport.common.endpoints")}
                 </p>
               </div>
-              <div className="rounded-lg border bg-card p-3 text-center">
-                <p className="text-2xl font-bold">{tagGroups.length}</p>
-                <p className="text-xs text-muted-foreground">
+              <div className="rounded-lg border bg-card p-2.5 text-center">
+                <p className="text-xl font-bold text-foreground">{tagGroups.length}</p>
+                <p className="text-[11px] text-muted-foreground">
                   {t("importExport.common.collections")}
                 </p>
               </div>
-              <div className="rounded-lg border bg-card p-3 text-center min-w-0">
+              <div className="rounded-lg border bg-card p-2.5 text-center min-w-0">
                 <p
                   className="text-xs font-mono font-semibold text-foreground truncate"
                   title={spec.baseUrl}
                 >
                   {spec.baseUrl || "—"}
                 </p>
-                <p className="text-xs text-muted-foreground">{t("importExport.common.baseUrl")}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {t("importExport.common.baseUrl")}
+                </p>
               </div>
             </div>
 
             {/* Options */}
-            <div className="mb-4">
+            <div>
               <button
+                type="button"
                 onClick={() => setShowOptions(!showOptions)}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Settings2 className="h-3.5 w-3.5" />
                 {t("importExport.common.options")}
@@ -282,9 +287,9 @@ export function ImportOpenApiModal({
               </button>
 
               {showOptions && (
-                <div className="mt-2 rounded-lg border bg-card/50 p-4 space-y-3">
+                <div className="mt-2 rounded-lg border bg-card/50 p-3 space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="group-by-tag" className="text-sm">
+                    <Label htmlFor="group-by-tag" className="text-xs">
                       {t("importExport.common.groupByTag")}
                     </Label>
                     <Switch
@@ -293,8 +298,8 @@ export function ImportOpenApiModal({
                       onCheckedChange={setGroupByTag}
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="base-url" className="text-sm">
+                  <div className="space-y-1">
+                    <Label htmlFor="base-url" className="text-xs">
                       {t("importExport.common.baseUrlOverride")}
                     </Label>
                     <Input
@@ -302,6 +307,7 @@ export function ImportOpenApiModal({
                       placeholder={spec.baseUrl || "https://api.example.com"}
                       value={baseUrlOverride}
                       onChange={(e) => setBaseUrlOverride(e.target.value)}
+                      className="h-8 text-xs font-mono"
                     />
                   </div>
                 </div>
@@ -309,8 +315,8 @@ export function ImportOpenApiModal({
             </div>
 
             {/* Tag groups preview */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground">
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t("importExport.common.collectionsPreview")}
               </h4>
               {tagGroups.map((group) => {
@@ -319,11 +325,13 @@ export function ImportOpenApiModal({
                   (name) => name.toLowerCase() === group.collectionName.toLowerCase(),
                 );
                 return (
-                  <div key={group.tag} className="rounded-lg border bg-card">
-                    <div className="flex items-center justify-between border-b px-3 py-2">
+                  <div key={group.tag} className="rounded-lg border bg-card overflow-hidden">
+                    <div className="flex items-center justify-between border-b px-3 py-2 bg-muted/20">
                       <div className="flex items-center gap-2">
                         <div className={`h-2 w-2 rounded-full ${color}`} />
-                        <span className="text-sm font-medium">{group.collectionName}</span>
+                        <span className="text-xs font-semibold text-foreground">
+                          {group.collectionName}
+                        </span>
                         <Badge
                           variant={isNew ? "default" : "secondary"}
                           className="text-[10px] px-1.5 py-0"
@@ -331,13 +339,13 @@ export function ImportOpenApiModal({
                           {isNew ? t("importExport.common.new") : t("importExport.common.exists")}
                         </Badge>
                       </div>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[11px] font-mono text-muted-foreground">
                         {t("importExport.openapi.endpointsGroup", {
                           count: group.endpoints.length,
                         })}
                       </span>
                     </div>
-                    <div className="divide-y">
+                    <div className="divide-y divide-border">
                       {group.endpoints.slice(0, 5).map((ep, i) => (
                         <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs">
                           <span
@@ -348,13 +356,13 @@ export function ImportOpenApiModal({
                           >
                             {ep.method}
                           </span>
-                          <span className="font-mono text-muted-foreground truncate">
+                          <span className="font-mono text-muted-foreground truncate text-[11px]">
                             {ep.path}
                           </span>
                         </div>
                       ))}
                       {group.endpoints.length > 5 && (
-                        <p className="px-3 py-1.5 text-xs text-muted-foreground">
+                        <p className="px-3 py-1 text-[11px] text-muted-foreground italic">
                           {t("importExport.common.more", { count: group.endpoints.length - 5 })}
                         </p>
                       )}
@@ -363,17 +371,17 @@ export function ImportOpenApiModal({
                 );
               })}
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter className="mt-4 flex items-center justify-between border-t pt-4">
-            <Button variant="ghost" onClick={handleBack}>
+          <DialogFooter className="p-3 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-between sm:justify-between">
+            <Button variant="ghost" size="sm" onClick={handleBack} className="text-xs">
               {t("importExport.common.switchFile")}
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleClose}>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleClose} className="text-xs">
                 {t("common.cancel")}
               </Button>
-              <Button onClick={handleImport}>
+              <Button size="sm" onClick={handleImport} className="text-xs font-semibold bg-primary">
                 {t("importExport.openapi.importEndpoints", { count: totalEndpoints })}
               </Button>
             </div>

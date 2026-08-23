@@ -44,8 +44,21 @@ const NETWORK_MESSAGE_RE =
  * - `unknown`     — nothing classifiable (e.g. a non-error status, or a
  *                   completely opaque error object).
  */
+function isStructuredTauriError(
+  err: unknown,
+): err is { kind: string; code: string; message: string; detail?: string } {
+  if (!err || typeof err !== "object") return false;
+  const value = err as Record<string, unknown>;
+  return (
+    typeof value.kind === "string" &&
+    typeof value.code === "string" &&
+    typeof value.message === "string"
+  );
+}
+
 export function classifyError(err: unknown): ErrorClass {
   if (err === null || err === undefined) return "unknown";
+  if (isStructuredTauriError(err)) return err.kind === "network" ? "network" : "unknown";
 
   const e = err as {
     status?: unknown;

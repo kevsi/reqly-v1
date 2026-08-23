@@ -12,14 +12,110 @@ import { assertSafeBaseUrl } from "../proxy-ai/lib/url-utils";
 import { isIP } from "node:net";
 import { isBlockedIp } from "@/lib/security/ssrf";
 import { resolveCached } from "@/lib/security/dns-cache";
+import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
+import { createRateLimiter } from "@/lib/rate-limiter";
+import { getRateLimitKey } from "../proxy-ai/lib/rate-limit";
+import type { Agent } from "undici";
+import type { NextRequest } from "next/server";
 
 const DEFAULT_BASE = (
   process.env.OPENAPI_GENERATOR_URL ?? "https://api.openapi-generator.tech/api/gen/clients"
 ).replace(/\/+$/, "");
 
 export const runtime = "nodejs";
+const sdkRateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 10 });
+const MAX_REQUEST_BYTES = 1_048_576;
+const MAX_SPEC_BYTES = 512_000;
 
-export async function POST(req: Request) {
+/** Errors raised by fetchGuarded that map to a 502 upstream response. */
+class GuardedFetchError extends Error {}
+
+/**
+ * Fetch a URL with the SSRF guard applied at connect time: the socket is
+ * pinned to the validated address (DNS-rebinding proof) and redirects are
+ * never followed silently. When `allowRedirect` is set, at most one redirect
+ * hop is followed after re-validating its destination.
+ */
+async function fetchGuarded(
+  url: string,
+  init: RequestInit,
+  dispatchers: Agent[],
+  allowRedirect = false,
+): Promise<Response> {
+  const dispatcher = await createPinnedDispatcher(url);
+  if (dispatcher) dispatchers.push(dispatcher);
+  const res = await fetch(url, {
+    ...init,
+    redirect: "manual",
+    ...(dispatcher ? { dispatcher } : {}),
+  });
+  if (allowRedirect && res.status >= 300 && res.status < 400) {
+    const location = res.headers.get("location");
+    if (location) {
+      let target: URL;
+      try {
+        target = new URL(location, url);
+      } catch {
+        throw new GuardedFetchError("Redirect to invalid destination");
+      }
+      if (!["http:", "https:"].includes(target.protocol)) {
+        throw new GuardedFetchError("Redirect to blocked destination: invalid protocol");
+      }
+      if (isIP(target.hostname) && isBlockedIp(target.hostname)) {
+        throw new GuardedFetchError("Redirect to blocked destination: private/internal IP");
+      }
+      const resolved = await resolveCached(target.hostname);
+      if (!resolved || isBlockedIp(resolved)) {
+        throw new GuardedFetchError("Redirect to blocked destination: private/internal IP");
+      }
+      return fetchGuarded(
+        target.toString(),
+        { ...init, method: "GET", body: undefined },
+        dispatchers,
+        false,
+      );
+    }
+  }
+  return res;
+}
+const ALLOWED_LANGUAGES = new Set([
+  "typescript-fetch",
+  "typescript-axios",
+  "javascript",
+  "python",
+  "java",
+  "go",
+  "csharp",
+  "kotlin",
+  "swift5",
+  "rust",
+  "php",
+  "ruby",
+  "dart",
+]);
+
+export async function POST(req: NextRequest) {
+  const rate = await sdkRateLimiter.check(getRateLimitKey(req));
+  if (!rate.allowed) {
+    return Response.json(
+      { error: "Trop de demandes de génération SDK. Réessayez plus tard." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))),
+        },
+      },
+    );
+  }
+  const requestLike = req as unknown as {
+    headers?: { get: (name: string) => string | null };
+    text?: () => Promise<string>;
+    json?: () => Promise<unknown>;
+  };
+  const contentLength = Number(requestLike.headers?.get?.("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+    return Response.json({ error: "Corps de requête trop volumineux" }, { status: 413 });
+  }
   let payload: {
     spec?: unknown;
     language?: string;
@@ -28,7 +124,17 @@ export async function POST(req: Request) {
     apiName?: string;
   };
   try {
-    payload = (await req.json()) as typeof payload;
+    if (typeof requestLike.text === "function") {
+      const rawBody = await requestLike.text();
+      if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
+        return Response.json({ error: "Corps de requête trop volumineux" }, { status: 413 });
+      }
+      payload = JSON.parse(rawBody) as typeof payload;
+    } else if (typeof requestLike.json === "function") {
+      payload = (await requestLike.json()) as typeof payload;
+    } else {
+      return Response.json({ error: "Impossible de lire le corps de la requête" }, { status: 400 });
+    }
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -36,6 +142,18 @@ export async function POST(req: Request) {
   const { spec, language, options, baseUrl, apiName } = payload;
   if (!language || spec == null) {
     return Response.json({ error: "Missing 'language' or 'spec'" }, { status: 400 });
+  }
+  if (!ALLOWED_LANGUAGES.has(language)) {
+    return Response.json({ error: "Unsupported SDK language" }, { status: 400 });
+  }
+  let serializedSpec: string;
+  try {
+    serializedSpec = JSON.stringify(spec);
+  } catch {
+    return Response.json({ error: "Invalid OpenAPI specification" }, { status: 400 });
+  }
+  if (new TextEncoder().encode(serializedSpec).byteLength > MAX_SPEC_BYTES) {
+    return Response.json({ error: "OpenAPI specification too large" }, { status: 413 });
   }
 
   let safeBase: string;
@@ -46,14 +164,21 @@ export async function POST(req: Request) {
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
+  // Stop upstream work as soon as the client disconnects.
+  req.signal?.addEventListener("abort", () => controller.abort());
+  const dispatchers: Agent[] = [];
 
   try {
-    const genRes = await fetch(`${safeBase}/${language}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ spec, options: options ?? {} }),
-      signal: controller.signal,
-    });
+    const genRes = await fetchGuarded(
+      `${safeBase}/${language}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spec, options: options ?? {} }),
+        signal: controller.signal,
+      },
+      dispatchers,
+    );
     if (!genRes.ok) {
       const text = await genRes.text().catch(() => "");
       return Response.json(
@@ -88,11 +213,12 @@ export async function POST(req: Request) {
     if (!resolvedDl || isBlockedIp(resolvedDl)) {
       return Response.json({ error: "Blocked download destination" }, { status: 403 });
     }
-    const portPart = dlParsed.port ? `:${dlParsed.port}` : "";
-    const hostLiteral = isIP(resolvedDl) === 6 ? `[${resolvedDl}]` : resolvedDl;
-    const pinnedDownloadUrl = `${dlParsed.protocol}//${hostLiteral}${portPart}${dlParsed.pathname}${dlParsed.search}`;
-
-    const zipRes = await fetch(pinnedDownloadUrl, { signal: controller.signal });
+    const zipRes = await fetchGuarded(
+      downloadUrl,
+      { signal: controller.signal },
+      dispatchers,
+      true,
+    );
     if (!zipRes.ok) {
       return Response.json(
         { error: `Failed to download generated SDK (${zipRes.status})` },
@@ -128,9 +254,14 @@ export async function POST(req: Request) {
         "Cache-Control": "no-store",
       },
     });
-  } catch (_err) {
-    return Response.json({ error: "SDK generation failed" }, { status: 500 });
+  } catch (err) {
+    if (err instanceof GuardedFetchError) {
+      return Response.json({ error: err.message }, { status: 502 });
+    }
+    const message = err instanceof Error ? err.message : "SDK generation failed";
+    return Response.json({ error: message }, { status: 500 });
   } finally {
     clearTimeout(timeout);
+    await Promise.allSettled(dispatchers.map((d) => d.close()));
   }
 }

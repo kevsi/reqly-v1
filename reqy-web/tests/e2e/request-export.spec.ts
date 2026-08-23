@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { mockHttpbin } from "./helpers/httpbin";
 
 test.describe("Request export (cURL / Fetch)", () => {
   test("export controls visible on home page when URL is entered", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
     await page.waitForSelector('[role="tab"]', { timeout: 10000 });
 
@@ -17,6 +19,7 @@ test.describe("Request export (cURL / Fetch)", () => {
   });
 
   test("can switch between cURL and Fetch formats", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
     await page.waitForSelector('[role="tab"]', { timeout: 10000 });
 
@@ -40,6 +43,7 @@ test.describe("Request export (cURL / Fetch)", () => {
   });
 
   test("Copy cURL/Fetch button is present", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
     await page.waitForSelector('[role="tab"]', { timeout: 10000 });
 
@@ -54,6 +58,7 @@ test.describe("Request export (cURL / Fetch)", () => {
   });
 
   test("REST snapshot controls are visible after sending a request", async ({ page }) => {
+    await mockHttpbin(page);
     await page.goto("/");
     await page.waitForSelector('[role="tab"]', { timeout: 10000 });
 

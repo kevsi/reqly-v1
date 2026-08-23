@@ -10,6 +10,7 @@
  */
 
 import type { AIAction, AIContext, CurrentRequest, TestAssertion } from "./types";
+import { authorizeToolCall, type ApprovalSource } from "@/src/ai/agent/permissions";
 
 export interface DispatchBlockedAction {
   type: string;
@@ -30,6 +31,10 @@ function resolvePath(obj: unknown, path: string): string | undefined {
   let current: unknown = obj;
   for (const key of keys) {
     if (current == null || typeof current !== "object") {
+      return undefined;
+    }
+    // Anti-prototype-pollution : ne jamais suivre __proto__/constructor/prototype
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
       return undefined;
     }
     current = (current as Record<string, unknown>)[key];
@@ -60,27 +65,51 @@ export async function dispatchAIActions(
     }) => Promise<unknown> | void;
   },
   ctx?: AIContext,
-  options?: { allowAutoApply?: boolean },
+  options?: {
+    allowAutoApply?: boolean;
+    /** Actions explicitement approuvées par une interaction utilisateur. */
+    confirmedActions?: string[];
+  },
 ): Promise<DispatchResult> {
   const blocked: DispatchBlockedAction[] = [];
+  const confirmed = new Set(options?.confirmedActions ?? []);
+
+  const authorizeLegacy = async (tool: string): Promise<boolean> => {
+    const approval: ApprovalSource = confirmed.has(tool)
+      ? "user"
+      : options?.allowAutoApply
+        ? "autoApply"
+        : "none";
+    const decision = authorizeToolCall(tool, approval);
+    await handlers.audit?.({
+      actionType: "AI_AUTHORIZATION_DECISION",
+      detail: {
+        tool,
+        approvalSource: approval,
+        permission: decision.permission,
+        decision: decision.allowed ? "allow" : decision.requiresConfirmation ? "ask" : "deny",
+        reason: decision.reason,
+      },
+    });
+    if (decision.allowed) return true;
+    blocked.push({ type: tool, reason: decision.reason });
+    await handlers.notify?.(`${tool} bloquée : ${decision.reason}`);
+    return false;
+  };
   for (const action of actions) {
     switch (action.type) {
       case "FILL_REQUEST": {
         try {
+          if (!(await authorizeLegacy("legacy_fill_request"))) break;
           await handlers.setRequest?.(action.payload, action.payload.reason);
-          // If AI requested to run the request (payload.run === true) and autoApply allowed, execute it
-          try {
-            const shouldRun = !!action.payload.run;
-            if (shouldRun && options?.allowAutoApply) {
-              const res = await handlers.executeRequest?.(action.payload);
-              await handlers.audit?.({
-                actionType: "FILL_REQUEST_RUN",
-                detail: action.payload,
-                result: res,
-              });
-            }
-          } catch (e) {
-            await handlers.notify?.(`FILL_REQUEST run error: ${String(e)}`);
+          if (action.payload.run) {
+            if (!(await authorizeLegacy("legacy_execute_request"))) break;
+            const res = await handlers.executeRequest?.(action.payload);
+            await handlers.audit?.({
+              actionType: "FILL_REQUEST_RUN",
+              detail: action.payload,
+              result: res,
+            });
           }
         } catch (e) {
           await handlers.notify?.(`FILL_REQUEST handler error: ${String(e)}`);
@@ -90,6 +119,7 @@ export async function dispatchAIActions(
 
       case "ADD_ASSERTIONS": {
         try {
+          if (!(await authorizeLegacy("legacy_add_assertions"))) break;
           const shouldAuto = Boolean(action.payload.autoApply) && Boolean(options?.allowAutoApply);
           const res = await handlers.addAssertions?.(action.payload.assertions, shouldAuto);
           if (shouldAuto) {
@@ -107,6 +137,7 @@ export async function dispatchAIActions(
 
       case "CREATE_VARIABLE": {
         try {
+          if (!(await authorizeLegacy("legacy_create_variable"))) break;
           let val = action.payload.value ?? "";
           if (!val && action.payload.fromResponsePath && ctx?.lastResponse?.body) {
             val = resolvePath(ctx.lastResponse.body, action.payload.fromResponsePath) ?? "";
@@ -121,8 +152,9 @@ export async function dispatchAIActions(
       case "SUGGEST_FIX": {
         try {
           await handlers.notify?.(action.payload.description ?? "Suggested fix available");
-          if (action.payload.autoApply && options?.allowAutoApply) {
-            if (action.payload.patch) {
+          if (action.payload.autoApply && action.payload.patch) {
+            if (!(await authorizeLegacy("legacy_apply_fix"))) break;
+            {
               const res = await handlers.applyFix?.(action.payload.patch);
               await handlers.audit?.({
                 actionType: "SUGGEST_FIX_AUTO",
@@ -139,6 +171,7 @@ export async function dispatchAIActions(
 
       case "GENERATE_DOC": {
         try {
+          if (!(await authorizeLegacy("legacy_generate_doc"))) break;
           await handlers.setDoc?.(action.payload.markdown, action.payload.title);
         } catch (e) {
           await handlers.notify?.(`GENERATE_DOC handler error: ${String(e)}`);
@@ -157,14 +190,7 @@ export async function dispatchAIActions(
 
       case "EXECUTE_REQUEST": {
         try {
-          // SECURITY FIX C1: Only execute requests when autoApply is explicitly true AND allowed by options
-          if (action.payload.reason && !options?.allowAutoApply) {
-            await handlers.notify?.(
-              `Exécution de la requête bloquée : l'application automatique n'est pas activée. Vérifie et exécute manuellement.`,
-            );
-            blocked.push({ type: "EXECUTE_REQUEST", reason: "allowAutoApply désactivé" });
-            break;
-          }
+          if (!(await authorizeLegacy("legacy_execute_request"))) break;
           await handlers.setRequest?.(action.payload, action.payload.reason);
           const res = await handlers.executeRequest?.(action.payload);
           await handlers.audit?.({
@@ -180,14 +206,7 @@ export async function dispatchAIActions(
 
       case "RUN_BATCH": {
         try {
-          // SECURITY FIX C1: Only execute batches when autoApply is explicitly allowed
-          if (!options?.allowAutoApply) {
-            await handlers.notify?.(
-              `Exécution par lots bloquée : l'application automatique n'est pas activée. Vérifie les requêtes manuellement.`,
-            );
-            blocked.push({ type: "RUN_BATCH", reason: "allowAutoApply désactivé" });
-            break;
-          }
+          if (!(await authorizeLegacy("legacy_run_batch"))) break;
           const results: Array<{ request: Partial<CurrentRequest>; result: unknown }> = [];
           for (const req of action.payload.requests) {
             const res = await handlers.executeRequest?.(req);

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockInvoke = vi.fn();
 
@@ -19,9 +19,58 @@ function mockTauriResponse(body: unknown, status = 200) {
   });
 }
 
+describe("normalizeOllamaTarget", () => {
+  it("rejects URL and authority injection in the direct desktop host", async () => {
+    await expect(
+      callAiProxyTauri({
+        provider: "ollama",
+        apiKey: "",
+        model: "llama3",
+        host: "http://127.0.0.1",
+        port: 11434,
+        message: "hello",
+      }),
+    ).rejects.toThrow("Invalid Ollama host");
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects ports outside the valid TCP range", async () => {
+    await expect(
+      callAiProxyTauri({
+        provider: "ollama",
+        apiKey: "",
+        model: "llama3",
+        host: "127.0.0.1",
+        port: 70000,
+        message: "hello",
+      }),
+    ).rejects.toThrow("Invalid Ollama port");
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
 describe("callAiProxyTauri (chemin Tauri)", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("applique le timeout de 60 secondes du chemin web", async () => {
+    vi.useFakeTimers();
+    mockInvoke.mockReturnValue(new Promise(() => {}));
+    const pending = callAiProxyTauri({
+      provider: "ollama",
+      apiKey: "",
+      model: "llama3",
+      host: "127.0.0.1",
+      port: 11434,
+      message: "hello",
+    });
+    const assertion = expect(pending).rejects.toThrow("timed out");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await assertion;
   });
 
   it("envoie les tools en format OpenAI-compatible dans le body", async () => {

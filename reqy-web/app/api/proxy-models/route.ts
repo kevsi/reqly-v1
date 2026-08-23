@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
 import { assertSafeBaseUrl } from "../proxy-ai/lib/url-utils";
+import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 60 });
 
@@ -25,6 +26,7 @@ interface ModelEntry {
 async function fetchOpenAICompatible(
   baseUrl: string,
   apiKey: string,
+  dispatcher?: unknown,
 ): Promise<{ data: ModelEntry[] }> {
   const base = baseUrl?.trim() || "https://api.openai.com/v1";
   const url = `${base.replace(/\/+$/, "")}/models`;
@@ -34,7 +36,11 @@ async function fetchOpenAICompatible(
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
-    });
+      redirect: "manual",
+      // Pin the validated IP for custom bases so the fetch cannot be
+      // re-resolved (DNS rebinding TOCTOU between check and request).
+      ...(dispatcher ? { dispatcher } : {}),
+    } as RequestInit);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as { data: ModelEntry[] };
   } finally {
@@ -61,8 +67,11 @@ async function fetchGeminiModels(apiKey: string): Promise<{ data: ModelEntry[] }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, { signal: controller.signal });
+    const url = "https://generativelanguage.googleapis.com/v1beta/models";
+    const res = await fetch(url, {
+      headers: { "x-goog-api-key": apiKey },
+      signal: controller.signal,
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = (await res.json()) as {
       models?: Array<{
@@ -191,7 +200,9 @@ export async function POST(req: NextRequest) {
       case "custom": {
         if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 400 });
         const safeBase = await assertSafeBaseUrl(baseUrl || "https://api.openai.com/v1");
-        result = await fetchOpenAICompatible(safeBase, apiKey);
+        // Same anti-rebinding pattern as proxy-ai/openai-compat.
+        const dispatcher = await createPinnedDispatcher(safeBase);
+        result = await fetchOpenAICompatible(safeBase, apiKey, dispatcher);
         break;
       }
 

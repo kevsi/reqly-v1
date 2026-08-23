@@ -16,6 +16,7 @@ import { type ToolDefinition, type ToolCall, type ToolResult, toOpenAITool } fro
 import { proxyAuthHeaders } from "@/lib/proxy-auth";
 import { isTauriAvailable } from "@/lib/tauri";
 import { callAiProxyTauri } from "@/lib/tauri-ai";
+import { recordAICall } from "@/src/ai/cloud-engine/metrics";
 
 export interface StreamLLMOptions {
   provider: AIProvider;
@@ -70,6 +71,36 @@ export interface LLMUsageEvent {
 export type LLMToken = LLMTextEvent | LLMToolCallEvent | LLMUsageEvent;
 
 export async function* streamLLM(opts: StreamLLMOptions): AsyncIterable<LLMToken> {
+  const start = typeof performance !== "undefined" ? performance.now() : Date.now();
+  let outcome: "success" | "error" | "timeout" = "success";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  try {
+    for await (const token of streamLLMInternal(opts)) {
+      if (token.type === "usage") {
+        inputTokens += token.usage.inputTokens;
+        outputTokens += token.usage.outputTokens;
+      }
+      yield token;
+    }
+  } catch (error) {
+    outcome =
+      error instanceof Error && /timeout|timed out/i.test(error.message) ? "timeout" : "error";
+    throw error;
+  } finally {
+    const end = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordAICall({
+      provider: opts.provider,
+      model: opts.model ?? "unknown",
+      outcome,
+      durationMs: end - start,
+      inputTokens,
+      outputTokens,
+    });
+  }
+}
+
+async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToken> {
   // Les providers attendent le format OpenAI ({type:"function", function:{...}}),
   // pas le format unifié Reqly ({name, description, parameters}). Convertir ici
   // garantit que les deux chemins (web et Tauri) envoient des tools valides.

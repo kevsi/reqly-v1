@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentType, SVGProps } from "react";
+import { isTauriAvailable } from "@/lib/tauri";
 import {
   Bot,
   Cpu,
@@ -32,6 +33,8 @@ export interface ProviderInfo {
   /** Fallback Lucide icon when no brandIcon is available */
   fallbackIcon: LucideIcon;
   gradient: string;
+  /** Provider only works from the desktop app (localhost target). */
+  desktopOnlyHint?: boolean;
 }
 
 export const PROVIDER_INFOS: ProviderInfo[] = [
@@ -90,6 +93,9 @@ export const PROVIDER_INFOS: ProviderInfo[] = [
     brandIcon: OllamaIcon,
     fallbackIcon: Server,
     gradient: "from-orange-500/20 to-orange-600/10",
+    // Web proxy blocks localhost (SSRF guard): Ollama only works from the
+    // desktop app that reaches http://127.0.0.1:11434 directly.
+    desktopOnlyHint: true,
   },
   {
     value: "opencode-zen",
@@ -192,6 +198,15 @@ export function AiProviderCard({
           <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-medium text-primary">
             <span className="size-1.5 rounded-full bg-primary" />
             {t("settings.ai.configured")}
+          </span>
+        </div>
+      )}
+
+      {/* Desktop-only hint (web builds cannot reach localhost targets) */}
+      {info.desktopOnlyHint && !isTauriAvailable() && (
+        <div className="relative z-10">
+          <span className="inline-flex items-center gap-1 rounded-full bg-chart-4/10 px-2.5 py-0.5 text-[10px] font-medium text-chart-4">
+            {t("settings.ai.desktopOnly")}
           </span>
         </div>
       )}

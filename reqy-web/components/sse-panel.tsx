@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useSSE, type SSEAuthType, type SSEEvent } from "@/hooks/use-sse";
 import { KeyValueEditor, type KeyValuePair } from "@/components/key-value-editor";
 import { useRequestStore } from "@/hooks/use-request-store";
@@ -30,6 +30,9 @@ import {
   Shield,
   Filter,
   List,
+  AlertCircle,
+  Pause,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
@@ -41,6 +44,12 @@ function formatTimestamp(ts: number): string {
   const ss = d.getSeconds().toString().padStart(2, "0");
   const ms = d.getMilliseconds().toString().padStart(3, "0");
   return `${hh}:${mm}:${ss}.${ms}`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${bytes} o`;
 }
 
 function prettyPrintJson(raw: string): string {
@@ -90,10 +99,30 @@ function EventItem({ event }: { event: SSEEvent }) {
 
 export function SSEPanel() {
   const { t } = useTranslation();
-  const { status, events, connect, disconnect, clearEvents } = useSSE();
+  const {
+    status,
+    events,
+    error,
+    statusMessage,
+    totalBytes,
+    eventsPerSec,
+    isPaused,
+    reconnectCount,
+    connect,
+    disconnect,
+    clearEvents,
+    togglePause,
+  } = useSSE();
   const [url, setUrl] = useState("https://localhost:3000/sse");
   const [showOptions, setShowOptions] = useState(false);
   const eventsEndRef = useRef<HTMLDivElement>(null);
+
+  // Follow the stream: scroll to the newest event.
+  useEffect(() => {
+    if (events.length > 0) {
+      eventsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [events.length]);
 
   // Store data for autocomplete
   const environments = useRequestStore((s) => s.environments);
@@ -313,6 +342,29 @@ export function SSEPanel() {
         </div>
       </div>
 
+      {/* Error banner */}
+      {status === "error" && error && (
+        <div className="px-3 pb-1">
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive animate-in slide-in-from-top-1 duration-200">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-semibold break-words">{error}</span>
+              <span className="text-destructive/70">{t("sse.errorHint")}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reconnecting banner */}
+      {status === "connecting" && statusMessage && (
+        <div className="px-3 pb-1">
+          <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning animate-in slide-in-from-top-1 duration-200">
+            <Loader2 className="size-3.5 shrink-0 animate-spin" />
+            <span className="min-w-0 break-words">{statusMessage}</span>
+          </div>
+        </div>
+      )}
+
       {/* Options Toggle */}
       <div className="px-3 pb-1">
         <button
@@ -447,24 +499,45 @@ export function SSEPanel() {
 
       {/* Events Area */}
       <div className="flex flex-1 min-h-0 flex-col px-3 pb-3">
-        <div className="flex items-center justify-between mb-2 shrink-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
+        <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 shrink-0">
             {t("sse.events")}
             {events.length > 0 && (
               <span className="ml-1.5 font-mono text-muted-foreground/30">({events.length})</span>
             )}
           </span>
-          {events.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearEvents}
-              className="h-6 gap-1 text-[10px] font-medium text-muted-foreground/50 hover:text-destructive transition-colors duration-200"
-            >
-              <Trash2 className="size-3" />
-              {t("sse.clear")}
-            </Button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {(totalBytes > 0 || eventsPerSec > 0 || reconnectCount > 0) && (
+              <span className="text-[10px] font-mono text-muted-foreground/40 truncate">
+                {totalBytes > 0 && formatBytes(totalBytes)}
+                {totalBytes > 0 && eventsPerSec > 0 && " · "}
+                {eventsPerSec > 0 && t("sse.eventsPerSec", { rate: eventsPerSec.toFixed(1) })}
+                {reconnectCount > 0 && ` · ${t("sse.statsReconnects", { count: reconnectCount })}`}
+              </span>
+            )}
+            {isConnected && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={togglePause}
+                className="h-6 gap-1 text-[10px] font-medium text-muted-foreground/50 hover:text-foreground transition-colors duration-200"
+              >
+                {isPaused ? <Play className="size-3" /> : <Pause className="size-3" />}
+                {isPaused ? t("sse.resume") : t("sse.pause")}
+              </Button>
+            )}
+            {events.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearEvents}
+                className="h-6 gap-1 text-[10px] font-medium text-muted-foreground/50 hover:text-destructive transition-colors duration-200"
+              >
+                <Trash2 className="size-3" />
+                {t("sse.clear")}
+              </Button>
+            )}
+          </div>
         </div>
 
         <ScrollArea className="flex-1 min-h-0 border border-border rounded-lg bg-muted/10">

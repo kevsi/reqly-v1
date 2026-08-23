@@ -62,11 +62,19 @@ async function postJson(
       status: number;
       needsVerification?: boolean;
       email?: string;
+      attemptsRemaining?: number;
+      codeInvalidated?: boolean;
     };
     err.status = res.status;
     if (data?.needsVerification) {
       err.needsVerification = true;
       err.email = data.email as string;
+    }
+    if (typeof data?.attemptsRemaining === "number") {
+      err.attemptsRemaining = data.attemptsRemaining;
+    }
+    if (data?.codeInvalidated) {
+      err.codeInvalidated = true;
     }
     throw err;
   }
@@ -115,4 +123,31 @@ export async function authMe(token: string): Promise<AuthUser> {
   }
   const data = (await res.json()) as { user: AuthUser };
   return data.user;
+}
+
+export async function authForgotPassword(email: string): Promise<{ message: string }> {
+  const data = await postJson("/forgot-password", { email });
+  return { message: data.message as string };
+}
+
+export async function authResetPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  const data = await postJson("/reset-password", { email, code, newPassword });
+  return { message: data.message as string };
+}
+
+/**
+ * Two-step reset flow, step 1: validate the reset code WITHOUT consuming it.
+ * The actual password change still goes through /reset-password (step 2),
+ * which enforces expiry + attempt cap again server-side.
+ */
+export async function authVerifyResetCode(
+  email: string,
+  code: string,
+): Promise<{ valid: boolean }> {
+  const data = await postJson("/verify-reset-code", { email, code });
+  return { valid: data.valid === true };
 }

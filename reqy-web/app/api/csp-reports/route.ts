@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createRateLimiter } from "@/lib/rate-limiter";
+import { getRateLimitKey } from "../proxy-ai/lib/rate-limit";
 
 /**
  * CSP violation report endpoint.
@@ -33,10 +35,29 @@ interface CspReport {
 }
 
 export const dynamic = "force-dynamic";
+const cspRateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 60 });
+const MAX_REPORT_BYTES = 64 * 1024;
 
 export async function POST(request: NextRequest) {
+  const rate = await cspRateLimiter.check(getRateLimitKey(request));
+  if (!rate.allowed) {
+    return new NextResponse(null, {
+      status: 429,
+      headers: {
+        "Retry-After": String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))),
+      },
+    });
+  }
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_REPORT_BYTES) {
+    return new NextResponse(null, { status: 204 });
+  }
   try {
-    const body = (await request.json()) as CspReport;
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_REPORT_BYTES) {
+      return new NextResponse(null, { status: 204 });
+    }
+    const body = JSON.parse(rawBody) as CspReport;
     const report = body["csp-report"];
 
     if (process.env.NODE_ENV !== "production") {

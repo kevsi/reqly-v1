@@ -13,6 +13,15 @@ export interface FileStatus {
   head: 0 | 1;
   workdir: 0 | 1 | 2;
   staged: 0 | 1 | 2 | 3;
+  /** Fichier en conflit de fusion (index non fusionné). */
+  conflicted?: boolean;
+}
+
+export interface DiffLine {
+  origin: string;
+  content: string;
+  oldLineno: number | null;
+  newLineno: number | null;
 }
 
 export interface DiffHunk {
@@ -20,12 +29,7 @@ export interface DiffHunk {
   oldLines: number;
   newStart: number;
   newLines: number;
-  lines: Array<{
-    origin: string;
-    content: string;
-    oldLineno: number | null;
-    newLineno: number | null;
-  }>;
+  lines: DiffLine[];
 }
 
 export interface DiffFile {
@@ -47,6 +51,18 @@ export interface RemoteInfo {
   url: string;
 }
 
+/** Credentials kept in memory for the current Git session only. */
+export interface GitCredentials {
+  username: string;
+  password: string;
+}
+
+export interface GitStashEntry {
+  index: number;
+  message: string;
+  oid: string;
+}
+
 export interface GitState {
   isInitialized: boolean;
   currentBranch: string;
@@ -54,6 +70,8 @@ export interface GitState {
   status: FileStatus[];
   branches: BranchInfo[];
   remotes: RemoteInfo[];
+  stashes: GitStashEntry[];
+  conflicts: string[];
   error: string | null;
   repoPath: string | null;
 }

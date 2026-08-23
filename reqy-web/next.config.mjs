@@ -42,7 +42,7 @@ const securityHeaders = [
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
-      `connect-src 'self' https: wss: ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
+      `connect-src 'self' https: wss: http://localhost:* ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
       "font-src 'self' data:",
       "frame-ancestors 'none'",
       "object-src 'none'",
@@ -82,21 +82,18 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  output: 'standalone',
+  outputFileTracingRoot: path.resolve(process.cwd(), ".."),
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },
-  // Web-only: HTTP security headers (work in SSR, ignored in static export)
   ...(!isDesktopBuild && {
     async headers() {
       return [{ source: "/(.*)", headers: securityHeaders }]
     },
   }),
-  // Desktop-only: static export + dev-server asset prefix
   ...(isDesktopBuild && {
     output: 'export',
-    // trailingSlash is required with output: 'export' so Next.js emits
-    // `out/<route>/index.html` (matching the SPA's expected resolution) and
-    // the client-side router can navigate without forcing a hard reload.
     trailingSlash: true,
     assetPrefix: isProd ? '' : `http://${internalHost}:3000`,
   }),

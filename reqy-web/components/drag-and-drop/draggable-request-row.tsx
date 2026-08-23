@@ -17,6 +17,7 @@ interface DraggableRequestRowProps {
   onSelect: () => void;
   onSend?: () => void;
   onRemove: () => void;
+  depth?: number;
 }
 
 export function DraggableRequestRow({
@@ -26,6 +27,7 @@ export function DraggableRequestRow({
   onSelect,
   onSend,
   onRemove,
+  depth = 0,
 }: DraggableRequestRowProps) {
   const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -39,6 +41,7 @@ export function DraggableRequestRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
+    paddingLeft: `${depth * 16 + 28}px`,
   };
 
   return (
@@ -46,9 +49,9 @@ export function DraggableRequestRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-center gap-2 py-1.5 px-3 pl-3 text-sm transition-all duration-150",
-        isSelected && "bg-primary/[0.03]",
+        "group flex items-center gap-2 py-1.5 text-sm transition-all duration-150",
         "hover:bg-muted/20",
+        isSelected && "bg-primary/[0.03]",
         isDragging && "z-10 opacity-50",
       )}
     >
