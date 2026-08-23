@@ -19,6 +19,7 @@ export function VariablesPanel() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId);
   const vars = activeEnv?.variables?.filter((v) => v.enabled && v.key.trim()) || [];
@@ -28,6 +29,17 @@ export function VariablesPanel() {
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 1500);
   };
+
+  const toggleReveal = (key: string) =>
+    setRevealedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
 
   const resolved = interpolate(previewUrl || "{{URL}}", vars);
   const hasUnresolved = previewUrl && resolved.includes("{{") && resolved.includes("}}");
@@ -135,7 +147,7 @@ export function VariablesPanel() {
                       <div className="grid grid-cols-[1fr_1fr_auto] gap-3 px-4 py-2 bg-muted/40 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                         <span>{t("variables.columnVariable")}</span>
                         <span>{t("variables.columnValue")}</span>
-                        <span className="w-7" />
+                        <span className="w-[60px]" />
                       </div>
                       {vars.map((v) => (
                         <div
@@ -148,23 +160,63 @@ export function VariablesPanel() {
                             {"}}"}
                           </code>
                           <code className="text-xs text-muted-foreground truncate">
-                            {v.value || (
-                              <span className="italic opacity-50">{t("variables.emptyValue")}</span>
-                            )}
+                            {v.secret && !revealedKeys.has(v.key)
+                              ? "••••••"
+                              : v.value || (
+                                  <span className="italic opacity-50">
+                                    {t("variables.emptyValue")}
+                                  </span>
+                                )}
                           </code>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopy(v.key)}
-                            className="size-7 p-0 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title={t("variables.copyVarTitle", { key: `{{${v.key}}}` })}
-                          >
-                            {copiedKey === v.key ? (
-                              <Check className="size-3.5 text-success" />
-                            ) : (
-                              <Copy className="size-3.5" />
+                          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {v.secret && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleReveal(v.key)}
+                                className="size-7 p-0"
+                                aria-label={t(
+                                  revealedKeys.has(v.key)
+                                    ? "env.hideSecretValue"
+                                    : "env.showSecretValue",
+                                  {
+                                    defaultValue: revealedKeys.has(v.key)
+                                      ? "Masquer la valeur"
+                                      : "Afficher la valeur",
+                                  },
+                                )}
+                                title={t(
+                                  revealedKeys.has(v.key)
+                                    ? "env.hideSecretValue"
+                                    : "env.showSecretValue",
+                                  {
+                                    defaultValue: revealedKeys.has(v.key)
+                                      ? "Masquer la valeur"
+                                      : "Afficher la valeur",
+                                  },
+                                )}
+                              >
+                                {revealedKeys.has(v.key) ? (
+                                  <EyeOff className="size-3.5" />
+                                ) : (
+                                  <Eye className="size-3.5" />
+                                )}
+                              </Button>
                             )}
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCopy(v.key)}
+                              className="size-7 p-0"
+                              title={t("variables.copyVarTitle", { key: `{{${v.key}}}` })}
+                            >
+                              {copiedKey === v.key ? (
+                                <Check className="size-3.5 text-success" />
+                              ) : (
+                                <Copy className="size-3.5" />
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>

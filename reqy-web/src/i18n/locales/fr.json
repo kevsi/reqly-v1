@@ -183,7 +183,8 @@
         "navigation": "Navigation",
         "display": "Affichage",
         "ai": "Assistant IA"
-      }
+      },
+      "customized": "Personnalisé"
     },
     "modules": {
       "title": "Modules",
@@ -415,7 +416,9 @@
     "clearNotificationsDescription": "Toutes les notifications seront définitivement supprimées. Cette action est irréversible.",
     "deleteNotification": "Supprimer",
     "toggleAiSidebarClose": "Fermer l'assistant IA",
-    "toggleAiSidebarOpen": "Ouvrir l'assistant IA (Cmd+I)"
+    "toggleAiSidebarOpen": "Ouvrir l'assistant IA (Cmd+I)",
+    "keyboardShortcuts": "Raccourcis clavier",
+    "shortcutsGroup": "Aide"
   },
   "language": {},
   "runner": {
@@ -444,7 +447,10 @@
       "closeOthers": "Fermer les autres",
       "closeToRight": "Fermer à droite",
       "closeAll": "Tout fermer",
-      "saveAll": "Tout enregistrer"
+      "saveAll": "Tout enregistrer",
+      "savedCount": "{{count}} onglet(s) sauvegardé(s)",
+      "allSaved": "Tous les onglets sont déjà sauvegardés",
+      "detachedWarning": "{{count}} onglet(s) non rattaché(s) à une collection"
     },
     "description": "Exécutez une collection entière et vérifiez chaque assertion en une seule passe.",
     "selectCollection": "Sélectionner une collection…",
@@ -520,7 +526,14 @@
       "jsonPath": "Chemin JSON {{path}} {{op}}",
       "schema": "Validation de schéma",
       "assertion": "Assertion"
-    }
+    },
+    "viewProgress": "Voir la progression",
+    "lastCompleted": "Terminée :",
+    "cumulativeDuration": "durée cumulée",
+    "iterationsIgnored": "Ignoré : dataset actif",
+    "datasetNoMatch": "Aucune colonne du dataset ne correspond aux variables {{placeholderSyntax}} des requêtes sélectionnées.",
+    "previousRuns": "Runs précédents",
+    "rerun": "Relancer"
   },
   "theme": {
     "label": {
@@ -590,7 +603,13 @@
       "deleteConfirm": "Supprimer {{items}} ?",
       "collectionCount": "{{count}} collection(s)",
       "requestCount": "{{count}} requête(s)",
-      "and": "et"
+      "and": "et",
+      "newBadge": "Nouveau",
+      "partialImported": "{{count}} importée(s)",
+      "partialSkipped": "{{count}} ignorée(s) (format invalide)",
+      "partialMore": "+{{count}} autres",
+      "unnamedRequest": "Requête sans nom",
+      "dragDuplicateHint": "Ctrl = dupliquer"
     },
     "searchBar": {
       "placeholder": "Rechercher collections & requêtes…",
@@ -677,7 +696,8 @@
       "requestLoadedAndSent": "« {{name}} » chargée et envoyée",
       "openApiImportDone": "Import OpenAPI terminé",
       "openApiImportDetails_one": "{{count}} requête importée dans {{collections}} collection.",
-      "openApiImportDetails_other": "{{count}} requêtes importées dans {{collections}} collections."
+      "openApiImportDetails_other": "{{count}} requêtes importées dans {{collections}} collections.",
+      "exportCancelled": "Export annulé"
     }
   },
   "history": {
@@ -854,7 +874,8 @@
     "binaryContentNoSize": "Contenu binaire",
     "download": "Télécharger",
     "noMedia": "Lecture multimédia non disponible",
-    "previewImage": "Image d'aperçu {{index}}"
+    "previewImage": "Image d'aperçu {{index}}",
+    "copyHeader": "Copier cet en-tête"
   },
   "auth": {
     "accordion": "Auth",
@@ -1029,7 +1050,13 @@
     "opContains": "contient",
     "opExists": "existe",
     "opNotExists": "n'existe pas",
-    "expectedPlaceholder": "attendu"
+    "expectedPlaceholder": "attendu",
+    "incompleteSuggestion": "Suggestion incomplète — application impossible.",
+    "incompleteNoExpectedStatus": "valeur attendue (code statut) manquante ou inexploitable",
+    "incompleteNoResponseTime": "seuil de temps de réponse manquant ou inexploitable",
+    "incompleteUnknown": "suggestion inexploitable",
+    "correctionMismatchTitle": "Correction non appliquée",
+    "correctionMismatchBody": "L'assertion à cet emplacement ne correspond plus à celle analysée. Relancez les tests puis redemandez une correction."
   },
   "git": {
     "notInitialized": "Dépôt non initialisé",
@@ -1139,7 +1166,9 @@
     "deleteConfirm": "Supprimer « {{name}} » ? Cette action est irréversible.",
     "variable": "variable",
     "key": "clé",
-    "otherEnvKeys": "Clés des autres environnements"
+    "otherEnvKeys": "Clés des autres environnements",
+    "showSecretValue": "Afficher la valeur",
+    "hideSecretValue": "Masquer la valeur"
   },
   "account": {
     "signIn": "Se connecter",
@@ -1551,7 +1580,10 @@
       "doneSummary_one": "{{count}} endpoint importé avec succès.",
       "doneSummary_other": "{{count}} endpoints importés avec succès.",
       "doneCollections_one": "dans {{count}} collection",
-      "doneCollections_other": "dans {{count}} collections"
+      "doneCollections_other": "dans {{count}} collections",
+      "pasteToggle": "Ou coller le contenu JSON/YAML",
+      "pastePlaceholder": "Collez ici votre spécification OpenAPI / Swagger…",
+      "pasteAnalyze": "Analyser"
     },
     "openapiExport": {
       "title": "Exporter en OpenAPI",
@@ -1576,7 +1608,13 @@
       "doneSummary_one": "{{count}} requête importée avec succès.",
       "doneSummary_other": "{{count}} requêtes importées avec succès.",
       "importRequests_one": "Importer {{count}} requête",
-      "importRequests_other": "Importer {{count}} requêtes"
+      "importRequests_other": "Importer {{count}} requêtes",
+      "errors": {
+        "file_too_large": "Fichier trop volumineux (max {{maxSize}} Mo)",
+        "parse_failed": "Impossible de parser le fichier : {{message}}",
+        "invalid_bru_format": "Format .bru non reconnu. Le fichier doit contenir des blocs structurés.",
+        "no_valid_request": "Impossible de trouver une requête valide dans ce fichier .bru."
+      }
     },
     "github": {
       "title": "Importer depuis GitHub",
@@ -1922,7 +1960,9 @@
       "suggestion2": "Crée une collection 'Tests API'",
       "suggestion3": "Importe le projet depuis GitHub",
       "consentNote": "L'IA n'agit que sur demande explicite",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "configBannerTitle": "Aucune clé IA configurée pour cet espace.",
+      "configCta": "Configurer l'accès IA"
     },
     "history": {
       "title": "Conversations",
@@ -1978,7 +2018,9 @@
       "fixApplied": "Fix appliqué",
       "noPatchTarget": "Aucune cible de patch disponible pour cette requête.",
       "jwtDetected": "JWT détecté dans Authorization",
-      "expired": "expiré"
+      "expired": "expiré",
+      "stopGeneration": "Arrêter",
+      "contextTruncated": "Contexte tronqué : {{count}} premiers caractères envoyés"
     },
     "rating": {
       "helpfulAria": "Diagnostic utile",
@@ -2208,6 +2250,13 @@
   },
   "requestUnsaved": {
     "title": "Modifications non enregistrées",
-    "description": "« {{name}} » n'est pas enregistré."
+    "description": "« {{name}} » n'est pas enregistré.",
+    "massCloseTitle": "{{count}} onglet(s) non sauvegardé(s)",
+    "massCloseDescription": "Fermer sans enregistrer ? Les modifications de ces onglets seront perdues."
+  },
+  "proxy": {
+    "ssrfBlockedLocal": "URL refusée par le proxy : localhost et adresses privées sont bloqués en mode web. En développement, utilise le mode dev ou définis ALLOW_LOCAL_HOSTS=true pour tester localhost.",
+    "targetUnreachable": "Serveur cible injoignable (connexion refusée ou DNS introuvable) — vérifie que le service tourne sur ce port et que l'URL est correcte.",
+    "certificateError": "Certificat TLS invalide ou auto-signé — corrige le certificat du serveur cible (ou désactive la vérification SSL côté desktop pour tester)."
   }
 }

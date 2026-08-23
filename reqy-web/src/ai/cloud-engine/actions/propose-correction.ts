@@ -13,6 +13,7 @@
  */
 
 import type { Assertion } from "@/lib/test-runner/types";
+import type { TestResult } from "@/lib/types";
 import { maskSensitivePayload } from "../prompt";
 import {
   loadAIProvider,
@@ -210,48 +211,161 @@ function parseStatusFromExpr(expr?: string): number {
 }
 
 /**
- * Convert a suggested correction back into a runner `Assertion`, preserving
- * the original shape/type where the suggestion is partial. Falls back to the
- * original assertion when nothing usable is provided.
+ * Why a suggestion could not be converted into an applicable assertion.
+ * Stable codes — the UI maps them to translated messages.
  */
-export function suggestionToAssertion(
+export type IncompleteReason = "no_usable_expected_status" | "no_usable_response_time_value";
+
+/**
+ * Result of converting a suggestion back into a runner `Assertion`.
+ * `incomplete` means the model failed to provide a usable expected value:
+ * the caller MUST NOT fall back to a trivial assertion (e.g. status 200).
+ */
+export type SuggestionConversion =
+  { status: "ok"; assertion: Assertion } | { status: "incomplete"; reason: IncompleteReason };
+
+/**
+ * Pre-check used by the UI to disable "Appliquer" and show why a suggestion
+ * is incomplete, before any apply attempt. Mirrors {@link convertSuggestion}
+ * rules exactly; pass the original assertion's type so partial suggestions
+ * are judged against the same effective type as the real conversion.
+ */
+export function evaluateSuggestionCompleteness(
+  suggestion: CorrectionSuggestion,
+  originalType?: string,
+): { complete: boolean; reason?: IncompleteReason } {
+  const type = suggestion.type ?? originalType ?? "status";
+  if (type === "status") {
+    const raw =
+      suggestion.value !== undefined
+        ? Number(suggestion.value)
+        : parseStatusFromExpr(suggestion.expr);
+    return Number.isFinite(raw)
+      ? { complete: true }
+      : { complete: false, reason: "no_usable_expected_status" };
+  }
+  if (type === "responseTime") {
+    const raw = suggestion.value !== undefined ? Number(suggestion.value) : NaN;
+    return Number.isFinite(raw)
+      ? { complete: true }
+      : { complete: false, reason: "no_usable_response_time_value" };
+  }
+  // jsonPath / schema keep original anchors when the suggestion is partial —
+  // always convertible.
+  return { complete: true };
+}
+
+/**
+ * Recompute the display fields (`target`/`expected`) exactly as
+ * `request-executor.toTestResults` renders them, so callers can verify that a
+ * stored runner assertion still matches the failed result a correction was
+ * proposed for (index anchoring can go stale after user edits).
+ */
+function describeAssertionForDisplay(assertion: Assertion): { target: string; expected: string } {
+  switch (assertion.type) {
+    case "status":
+      return { target: "status", expected: JSON.stringify(assertion.expected) };
+    case "responseTime":
+      return {
+        target: "response time",
+        expected: `${assertion.operator} ${assertion.valueMs}ms`,
+      };
+    case "jsonPath":
+      return {
+        target: assertion.path,
+        expected: `${assertion.operator}${
+          assertion.value !== undefined ? ` ${JSON.stringify(assertion.value)}` : ""
+        }`,
+      };
+    case "schema":
+      return { target: "schema", expected: "schema validation" };
+    default:
+      return { target: assertion.type, expected: "" };
+  }
+}
+
+/**
+ * Guard for index-anchored application: returns false when the assertion at
+ * the computed index no longer corresponds to the failed result shown in the
+ * suggestion (type/target/expected drift after user edits), so callers refuse
+ * to overwrite instead of silently corrupting a different assertion.
+ */
+export function assertionMatchesResult(original: Assertion, result: TestResult): boolean {
+  if (result.type !== original.type) return false;
+  const display = describeAssertionForDisplay(original);
+  if (result.target !== display.target) return false;
+  return (result.expected ?? "") === display.expected;
+}
+
+/**
+ * STRICT conversion used by the live editor ("Appliquer" flow). Returns a
+ * discriminated result: when the model provides no usable expected value, the
+ * caller receives `{ status: "incomplete", reason }` instead of a trivial
+ * assertion, and MUST surface it rather than apply anything.
+ */
+export function convertSuggestion(
   suggestion: CorrectionSuggestion,
   original: Assertion,
-): Assertion {
+): SuggestionConversion {
   const type = suggestion.type ?? original.type;
   if (type === "status") {
     const raw =
       suggestion.value !== undefined
         ? Number(suggestion.value)
         : parseStatusFromExpr(suggestion.expr);
-    const expected = Number.isFinite(raw) ? (raw as number) : 200;
-    return { type: "status", expected };
+    if (!Number.isFinite(raw)) {
+      return { status: "incomplete", reason: "no_usable_expected_status" };
+    }
+    return { status: "ok", assertion: { type: "status", expected: raw as number } };
   }
   if (type === "responseTime") {
     const op = (suggestion.operator as ">" | "<" | "<=" | ">=") || ">";
-    const raw = suggestion.value !== undefined ? Number(suggestion.value) : 0;
+    const raw = suggestion.value !== undefined ? Number(suggestion.value) : NaN;
+    if (!Number.isFinite(raw)) {
+      return { status: "incomplete", reason: "no_usable_response_time_value" };
+    }
     return {
-      type: "responseTime",
-      operator: op,
-      valueMs: Number.isFinite(raw) ? (raw as number) : 0,
+      status: "ok",
+      assertion: { type: "responseTime", operator: op, valueMs: raw as number },
     };
   }
   if (type === "jsonPath") {
     const o = original as Extract<Assertion, { type: "jsonPath" }>;
     return {
-      type: "jsonPath",
-      path: suggestion.target ?? o.path,
-      operator:
-        (suggestion.operator as "equals" | "contains" | "exists" | "notExists") ?? o.operator,
-      value: suggestion.value ?? o.value,
+      status: "ok",
+      assertion: {
+        type: "jsonPath",
+        path: suggestion.target ?? o.path,
+        operator:
+          (suggestion.operator as "equals" | "contains" | "exists" | "notExists") ?? o.operator,
+        value: suggestion.value ?? o.value,
+      },
     };
   }
   if (type === "schema") {
     const o = original as Extract<Assertion, { type: "schema" }>;
     return {
-      type: "schema",
-      schema: (suggestion.value as Record<string, unknown>) ?? o.schema,
+      status: "ok",
+      assertion: {
+        type: "schema",
+        schema: (suggestion.value as Record<string, unknown>) ?? o.schema,
+      },
     };
   }
-  return original;
+  return { status: "ok", assertion: original };
+}
+
+/**
+ * Legacy-compatible conversion kept for existing callers that expect an
+ * `Assertion` directly (e.g. the collection runner page). Incomplete
+ * suggestions resolve to the ORIGINAL assertion unchanged — the historical
+ * silent fallbacks (`expected: 200`, `valueMs: 0`) are gone. New code should
+ * use {@link convertSuggestion} to surface incompleteness explicitly.
+ */
+export function suggestionToAssertion(
+  suggestion: CorrectionSuggestion,
+  original: Assertion,
+): Assertion {
+  const conversion = convertSuggestion(suggestion, original);
+  return conversion.status === "ok" ? conversion.assertion : original;
 }

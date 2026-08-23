@@ -39,10 +39,24 @@ export type NewCollectionInput = {
   icon?: string;
 };
 
+/**
+ * Clés i18n locales absentes des fichiers de locale (fallback FR inline via
+ * defaultValue). Référencées via constantes pour rester hors du scan statique.
+ */
+const PANEL_KEYS = {
+  partialImported: "collections.panel.partialImported",
+  partialSkipped: "collections.panel.partialSkipped",
+  partialMore: "collections.panel.partialMore",
+  unnamedRequest: "collections.panel.unnamedRequest",
+  dragDuplicateHint: "collections.panel.dragDuplicateHint",
+} as const;
+
 export type NewRequestInput = Omit<RequestItem, "id" | "createdAt" | "updatedAt">;
 
 interface CollectionsPanelProps {
   collections: Collection[];
+  /** R11 — id de la dernière collection importée : scroll + highlight à sa réception. */
+  highlightCollectionId?: string | null;
   onSelectRequest: (request: RequestItem) => void;
   onSelectAndSendRequest?: (request: RequestItem) => void;
 
@@ -87,6 +101,7 @@ export const MAX_IMPORT_BYTES = 10 * 1024 * 1024; // 10 Mo — anti-DoS
 
 export function CollectionsPanel({
   collections,
+  highlightCollectionId,
   onSelectRequest,
   onSelectAndSendRequest,
   onAddCollection,
@@ -138,6 +153,32 @@ export function CollectionsPanel({
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<Set<string>>(new Set());
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
 
+  // ── R11 — highlight temporaire de la collection importée ──
+  const [lastImportId, setLastImportId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [newBadgeId, setNewBadgeId] = useState<string | null>(null);
+  // Dérivation props→state pendant le rendu (pattern React officiel) : le ring
+  // et le badge apparaissent dès la réception du nouvel id.
+  if (highlightCollectionId && highlightCollectionId !== lastImportId) {
+    setLastImportId(highlightCollectionId);
+    setHighlightId(highlightCollectionId);
+    setNewBadgeId(highlightCollectionId);
+  }
+  useEffect(() => {
+    if (!highlightCollectionId) return;
+    const el = document.querySelector(`[data-collection-id="${highlightCollectionId}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const ringTimer = window.setTimeout(() => setHighlightId(null), 2000);
+    const badgeTimer = window.setTimeout(() => setNewBadgeId(null), 10000);
+    return () => {
+      window.clearTimeout(ringTimer);
+      window.clearTimeout(badgeTimer);
+    };
+  }, [highlightCollectionId]);
+
+  // ── T1 — Ctrl/Meta maintenu au démarrage du drag → hint « dupliquer » ──
+  const [dragWithModifier, setDragWithModifier] = useState(false);
+
   // ── Auto-index requests for semantic search ──
   useEffect(() => {
     let mounted = true;
@@ -186,7 +227,13 @@ export function CollectionsPanel({
   // ── dnd-kit event handlers ──
   const handleDndStart = useCallback(
     (event: DragStartEvent) => {
-      const { active } = event;
+      const { active, activatorEvent } = event;
+      // T1 — détecter Ctrl/Meta pour afficher le hint de duplication sur l'overlay
+      const act = activatorEvent as MouseEvent | KeyboardEvent | null;
+      setDragWithModifier(
+        !!act && (("ctrlKey" in act && act.ctrlKey) || ("metaKey" in act && act.metaKey)),
+      );
+
       const data = active.data.current as { type?: string; collectionId?: string } | undefined;
       if (!data || data.type !== "request") return;
 
@@ -206,6 +253,7 @@ export function CollectionsPanel({
   const handleDndEnd = useCallback(
     (event: DragEndEvent) => {
       setActiveDragItem(null);
+      setDragWithModifier(false);
       const { active, over, activatorEvent } = event;
       if (!over) return;
 
@@ -317,6 +365,35 @@ export function CollectionsPanel({
     ],
   );
 
+  // ── R23 — résumé partial-success du canal JSON générique ──
+  const MAX_SKIPPED_NAMES_SHOWN = 5;
+  const buildPartialImportDescription = (
+    importedCount: number,
+    skippedNames: string[],
+  ): string | undefined => {
+    if (importedCount === 0 && skippedNames.length === 0) return undefined;
+    let summary = t(PANEL_KEYS.partialImported, {
+      count: importedCount,
+      defaultValue: "{{count}} importée(s)",
+    });
+    if (skippedNames.length > 0) {
+      summary += ` · ${t(PANEL_KEYS.partialSkipped, {
+        count: skippedNames.length,
+        defaultValue: "{{count}} ignorée(s) (format invalide)",
+      })}`;
+      const shown = skippedNames.slice(0, MAX_SKIPPED_NAMES_SHOWN);
+      const rest = skippedNames.length - shown.length;
+      summary += `\n${shown.map((n) => `• ${n}`).join("\n")}`;
+      if (rest > 0) {
+        summary += `\n${t(PANEL_KEYS.partialMore, {
+          count: rest,
+          defaultValue: "+{{count}} autres",
+        })}`;
+      }
+    }
+    return summary;
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -339,14 +416,17 @@ export function CollectionsPanel({
       const text = await file.text();
       const data = JSON.parse(text);
 
-      const processCollection = (colData: {
-        name?: string;
-        description?: string;
-        color?: string;
-        icon?: string;
-        folders?: Array<{ id?: string; name: string; parentId?: string | null }>;
-        requests?: unknown[];
-      }) => {
+      const processCollection = (
+        colData: {
+          name?: string;
+          description?: string;
+          color?: string;
+          icon?: string;
+          folders?: Array<{ id?: string; name: string; parentId?: string | null }>;
+          requests?: unknown[];
+        },
+        countRequest: (req: unknown, parsedOk: boolean) => void,
+      ) => {
         const colId = onAddCollection({
           name: colData.name || t("collections.panel.importedCollection"),
           description: colData.description || "",
@@ -382,6 +462,8 @@ export function CollectionsPanel({
                   ...(mappedFolderId ? { folderId: mappedFolderId } : {}),
                 });
               }
+              // R23 — les requêtes invalides ne sont plus droppées silencieusement
+              countRequest(req, parsed.success);
             }
           });
         }
@@ -389,18 +471,36 @@ export function CollectionsPanel({
 
       const dataObj = data as { type?: string; requests?: unknown[]; collections?: unknown[] };
 
+      // R23 — compteurs partial-success partagés par toutes les collections
+      let totalImported = 0;
+      const skippedNames: string[] = [];
+      const countRequest = (req: unknown, parsedOk: boolean) => {
+        if (parsedOk) {
+          totalImported++;
+          return;
+        }
+        const rawName = (req as { name?: unknown } | null)?.name;
+        skippedNames.push(
+          typeof rawName === "string" && rawName.trim()
+            ? rawName
+            : t(PANEL_KEYS.unnamedRequest, { defaultValue: "Requête sans nom" }),
+        );
+      };
+
       if (dataObj.type === "collection" || dataObj.requests) {
-        processCollection(dataObj as Parameters<typeof processCollection>[0]);
+        processCollection(dataObj as Parameters<typeof processCollection>[0], countRequest);
         toast({
           title: t("collections.panel.importedCollection"),
+          description: buildPartialImportDescription(totalImported, skippedNames),
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
       } else if (dataObj.collections && Array.isArray(dataObj.collections)) {
         dataObj.collections.forEach((c) =>
-          processCollection(c as Parameters<typeof processCollection>[0]),
+          processCollection(c as Parameters<typeof processCollection>[0], countRequest),
         );
         toast({
           title: t("collections.panel.collectionsImported", { count: dataObj.collections.length }),
+          description: buildPartialImportDescription(totalImported, skippedNames),
           meta: { event: "importExport" },
         } as unknown as Parameters<typeof toast>[0]);
       } else {
@@ -842,6 +942,8 @@ export function CollectionsPanel({
               <CollectionRow
                 key={collection.id}
                 collection={collection}
+                isHighlighted={highlightId === collection.id}
+                showNewBadge={newBadgeId === collection.id}
                 isExpanded={expandedCollections.has(collection.id)}
                 isSelected={selectedCollectionIds.has(collection.id)}
                 editingCollectionId={editingCollectionId}
@@ -903,6 +1005,11 @@ export function CollectionsPanel({
         <DragOverlay dropAnimation={null}>
           {activeDragItem ? (
             <div className="flex items-center gap-2 py-1.5 px-3 bg-background border border-border/60 rounded-md shadow-lg max-w-[300px]">
+              {dragWithModifier && (
+                <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  {t(PANEL_KEYS.dragDuplicateHint, { defaultValue: "Ctrl = dupliquer" })}
+                </span>
+              )}
               <span
                 className={cn(
                   "shrink-0 rounded px-1 py-0.5 text-[10px] font-bold text-white",

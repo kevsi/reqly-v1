@@ -54,7 +54,7 @@ export default async function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <head>
         <Script id="theme-init" strategy="beforeInteractive" nonce={nonce} suppressHydrationWarning>
-          {`(function(){try{var t=localStorage.getItem("reqly-theme");var v=["light","dark","emerald","ocean","sunset","purple","midnight"];if(!t||!v.includes(t)){t=window.matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"}document.documentElement.classList.add(t);if(t==="midnight"){document.documentElement.classList.add("dark")}var c=t==="dark"||t==="midnight"?"dark":"light";document.documentElement.style.colorScheme=c;var m=document.querySelector("meta[name=theme-color]");if(m){m.content=c==="dark"?"#0d1117":"#ffffff"}}catch(e){}})()`}
+          {`(function(){try{var t=localStorage.getItem("reqly-theme");var v=["light","dark","emerald","ocean","sunset","purple","midnight"];if(!t||!v.includes(t)){t=window.matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"}document.documentElement.classList.add(t);if(t==="midnight"){document.documentElement.classList.add("dark")}var c=t==="dark"||t==="midnight"?"dark":"light";document.documentElement.style.colorScheme=c;var m=document.querySelector("meta[name=theme-color]");if(m){m.content=c==="dark"?"#0d1117":"#ffffff"}var l=localStorage.getItem("reqly-language");if(l!=="fr"&&l!=="en"){l=(navigator.language||"fr").toLowerCase().indexOf("en")===0?"en":"fr"}document.documentElement.lang=l}catch(e){}})()`}
         </Script>
         <meta name="color-scheme" content="light dark" />
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />

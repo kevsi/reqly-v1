@@ -264,4 +264,100 @@ describe("useRequestExecutionCore", () => {
       }),
     );
   });
+
+  it("names unresolved placeholders with their field in the toast description", async () => {
+    const { toast } = await import("@/hooks/use-toast");
+    const { result } = renderHook(() => useRequestExecutionCore(mockState));
+    const tab = {
+      id: "tab-1",
+      name: "Test",
+      method: "GET" as const,
+      url: "https://api.example.com?apiKey={{apiKey}}",
+      endpoint: "/",
+      headers: [
+        { key: "Authorization", value: "Bearer {{MISSING_TOKEN}}", enabled: true },
+        { key: "X-Disabled", value: "{{DISABLED_ONE}}", enabled: false },
+      ],
+      queryParams: [],
+      pathParams: [],
+      body: '{"refresh": "{{MISSING_REFRESH}}"}',
+      bodyType: "json" as const,
+      authType: "none" as const,
+      authToken: "",
+      hasResponse: false,
+      isSaved: false,
+    };
+
+    await act(async () => {
+      await result.current.sendSpecificRequest(tab, false);
+    });
+
+    expect(requestExecutor.executeRequest).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Variables non résolues",
+        description: expect.stringContaining("apiKey (URL)"),
+        variant: "destructive",
+      }),
+    );
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("MISSING_TOKEN (header Authorization)"),
+      }),
+    );
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("MISSING_REFRESH (body)"),
+      }),
+    );
+    // Disabled headers are not interpolated by buildHeaders and must not block.
+    expect(toast).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        description: expect.stringContaining("DISABLED_ONE"),
+      }),
+    );
+  });
+
+  it("blocks execution when a disabled environment variable is used in a header", async () => {
+    vi.mocked(useRequestStore).mockReturnValue({
+      ...mockStore,
+      environments: [
+        {
+          id: "env-1",
+          name: "Test Env",
+          variables: [{ key: "API_KEY", value: "secret123", enabled: false }],
+        },
+      ],
+      activeEnvironmentId: "env-1",
+    } as unknown as ReturnType<typeof useRequestStore>);
+    const { toast } = await import("@/hooks/use-toast");
+    const { result } = renderHook(() => useRequestExecutionCore(mockState));
+    const tab = {
+      id: "tab-1",
+      name: "Test",
+      method: "GET" as const,
+      url: "https://api.example.com",
+      endpoint: "/",
+      headers: [{ key: "x-api-key", value: "{{API_KEY}}", enabled: true }],
+      queryParams: [],
+      pathParams: [],
+      body: "",
+      bodyType: "json" as const,
+      authType: "none" as const,
+      authToken: "",
+      hasResponse: false,
+      isSaved: false,
+    };
+
+    await act(async () => {
+      await result.current.sendSpecificRequest(tab, false);
+    });
+
+    expect(requestExecutor.executeRequest).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("API_KEY (header x-api-key)"),
+      }),
+    );
+  });
 });

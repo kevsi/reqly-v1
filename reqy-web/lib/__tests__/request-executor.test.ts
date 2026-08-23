@@ -398,4 +398,81 @@ describe("request-executor", () => {
       );
     });
   });
+
+  describe("proxy error translation", () => {
+    const baseTab = {
+      id: "test-1",
+      name: "Test",
+      method: "GET" as const,
+      url: "http://localhost:3000/api",
+      endpoint: "/api",
+      headers: [] as never[],
+      queryParams: [],
+      pathParams: [],
+      body: "",
+      bodyType: "json" as const,
+      authType: "none" as const,
+      authToken: "",
+      hasResponse: false,
+      isSaved: false,
+    };
+
+    async function executeWithProxyError(code: string, errorText: string) {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        text: () => Promise.resolve(JSON.stringify({ error: errorText, code })),
+      } as unknown as Response);
+      const { parseJsonSafe } = await import("../utils");
+      vi.mocked(parseJsonSafe).mockResolvedValue({
+        status: 502,
+        error: errorText,
+        code,
+      } as unknown as Awaited<ReturnType<typeof parseJsonSafe>>);
+
+      return executeRequest({
+        tab: baseTab,
+        allVars: [],
+        activeProjectPort: 3000,
+        activeProject: false,
+        nativeMode: false,
+        activeWorkspaceId: null,
+      });
+    }
+
+    it("expects SSRF_BLOCKED from the proxy (not BLOCKED_SSRF) and suggests local-host escape hatch", async () => {
+      const result = await executeWithProxyError(
+        "SSRF_BLOCKED",
+        "Requests to private/internal hosts are not allowed",
+      );
+      expect(result.transportError?.code).toBe("SSRF_BLOCKED");
+      expect(result.responseBody).toContain("localhost");
+    });
+
+    it("maps TARGET_UNREACHABLE to an actionable message", async () => {
+      const result = await executeWithProxyError(
+        "TARGET_UNREACHABLE",
+        "Target host unreachable: connect ECONNREFUSED 127.0.0.1:3000",
+      );
+      expect(result.transportError?.code).toBe("TARGET_UNREACHABLE");
+      expect(result.responseBody).toContain("injoignable");
+      expect(result.transportError?.detail).toContain("ECONNREFUSED");
+    });
+
+    it("maps CERTIFICATE_ERROR to an actionable message", async () => {
+      const result = await executeWithProxyError(
+        "CERTIFICATE_ERROR",
+        "Upstream TLS certificate error: self signed certificate",
+      );
+      expect(result.transportError?.code).toBe("CERTIFICATE_ERROR");
+      expect(result.responseBody).toContain("TLS");
+    });
+
+    it("keeps TIMEOUT mapped to the timeout message", async () => {
+      const result = await executeWithProxyError("TIMEOUT", "Request timed out");
+      expect(result.transportError?.code).toBe("TIMEOUT");
+      expect(result.responseBody).toContain("expiré");
+    });
+  });
 });

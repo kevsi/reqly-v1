@@ -7,6 +7,15 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/test" }));
 vi.mock("@/src/ai/cloud-engine/llm", () => ({
   streamLLM: vi.fn(),
 }));
+// R19 : sendMessage pré-vérifie la configuration IA — fournir une config
+// valide pour que ce test continue d'exercer le chemin nominal.
+vi.mock("@/lib/config", () => ({
+  loadAIProvider: () => "openai",
+  loadApiKey: () => "test-key",
+  loadAiBaseUrl: () => "",
+  loadAiModel: () => "",
+  loadOllamaConfig: () => ({}),
+}));
 vi.mock("@/lib/llm-tools", () => ({
   REQLY_TOOLS: [],
   executeAuthorizedToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),

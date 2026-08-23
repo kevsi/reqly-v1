@@ -1,5 +1,6 @@
 import type { Collection, RequestItem } from "@/hooks/request-types";
 import { computeOrder } from "@/lib/types";
+import { resolveUniqueCollectionName } from "@/lib/import-schemas";
 import { CommitFn, WORKSPACE_PERSONAL_ID } from "./types";
 import { toast } from "sonner";
 
@@ -55,7 +56,10 @@ export function createCollectionsMutations(commit: CommitFn) {
       const duplicate: Collection = {
         ...source,
         id: newId,
-        name: `${source.name} (Copy)`,
+        name: resolveUniqueCollectionName(
+          source.name,
+          prev.collections.filter((c) => c.id !== id).map((c) => c.name),
+        ),
         requests: source.requests.map((r) => ({
           ...r,
           id: `req-${crypto.randomUUID()}`,

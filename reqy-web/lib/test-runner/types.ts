@@ -28,6 +28,11 @@ export interface RequestTestResult {
   assertionResults: AssertionResult[];
   scriptOutput?: { pre?: string; post?: string };
   error?: string;
+  /**
+   * Truncated response body (hard cap 2000 chars) captured for the
+   * AI-assisted assertion-correction flow ("Corriger avec l'IA").
+   */
+  responseBodyExcerpt?: string;
 }
 
 export interface VariableExtractionRule {
@@ -55,6 +60,12 @@ export interface CollectionRunReport {
   results: RequestTestResult[];
   summary: { total: number; passed: number; failed: number; skipped: number; errored: number };
   performanceReport?: PerformanceReport;
+  /**
+   * "cumulative" when totalDurationMs sums several passes over the same
+   * collection (e.g. after a partial "re-run failed"), so the UI can label
+   * the duration honestly instead of implying a single pass.
+   */
+  durationKind?: "total" | "cumulative";
 }
 
 export interface RequestResponse {

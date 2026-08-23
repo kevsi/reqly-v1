@@ -28,6 +28,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const lang = isLanguage(language) ? language : DEFAULT_LANGUAGE;
     void i18n.changeLanguage(lang).then(() => {
       document.documentElement.lang = lang;
+      // Mirror the language synchronously so the inline anti-FOUC script in
+      // app/layout.tsx can set <html lang> before first paint on next loads.
+      try {
+        localStorage.setItem("reqly-language", lang);
+      } catch {
+        /* storage unavailable — script falls back to navigator.language */
+      }
       // Mark hydration complete after language is synced
       setIsHydrated(true);
     });

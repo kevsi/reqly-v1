@@ -6,10 +6,31 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   proposeAssertionCorrection,
+  evaluateSuggestionCompleteness,
   type CorrectionAssertionInput,
   type CorrectionSuggestion,
+  type IncompleteReason,
 } from "@/src/ai/cloud-engine/actions/propose-correction";
 import type { TestResult } from "@/lib/types";
+
+/** Translated explanation for an incomplete suggestion. */
+function incompleteReasonLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  reason?: IncompleteReason,
+): string {
+  switch (reason) {
+    case "no_usable_expected_status":
+      return t("assertion.incompleteNoExpectedStatus", {
+        defaultValue: "valeur attendue (code statut) manquante ou inexploitable",
+      });
+    case "no_usable_response_time_value":
+      return t("assertion.incompleteNoResponseTime", {
+        defaultValue: "seuil de temps de réponse manquant ou inexploitable",
+      });
+    default:
+      return t("assertion.incompleteUnknown", { defaultValue: "suggestion inexploitable" });
+  }
+}
 
 interface AssertionCorrectionProps {
   result: TestResult;
@@ -61,6 +82,7 @@ export function AssertionCorrection({
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<CorrectionSuggestion | null>(null);
   const [rationale, setRationale] = useState<string>("");
+  const [incompleteReason, setIncompleteReason] = useState<IncompleteReason | null>(null);
 
   const current: CorrectionAssertionInput = {
     type: result.type,
@@ -82,6 +104,9 @@ export function AssertionCorrection({
       );
       setSuggestion(out.suggestion);
       setRationale(out.rationale);
+      // Refuse incomplete suggestions up-front: show why, disable "Appliquer".
+      const completeness = evaluateSuggestionCompleteness(out.suggestion, result.type);
+      setIncompleteReason(completeness.complete ? null : (completeness.reason ?? null));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -93,6 +118,7 @@ export function AssertionCorrection({
     setSuggestion(null);
     setRationale("");
     setError(null);
+    setIncompleteReason(null);
   };
 
   return (
@@ -113,15 +139,30 @@ export function AssertionCorrection({
 
       {error && <div className="text-[11px] text-destructive">{error}</div>}
 
+      {suggestion && incompleteReason && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5">
+          <div className="text-[11px] font-medium text-destructive">
+            {t("assertion.incompleteSuggestion", {
+              defaultValue: "Suggestion incomplète — application impossible.",
+            })}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {incompleteReasonLabel(t, incompleteReason)}
+          </div>
+        </div>
+      )}
+
       {suggestion && (
         <div className="space-y-1">
           <div className="text-[11px] text-muted-foreground">
             {t("assertion.current")} <code className="font-mono">{displayAssertion(current)}</code>
           </div>
-          <div className="text-[11px] text-success">
-            {t("assertion.proposed")}{" "}
-            <code className="font-mono">{displayAssertion(suggestion)}</code>
-          </div>
+          {!incompleteReason && (
+            <div className="text-[11px] text-success">
+              {t("assertion.proposed")}{" "}
+              <code className="font-mono">{displayAssertion(suggestion)}</code>
+            </div>
+          )}
           {rationale && <div className="text-[11px] text-muted-foreground">{rationale}</div>}
           <div className="flex items-center gap-2">
             <Button
@@ -129,6 +170,7 @@ export function AssertionCorrection({
               variant="default"
               className="h-6 text-xs"
               onClick={() => onApply(result, suggestion)}
+              disabled={incompleteReason !== null}
               data-testid="apply-correction"
             >
               <Check className="size-3" />

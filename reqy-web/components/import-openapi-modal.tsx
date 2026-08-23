@@ -40,6 +40,13 @@ interface ImportOpenApiModalProps {
 
 type Step = "upload" | "preview" | "importing" | "done";
 
+/** Clés i18n locales (absentes des fichiers de locale ; fallback FR inline). */
+const OPENAPI_MODAL_KEYS = {
+  pasteToggle: "importExport.openapi.pasteToggle",
+  pastePlaceholder: "importExport.openapi.pastePlaceholder",
+  pasteAnalyze: "importExport.openapi.pasteAnalyze",
+} as const;
+
 export function ImportOpenApiModal({
   open,
   onClose,
@@ -54,6 +61,8 @@ export function ImportOpenApiModal({
   const [error, setError] = useState<string | null>(null);
   const [_fileName, setFileName] = useState<string>("");
   const [_rawContents, setRawContents] = useState<string>("");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteValue, setPasteValue] = useState("");
 
   // Options
   const [baseUrlOverride, setBaseUrlOverride] = useState("");
@@ -69,6 +78,8 @@ export function ImportOpenApiModal({
     setBaseUrlOverride("");
     setGroupByTag(true);
     setShowOptions(false);
+    setPasteOpen(false);
+    setPasteValue("");
   }, []);
 
   const handleClose = () => {
@@ -76,11 +87,24 @@ export function ImportOpenApiModal({
     onClose();
   };
 
+  const processContents = useCallback((contents: string, name: string) => {
+    setError(null);
+    setFileName(name);
+    setRawContents(contents);
+
+    const result = parseOpenApiSpec(contents, name);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setParseResult(result);
+    setBaseUrlOverride(result.spec.baseUrl || "");
+    setStep("preview");
+  }, []);
+
   const processFile = useCallback(
     (file: File) => {
-      setFileName(file.name);
-      setError(null);
-
       const reader = new FileReader();
       reader.onload = (evt) => {
         const contents = evt.target?.result as string;
@@ -88,24 +112,14 @@ export function ImportOpenApiModal({
           setError(t("importExport.common.readFileError"));
           return;
         }
-        setRawContents(contents);
-
-        const result = parseOpenApiSpec(contents, file.name);
-        if (!result.success) {
-          setError(result.error);
-          return;
-        }
-
-        setParseResult(result);
-        setBaseUrlOverride(result.spec.baseUrl || "");
-        setStep("preview");
+        processContents(contents, file.name);
       };
       reader.onerror = () => {
         setError(t("importExport.common.readError"));
       };
       reader.readAsText(file);
     },
-    [t],
+    [processContents, t],
   );
 
   const handleDrop = useCallback(
@@ -201,6 +215,18 @@ export function ImportOpenApiModal({
                 <Button variant="outline" size="sm" onClick={() => setError(null)}>
                   {t("common.retry")}
                 </Button>
+                <button
+                  type="button"
+                  className="mt-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  onClick={() => {
+                    setPasteOpen(true);
+                    setError(null);
+                  }}
+                >
+                  {t(OPENAPI_MODAL_KEYS.pasteToggle, {
+                    defaultValue: "Ou coller le contenu JSON/YAML",
+                  })}
+                </button>
               </div>
             ) : (
               <>
@@ -213,9 +239,53 @@ export function ImportOpenApiModal({
                 <p className="mt-3 text-xs text-muted-foreground">
                   {t("importExport.openapi.formats")}
                 </p>
+                <button
+                  type="button"
+                  className="mt-3 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  onClick={() => setPasteOpen(true)}
+                >
+                  {t(OPENAPI_MODAL_KEYS.pasteToggle, {
+                    defaultValue: "Ou coller le contenu JSON/YAML",
+                  })}
+                </button>
               </>
             )}
           </div>
+
+          {pasteOpen && (
+            <div className="mt-3 flex flex-col gap-3">
+              <textarea
+                value={pasteValue}
+                onChange={(e) => setPasteValue(e.target.value)}
+                rows={10}
+                spellCheck={false}
+                placeholder={t(OPENAPI_MODAL_KEYS.pastePlaceholder, {
+                  defaultValue: "Collez ici votre spécification OpenAPI / Swagger…",
+                })}
+                className="h-48 w-full resize-y rounded-md border border-input bg-muted/20 p-3 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+              />
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPasteOpen(false);
+                    setPasteValue("");
+                    setError(null);
+                  }}
+                >
+                  {t("importExport.common.switchFile")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!pasteValue.trim()}
+                  onClick={() => processContents(pasteValue, "clipboard")}
+                >
+                  {t(OPENAPI_MODAL_KEYS.pasteAnalyze, { defaultValue: "Analyser" })}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     );

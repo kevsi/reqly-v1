@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Activity,
@@ -25,15 +25,51 @@ import { useTranslation } from "react-i18next";
 
 const ChartsContent = dynamic(() => import("./charts-content"), { ssr: false });
 
-const METHOD_COLORS: Record<string, string> = {
-  GET: "#22c55e",
-  POST: "#3b82f6",
-  PUT: "#f59e0b",
-  DELETE: "#ef4444",
-  PATCH: "#8b5cf6",
-  OPTIONS: "#6b7280",
-  HEAD: "#06b6d4",
+// ── R29 — couleurs des graphiques lues au runtime depuis le thème ──
+const CHART_COLOR_FALLBACKS = {
+  chart1: "#22c55e",
+  chart2: "#3b82f6",
+  chart3: "#8b5cf6",
+  chart4: "#f59e0b",
+  chart5: "#06b6d4",
+  success: "#22c55e",
+  destructive: "#ef4444",
+  warning: "#f59e0b",
+  mutedForeground: "#6b7280",
 };
+
+type ChartPalette = typeof CHART_COLOR_FALLBACKS;
+
+function readThemeColor(varName: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  return value || fallback;
+}
+
+function readChartPalette(): ChartPalette {
+  const fb = CHART_COLOR_FALLBACKS;
+  return {
+    chart1: readThemeColor("--chart-1", fb.chart1),
+    chart2: readThemeColor("--chart-2", fb.chart2),
+    chart3: readThemeColor("--chart-3", fb.chart3),
+    chart4: readThemeColor("--chart-4", fb.chart4),
+    chart5: readThemeColor("--chart-5", fb.chart5),
+    success: readThemeColor("--success", fb.success),
+    destructive: readThemeColor("--destructive", fb.destructive),
+    warning: readThemeColor("--warning", fb.warning),
+    mutedForeground: readThemeColor("--muted-foreground", fb.mutedForeground),
+  };
+}
+
+const buildMethodColors = (p: ChartPalette): Record<string, string> => ({
+  GET: p.chart1,
+  POST: p.chart2,
+  PUT: p.chart4,
+  DELETE: p.destructive,
+  PATCH: p.chart3,
+  OPTIONS: p.mutedForeground,
+  HEAD: p.chart5,
+});
 
 const METHOD_BADGE: Record<string, string> = {
   GET: "bg-success/10 text-success",
@@ -130,18 +166,22 @@ const buildTopSlowEndpoints = (
     .slice(0, 8);
 };
 
-const buildMethodData = (history: HistoryItem[]) => {
+const buildMethodData = (history: HistoryItem[], methodColors: Record<string, string>) => {
   const counts: Record<string, number> = {};
   history.forEach((item) => {
     const m = item.method || "GET";
     counts[m] = (counts[m] ?? 0) + 1;
   });
   return Object.entries(counts)
-    .map(([method, count]) => ({ method, count, color: METHOD_COLORS[method] ?? "#6b7280" }))
+    .map(([method, count]) => ({
+      method,
+      count,
+      color: methodColors[method] ?? CHART_COLOR_FALLBACKS.mutedForeground,
+    }))
     .sort((a, b) => b.count - a.count);
 };
 
-const buildStatusData = (history: HistoryItem[]) => {
+const buildStatusData = (history: HistoryItem[], p: ChartPalette) => {
   const buckets: Record<string, number> = { "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, Other: 0 };
   history.forEach((item) => {
     const s = item.responseStatus ?? 0;
@@ -152,11 +192,11 @@ const buildStatusData = (history: HistoryItem[]) => {
     else if (s > 0) buckets["Other"]++;
   });
   const colors: Record<string, string> = {
-    "2xx": "#22c55e",
-    "3xx": "#06b6d4",
-    "4xx": "#f59e0b",
-    "5xx": "#ef4444",
-    Other: "#6b7280",
+    "2xx": p.success,
+    "3xx": p.chart5,
+    "4xx": p.warning,
+    "5xx": p.destructive,
+    Other: p.mutedForeground,
   };
   return Object.entries(buckets)
     .filter(([, v]) => v > 0)
@@ -171,6 +211,15 @@ export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   // Captured once on mount (React purity rule: no impure calls during render).
   const [now] = useState(() => Date.now());
+
+  // R29 — relecture des tokens du thème après montage (fallbacks = hex actuels,
+  // zéro mismatch SSR/hydration). Lecture planifiée hors du corps d'effet.
+  const [palette, setPalette] = useState<ChartPalette>(CHART_COLOR_FALLBACKS);
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => setPalette(readChartPalette()));
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+  const methodColors = useMemo(() => buildMethodColors(palette), [palette]);
 
   const filteredHistory = useMemo(() => {
     if (timeRange === "all") return history;
@@ -284,8 +333,14 @@ export default function DashboardPage() {
     () => buildTopSlowEndpoints(filteredHistory, t),
     [filteredHistory, t],
   );
-  const methodData = useMemo(() => buildMethodData(filteredHistory), [filteredHistory]);
-  const statusData = useMemo(() => buildStatusData(filteredHistory), [filteredHistory]);
+  const methodData = useMemo(
+    () => buildMethodData(filteredHistory, methodColors),
+    [filteredHistory, methodColors],
+  );
+  const statusData = useMemo(
+    () => buildStatusData(filteredHistory, palette),
+    [filteredHistory, palette],
+  );
 
   const healthCounts = useMemo(() => {
     const latestByEndpoint = new Map<string, HistoryItem>();
@@ -411,7 +466,16 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Row 2: Charts ── */}
-            <ChartsContent data={requestsByDay} methodData={methodData} statusData={statusData} />
+            <ChartsContent
+              data={requestsByDay}
+              methodData={methodData}
+              statusData={statusData}
+              colors={{
+                volume: palette.chart1,
+                errorRate: palette.chart4,
+                avgTime: palette.chart3,
+              }}
+            />
 
             {/* ── Row 3: Recent Requests + Slowest Endpoints ── */}
             <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
@@ -554,10 +618,10 @@ export default function DashboardPage() {
                               width: `${pct}%`,
                               background:
                                 endpoint.status === "healthy"
-                                  ? "#22c55e"
+                                  ? palette.success
                                   : endpoint.status === "warning"
-                                    ? "#f59e0b"
-                                    : "#ef4444",
+                                    ? palette.warning
+                                    : palette.destructive,
                             }}
                           />
                         </div>
@@ -724,10 +788,10 @@ export default function DashboardPage() {
                         width: `${pct}%`,
                         background:
                           endpoint.status === "healthy"
-                            ? "#22c55e"
+                            ? palette.success
                             : endpoint.status === "warning"
-                              ? "#f59e0b"
-                              : "#ef4444",
+                              ? palette.warning
+                              : palette.destructive,
                       }}
                     />
                   </div>

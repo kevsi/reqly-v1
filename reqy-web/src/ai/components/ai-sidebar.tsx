@@ -11,6 +11,7 @@ import {
   Play,
   FolderPlus,
   Import,
+  Key,
   ShieldCheck,
   RotateCcw,
   AlertTriangle,
@@ -426,6 +427,31 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                     title={t("ai.sidebar.retry")}
                   >
                     <RotateCcw className="size-3" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Missing AI config — guided setup CTA (R19) */}
+              {chat.missingConfig && (
+                <div
+                  className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2.5 text-sm text-warning mr-6"
+                  data-testid="ai-sidebar-missing-config"
+                >
+                  <Key className="size-4 shrink-0" />
+                  <span className="flex-1">
+                    {t("ai.sidebar.configBannerTitle", {
+                      defaultValue: "Aucune clé IA configurée pour cet espace.",
+                    })}
+                  </span>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-7 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                  >
+                    <Link href="/settings#ai" data-testid="ai-sidebar-config-cta">
+                      {t("ai.sidebar.configCta", { defaultValue: "Configurer l'accès IA" })}
+                    </Link>
                   </Button>
                 </div>
               )}

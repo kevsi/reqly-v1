@@ -34,6 +34,8 @@ import { useTranslation } from "react-i18next";
 interface HistoryPanelProps {
   history: HistoryItem[];
   onSelectRequest: (item: HistoryItem) => void;
+  /** Rejouer = charger ET envoyer. Absent → repli sur le chargement seul. */
+  onReplayRequest?: (item: HistoryItem) => void;
   onClearHistory: () => void;
   onRemoveItem: (id: string) => void;
   onGenerateFollowUp?: (item: HistoryItem) => void;
@@ -57,6 +59,7 @@ function formatTimeAgo(t: TFunction, timestamp: number): string {
 export function HistoryPanel({
   history,
   onSelectRequest,
+  onReplayRequest,
   onClearHistory,
   onRemoveItem,
   onGenerateFollowUp,
@@ -310,7 +313,7 @@ export function HistoryPanel({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onSelectRequest(item)}
+                      onClick={() => (onReplayRequest ?? onSelectRequest)(item)}
                       className="size-6 p-0"
                       title={t("history.replay")}
                     >

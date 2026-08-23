@@ -48,8 +48,17 @@ import { collectionDropId, requestId, folderDropId } from "@/hooks/use-request-d
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
+/** Clé i18n locale (absente des fichiers de locale ; fallback FR inline). */
+const ROW_KEYS = {
+  newBadge: "collections.panel.newBadge",
+} as const;
+
 interface CollectionRowProps {
   collection: Collection;
+  /** R11 — ring de mise en évidence temporaire après import. */
+  isHighlighted?: boolean;
+  /** R11 — badge « Nouveau » affiché ~10 s après un import. */
+  showNewBadge?: boolean;
   isExpanded: boolean;
   isSelected: boolean;
   editingCollectionId: string | null;
@@ -219,7 +228,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 setRenameOpen(true);
               }}
-              className="size-5 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
             >
               <Edit2 className="size-3" />
             </button>
@@ -232,7 +241,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 onFolderMoveUp(folder.id);
               }}
-              className="size-5 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
             >
               <ArrowUp className="size-3" />
             </button>
@@ -245,7 +254,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 onFolderMoveDown(folder.id);
               }}
-              className="size-5 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
             >
               <ArrowDown className="size-3" />
             </button>
@@ -261,7 +270,7 @@ function FolderDropZone({
                   () => onDeleteFolder(collectionId, folder.id),
                 );
               }}
-              className="size-5 flex items-center justify-center rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all"
+              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all"
             >
               <Trash2 className="size-3" />
             </button>
@@ -294,6 +303,8 @@ function FolderDropZone({
 
 export function CollectionRow({
   collection,
+  isHighlighted = false,
+  showNewBadge = false,
   isExpanded,
   isSelected,
   editingCollectionId,
@@ -436,8 +447,10 @@ export function CollectionRow({
     <div
       ref={dropRef}
       data-testid="collection-row"
+      data-collection-id={collection.id}
       className={cn(
-        "relative",
+        "relative rounded-md transition-shadow duration-300",
+        isHighlighted && "ring-2 ring-primary ring-offset-0",
         isOver && "bg-primary/[0.04]",
         isOver &&
           "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r before:bg-primary/60",
@@ -510,6 +523,14 @@ export function CollectionRow({
         >
           {collection.requests.length}
         </Badge>
+        {showNewBadge && (
+          <Badge
+            variant="default"
+            className="shrink-0 text-[10px] px-1.5 py-0 h-4 font-medium bg-primary/15 text-primary border-primary/30"
+          >
+            {t(ROW_KEYS.newBadge, { defaultValue: "Nouveau" })}
+          </Badge>
+        )}
         <div className="flex items-center gap-0.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -57,7 +57,7 @@ export function DraggableRequestRow({
     >
       {/* Drag handle */}
       <button
-        className="shrink-0 size-5 flex items-center justify-center rounded text-muted-foreground/20 opacity-0 group-hover:opacity-100 hover:text-muted-foreground/60 hover:bg-muted/30 transition-all duration-150 cursor-grab active:cursor-grabbing focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+        className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/20 opacity-0 group-hover:opacity-100 hover:text-muted-foreground/60 hover:bg-muted/30 transition-all duration-150 cursor-grab active:cursor-grabbing focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
         {...attributes}
         {...listeners}
         tabIndex={0}
@@ -95,7 +95,7 @@ export function DraggableRequestRow({
       {/* Send button */}
       {onSend && (
         <button
-          className="shrink-0 size-5 flex items-center justify-center rounded text-success/50 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-success hover:bg-success/10"
+          className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-success/50 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-success hover:bg-success/10"
           onClick={onSend}
           title={t("collections.row.loadAndSend")}
         >
@@ -105,7 +105,7 @@ export function DraggableRequestRow({
 
       {/* Remove button */}
       <button
-        className="shrink-0 size-5 flex items-center justify-center rounded text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-destructive hover:bg-destructive/10"
+        className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-destructive hover:bg-destructive/10"
         onClick={onRemove}
         title={t("collections.row.removeRequest")}
       >

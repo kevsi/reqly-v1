@@ -9,7 +9,7 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { AiSidebarContext } from "@/contexts/ai-sidebar-context";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ShortcutsRegistrar } from "@/hooks/use-shortcuts";
+import { ShortcutsRegistrar, SHORTCUTS_MODAL_EVENT } from "@/hooks/use-shortcuts";
 import { getModuleRoutes } from "@/lib/modules/registry";
 
 // Maps URL segment → ApiSidebar `activePage` value.
@@ -56,20 +56,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
 
   // Cmd+I / Ctrl+I toggle AI sidebar
-  // Cmd+K / Ctrl+K toggle shortcuts modal
+  // (Ctrl+K est géré uniquement par ShortcutsRegistrar → palette de commandes ;
+  // la modale raccourcis s'ouvre via l'entrée dédiée de la palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
         e.preventDefault();
         setAiSidebarOpen((prev) => !prev);
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setShortcutsModalOpen((prev) => !prev);
-      }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    const openShortcuts = () => setShortcutsModalOpen(true);
+    window.addEventListener(SHORTCUTS_MODAL_EVENT, openShortcuts);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener(SHORTCUTS_MODAL_EVENT, openShortcuts);
+    };
   }, []);
 
   return (

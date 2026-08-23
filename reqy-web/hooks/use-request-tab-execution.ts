@@ -422,16 +422,10 @@ export function useRequestTabExecution(state: RequestTabsState) {
     if (container) container.scrollTop = 0;
   }, [activeTabId]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        saveActiveTab();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [saveActiveTab]);
+  // NOTE: Ctrl+S n'est PAS écouté ici — il est géré une seule fois par
+  // ShortcutsRegistrar via SHORTCUT_DEFS ("saveRequest" → clic tabbar-save),
+  // désormais autorisé dans les champs de saisie. Un second listener window
+  // provoquait une double exécution de la sauvegarde.
 
   // Store-and-forward replay: when connectivity is restored, automatically
   // replay any requests that were queued during the outage and notify the user.

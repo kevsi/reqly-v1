@@ -20,6 +20,20 @@ import { useTranslation } from "react-i18next";
 
 const CHART_MARGIN = { top: 10, right: 10, left: -10, bottom: 0 } as const;
 
+// R29 — couleurs injectées par dashboard/page.tsx depuis les variables CSS du
+// thème (--chart-1..5 / --success…). Fallbacks = anciens hex si variable vide.
+export interface DashboardChartColors {
+  volume: string;
+  errorRate: string;
+  avgTime: string;
+}
+
+const DEFAULT_CHART_COLORS: DashboardChartColors = {
+  volume: "#22c55e",
+  errorRate: "#f97316",
+  avgTime: "#8b5cf6",
+};
+
 interface ChartDataPoint {
   label: string;
   requests: number;
@@ -96,10 +110,12 @@ export default function ChartsContent({
   data,
   methodData,
   statusData,
+  colors = DEFAULT_CHART_COLORS,
 }: {
   data: ChartDataPoint[];
   methodData: MethodDataPoint[];
   statusData: StatusDataPoint[];
+  colors?: DashboardChartColors;
 }) {
   const { t } = useTranslation();
   return (
@@ -118,8 +134,8 @@ export default function ChartsContent({
               <AreaChart data={data} margin={CHART_MARGIN}>
                 <defs>
                   <linearGradient id="requestsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor={colors.volume} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={colors.volume} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} />
@@ -130,10 +146,10 @@ export default function ChartsContent({
                   type="monotone"
                   dataKey="requests"
                   name={t("dashboard.requests")}
-                  stroke="#22c55e"
+                  stroke={colors.volume}
                   strokeWidth={2}
                   fill="url(#requestsGradient)"
-                  dot={{ r: 3, fill: "#22c55e", strokeWidth: 0 }}
+                  dot={{ r: 3, fill: colors.volume, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
                 />
               </AreaChart>
@@ -153,8 +169,8 @@ export default function ChartsContent({
               <AreaChart data={data} margin={CHART_MARGIN}>
                 <defs>
                   <linearGradient id="errorGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    <stop offset="5%" stopColor={colors.errorRate} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={colors.errorRate} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} />
@@ -170,10 +186,10 @@ export default function ChartsContent({
                   type="monotone"
                   dataKey="errorRate"
                   name={t("dashboard.errorRateName")}
-                  stroke="#f97316"
+                  stroke={colors.errorRate}
                   strokeWidth={2}
                   fill="url(#errorGradient)"
-                  dot={{ r: 3, fill: "#f97316", strokeWidth: 0 }}
+                  dot={{ r: 3, fill: colors.errorRate, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
                 />
               </AreaChart>
@@ -201,7 +217,7 @@ export default function ChartsContent({
                 <Bar
                   dataKey="avgTime"
                   name={t("dashboard.avgTime")}
-                  fill="#8b5cf6"
+                  fill={colors.avgTime}
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>

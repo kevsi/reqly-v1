@@ -45,6 +45,16 @@ function clickTestId(id: string): void {
   el?.click();
 }
 
+/**
+ * Event opened by ApiHeader to show the command palette. Decoupled from the
+ * header button so the shortcut works in any language (no title matching)
+ * and regardless of the button's mount/visibility state.
+ */
+export const COMMAND_PALETTE_EVENT = "reqly:open-command-palette";
+
+/** Event that opens the keyboard shortcuts modal (owned by the app layout). */
+export const SHORTCUTS_MODAL_EVENT = "reqly:open-shortcuts-modal";
+
 // ─── Hook ───────────────────────────────────────────────────────────
 type ShortcutActions = { router: ReturnType<typeof useRouter>; toggleSidebar: () => void };
 
@@ -101,7 +111,10 @@ export function ShortcutsRegistrar() {
           shift: combo.shift,
           alt: combo.alt,
           description: def.descriptionKey,
-          allowInInputs: def.id === "formatJson",
+          // Send/Save must work while focus is in the URL/body inputs (the
+          // #1 gesture), same as Format JSON.
+          allowInInputs:
+            def.id === "sendRequest" || def.id === "saveRequest" || def.id === "formatJson",
           action: () => {
             const { router, toggleSidebar } = actionRef.current;
             dispatchShortcutAction(def.id, { router, toggleSidebar });
@@ -137,8 +150,8 @@ function dispatchShortcutAction(id: string, deps: ShortcutActions): void {
       closeActiveTab();
       break;
     case "search":
-      // Open search palette via the header search button
-      clickTitle("Search (Ctrl+K)");
+      // Open the command palette (ApiHeader listens for this event)
+      window.dispatchEvent(new CustomEvent(COMMAND_PALETTE_EVENT));
       break;
     case "toggleSidebar":
       deps.toggleSidebar();
@@ -153,11 +166,6 @@ function dispatchShortcutAction(id: string, deps: ShortcutActions): void {
       clickTestId("btn-ai-open");
       break;
   }
-}
-
-/** Click an element by its `title` attribute. */
-function clickTitle(title: string): void {
-  document.querySelector<HTMLElement>(`[title="${title}"]`)?.click();
 }
 
 /** Format JSON in the request body textarea. Returns true if successful. */

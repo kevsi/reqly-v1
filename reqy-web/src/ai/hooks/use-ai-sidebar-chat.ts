@@ -13,6 +13,7 @@ import {
   loadAiModel,
   loadOllamaConfig,
 } from "@/lib/config";
+import { isAiConfigured } from "@/lib/ai-config";
 import {
   REQLY_TOOLS,
   executeAuthorizedToolCall,
@@ -62,6 +63,9 @@ export function useAiSidebarChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // R19 — configuration IA absente/invalide : la sidebar affiche alors un CTA
+  // « Configurer l'accès IA » au lieu de laisser filer une erreur proxy brute.
+  const [missingConfig, setMissingConfig] = useState(false);
 
   // Editing
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -220,6 +224,16 @@ export function useAiSidebarChat() {
     ) => {
       if (!content.trim() || isLoading) return;
       setError(null);
+      setMissingConfig(false);
+
+      // R19 — pré-check config (même validation que parseAiConfig, via
+      // isAiConfigured) : sans clé configurée, on guide vers le réglage au
+      // lieu de propager l'erreur proxy brute du premier appel LLM.
+      if (!isAiConfigured()) {
+        setMissingConfig(true);
+        return;
+      }
+
       const effectiveAttachments = options?.attachmentsOverride ?? attachments;
       if (!options?.planCalls?.length && !options?.skipUserMessage) {
         const userMsg: ChatMessage = {
@@ -918,6 +932,7 @@ export function useAiSidebarChat() {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setError(null);
+    setMissingConfig(false);
     setEditingIndex(null);
     setEditingText("");
     setSessionUsage(emptyUsage());
@@ -1030,6 +1045,7 @@ export function useAiSidebarChat() {
     messages,
     isLoading,
     error,
+    missingConfig,
     editingIndex,
     editingText,
     copiedIndex,

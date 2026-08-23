@@ -202,6 +202,62 @@ describe("POST /api/proxy", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe("INVALID_PAYLOAD");
   });
+
+  it("classifies an ECONNREFUSED upstream failure as TARGET_UNREACHABLE (not generic BAD_GATEWAY)", async () => {
+    const cause = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), {
+      code: "ECONNREFUSED",
+    });
+    vi.mocked(fetch).mockRejectedValue(Object.assign(new TypeError("fetch failed"), { cause }));
+
+    const res = await POST(
+      makeRequest({ url: "https://public.example.com/x", method: "GET", headers: {} }),
+    );
+    expect(res.status).toBe(502);
+    const data = await res.json();
+    expect(data.code).toBe("TARGET_UNREACHABLE");
+    expect(data.error).toContain("ECONNREFUSED");
+  });
+
+  it("classifies ENOTFOUND and undici connect timeouts as TARGET_UNREACHABLE", async () => {
+    for (const code of ["ENOTFOUND", "UND_ERR_CONNECT_TIMEOUT"]) {
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError("fetch failed"), {
+          cause: Object.assign(new Error(code), { code }),
+        }),
+      );
+      const res = await POST(
+        makeRequest({ url: "https://public.example.com/x", method: "GET", headers: {} }),
+      );
+      expect((await res.json()).code).toBe("TARGET_UNREACHABLE");
+    }
+  });
+
+  it("classifies TLS certificate failures as CERTIFICATE_ERROR", async () => {
+    const cause = Object.assign(new Error("self signed certificate"), {
+      code: "DEPTH_ZERO_SELF_SIGNED_CERT",
+    });
+    vi.mocked(fetch).mockRejectedValue(Object.assign(new TypeError("fetch failed"), { cause }));
+
+    const res = await POST(
+      makeRequest({ url: "https://public.example.com/x", method: "GET", headers: {} }),
+    );
+    expect(res.status).toBe(502);
+    const data = await res.json();
+    expect(data.code).toBe("CERTIFICATE_ERROR");
+    expect(data.error).toContain("certificate");
+  });
+
+  it("keeps TIMEOUT for an aborted upstream fetch", async () => {
+    vi.mocked(fetch).mockRejectedValue(
+      new DOMException("The operation was aborted.", "AbortError"),
+    );
+
+    const res = await POST(
+      makeRequest({ url: "https://public.example.com/x", method: "GET", headers: {} }),
+    );
+    expect(res.status).toBe(504);
+    expect((await res.json()).code).toBe("TIMEOUT");
+  });
 });
 
 describe("POST /api/proxy auth gate (open proxy guard)", () => {

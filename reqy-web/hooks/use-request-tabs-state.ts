@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { persistence } from "@/lib/persistence";
 import type { RequestTab } from "@/lib/request-executor";
@@ -8,11 +9,14 @@ import {
   STORAGE_KEY_TABS,
   createEmptyTab,
   generateRequestTabId,
+  headersArrayToRecord,
   initialTabs,
   sanitizeTabForStorage,
 } from "@/lib/request-tab-utils";
 import { isTauriAvailable } from "@/lib/tauri";
 import { toast } from "@/hooks/use-toast";
+import { useRequestStore } from "@/hooks/use-request-store";
+import { openRequestMassCloseConfirm } from "@/components/request-mass-close-dialog";
 
 export interface TabContextMenu {
   tabId: string;
@@ -20,7 +24,14 @@ export interface TabContextMenu {
   y: number;
 }
 
+/** Same guard as the single-tab close: unsaved AND carrying content. */
+function hasUnsavedContent(tab: RequestTab): boolean {
+  return !tab.isSaved && Boolean(tab.url || tab.body);
+}
+
 export function useRequestTabsState() {
+  const { t } = useTranslation();
+  const updateRequestById = useRequestStore((s) => s.updateRequestById);
   const [tabs, setTabs] = useState<RequestTab[]>(initialTabs);
   const [activeTabId, setActiveTabId] = useState(initialTabs[0].id);
   const [isTabsLoaded, setIsTabsLoaded] = useState(false);
@@ -180,51 +191,120 @@ export function useRequestTabsState() {
     setActiveTabId(duplicatedTab.id);
   }, []);
 
-  const closeOthers = useCallback((id: string) => {
-    setTabs((prev) => prev.filter((t) => t.id === id));
-    setActiveTabId(id);
+  /** Mass-close guard: confirm via the unsaved-changes dialog when at least
+   *  one candidate tab is unsaved with content, otherwise close right away. */
+  const performMassClose = useCallback((candidates: RequestTab[], perform: () => void) => {
+    const risky = candidates.filter(hasUnsavedContent);
+    if (risky.length === 0) {
+      perform();
+      return;
+    }
+    openRequestMassCloseConfirm(risky.length, perform);
   }, []);
 
-  const closeToRight = useCallback((id: string) => {
-    setTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx === -1) return prev;
-      setActiveTabId((current) => {
-        const activeIdx = prev.findIndex((t) => t.id === current);
-        return activeIdx > idx ? id : current;
+  const closeOthers = useCallback(
+    (id: string) => {
+      const others = tabs.filter((t) => t.id !== id);
+      performMassClose(others, () => {
+        setTabs((prev) => prev.filter((t) => t.id === id));
+        setActiveTabId(id);
       });
-      return prev.slice(0, idx + 1);
-    });
-  }, []);
+    },
+    [tabs, performMassClose],
+  );
+
+  const closeToRight = useCallback(
+    (id: string) => {
+      const idx = tabs.findIndex((t) => t.id === id);
+      if (idx === -1) return;
+      const targets = tabs.slice(idx + 1);
+      performMassClose(targets, () => {
+        setTabs((prev) => {
+          setActiveTabId((current) => {
+            const activeIdx = prev.findIndex((t) => t.id === current);
+            return activeIdx > idx ? id : current;
+          });
+          return prev.slice(0, idx + 1);
+        });
+      });
+    },
+    [tabs, performMassClose],
+  );
 
   const closeAllTabs = useCallback(() => {
-    const newTab = createEmptyTab();
-    setTabs([newTab]);
-    setActiveTabId(newTab.id);
-  }, []);
-
-  const saveAllTabs = useCallback(() => {
-    let count = 0;
-    setTabs((prev) =>
-      prev.map((tab) => {
-        if (!tab.isSaved) {
-          count++;
-          return { ...tab, isSaved: true };
-        }
-        return tab;
-      }),
-    );
-    if (count > 0) {
-      toast({ title: `Saved ${count} tab${count > 1 ? "s" : ""}` });
-    } else {
-      toast({ title: "All tabs are already saved" });
-    }
-  }, []);
+    performMassClose(tabs, () => {
+      const newTab = createEmptyTab();
+      setTabs([newTab]);
+      setActiveTabId(newTab.id);
+    });
+  }, [tabs, performMassClose]);
 
   const flashSavedIndicator = useCallback(() => {
     setSavedIndicator(true);
     window.setTimeout(() => setSavedIndicator(false), 2000);
   }, []);
+
+  // Real save: tabs already attached to a collection are persisted through the
+  // request store; detached tabs are reported so the user knows they were NOT
+  // silently marked as saved.
+  const saveAllTabs = useCallback(() => {
+    const attached = tabs.filter((tab) => !tab.isSaved && tab.savedRequestId);
+    const detached = tabs.filter((tab) => !tab.isSaved && !tab.savedRequestId);
+
+    if (attached.length === 0 && detached.length === 0) {
+      toast({
+        title: t("runner.tabs.allSaved", {
+          defaultValue: "Tous les onglets sont déjà sauvegardés",
+        }),
+      });
+      return;
+    }
+
+    for (const tab of attached) {
+      updateRequestById(tab.savedRequestId as string, {
+        name: tab.name,
+        method: tab.method,
+        url: tab.url,
+        endpoint: tab.endpoint,
+        headers: headersArrayToRecord(tab.headers),
+        body: tab.body,
+        bodyType: tab.bodyType,
+        authType: tab.authType,
+        authToken: tab.authToken,
+        queryParams: tab.queryParams,
+        assertions: tab.assertions,
+        runnerAssertions: tab.runnerAssertions,
+        preRequestScript: tab.preRequestScript,
+        postResponseScript: tab.postResponseScript,
+        protocol: tab.protocol,
+        graphql: tab.graphql,
+        datasetKey: tab.datasetKey,
+      });
+    }
+
+    if (attached.length > 0) {
+      setTabs((prev) =>
+        prev.map((tab) => (!tab.isSaved && tab.savedRequestId ? { ...tab, isSaved: true } : tab)),
+      );
+      flashSavedIndicator();
+      toast({
+        title: t("runner.tabs.savedCount", {
+          count: attached.length,
+          defaultValue: "{{count}} onglet(s) sauvegardé(s)",
+        }),
+      });
+    }
+
+    if (detached.length > 0) {
+      toast({
+        title: t("runner.tabs.detachedWarning", {
+          count: detached.length,
+          defaultValue: "{{count}} onglet(s) non rattaché(s) à une collection",
+        }),
+        variant: "destructive",
+      });
+    }
+  }, [tabs, updateRequestById, flashSavedIndicator, t]);
 
   return {
     tabs,

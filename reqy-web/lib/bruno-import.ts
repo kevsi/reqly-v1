@@ -12,8 +12,16 @@ import type { CollectionImportData } from "@/lib/openapi-import";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
+/** Structured error codes — the UI translates them via i18n. */
+export type BrunoImportErrorCode =
+  "file_too_large" | "parse_failed" | "invalid_bru_format" | "no_valid_request";
+
 export interface BrunoParseError {
   success: false;
+  code: BrunoImportErrorCode;
+  /** Interpolation values for the translated message (e.g. maxSize, message). */
+  detail?: Record<string, string | number>;
+  /** Legacy human-readable fallback (used as i18n defaultValue). */
   error: string;
 }
 
@@ -47,6 +55,8 @@ export function parseBrunoCollection(contents: string, fileName?: string): Bruno
   if (new TextEncoder().encode(contents).length > MAX_BRUNO_IMPORT_BYTES) {
     return {
       success: false,
+      code: "file_too_large",
+      detail: { maxSize: MAX_BRUNO_IMPORT_BYTES / (1024 * 1024) },
       error: `Fichier trop volumineux (max ${MAX_BRUNO_IMPORT_BYTES / (1024 * 1024)} Mo)`,
     };
   }
@@ -62,6 +72,8 @@ export function parseBrunoCollection(contents: string, fileName?: string): Bruno
   } catch (err) {
     return {
       success: false,
+      code: "parse_failed",
+      detail: { message: err instanceof Error ? err.message : String(err) },
       error: err instanceof Error ? err.message : "Erreur inconnue lors du parsing.",
     };
   }
@@ -122,6 +134,7 @@ function parseBruFile(content: string): BrunoParseResult {
   if (!content.includes("{") || !content.includes("}")) {
     return {
       success: false,
+      code: "invalid_bru_format",
       error: "Format .bru non reconnu. Le fichier doit contenir des blocs structurés.",
     };
   }
@@ -141,6 +154,7 @@ function parseBruFile(content: string): BrunoParseResult {
   if (!method && !url && Object.keys(headers).length === 0 && !body.data) {
     return {
       success: false,
+      code: "no_valid_request",
       error: "Impossible de trouver une requête valide dans ce fichier .bru.",
     };
   }

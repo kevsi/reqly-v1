@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef } from "react";
-import { interpolate, replaceLocalhostPort, hasUnresolvedPlaceholders } from "@/lib/utils";
+import { interpolate, replaceLocalhostPort, extractUnresolvedPlaceholders } from "@/lib/utils";
 import { runScript } from "@/lib/test-runner/scripts";
 import type { RunnerContext } from "@/lib/test-runner/types";
 import { toast } from "@/hooks/use-toast";
@@ -13,6 +13,19 @@ import type { RequestTabsState } from "@/hooks/use-request-tabs-state";
 import type { PendingCollectionRequest } from "@/lib/request-bridge";
 import { isTauriInvokeError } from "@/lib/tauri";
 import { useTranslation } from "react-i18next";
+
+function unresolvedFieldLabel(field: string): string {
+  switch (field) {
+    case "url":
+      return "URL";
+    case "body":
+      return "body";
+    case "authToken":
+      return "header Authorization";
+    default:
+      return field.startsWith("header:") ? `header ${field.slice("header:".length) || "?"}` : field;
+  }
+}
 
 export function useRequestExecutionCore(state: RequestTabsState) {
   const { nativeMode, setLoadingCount, updateTab } = state;
@@ -51,7 +64,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
     const preview = warnings
       .slice(0, 3)
       .map((w) => `{{${w.name}}}: ${w.error}`)
-      .join(" · ");
+      .join(", ");
     const suffix = warnings.length > 3 ? ` (+${warnings.length - 3} autres)` : "";
     toast({
       title: t("request.unresolvedVariables"),
@@ -154,15 +167,31 @@ export function useRequestExecutionCore(state: RequestTabsState) {
         const resolvedUrl = interpolate(tab.url, allVarsAfterScript);
         const resolvedBody = interpolate(tab.body || "", allVarsAfterScript);
         const resolvedToken = interpolate(tab.authToken, allVarsAfterScript);
-        if (
-          hasUnresolvedPlaceholders(resolvedUrl) ||
-          hasUnresolvedPlaceholders(resolvedBody) ||
-          hasUnresolvedPlaceholders(resolvedToken)
-        ) {
+        // Miroir de l'interpolation des headers dans buildRequestPayload
+        // (lib/request-executor.ts) : clés et valeurs des headers actifs non vides.
+        const enabledHeaders = tab.headers.filter(
+          (h) => h.enabled !== false && !!h.key?.trim() && !!h.value?.trim(),
+        );
+        const unresolvedPlaceholders = extractUnresolvedPlaceholders([
+          { field: "url", text: resolvedUrl },
+          { field: "body", text: resolvedBody },
+          { field: "authToken", text: resolvedToken },
+          ...enabledHeaders.flatMap((h) => [
+            { field: `header:${h.key.trim()}`, text: interpolate(h.key, allVarsAfterScript) },
+            { field: `header:${h.key.trim()}`, text: interpolate(h.value, allVarsAfterScript) },
+          ]),
+        ]);
+        if (unresolvedPlaceholders.length > 0) {
           notifyUnresolvedVariables();
+          const preview = unresolvedPlaceholders
+            .slice(0, 5)
+            .map((u) => `${u.name} (${unresolvedFieldLabel(u.field)})`)
+            .join(", ");
+          const suffix =
+            unresolvedPlaceholders.length > 5 ? ` (+${unresolvedPlaceholders.length - 5})` : "";
           toast({
             title: t("request.unresolvedVariables"),
-            description: t("request.unresolvedVariablesHint"),
+            description: `${preview}${suffix}`,
             variant: "destructive",
           });
           return null;

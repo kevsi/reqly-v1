@@ -183,7 +183,8 @@
         "navigation": "Navigation",
         "display": "Display",
         "ai": "AI Assistant"
-      }
+      },
+      "customized": "Customized"
     },
     "modules": {
       "title": "Modules",
@@ -415,7 +416,9 @@
     "clearNotificationsDescription": "All notifications will be permanently deleted. This action cannot be undone.",
     "deleteNotification": "Delete",
     "toggleAiSidebarClose": "Close AI assistant",
-    "toggleAiSidebarOpen": "Open AI assistant (Cmd+I)"
+    "toggleAiSidebarOpen": "Open AI assistant (Cmd+I)",
+    "keyboardShortcuts": "Keyboard shortcuts",
+    "shortcutsGroup": "Help"
   },
   "language": {},
   "runner": {
@@ -444,7 +447,10 @@
       "closeOthers": "Close Others",
       "closeToRight": "Close to the Right",
       "closeAll": "Close All",
-      "saveAll": "Save All"
+      "saveAll": "Save All",
+      "savedCount": "Saved {{count}} tab(s)",
+      "allSaved": "All tabs are already saved",
+      "detachedWarning": "{{count}} tab(s) not attached to a collection"
     },
     "description": "Execute an entire collection and verify every assertion in one pass.",
     "selectCollection": "Select a collection…",
@@ -520,7 +526,14 @@
       "jsonPath": "JSONPath {{path}} {{op}}",
       "schema": "Schema validation",
       "assertion": "Assertion"
-    }
+    },
+    "viewProgress": "View progress",
+    "lastCompleted": "Completed:",
+    "cumulativeDuration": "cumulative duration",
+    "iterationsIgnored": "Ignored: dataset active",
+    "datasetNoMatch": "No dataset column matches the {{placeholderSyntax}} variables used by the selected requests.",
+    "previousRuns": "Previous runs",
+    "rerun": "Re-run"
   },
   "theme": {
     "label": {
@@ -590,7 +603,13 @@
       "deleteConfirm": "Delete {{items}}?",
       "collectionCount": "{{count}} collection(s)",
       "requestCount": "{{count}} request(s)",
-      "and": "and"
+      "and": "and",
+      "newBadge": "New",
+      "partialImported": "{{count}} imported",
+      "partialSkipped": "{{count}} skipped (invalid format)",
+      "partialMore": "+{{count}} more",
+      "unnamedRequest": "Unnamed request",
+      "dragDuplicateHint": "Ctrl = duplicate"
     },
     "searchBar": {
       "placeholder": "Search collections & requests...",
@@ -677,7 +696,8 @@
       "requestLoadedAndSent": "“{{name}}” loaded and sent",
       "openApiImportDone": "OpenAPI import complete",
       "openApiImportDetails_one": "{{count}} request imported into {{collections}} collection.",
-      "openApiImportDetails_other": "{{count}} requests imported into {{collections}} collections."
+      "openApiImportDetails_other": "{{count}} requests imported into {{collections}} collections.",
+      "exportCancelled": "Export cancelled"
     }
   },
   "history": {
@@ -854,7 +874,8 @@
     "binaryContentNoSize": "Binary content",
     "download": "Download",
     "noMedia": "Media playback not available",
-    "previewImage": "Preview image {{index}}"
+    "previewImage": "Preview image {{index}}",
+    "copyHeader": "Copy this header"
   },
   "auth": {
     "accordion": "Auth",
@@ -1029,7 +1050,13 @@
     "opContains": "contains",
     "opExists": "exists",
     "opNotExists": "not exists",
-    "expectedPlaceholder": "expected"
+    "expectedPlaceholder": "expected",
+    "incompleteSuggestion": "Incomplete suggestion — cannot be applied.",
+    "incompleteNoExpectedStatus": "missing or unusable expected value (status code)",
+    "incompleteNoResponseTime": "missing or unusable response time threshold",
+    "incompleteUnknown": "unusable suggestion",
+    "correctionMismatchTitle": "Correction not applied",
+    "correctionMismatchBody": "The assertion at this position no longer matches the analyzed one. Re-run the tests and request a new correction."
   },
   "git": {
     "notInitialized": "Repository not initialized",
@@ -1139,7 +1166,9 @@
     "deleteConfirm": "Delete \"{{name}}\"? This action is irreversible.",
     "variable": "variable",
     "key": "key",
-    "otherEnvKeys": "Keys from other environments"
+    "otherEnvKeys": "Keys from other environments",
+    "showSecretValue": "Show value",
+    "hideSecretValue": "Hide value"
   },
   "account": {
     "signIn": "Sign in",
@@ -1551,7 +1580,10 @@
       "doneSummary_one": "{{count}} endpoint imported successfully.",
       "doneSummary_other": "{{count}} endpoints imported successfully.",
       "doneCollections_one": "into {{count}} collection",
-      "doneCollections_other": "into {{count}} collections"
+      "doneCollections_other": "into {{count}} collections",
+      "pasteToggle": "Or paste JSON/YAML content",
+      "pastePlaceholder": "Paste your OpenAPI / Swagger spec here…",
+      "pasteAnalyze": "Analyze"
     },
     "openapiExport": {
       "title": "Export to OpenAPI",
@@ -1576,7 +1608,13 @@
       "doneSummary_one": "{{count}} request imported successfully.",
       "doneSummary_other": "{{count}} requests imported successfully.",
       "importRequests_one": "Import {{count}} request",
-      "importRequests_other": "Import {{count}} requests"
+      "importRequests_other": "Import {{count}} requests",
+      "errors": {
+        "file_too_large": "File too large (max {{maxSize}} MB)",
+        "parse_failed": "Could not parse file: {{message}}",
+        "invalid_bru_format": "Unrecognized .bru format. The file must contain structured blocks.",
+        "no_valid_request": "No valid request found in this .bru file."
+      }
     },
     "github": {
       "title": "Import from GitHub",
@@ -1922,7 +1960,9 @@
       "suggestion2": "Create an 'API Tests' collection",
       "suggestion3": "Import the project from GitHub",
       "consentNote": "The AI only acts on explicit request",
-      "retry": "Retry"
+      "retry": "Retry",
+      "configBannerTitle": "No AI key configured for this workspace.",
+      "configCta": "Set up AI access"
     },
     "history": {
       "title": "Conversations",
@@ -1978,7 +2018,9 @@
       "fixApplied": "Fix applied",
       "noPatchTarget": "No patch target available for this request.",
       "jwtDetected": "JWT detected in Authorization",
-      "expired": "expired"
+      "expired": "expired",
+      "stopGeneration": "Stop",
+      "contextTruncated": "Context truncated: only the first {{count}} characters were sent"
     },
     "rating": {
       "helpfulAria": "Helpful diagnostic",
@@ -2208,6 +2250,13 @@
   },
   "requestUnsaved": {
     "title": "Unsaved changes",
-    "description": "\"{{name}}\" is not saved."
+    "description": "\"{{name}}\" is not saved.",
+    "massCloseTitle": "{{count}} unsaved tab(s)",
+    "massCloseDescription": "Close without saving? Changes in these tabs will be lost."
+  },
+  "proxy": {
+    "ssrfBlockedLocal": "URL rejected by the proxy: localhost and private addresses are blocked in web mode. In development, use dev mode or set ALLOW_LOCAL_HOSTS=true to test localhost.",
+    "targetUnreachable": "Target server unreachable (connection refused or DNS not found) — check that the service is running on this port and the URL is correct.",
+    "certificateError": "Invalid or self-signed TLS certificate — fix the target server certificate (or disable SSL verification in desktop mode to test)."
   }
 }

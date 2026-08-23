@@ -13,6 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { parseBrunoCollection, convertBrunoToCollections } from "@/lib/bruno-import";
+import type { BrunoParseError } from "@/lib/bruno-import";
 import type { CollectionImportData } from "@/lib/openapi-import";
 import { Trans, useTranslation } from "react-i18next";
 
@@ -23,6 +24,17 @@ interface ImportBrunoModalProps {
 }
 
 type Step = "upload" | "preview" | "importing" | "done";
+
+/** Translate a structured parser error via i18n (legacy FR string as fallback). */
+function formatBrunoError(
+  err: BrunoParseError,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return t(`importExport.bruno.errors.${err.code}`, {
+    defaultValue: err.error,
+    ...(err.detail ?? {}),
+  });
+}
 
 export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalProps) {
   const { t } = useTranslation();
@@ -65,7 +77,7 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
 
         const result = parseBrunoCollection(contents, file.name);
         if (!result.success) {
-          setError(result.error);
+          setError(formatBrunoError(result, t));
           return;
         }
 
@@ -109,7 +121,7 @@ export function ImportBrunoModal({ open, onClose, onImport }: ImportBrunoModalPr
 
     const result = parseBrunoCollection(rawContents, fileName);
     if (!result.success) {
-      setError(result.error);
+      setError(formatBrunoError(result, t));
       setStep("preview");
       return;
     }

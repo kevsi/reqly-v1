@@ -8,9 +8,9 @@
  *
  * Replaces the previous multi-tab AI layout (Chat + ReqlyAI).
  */
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Loader2, Sparkles, Clipboard, FileText, Lightbulb, Key } from "lucide-react";
+import { Bot, Sparkles, Clipboard, FileText, Lightbulb, Key, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,6 +74,13 @@ import {
 import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 
 type AiTab = "analyse" | "assistant" | "explain";
+
+/**
+ * Limite d'envoi du body au LLM — alignée sur MAX_BODY_CHARS de
+ * cloud-engine/prompt.ts (constante non exportée, garder les deux valeurs
+ * synchronisées) et utilisée par truncate() via safeBodyForPrompt.
+ */
+const PROMPT_BODY_LIMIT = 2000;
 
 /** Messages d'erreur typiques quand le provider IA ne supporte pas les tools/function calling. */
 function isToolUnsupportedError(msg: string): boolean {
@@ -180,6 +187,36 @@ export function AIModal(props: AIModalProps) {
     reasoningContent?: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  // R17 — génération interrompable : un AbortController par génération.
+  const abortRef = useRef<AbortController | null>(null);
+  // R17 — chronomètre simple (secondes écoulées) pendant la génération.
+  const [generationSeconds, setGenerationSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!llmLoading) return;
+    const startedAt = Date.now();
+    setGenerationSeconds(0);
+    const id = window.setInterval(
+      () => setGenerationSeconds(Math.floor((Date.now() - startedAt) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(id);
+  }, [llmLoading]);
+
+  // Fermer le modal interrompt la génération en cours ; cleanup de sûreté au
+  // démontage (le Dialog Radix ne démonte pas AIModal lui-même).
+  useEffect(() => {
+    if (props.open) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [props.open]);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const handleStopGeneration = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLlmLoading(false);
+  }, []);
 
   // Refs pour la boucle multi-turn — persistentes entre handleRunLLM et handleConfirmToolCall
   const accRef = useRef("");
@@ -323,6 +360,12 @@ export function AIModal(props: AIModalProps) {
         }
       }
     } catch (e) {
+      // Interruption volontaire (bouton Stop ou fermeture du modal) : garder
+      // le texte partiel affiché, sans erreur ni relance.
+      if ((e as { name?: string } | null)?.name === "AbortError") {
+        setLlmLoading(false);
+        return;
+      }
       // Si l'erreur ressemble à un rejet des tools/function calling et
       // qu'on n'a pas déjà retenté, on relance sans outils.
       if (
@@ -621,6 +664,10 @@ export function AIModal(props: AIModalProps) {
     const openaiUrl = loadAiBaseUrl(provider);
     const ollamaConfig = loadOllamaConfig();
 
+    // AbortController dédié à cette génération (bouton Stop + fermeture modal).
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     // Fetch RAG chunks from similar historical requests
     let retrievedChunks: RetrievedChunk[] = [];
     try {
@@ -656,7 +703,7 @@ export function AIModal(props: AIModalProps) {
       question: userPrompt || prompt,
       ctx,
       diagnostics,
-      signal: undefined,
+      signal: controller.signal,
       tools: REQLY_TOOLS,
       tool_choice: "auto",
       retrievedChunks,
@@ -822,28 +869,45 @@ export function AIModal(props: AIModalProps) {
                   className="resize-none text-sm flex-1 [field-sizing:fixed]"
                   data-testid="ai-assistant-input"
                 />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleRunLLM}
-                  disabled={llmLoading}
-                  className="shrink-0 mt-[5px]"
-                  data-testid="ai-run-llm"
-                >
-                  {llmLoading ? (
-                    <>
-                      <Loader2 className="size-3 mr-1 animate-spin pointer-events-none" />
-                      Génération...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="size-3 mr-1 pointer-events-none" />
-                      {showConfig ? "Configurer d'abord" : "Lancer l'assistant"}
-                    </>
-                  )}
-                </Button>
+                {llmLoading ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleStopGeneration}
+                    className="shrink-0 mt-[5px] border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    data-testid="ai-stop-generation"
+                  >
+                    <Square className="size-3 mr-1" />
+                    {t("ai.modal.stopGeneration", { defaultValue: "Arrêter" })} ·{" "}
+                    {generationSeconds}s
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRunLLM}
+                    className="shrink-0 mt-[5px]"
+                    data-testid="ai-run-llm"
+                  >
+                    <Sparkles className="size-3 mr-1 pointer-events-none" />
+                    {showConfig ? "Configurer d'abord" : "Lancer l'assistant"}
+                  </Button>
+                )}
               </div>
+
+              {(props.responseBody?.length ?? 0) > PROMPT_BODY_LIMIT && (
+                <p
+                  className="text-[11px] text-muted-foreground/70 px-1"
+                  data-testid="ai-context-truncated"
+                >
+                  {t("ai.modal.contextTruncated", {
+                    count: PROMPT_BODY_LIMIT,
+                    defaultValue: "Contexte tronqué : {{count}} premiers caractères envoyés",
+                  })}
+                </p>
+              )}
 
               {llmError && (
                 <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-2 text-xs text-destructive">

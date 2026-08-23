@@ -28,6 +28,7 @@ import {
   BarChart3,
   Activity,
   Sparkles,
+  History,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,16 @@ import { resolveSelectedCollectionId } from "@/lib/runner-state";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { TauriErrorPayload } from "@/lib/tauri";
+import { toast } from "@/hooks/use-toast";
+import type { TestResult } from "@/lib/types";
+import { persistence } from "@/lib/persistence";
+import { AssertionCorrection } from "@/components/assertion-correction";
+import {
+  suggestionToAssertion,
+  type CorrectionSuggestion,
+} from "@/src/ai/cloud-engine/actions/propose-correction";
+import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions/prompts";
+import { useAIEngine } from "@/src/ai/hooks/use-ai-engine";
 
 type RequestTestResultWithTransportError = RequestTestResult & {
   transportError?: TauriErrorPayload | null;
@@ -183,12 +194,113 @@ function formatActual(v: unknown): string {
   }
 }
 
+/**
+ * i18n keys introduced by this page that are not in the locale files yet.
+ * They are referenced via constants (with defaultValue fallbacks) and
+ * shipped as a { key: { fr, en } } manifest — see the change report.
+ */
+const RUNNER_KEYS = {
+  viewProgress: "runner.viewProgress",
+  lastCompleted: "runner.lastCompleted",
+  cumulativeDuration: "runner.cumulativeDuration",
+  iterationsIgnored: "runner.iterationsIgnored",
+  datasetNoMatch: "runner.datasetNoMatch",
+  previousRuns: "runner.previousRuns",
+} as const;
+
+// ── R7c: persisted run history (last 5 reports) ───────────────────────────
+
+const RUN_HISTORY_KEY = "reqly-runner-run-history";
+const RUN_HISTORY_LIMIT = 5;
+
+interface StoredRunEntry {
+  savedAt: number;
+  report: CollectionRunReport;
+}
+
+/** Same aggregation as lib/test-runner/runner.summarize (not exported there). */
+function summarizeResults(results: RequestTestResult[]) {
+  const s = { total: results.length, passed: 0, failed: 0, skipped: 0, errored: 0 };
+  for (const r of results) {
+    if (r.status === "pass") s.passed++;
+    else if (r.status === "fail") s.failed++;
+    else if (r.status === "skipped") s.skipped++;
+    else s.errored++;
+  }
+  return s;
+}
+
+function excerptResponseBody(body: unknown): string | undefined {
+  if (body == null) return undefined;
+  try {
+    const raw = typeof body === "string" ? body : JSON.stringify(body);
+    if (!raw) return undefined;
+    return raw.length > 2000 ? raw.slice(0, 2000) : raw;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Bridge a runner AssertionResult into the TestResult shape expected by AssertionCorrection. */
+function assertionResultToTestResult(
+  result: RequestTestResultWithTransportError,
+  ar: AssertionResult,
+  index: number,
+): TestResult {
+  const a = ar.assertion;
+  let target = "";
+  let expected: string | undefined;
+  switch (a.type) {
+    case "jsonPath":
+      target = a.path;
+      expected = a.value !== undefined ? JSON.stringify(a.value) : undefined;
+      break;
+    case "header":
+      target = a.name;
+      expected = a.value;
+      break;
+    case "status":
+      target = "status";
+      expected = typeof a.expected === "number" ? String(a.expected) : JSON.stringify(a.expected);
+      break;
+    case "responseTime":
+      target = "responseTime";
+      expected = `${a.operator} ${a.valueMs}`;
+      break;
+    case "schema":
+      target = "schema";
+      expected = JSON.stringify(a.schema);
+      break;
+  }
+  return {
+    // Types intentionally bridged: runner Assertion and legacy AssertionType diverge.
+    type: a.type as unknown as TestResult["type"],
+    assertionId: `${result.requestId}-${index}`,
+    target,
+    expected,
+    passed: ar.passed,
+    message: ar.error ?? "",
+  };
+}
+
 function RequestResultItem({
   result,
   accordionValue,
+  endpoint,
+  responseBodyExcerpt,
+  askAI,
+  onApplyCorrection,
 }: {
   result: RequestTestResultWithTransportError;
   accordionValue: string;
+  endpoint?: string;
+  responseBodyExcerpt?: string;
+  askAI?: (prompt: string) => Promise<string>;
+  onApplyCorrection?: (
+    result: RequestTestResultWithTransportError,
+    assertionIndex: number,
+    suggestion: CorrectionSuggestion,
+  ) => void;
 }) {
   const { t } = useTranslation();
   const meta = STATUS_META[result.status];
@@ -265,6 +377,17 @@ function RequestResultItem({
                         {t("runner.actual")} {formatActual(ar.actualValue)}
                       </p>
                     )}
+                    {/* R16: AI correction bridge for failed assertions (existing component). */}
+                    {!ar.passed && askAI && onApplyCorrection && (
+                      <AssertionCorrection
+                        result={assertionResultToTestResult(result, ar, i)}
+                        endpoint={endpoint ?? ""}
+                        responseStatus={result.statusCode}
+                        responseBody={responseBodyExcerpt}
+                        askAI={askAI}
+                        onApply={(_tr, suggestion) => onApplyCorrection(result, i, suggestion)}
+                      />
+                    )}
                   </div>
                 </div>
               ))}
@@ -299,8 +422,14 @@ function RequestResultItem({
 
 export default function RunnerPage() {
   const { t } = useTranslation();
-  const { collections, environmentVariables, variableMappings, history, activeWorkspaceId } =
-    useRequestStore();
+  const {
+    collections,
+    environmentVariables,
+    variableMappings,
+    history,
+    activeWorkspaceId,
+    updateRequestById,
+  } = useRequestStore();
 
   const [selectedId, setSelectedId] = useState<string>("");
   const effectiveSelectedId = useMemo(
@@ -397,11 +526,11 @@ export default function RunnerPage() {
     setExtractions((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
-  // Dataset state
+  // Dataset state (R13: error / filename are read for display)
   const [, setDatasetText] = useState("");
   const [datasetRows, setDatasetRows] = useState<Record<string, string>[]>([]);
-  const [, setDatasetError] = useState<string | null>(null);
-  const [, setDatasetFileName] = useState<string | null>(null);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
+  const [datasetFileName, setDatasetFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal & Run state
@@ -413,7 +542,109 @@ export default function RunnerPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<string>("all");
 
+  // R15: completed/total counters feeding the honest "Terminée : X (n/total)" label
+  const [progressCounts, setProgressCounts] = useState<{ completed: number; total: number } | null>(
+    null,
+  );
+
+  // R7c: persisted history of the last runs (read-only reload)
+  const [runHistory, setRunHistory] = useState<StoredRunEntry[]>([]);
+  const runHistoryRef = useRef<StoredRunEntry[]>([]);
+  // True while the report view shows a reloaded historical run (read-only).
+  const [isHistoricalView, setIsHistoricalView] = useState(false);
+
   const runAbortControllerRef = useRef<AbortController | null>(null);
+
+  // R7b: abort any in-flight run when the page unmounts
+  useEffect(
+    () => () => {
+      runAbortControllerRef.current?.abort();
+    },
+    [],
+  );
+
+  // R7a: warn before closing the tab while a run is active
+  useEffect(() => {
+    if (!isRunning) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isRunning]);
+
+  // R7c: load persisted run history once the persistence layer is ready
+  useEffect(() => {
+    let cancelled = false;
+    void persistence.waitForReady().then(() => {
+      if (cancelled) return;
+      const stored = persistence.getItem<StoredRunEntry[]>(RUN_HISTORY_KEY);
+      if (Array.isArray(stored)) {
+        const entries = stored.filter((e) => e && e.report).slice(0, RUN_HISTORY_LIMIT);
+        runHistoryRef.current = entries;
+        setRunHistory(entries);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persistRunReport = useCallback((rep: CollectionRunReport) => {
+    const entry: StoredRunEntry = { savedAt: Date.now(), report: rep };
+    const next = [entry, ...runHistoryRef.current].slice(0, RUN_HISTORY_LIMIT);
+    runHistoryRef.current = next;
+    setRunHistory(next);
+    void persistence.setItem(RUN_HISTORY_KEY, next);
+  }, []);
+
+  const loadHistoricalRun = useCallback(
+    (savedAt: string) => {
+      if (isRunning) return;
+      const entry = runHistory.find((e) => String(e.savedAt) === savedAt);
+      if (!entry) return;
+      setIsHistoricalView(true);
+      setError(null);
+      setFilterTab("all");
+      setReport(entry.report);
+      setIsModalOpen(true);
+    },
+    [isRunning, runHistory],
+  );
+
+  // R16: askAI bridge — same wiring as request-tabs-manager's correctionAskAI.
+  const aiEngine = useAIEngine();
+  const runnerAskAI = useCallback(
+    (prompt: string) => {
+      const ctx = aiEngine.buildContext();
+      return aiEngine.sendMessage(prompt, ACTIONS_SYSTEM_PROMPT, ctx);
+    },
+    [aiEngine],
+  );
+
+  // R16: apply a suggested correction back onto the collection request.
+  const handleApplyRunnerCorrection = useCallback(
+    (
+      result: RequestTestResultWithTransportError,
+      assertionIndex: number,
+      suggestion: CorrectionSuggestion,
+    ) => {
+      const req = orderedRequests.find((r) => r.id === result.requestId);
+      const assertions = req?.runnerAssertions ?? [];
+      const original = assertions[assertionIndex];
+      if (!original) {
+        toast({ title: t("runner.assertionNotFound"), variant: "destructive" });
+        return;
+      }
+      const corrected = suggestionToAssertion(suggestion, original);
+      updateRequestById(result.requestId, {
+        runnerAssertions: assertions.map((a, i) => (i === assertionIndex ? corrected : a)),
+      });
+      toast({ title: t("runner.assertionCorrected") });
+    },
+    [orderedRequests, t, updateRequestById],
+  );
 
   const totalCollectionRequests = orderedRequests.length;
   const selectedCount = selectedRequestIds.size;
@@ -518,6 +749,37 @@ export default function RunnerPage() {
     return buildIterationContexts(baseContext, datasetRows, iterationsCount);
   }, [baseContext, datasetRows, iterationsCount]);
 
+  // R13: preview of the parsed dataset (first 3 rows / first columns)
+  const datasetPreviewColumns = useMemo(
+    () => Object.keys(datasetRows[0] ?? {}).slice(0, 6),
+    [datasetRows],
+  );
+  const datasetPreviewRows = useMemo(() => datasetRows.slice(0, 3), [datasetRows]);
+
+  // R13: does any dataset column match a {{placeholder}} used by the selected requests?
+  const unmatchedDatasetColumns = useMemo(() => {
+    if (datasetRows.length === 0) return false;
+    const placeholders = new Set<string>();
+    const selectedReqs = orderedRequests.filter((r) => selectedRequestIds.has(r.id));
+    for (const req of selectedReqs) {
+      const haystack = [
+        req.url ?? "",
+        req.body ?? "",
+        Object.values(req.headers ?? {}).join(" "),
+      ].join("\n");
+      for (const m of haystack.matchAll(/\{\{(\w+)\}\}/g)) placeholders.add(m[1]);
+    }
+    if (placeholders.size === 0) return false;
+    const columns = new Set<string>();
+    for (const row of datasetRows) {
+      for (const k of Object.keys(row)) columns.add(k);
+    }
+    for (const p of placeholders) {
+      if (columns.has(p)) return false;
+    }
+    return true;
+  }, [datasetRows, orderedRequests, selectedRequestIds]);
+
   const handleFileUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -578,6 +840,8 @@ export default function RunnerPage() {
     setIsRunning(true);
     setIsModalOpen(true);
     setProgress(0);
+    setProgressCounts(null);
+    setIsHistoricalView(false);
     setCurrentExecutingName(filteredRequests[0]?.name ?? null);
     setReport(null);
     setError(null);
@@ -600,6 +864,16 @@ export default function RunnerPage() {
           signal: controller.signal,
           concurrency: virtualUsers,
           serverSide: runMethod === "local",
+          // R12: same progression state as the functional mode
+          onRequestDone: (completed, total) => {
+            if (!controller.signal.aborted) {
+              setProgress(Math.round((completed / Math.max(1, total)) * 100));
+              // Concurrent completions can't be attributed to a specific
+              // request — never display an arbitrary name as "completed".
+              setCurrentExecutingName(null);
+              setProgressCounts({ completed, total });
+            }
+          },
         });
 
         const endTime = Date.now();
@@ -633,6 +907,7 @@ export default function RunnerPage() {
           responseTimeMs: res.ok ? res.response.responseTimeMs : 0,
           assertionResults: [],
           error: res.ok ? undefined : res.error,
+          responseBodyExcerpt: res.ok ? excerptResponseBody(res.response.body) : undefined,
         }));
 
         const finalReport: CollectionRunReport = {
@@ -653,15 +928,24 @@ export default function RunnerPage() {
         };
 
         setReport(finalReport);
+        persistRunReport(finalReport);
         setProgress(100);
       } else {
         // Functional Run Mode with Visual Extractions & onRequestDone
+        const baseExecutor = createRunnerExecutor({
+          workspaceId: activeWorkspaceId,
+          signal: controller.signal,
+          serverSide: runMethod === "local",
+        });
+        // R16: capture response body excerpts (keyed by interpolated method+URL)
+        const responseExcerpts = new Map<string, string>();
         const opts: RunnerOptions = {
-          executor: createRunnerExecutor({
-            workspaceId: activeWorkspaceId,
-            signal: controller.signal,
-            serverSide: runMethod === "local",
-          }),
+          executor: async (req) => {
+            const response = await baseExecutor(req);
+            const excerpt = excerptResponseBody(response.body);
+            if (excerpt) responseExcerpts.set(`${req.method} ${req.url}`, excerpt);
+            return response;
+          },
           signal: controller.signal,
           stopOnFailure,
           delayMs,
@@ -670,13 +954,23 @@ export default function RunnerPage() {
             if (!controller.signal.aborted) {
               setProgress(Math.round((completed / total) * 100));
               setCurrentExecutingName(res.requestName);
+              setProgressCounts({ completed, total });
             }
           },
         };
         if (iterations) opts.iterations = iterations;
 
         const result = await runCollectionEngine(collectionToRun, baseContext, opts);
-        setReport(result);
+        // R16: attach captured excerpts to the results they belong to.
+        const enrichedResults = result.results.map((r) => {
+          if (r.responseBodyExcerpt) return r;
+          const req = collectionToRun.requests.find((q) => q.id === r.requestId);
+          const excerpt = req ? responseExcerpts.get(`${req.method} ${req.url}`) : undefined;
+          return excerpt ? { ...r, responseBodyExcerpt: excerpt } : r;
+        });
+        const enrichedReport: CollectionRunReport = { ...result, results: enrichedResults };
+        setReport(enrichedReport);
+        persistRunReport(enrichedReport);
         setProgress(controller.signal.aborted ? 0 : 100);
       }
     } catch (err) {
@@ -701,19 +995,29 @@ export default function RunnerPage() {
     const controller = new AbortController();
     runAbortControllerRef.current = controller;
     setIsRunning(true);
+    setIsHistoricalView(false);
     setProgress(0);
+    setProgressCounts(null);
     setFilterTab("all");
 
     try {
+      const baseExecutor = createRunnerExecutor({
+        workspaceId: activeWorkspaceId,
+        signal: controller.signal,
+        serverSide: runMethod === "local",
+      });
+      // R16: capture response body excerpts for the re-run requests too.
+      const responseExcerpts = new Map<string, string>();
       const result = await runCollectionEngine(
         { ...selected, requests: failedRequests } as Collection,
         baseContext,
         {
-          executor: createRunnerExecutor({
-            workspaceId: activeWorkspaceId,
-            signal: controller.signal,
-            serverSide: runMethod === "local",
-          }),
+          executor: async (req) => {
+            const response = await baseExecutor(req);
+            const excerpt = excerptResponseBody(response.body);
+            if (excerpt) responseExcerpts.set(`${req.method} ${req.url}`, excerpt);
+            return response;
+          },
           iterations,
           signal: controller.signal,
           stopOnFailure,
@@ -723,21 +1027,33 @@ export default function RunnerPage() {
             if (!controller.signal.aborted) {
               setProgress(Math.round((completed / total) * 100));
               setCurrentExecutingName(res.requestName);
+              setProgressCounts({ completed, total });
             }
           },
         },
       );
-      const merged = {
+      // R6: honest merge — the results array keeps one entry per original
+      // request, so the summary is recomputed from the merged results (a
+      // sub-run summary would only cover the failed subset). startedAt is
+      // preserved; durations are accumulated and flagged "cumulative".
+      const mergedResults = report.results.map((r) => {
+        const replacement = result.results.find((rr) => rr.requestId === r.requestId);
+        if (!replacement) return r;
+        if (replacement.responseBodyExcerpt) return replacement;
+        const req = failedRequests.find((q) => q.id === r.requestId);
+        const excerpt = req ? responseExcerpts.get(`${req.method} ${req.url}`) : undefined;
+        return excerpt ? { ...replacement, responseBodyExcerpt: excerpt } : replacement;
+      });
+      const merged: CollectionRunReport = {
         ...report,
-        results: report.results.map((r) => {
-          const replacement = result.results.find((rr) => rr.requestId === r.requestId);
-          return replacement ?? r;
-        }),
-        summary: result.summary,
-        totalDurationMs: result.totalDurationMs,
+        results: mergedResults,
+        summary: summarizeResults(mergedResults),
+        totalDurationMs: report.totalDurationMs + result.totalDurationMs,
         completedAt: result.completedAt,
+        durationKind: "cumulative",
       };
       setReport(merged);
+      persistRunReport(merged);
       setProgress(controller.signal.aborted ? 0 : 100);
     } catch (err) {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err));
@@ -835,7 +1151,34 @@ export default function RunnerPage() {
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 sm:absolute sm:right-6 sm:top-1/2 sm:mt-0 sm:-translate-y-1/2 sm:border-0 sm:pt-0">
             <EnvironmentSelector />
-            {report && (
+            {/* R7c: reload a previous run report (read-only) */}
+            {runHistory.length > 0 && (
+              <Select value="" onValueChange={loadHistoricalRun} disabled={isRunning}>
+                <SelectTrigger className="h-8 w-full max-w-[240px] gap-1.5 bg-muted/50 text-xs shadow-none">
+                  <History className="size-3.5 shrink-0 text-muted-foreground" />
+                  <SelectValue
+                    placeholder={t(RUNNER_KEYS.previousRuns, {
+                      defaultValue: "Runs précédents",
+                    })}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {runHistory.map((entry) => (
+                    <SelectItem key={entry.savedAt} value={String(entry.savedAt)}>
+                      <span className="max-w-[160px] truncate font-medium">
+                        {entry.report.collectionName}
+                      </span>
+                      <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+                        {new Date(entry.savedAt).toLocaleString()} · {entry.report.summary.passed}/
+                        {entry.report.summary.total}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {/* R5: result access stays available during a run (progress view) */}
+            {(report || isRunning) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -843,7 +1186,9 @@ export default function RunnerPage() {
                 className="gap-1.5 text-xs"
               >
                 <ListChecks className="size-3.5 text-primary" />
-                Voir le résultat
+                {isRunning
+                  ? t(RUNNER_KEYS.viewProgress, { defaultValue: "Voir la progression" })
+                  : "Voir le résultat"}
               </Button>
             )}
           </div>
@@ -880,13 +1225,25 @@ export default function RunnerPage() {
               )}
             >
               {isRunning
-                ? "En cours"
+                ? `En cours · ${progress}%`
                 : report
                   ? hasFailures
                     ? "À vérifier"
                     : "Prêt"
                   : "En attente"}
             </span>
+            {/* R5: Stop stays reachable outside the modal while a run is active */}
+            {isRunning && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                className="mt-2 h-6 gap-1 border-destructive/30 px-2 text-[11px] text-destructive"
+              >
+                <CircleSlash className="size-3" />
+                {t("common.cancel")}
+              </Button>
+            )}
           </div>
           <div className="bg-card px-3 py-3 sm:px-4">
             <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -901,7 +1258,23 @@ export default function RunnerPage() {
               Durée
             </span>
             <span className="mt-1 block font-mono text-sm font-semibold text-foreground">
-              {report?.totalDurationMs != null ? formatDuration(report.totalDurationMs) : "—"}
+              {report?.totalDurationMs != null ? (
+                <>
+                  {formatDuration(report.totalDurationMs)}
+                  {/* R6: honest labelling when durations are summed across passes */}
+                  {report.durationKind === "cumulative" && (
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                      (
+                      {t(RUNNER_KEYS.cumulativeDuration, {
+                        defaultValue: "durée cumulée",
+                      })}
+                      )
+                    </span>
+                  )}
+                </>
+              ) : (
+                "—"
+              )}
             </span>
           </div>
         </div>
@@ -1258,9 +1631,20 @@ export default function RunnerPage() {
                       max="100"
                       value={iterationsCount}
                       onChange={(e) => setIterationsCount(Math.max(1, Number(e.target.value)))}
-                      className="h-8 text-xs font-mono"
-                      disabled={isRunning}
+                      className={cn(
+                        "h-8 text-xs font-mono",
+                        datasetRows.length > 0 && "opacity-50",
+                      )}
+                      disabled={isRunning || datasetRows.length > 0}
                     />
+                    {/* R14: honest hint when the dataset takes precedence */}
+                    {datasetRows.length > 0 && (
+                      <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+                        {t(RUNNER_KEYS.iterationsIgnored, {
+                          defaultValue: "Ignoré : dataset actif",
+                        })}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1304,6 +1688,62 @@ export default function RunnerPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* R13: dataset diagnostics — filename, preview, placeholder coverage */}
+                {(datasetFileName || datasetError || datasetRows.length > 0) && (
+                  <div className="space-y-2">
+                    {datasetFileName && (
+                      <p className="truncate font-mono text-[11px] text-muted-foreground">
+                        <span className="font-semibold text-foreground">{datasetFileName}</span> ·{" "}
+                        {datasetRows.length} rows
+                      </p>
+                    )}
+                    {datasetPreviewColumns.length > 0 && (
+                      <div className="overflow-x-auto rounded-md border border-border bg-muted/10">
+                        <table className="w-full text-left font-mono text-[10px]">
+                          <thead className="bg-muted/40 text-muted-foreground">
+                            <tr>
+                              {datasetPreviewColumns.map((col) => (
+                                <th key={col} className="whitespace-nowrap px-2 py-1 font-semibold">
+                                  {col}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {datasetPreviewRows.map((row, ri) => (
+                              <tr key={ri} className="border-t border-border/60">
+                                {datasetPreviewColumns.map((col) => (
+                                  <td
+                                    key={col}
+                                    className="max-w-[120px] truncate px-2 py-1 text-foreground"
+                                    title={row[col]}
+                                  >
+                                    {row[col]}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {unmatchedDatasetColumns && (
+                      <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-snug text-warning">
+                        {t(RUNNER_KEYS.datasetNoMatch, {
+                          defaultValue:
+                            "Aucune colonne du dataset ne correspond aux variables {{placeholderSyntax}} des requêtes sélectionnées.",
+                          placeholderSyntax: "{{…}}",
+                        })}
+                      </div>
+                    )}
+                    {datasetError && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] leading-snug text-destructive">
+                        {datasetError}
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1461,7 +1901,10 @@ export default function RunnerPage() {
               className="w-full h-12 text-base font-bold gap-2 shadow-md bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-all"
             >
               <Play className="size-5 fill-current" />
-              Start run ({selectedCount} request{selectedCount > 1 ? "s" : ""})
+              {/* R14: show the real execution count when the dataset drives iterations */}
+              {runType === "functional" && datasetRows.length > 0
+                ? `Start run (${selectedCount * datasetRows.length} executions)`
+                : `Start run (${selectedCount} request${selectedCount > 1 ? "s" : ""})`}
             </Button>
           </div>
         </div>
@@ -1495,6 +1938,15 @@ export default function RunnerPage() {
                       <>
                         <span>•</span>
                         <span className="font-mono">{formatDuration(report.totalDurationMs)}</span>
+                        {report.durationKind === "cumulative" && (
+                          <span className="text-muted-foreground">
+                            (
+                            {t(RUNNER_KEYS.cumulativeDuration, {
+                              defaultValue: "durée cumulée",
+                            })}
+                            )
+                          </span>
+                        )}
                       </>
                     )}
                   </DialogDescription>
@@ -1524,8 +1976,14 @@ export default function RunnerPage() {
                   {currentExecutingName && (
                     <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
                       <ChevronRight className="size-3 text-orange-500" />
-                      {t("runner.currentlyExecuting")}{" "}
+                      {/* R15: honest label — the shown request has completed, it is not "in progress" */}
+                      {t(RUNNER_KEYS.lastCompleted, { defaultValue: "Terminée :" })}
                       <span className="text-foreground font-medium">{currentExecutingName}</span>
+                      {progressCounts && (
+                        <span className="font-mono">
+                          ({progressCounts.completed}/{progressCounts.total})
+                        </span>
+                      )}
                     </p>
                   )}
                   <div className="flex justify-end pt-2">
@@ -1670,13 +2128,20 @@ export default function RunnerPage() {
                       </p>
                     ) : (
                       <Accordion type="multiple" className="w-full">
-                        {filteredResults.map((res) => (
-                          <RequestResultItem
-                            key={res.requestId}
-                            result={res}
-                            accordionValue={`item-${res.requestId}`}
-                          />
-                        ))}
+                        {filteredResults.map((res) => {
+                          const req = orderedRequests.find((r) => r.id === res.requestId);
+                          return (
+                            <RequestResultItem
+                              key={res.requestId}
+                              result={res}
+                              accordionValue={`item-${res.requestId}`}
+                              endpoint={req ? `${req.method} ${req.url}` : undefined}
+                              responseBodyExcerpt={res.responseBodyExcerpt}
+                              askAI={runnerAskAI}
+                              onApplyCorrection={handleApplyRunnerCorrection}
+                            />
+                          );
+                        })}
                       </Accordion>
                     )}
                   </div>
@@ -1687,7 +2152,7 @@ export default function RunnerPage() {
             {/* Modal Footer */}
             <DialogFooter className="p-3 border-t bg-muted/20 flex flex-row items-center justify-between sm:justify-between">
               <div className="flex items-center gap-2">
-                {report && hasFailures && !isRunning && (
+                {report && hasFailures && !isRunning && !isHistoricalView && (
                   <Button
                     variant="outline"
                     size="sm"

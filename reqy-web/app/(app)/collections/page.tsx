@@ -30,6 +30,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function CollectionsPage() {
+  // Clés i18n locales (absentes des fichiers de locale ; fallback FR inline).
+  const PAGE_KEYS = {
+    exportCancelled: "collections.toast.exportCancelled",
+  } as const;
+
   const router = useRouter();
   const { t } = useTranslation();
   const {
@@ -67,6 +72,8 @@ export default function CollectionsPage() {
   const [exportingPostman, setExportingPostman] = useState(false);
   const [exportingOpenApi, setExportingOpenApi] = useState(false);
   const [openApiExportOpen, setOpenApiExportOpen] = useState(false);
+  // R11 — id de la dernière collection importée, pour scroll + highlight
+  const [highlightedCollectionId, setHighlightedCollectionId] = useState<string | null>(null);
 
   // Check Postman connection status (re-check on focus to catch login from other tabs/sections)
   useEffect(() => {
@@ -160,6 +167,9 @@ export default function CollectionsPage() {
             ? t("collections.toast.postmanRenamed", { old: collection.name })
             : undefined,
     });
+
+    // R11 — orienter l'utilisateur vers la collection fraîchement créée
+    setHighlightedCollectionId(newCollectionId);
   };
 
   const handleExportCollectionsToPostman = async (selectedCollectionIds: string[]) => {
@@ -339,6 +349,7 @@ export default function CollectionsPage() {
     }>,
   ) => {
     let createdCount = 0;
+    let firstCreatedId: string | null = null;
     for (const col of incomingCollections) {
       const uniqueName = resolveUniqueCollectionName(col.name, existingCollectionNames);
       existingCollectionNames.push(uniqueName);
@@ -348,6 +359,7 @@ export default function CollectionsPage() {
         icon: col.icon || "package",
         description: col.description,
       });
+      if (firstCreatedId === null) firstCreatedId = newCollectionId;
 
       const tempToRealFolderId = new Map<string, string>();
       for (const folder of col.folders ?? []) {
@@ -386,6 +398,9 @@ export default function CollectionsPage() {
       }),
       meta: { event: "importExport" },
     });
+
+    // R11 — orienter l'utilisateur vers la première collection créée
+    if (firstCreatedId !== null) setHighlightedCollectionId(firstCreatedId);
   };
 
   const handleExportOpenApi = async (exportOptions?: { inferFromHistory?: boolean }) => {
@@ -424,8 +439,17 @@ export default function CollectionsPage() {
         await writable.close();
         setExportingOpenApi(false);
         return;
-      } catch {
-        // If user cancels save dialog or browser doesn't support it, fallback to download
+      } catch (err) {
+        // R8bis — annulation utilisateur : sortie propre, pas de téléchargement
+        if ((err as DOMException | undefined)?.name === "AbortError") {
+          toast({
+            title: t(PAGE_KEYS.exportCancelled, { defaultValue: "Export annulé" }),
+            meta: { event: "importExport" },
+          });
+          setExportingOpenApi(false);
+          return;
+        }
+        // Autres erreurs : fallback téléchargement navigateur ci-dessous
       }
     }
 
@@ -603,6 +627,7 @@ export default function CollectionsPage() {
 
       <CollectionsPanel
         collections={collections}
+        highlightCollectionId={highlightedCollectionId}
         onSelectRequest={handleSelectRequest}
         onSelectAndSendRequest={handleSelectAndSendRequest}
         onRunCollection={handleRunCollection}

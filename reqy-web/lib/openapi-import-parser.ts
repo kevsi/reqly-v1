@@ -254,11 +254,24 @@ function parseToJson(contents: string, _fileName?: string): unknown {
     // `load` already rejects `!!js/*` custom tags by default; pinning the
     // schema makes that explicit for untrusted OpenAPI specs.
     return yaml.load(contents, { schema: yaml.JSON_SCHEMA });
-  } catch {
+  } catch (err) {
     throw new Error(
-      "Impossible de parser le fichier. Format non supporté (attendu: JSON ou YAML).",
+      `Impossible de parser le fichier. Format non supporté (attendu: JSON ou YAML).${formatYamlErrorLocation(err)}`,
+      { cause: err },
     );
   }
+}
+
+/** Extract "(ligne N[, colonne M])" from a js-yaml YAMLException mark (0-based). */
+export function formatYamlErrorLocation(err: unknown): string {
+  const mark = (err as { mark?: { line?: number; column?: number } } | null)?.mark;
+  if (mark && typeof mark.line === "number" && mark.line >= 0) {
+    if (typeof mark.column === "number" && mark.column >= 0) {
+      return ` (ligne ${mark.line + 1}, colonne ${mark.column + 1})`;
+    }
+    return ` (ligne ${mark.line + 1})`;
+  }
+  return "";
 }
 
 function extractBaseUrl(servers?: Array<Record<string, unknown>>): string | undefined {

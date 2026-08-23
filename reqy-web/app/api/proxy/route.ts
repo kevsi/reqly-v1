@@ -156,6 +156,44 @@ function isFetchNetworkError(error: unknown): boolean {
   );
 }
 
+type UpstreamFailureCode = "TARGET_UNREACHABLE" | "CERTIFICATE_ERROR";
+
+/**
+ * Classifie une erreur fetch/undici en remontant la chaîne de `cause`
+ * (undici enveloppe les erreurs socket/TLS dans un TypeError "fetch failed").
+ */
+function classifyUpstreamError(error: unknown): UpstreamFailureCode | null {
+  const codes: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 5; depth += 1) {
+    const code = (current as NodeJS.ErrnoException).code;
+    if (typeof code === "string") codes.push(code);
+    current = (current as { cause?: unknown }).cause;
+  }
+  if (
+    codes.some((code) =>
+      ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "UND_ERR_CONNECT_TIMEOUT"].includes(code),
+    )
+  ) {
+    return "TARGET_UNREACHABLE";
+  }
+  if (codes.some((code) => code.startsWith("OPENSSL_") || code.includes("CERT_"))) {
+    return "CERTIFICATE_ERROR";
+  }
+  const causeMessage =
+    error instanceof Error && error.cause instanceof Error ? error.cause.message : "";
+  const message = `${error instanceof Error ? error.message : String(error)} ${causeMessage}`;
+  if (/OPENSSL_|CERT_|certificate/i.test(message)) return "CERTIFICATE_ERROR";
+  if (
+    /ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|connect timeout|socket hang up/i.test(
+      message,
+    )
+  ) {
+    return "TARGET_UNREACHABLE";
+  }
+  return null;
+}
+
 function sanitizeUrlForDebug(url: URL): string {
   let sanitized = `${url.protocol}//${url.hostname}`;
   if (url.port) sanitized += `:${url.port}`;
@@ -579,7 +617,24 @@ export async function POST(request: NextRequest) {
       return structuredError("Request timed out", "TIMEOUT", 504);
     }
 
-    const detailMsg = error instanceof Error ? error.message : String(error);
+    const rawDetailMsg = error instanceof Error ? error.message : String(error);
+    // Undici wraps the real socket/TLS error in a generic TypeError("fetch failed"):
+    // surface the root cause message too, or the client-side detail is useless.
+    const causeDetailMsg =
+      error instanceof Error && error.cause instanceof Error ? ` (${error.cause.message})` : "";
+    const detailMsg = `${rawDetailMsg}${causeDetailMsg}`;
+
+    // Undici/fetch network failure with a known shape: surface an actionable
+    // code instead of the generic BAD_GATEWAY. TIMEOUT (AbortError) is handled
+    // above and keeps its own 504.
+    const upstreamCode = classifyUpstreamError(error);
+    if (upstreamCode) {
+      const label =
+        upstreamCode === "CERTIFICATE_ERROR"
+          ? "Upstream TLS certificate error"
+          : "Target host unreachable";
+      return structuredError(`${label}: ${detailMsg}`, upstreamCode, 502);
+    }
 
     if (isFetchNetworkError(error)) {
       const resp = structuredError(`Upstream request failed: ${detailMsg}`, "BAD_GATEWAY", 502);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Search, Bell, Clock, Command, GitBranch, X, Sparkles, Menu } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -26,12 +26,13 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Radio, Braces } from "lucide-react";
+import { Radio, Braces, Keyboard } from "lucide-react";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
 import { useRouter } from "next/navigation";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
 import { useTranslation } from "react-i18next";
+import { COMMAND_PALETTE_EVENT, SHORTCUTS_MODAL_EVENT } from "@/hooks/use-shortcuts";
 
 interface ApiHeaderProps {
   /** Ouvre le drawer de navigation sur mobile. */
@@ -71,17 +72,14 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
   const [pendingRemoveNotifId, setPendingRemoveNotifId] = useState<string | null>(null);
   const [showClearNotifConfirm, setShowClearNotifConfirm] = useState(false);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-      e.preventDefault();
-      setSearchOpen(true);
-    }
-  }, []);
-
+  // Ctrl+K est géré de façon centralisée par ShortcutsRegistrar
+  // (SHORTCUT_DEFS "search") → événement COMMAND_PALETTE_EVENT. Un seul
+  // listener global, aucun doublon ad-hoc ici.
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    const openPalette = () => setSearchOpen(true);
+    window.addEventListener(COMMAND_PALETTE_EVENT, openPalette);
+    return () => window.removeEventListener(COMMAND_PALETTE_EVENT, openPalette);
+  }, []);
 
   return (
     <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-gradient-to-r from-background via-muted/10 to-background px-3 sm:px-4 @container">
@@ -97,7 +95,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
             <Menu className="size-5" />
           </button>
         )}
-        <div className="group/logo hidden size-8 items-center justify-center rounded-lg border border-border bg-muted/30 transition-all duration-200 hover:border-primary/30 hover:bg-primary/5 sm:flex">
+        <div className="group/logo hidden size-8 items-center justify-center rounded-lg border border-border bg-muted/30 transition-all duration-200 hover:border-primary/30 hover:bg-primary/5 @min-[22rem]:flex">
           <div className="size-4 rounded-sm bg-foreground transition-all duration-200 group-hover/logo:bg-primary" />
         </div>
         <WorkspaceSelector />
@@ -108,11 +106,16 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
         <button
           onClick={() => setSearchOpen(true)}
           aria-label={t("header.search")}
-          className="group/search relative transition-all duration-200 hover:scale-[1.02]"
+          data-testid="command-palette-trigger"
+          className="group/search relative transition-all duration-200 hover:scale-[1.02] min-w-0"
           title={t("header.searchTitle")}
         >
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none transition-colors group-hover/search:text-muted-foreground hidden @min-[40rem]:block" />
-          <div className="hidden h-9 w-56 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20 @min-[40rem]:flex lg:w-80">
+          {/* Largeur pilotée par des container queries (et non lg:) : avec les deux
+              sidebars ouvertes la fenêtre peut rester large alors que le header
+              lui-même est étroit — un breakpoint viewport provoquerait un
+              débordement clippé par overflow-x-hidden. */}
+          <div className="hidden h-9 w-52 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20 @min-[40rem]:flex @min-[46rem]:w-64 @min-[52rem]:w-80">
             <span className="flex-1 text-left text-muted-foreground/70">
               {t("header.searchPlaceholder")}
             </span>
@@ -158,6 +161,18 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
               >
                 <GitBranch className="mr-2 size-4" />
                 <span>{t("header.openGit")}</span>
+              </CommandItem>
+            </CommandGroup>
+            <CommandGroup heading={t("header.shortcutsGroup", { defaultValue: "Aide" })}>
+              <CommandItem
+                onSelect={() => {
+                  setSearchOpen(false);
+                  window.dispatchEvent(new CustomEvent(SHORTCUTS_MODAL_EVENT));
+                }}
+                data-testid="command-palette-shortcuts"
+              >
+                <Keyboard className="mr-2 size-4" />
+                <span>{t("header.keyboardShortcuts", { defaultValue: "Raccourcis clavier" })}</span>
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading={t("header.history")}>

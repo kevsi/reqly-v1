@@ -324,12 +324,35 @@ function translateProxyError(
         message: "Trop de requêtes envoyées : patientez une minute avant de réessayer.",
         detail,
       };
-    case "BLOCKED_SSRF":
+    case "SSRF_BLOCKED":
+      return {
+        message: i18n.t("proxy.ssrfBlockedLocal", {
+          defaultValue:
+            "URL refusée par le proxy : localhost et adresses privées sont bloqués en mode web. En développement, utilise le mode dev ou définis ALLOW_LOCAL_HOSTS=true pour tester localhost.",
+        }),
+        detail,
+      };
     case "INVALID_URL":
     case "DNS_ERROR":
       return {
         message:
           "URL de destination refusée par le proxy (adresse privée ou invalide) : vérifiez l'adresse demandée.",
+        detail,
+      };
+    case "TARGET_UNREACHABLE":
+      return {
+        message: i18n.t("proxy.targetUnreachable", {
+          defaultValue:
+            "Serveur cible injoignable (connexion refusée ou DNS introuvable) — vérifie que le service tourne sur ce port et que l'URL est correcte.",
+        }),
+        detail,
+      };
+    case "CERTIFICATE_ERROR":
+      return {
+        message: i18n.t("proxy.certificateError", {
+          defaultValue:
+            "Certificat TLS invalide ou auto-signé — corrige le certificat du serveur cible (ou désactive la vérification SSL côté desktop pour tester).",
+        }),
         detail,
       };
     case "TIMEOUT":

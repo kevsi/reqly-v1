@@ -9,6 +9,8 @@ export interface RunnerExecutorOptions {
   serverSide?: boolean;
   /** Abort the active web request when the user stops a run. */
   signal?: AbortSignal;
+  /** Progress callback invoked once per settled request (success or failure). */
+  onRequestDone?: (completed: number, total: number) => void;
 }
 
 function parseResponseBody(body: string, headers: Record<string, string>): unknown {
@@ -170,6 +172,7 @@ export async function runRequestsConcurrent(
     new Array(requests.length);
 
   let cursor = 0;
+  let completed = 0;
   async function worker(): Promise<void> {
     while (true) {
       const idx = cursor++;
@@ -180,6 +183,8 @@ export async function runRequestsConcurrent(
       } catch (e) {
         results[idx] = { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
+      completed++;
+      options.onRequestDone?.(completed, requests.length);
     }
   }
 

@@ -54,6 +54,38 @@ export function hasUnresolvedPlaceholders(text: string): boolean {
   return /\{\{\s*[^}]+\s*\}\}/.test(text);
 }
 
+/** Placeholder {{…}} resté littéral après interpolation, rattaché à son champ. */
+export interface UnresolvedPlaceholder {
+  /** Champ d'origine : "url", "body", "authToken" ou "header:<Nom>". */
+  field: string;
+  /** Nom de la variable non résolue (sans accolades). */
+  name: string;
+}
+
+const PLACEHOLDER_REGEX = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+/**
+ * Liste les placeholders restés littéraux par champ (même sémantique que
+ * `hasUnresolvedPlaceholders`, donc qu'`interpolate()` qui ne remplace
+ * qu'une variable active portant exactement ce nom).
+ */
+export function extractUnresolvedPlaceholders(
+  fields: Array<{ field: string; text: string | null | undefined }>,
+): UnresolvedPlaceholder[] {
+  const out: UnresolvedPlaceholder[] = [];
+  for (const { field, text } of fields) {
+    if (!text) continue;
+    const seen = new Set<string>();
+    for (const match of text.matchAll(PLACEHOLDER_REGEX)) {
+      const name = match[1];
+      if (seen.has(name)) continue;
+      seen.add(name);
+      out.push({ field, name });
+    }
+  }
+  return out;
+}
+
 /** Forme typée de la réponse JSON renvoyée par le proxy. */
 export interface ProxySafeResult {
   body?: unknown;
@@ -65,7 +97,7 @@ export interface ProxySafeResult {
   durationMs?: number;
   encoding?: string;
   error?: string;
-  /** Code machine de l'erreur (ex. RATE_LIMIT_EXCEEDED, BLOCKED_SSRF, TIMEOUT). */
+  /** Code machine de l'erreur (ex. RATE_LIMIT_EXCEEDED, SSRF_BLOCKED, TIMEOUT). */
   code?: string;
 }
 

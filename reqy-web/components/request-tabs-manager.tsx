@@ -31,13 +31,35 @@ import { toast } from "@/hooks/use-toast";
 import { RestSnapshotModal } from "@/components/rest-snapshot-modal";
 import { Camera, AlertTriangle } from "lucide-react";
 import {
-  suggestionToAssertion,
+  convertSuggestion,
+  assertionMatchesResult,
   type CorrectionSuggestion,
+  type IncompleteReason,
 } from "@/src/ai/cloud-engine/actions/propose-correction";
 import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions";
 import type { TestResult } from "@/lib/types";
 import { formatDataSize } from "@/lib/network/format";
 import { useTranslation } from "react-i18next";
+import { Play } from "lucide-react";
+
+/** Translated explanation for an incomplete correction suggestion. */
+function incompleteReasonLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  reason: IncompleteReason,
+): string {
+  switch (reason) {
+    case "no_usable_expected_status":
+      return t("assertion.incompleteNoExpectedStatus", {
+        defaultValue: "valeur attendue (code statut) manquante ou inexploitable",
+      });
+    case "no_usable_response_time_value":
+      return t("assertion.incompleteNoResponseTime", {
+        defaultValue: "seuil de temps de réponse manquant ou inexploitable",
+      });
+    default:
+      return t("assertion.incompleteUnknown", { defaultValue: "suggestion inexploitable" });
+  }
+}
 
 /** Parse a response body string into JSON; returns undefined when not JSON. */
 export function RequestTabsManager() {
@@ -284,13 +306,58 @@ export function RequestTabsManager() {
         toast({ title: t("runner.assertionNotFound"), variant: "destructive" });
         return;
       }
-      const corrected = suggestionToAssertion(suggestion, original);
+      // Anchor guard: if the assertion at the computed index no longer matches
+      // the failed result the suggestion was built from (user edited the list
+      // in between), refuse instead of silently overwriting another assertion.
+      if (!assertionMatchesResult(original, result)) {
+        toast({
+          title: t("assertion.correctionMismatchTitle", {
+            defaultValue: "Correction non appliquée",
+          }),
+          description: t("assertion.correctionMismatchBody", {
+            defaultValue:
+              "L'assertion à cet emplacement ne correspond plus à celle analysée. Relancez les tests puis redemandez une correction.",
+          }),
+          variant: "destructive",
+        });
+        return;
+      }
+      // Never fall back to a trivial assertion when the model gave no usable
+      // expected value — surface the incompleteness instead.
+      const conversion = convertSuggestion(suggestion, original);
+      if (conversion.status === "incomplete") {
+        toast({
+          title: t("assertion.incompleteSuggestion", {
+            defaultValue: "Suggestion incomplète — application impossible.",
+          }),
+          description: incompleteReasonLabel(t, conversion.reason),
+          variant: "destructive",
+        });
+        return;
+      }
       updateTab(activeTab.id, {
-        runnerAssertions: assertions.map((a, i) => (i === index ? corrected : a)),
+        runnerAssertions: assertions.map((a, i) => (i === index ? conversion.assertion : a)),
       } as Parameters<typeof updateTab>[1]);
-      toast({ title: t("runner.assertionCorrected") });
+      toast({
+        title: t("runner.assertionCorrected"),
+        description: (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+            data-testid="rerun-after-correction"
+            onClick={(e) => {
+              e.stopPropagation();
+              void sendRequest();
+            }}
+          >
+            <Play className="size-3" />
+            {t("runner.rerun", { defaultValue: "Relancer" })}
+          </button>
+        ),
+        onClick: () => void sendRequest(),
+      });
     },
-    [activeTab, updateTab, t],
+    [activeTab, updateTab, t, sendRequest],
   );
 
   useEffect(() => {
@@ -701,6 +768,12 @@ export function RequestTabsManager() {
               history={history}
               onSelectRequest={(item) => {
                 loadRequestIntoActiveTab(item);
+                setHistoryOpen(false);
+              }}
+              // ↺ = Rejouer réellement : charge ET envoie. Le clic-ligne
+              // reste un simple chargement sans envoi.
+              onReplayRequest={(item) => {
+                void loadAndSendRequest(item);
                 setHistoryOpen(false);
               }}
               onClearHistory={clearHistory}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Check, ChevronsUpDown, Plus, Settings2, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Eye, EyeOff, Plus, Settings2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useRequestStore, type EnvironmentVariable } from "@/hooks/use-request-store";
@@ -60,8 +60,9 @@ export function EnvironmentSelector() {
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [editingEnvId, setEditingEnvId] = useState<string | null>(null);
 
-  // Find active env
-  const activeEnv = environments.find((e) => e.id === activeEnvironmentId) || environments[0];
+  // Find active env — strict: no silent fallback to the first environment,
+  // execution without an active environment is blocked downstream.
+  const activeEnv = environments.find((e) => e.id === activeEnvironmentId);
 
   const handleCreateNew = () => {
     const newId = addEnvironment({
@@ -81,18 +82,22 @@ export function EnvironmentSelector() {
             variant="outline"
             size="sm"
             aria-label={t("env.selectorAria")}
-            className="h-8 gap-2 border-dashed font-normal"
+            title={activeEnv ? activeEnv.name : t("env.noEnvironment")}
+            className="h-8 gap-2 border-dashed font-normal min-w-0"
           >
             <div
               className={cn(
-                "size-2 rounded-full",
+                "size-2 rounded-full shrink-0",
                 activeEnv
                   ? envColors[activeEnv.color] || "bg-muted-foreground"
-                  : "bg-muted-foreground",
+                  : "border border-dashed border-muted-foreground bg-transparent",
               )}
             />
-            {activeEnv ? activeEnv.name : t("env.noEnvironment")}
-            <ChevronsUpDown className="size-3 text-muted-foreground" />
+            {/* Compacte en conteneur étroit : pastille seule (le point sert d'icône). */}
+            <span className="max-w-[140px] truncate @max-[42rem]:hidden">
+              {activeEnv ? activeEnv.name : t("env.noEnvironment")}
+            </span>
+            <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[200px]">
@@ -311,7 +316,7 @@ function ManageEnvironmentsDialog({
                       <div className="w-6" />
                       <div>VARIABLE</div>
                       <div>VALUE</div>
-                      <div className="w-8" />
+                      <div className="w-[72px]" />
                     </div>
                     {selectedEnv.variables.length === 0 ? (
                       <div className="p-8 text-center text-sm text-muted-foreground">
@@ -341,18 +346,47 @@ function ManageEnvironmentsDialog({
                             value={v.value}
                             onChange={(value) => updateVar(i, "value", value)}
                             placeholder="value"
+                            type={v.secret ? "password" : "text"}
                             className="h-8 font-mono text-xs"
                             suggestions={envValSuggestions}
                             emptyMessage=""
                           />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeVar(i)}
-                            className="size-8 opacity-0 group-hover:opacity-100 text-destructive"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => updateVar(i, "secret", !v.secret)}
+                              className={cn(
+                                "size-8 shrink-0",
+                                v.secret ? "text-primary" : "text-muted-foreground",
+                              )}
+                              aria-label={t(
+                                v.secret ? "env.showSecretValue" : "env.hideSecretValue",
+                                {
+                                  defaultValue: v.secret
+                                    ? "Afficher la valeur"
+                                    : "Masquer la valeur",
+                                },
+                              )}
+                              title={t(v.secret ? "env.showSecretValue" : "env.hideSecretValue", {
+                                defaultValue: v.secret ? "Afficher la valeur" : "Masquer la valeur",
+                              })}
+                            >
+                              {v.secret ? (
+                                <Eye className="size-3.5" />
+                              ) : (
+                                <EyeOff className="size-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeVar(i)}
+                              className="size-8 opacity-0 group-hover:opacity-100 text-destructive"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       ))
                     )}

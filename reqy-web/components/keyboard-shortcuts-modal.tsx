@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Keyboard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SHORTCUT_DEFS, type ShortcutDef } from "@/lib/shortcut-defs";
+import { useShortcuts } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 
@@ -17,6 +18,11 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
     () => typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0,
   );
   const { t } = useTranslation();
+
+  // Afficher la configuration RÉELLE (raccourcis personnalisés inclus), pas
+  // uniquement les défauts. Le store réactif se met à jour dès qu'un
+  // raccourci est personnalisé/réinitialisé ailleurs dans l'app.
+  const { custom: customKeys } = useShortcuts();
 
   // Grouper les raccourcis par catégorie
   const categories = SHORTCUT_DEFS.reduce(
@@ -68,12 +74,9 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
               </h3>
               <div className="space-y-2">
                 {shortcuts.map((shortcut) => {
-                  const keyParts = formatKey(
-                    shortcut.defaultKeys.key,
-                    shortcut.defaultKeys.ctrl,
-                    shortcut.defaultKeys.shift,
-                    shortcut.defaultKeys.alt,
-                  );
+                  const combo = customKeys[shortcut.id] ?? shortcut.defaultKeys;
+                  const isCustom = customKeys[shortcut.id] !== undefined;
+                  const keyParts = formatKey(combo.key, combo.ctrl, combo.shift, combo.alt);
 
                   return (
                     <div
@@ -81,21 +84,33 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
                       className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <span className="text-sm text-foreground">{t(shortcut.descriptionKey)}</span>
-                      <div className="flex items-center gap-1">
-                        {keyParts.map((part, idx) => (
-                          <kbd
-                            key={idx}
-                            className={cn(
-                              "inline-flex items-center justify-center",
-                              "min-w-[1.75rem] h-7 px-2",
-                              "rounded border border-border bg-muted",
-                              "font-mono text-xs font-medium text-muted-foreground",
-                              "shadow-sm",
-                            )}
+                      <div className="flex items-center gap-2">
+                        {isCustom && (
+                          <span
+                            className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+                            title={t("settings.keyboard.customized", {
+                              defaultValue: "Personnalisé",
+                            })}
                           >
-                            {part}
-                          </kbd>
-                        ))}
+                            {t("settings.keyboard.customized", { defaultValue: "Personnalisé" })}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {keyParts.map((part, idx) => (
+                            <kbd
+                              key={idx}
+                              className={cn(
+                                "inline-flex items-center justify-center",
+                                "min-w-[1.75rem] h-7 px-2",
+                                "rounded border border-border bg-muted",
+                                "font-mono text-xs font-medium text-muted-foreground",
+                                "shadow-sm",
+                              )}
+                            >
+                              {part}
+                            </kbd>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   );

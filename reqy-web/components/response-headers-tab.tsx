@@ -10,10 +10,17 @@ interface ResponseHeadersTabProps {
   responseHeaders?: Record<string, string>;
 }
 
+/** Clé i18n locale (absente des fichiers de locale ; fallback FR inline). */
+const HEADERS_TAB_KEYS = {
+  copyHeader: "response.copyHeader",
+} as const;
+
 export const ResponseHeadersTab = memo(function ResponseHeadersTab({
   responseHeaders,
 }: ResponseHeadersTabProps) {
   const [copied, setCopied] = useState(false);
+  // R25-min — dernière ligne copiée (feedback par en-tête)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const { t } = useTranslation();
 
   const handleCopy = async () => {
@@ -26,6 +33,17 @@ export const ResponseHeadersTab = memo(function ResponseHeadersTab({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  };
+
+  // R25-min — copie au clic d'un seul en-tête (« key: value »)
+  const handleCopyRow = async (key: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(`${key}: ${value}`);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      setCopiedKey(null);
     }
   };
 
@@ -75,9 +93,24 @@ export const ResponseHeadersTab = memo(function ResponseHeadersTab({
             className="group/header flex items-start gap-3 rounded-lg border border-border/30 bg-muted/10 px-3.5 py-2.5 transition-all duration-200 hover:bg-muted/20 hover:border-border/60"
           >
             <span className="shrink-0 text-xs font-bold text-foreground/80">{key}:</span>
-            <span className="text-xs text-muted-foreground/80 break-all leading-relaxed">
+            <span className="flex-1 min-w-0 text-xs text-muted-foreground/80 break-all leading-relaxed">
               {value}
             </span>
+            {/* R25-min — copie granulaire par en-tête */}
+            <button
+              type="button"
+              onClick={() => void handleCopyRow(key, value)}
+              title={t(HEADERS_TAB_KEYS.copyHeader, { defaultValue: "Copier cet en-tête" })}
+              aria-label={t(HEADERS_TAB_KEYS.copyHeader, { defaultValue: "Copier cet en-tête" })}
+              className={cn(
+                "shrink-0 self-center rounded p-0.5 text-muted-foreground/40 transition-opacity duration-150",
+                "opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100",
+                "hover:text-foreground",
+                copiedKey === key && "text-success opacity-100",
+              )}
+            >
+              {copiedKey === key ? <Check className="size-3" /> : <Copy className="size-3" />}
+            </button>
           </div>
         ))}
       </div>
