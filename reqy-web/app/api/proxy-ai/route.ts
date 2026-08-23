@@ -3,6 +3,7 @@
  * Any provider, validation, timeout, or response-format change must be replicated in both paths.
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimiter, getRateLimitKey } from "./lib/rate-limit";
 import { structuredError } from "./lib/errors";

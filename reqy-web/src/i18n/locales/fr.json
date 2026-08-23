@@ -463,6 +463,7 @@
     "columns": "Colonnes",
     "file": "Fichier :",
     "clearDataset": "Effacer le jeu de données",
+    "currentlyExecuting": "En cours :",
     "pasteDataset": "Collez un tableau JSON d'objets ou des données CSV ici…\n\nExemple (JSON) :\n[{\"id\":\"1\",\"name\":\"Alice\"},{\"id\":\"2\",\"name\":\"Bob\"}]\n\nExemple (CSV) :\nid,name\n1,Alice\n2,Bob",
     "loadDataset": "Charger le jeu de données",
     "uploadFile": "Importer .json/.csv",
@@ -626,6 +627,8 @@
       "cancel": "Annuler",
       "delete": "Supprimer"
     },
+    "removeRequestTitle": "Supprimer la requête ?",
+    "removeRequestDescription": "La requête « {{name}} » sera retirée de la collection. Cette action est irréversible.",
     "row": {
       "renameFolder": "Renommer le dossier",
       "deleteFolder": "Supprimer le dossier",
@@ -644,8 +647,7 @@
       "delete": "Supprimer",
       "dragLabel": "Faire glisser {{name}}",
       "loadAndSend": "Charger et envoyer",
-      "removeRequest": "Supprimer la requête",
-      "deleteRequest": "Supprimer la requête « {{name}} » ?"
+      "removeRequest": "Supprimer la requête"
     },
     "folder": {
       "namePlaceholder": "Nom du dossier",
@@ -2150,6 +2152,8 @@
     "captures": "Captures",
     "changePort": "Changer le port",
     "clear": "Effacer",
+    "clearConfirmDescription": "Toutes les sessions capturées seront définitivement supprimées. Cette action est irréversible.",
+    "clearConfirmTitle": "Effacer toutes les captures ?",
     "collectionName": "Nom de la collection",
     "copied": "Copié",
     "copyAll": "Tout copier",

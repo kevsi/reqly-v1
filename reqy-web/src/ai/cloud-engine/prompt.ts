@@ -25,7 +25,9 @@ const MAX_BODY_CHARS = 2000;
 const MAX_RAG_CHARS = 4000;
 const MAX_RAG_CHUNKS = 8;
 
-function truncate(value: unknown): string {
+// Shared with AIModal / proxy tool-history so every surface sending external
+// data to the LLM reuses the SAME escaping (logic must stay identical).
+export function truncate(value: unknown): string {
   if (value == null) return "(empty)";
   const s = typeof value === "string" ? value : JSON.stringify(value);
   if (s.length <= MAX_BODY_CHARS) return s;
@@ -33,7 +35,7 @@ function truncate(value: unknown): string {
 }
 
 // SECURITY FIX H9: XML escape helper to prevent prompt injection
-function escapeXml(str: string): string {
+export function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

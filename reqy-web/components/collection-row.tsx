@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -344,6 +345,7 @@ export function CollectionRow({
     data: { type: "collection" as const, collectionId: collection.id },
   });
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [pendingRemoveRequest, setPendingRemoveRequest] = useState<RequestItem | null>(null);
 
   // ── Sortable request IDs ──
   const requestIds = collection.requests.map((r) => requestId(r.id));
@@ -371,7 +373,7 @@ export function CollectionRow({
               isSelected={selectedRequestIds.has(`${collection.id}::${req.id}`)}
               onSelect={() => onSelectRequest(req)}
               onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined}
-              onRemove={() => onRemoveRequest(collection.id, req.id)}
+              onRemove={() => setPendingRemoveRequest(req)}
               depth={0}
             />
           ))}
@@ -406,7 +408,7 @@ export function CollectionRow({
               isSelected={selectedRequestIds.has(`${collection.id}::${req.id}`)}
               onSelect={() => onSelectRequest(req)}
               onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined}
-              onRemove={() => onRemoveRequest(collection.id, req.id)}
+              onRemove={() => setPendingRemoveRequest(req)}
               depth={1}
             />
           ))}
@@ -420,7 +422,6 @@ export function CollectionRow({
     selectedRequestIds,
     onSelectRequest,
     onSelectAndSendRequest,
-    onRemoveRequest,
     onConfirmDelete,
     onDeleteFolder,
     onRenameFolder,
@@ -581,17 +582,30 @@ export function CollectionRow({
                     isSelected={selectedRequestIds.has(`${collection.id}::${req.id}`)}
                     onSelect={() => onSelectRequest(req)}
                     onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined}
-                    onRemove={() =>
-                      onConfirmDelete(t("collections.row.deleteRequest", { name: req.name }), () =>
-                        onRemoveRequest(collection.id, req.id),
-                      )
-                    }
+                    onRemove={() => setPendingRemoveRequest(req)}
                     depth={1}
                   />
                 ))}
           </SortableContext>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingRemoveRequest}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoveRequest(null);
+        }}
+        title={t("collections.removeRequestTitle")}
+        description={t("collections.removeRequestDescription", {
+          name: pendingRemoveRequest?.name,
+        })}
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => {
+          if (pendingRemoveRequest) onRemoveRequest(collection.id, pendingRemoveRequest.id);
+          setPendingRemoveRequest(null);
+        }}
+      />
 
       <FolderNameModal
         open={createFolderOpen}

@@ -43,7 +43,13 @@ import {
 } from "@/src/ai/cloud-engine/explain";
 
 import { streamLLM, type StreamLLMOptions } from "@/src/ai/cloud-engine/llm";
-import { type RetrievedChunk } from "@/src/ai/cloud-engine/prompt";
+import {
+  type RetrievedChunk,
+  isSensitiveName,
+  maskSensitivePayload,
+  escapeXml,
+  truncate,
+} from "@/src/ai/cloud-engine/prompt";
 import { extractCitations } from "@/src/ai/cloud-engine/citations";
 import { detectLanguage } from "@/src/ai/cloud-engine/language";
 import { cn } from "@/lib/utils";
@@ -101,6 +107,38 @@ export interface AIModalContext {
 interface AIModalProps extends AIModalContext {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/**
+ * SECURITY FIX: les prompts construits ici embarquent des données de réponse
+ * HTTP externes. Même traitement que le fix H9 de buildContextSummary :
+ * masquage des secrets (maskSensitivePayload), troncature à 2000 chars
+ * (truncate), échappement XML (escapeXml) et délimiteurs <response_body> /
+ * <response_headers> identiques au reste du code — pour éviter à la fois la
+ * fuite de secrets vers le LLM et l'injection indirecte de prompt.
+ */
+export function safeBodyForPrompt(body?: string): string {
+  if (!body) return "";
+  return `<response_body>\n${escapeXml(truncate(maskSensitivePayload(body)))}\n</response_body>`;
+}
+
+export function safeHeadersForPrompt(headers?: Record<string, string>): string {
+  if (!headers || Object.keys(headers).length === 0) return "{}";
+  const masked = maskSensitivePayload(headers);
+  const json =
+    masked && typeof masked === "object" && !Array.isArray(masked)
+      ? JSON.stringify(masked, null, 2)
+      : "{}";
+  return `<response_headers>\n${escapeXml(json)}\n</response_headers>`;
+}
+
+/** Headers sensibles (Authorization, cookies, clés API) filtrés avant tout envoi. */
+export function filterSecretHeaders(headers?: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers ?? {})) {
+    if (!isSensitiveName(k)) out[k] = v;
+  }
+  return out;
 }
 
 const TABS: Array<{ id: AiTab; label: string; icon: typeof Sparkles; desc: string }> = [
@@ -203,21 +241,21 @@ export function AIModal(props: AIModalProps) {
   const prompt = useMemo(() => {
     switch (activeTab) {
       case "analyse":
-        return `Analyse cette requête/réponse HTTP et liste les problèmes potentiels.\n\nMéthode: ${props.method}\nURL: ${props.url}\nStatus: ${props.responseStatus ?? "inconnu"}\n\nRéponse (extrait):\n${(props.responseBody ?? "").slice(0, 1000)}`;
+        return `Analyse cette requête/réponse HTTP et liste les problèmes potentiels.\n\nMéthode: ${props.method}\nURL: ${props.url}\nStatus: ${props.responseStatus ?? "inconnu"}\n\nRéponse (extrait):\n${safeBodyForPrompt(props.responseBody)}`;
       case "assistant": {
         const hasError = props.responseStatus != null && props.responseStatus >= 400;
         return hasError
-          ? `Debug cette réponse HTTP. Si le status indique une erreur (4xx/5xx), explique la cause probable et propose un fix concret.\n\n${props.method} ${props.url}\nStatus: ${props.responseStatus}\n\nBody:\n${(props.responseBody ?? "").slice(0, 2000)}`
+          ? `Debug cette réponse HTTP. Si le status indique une erreur (4xx/5xx), explique la cause probable et propose un fix concret.\n\n${props.method} ${props.url}\nStatus: ${props.responseStatus}\n\nBody:\n${safeBodyForPrompt(props.responseBody)}`
           : buildTestSuggestionsPrompt({
               method: props.method,
               url: props.url,
-              headers: props.responseHeaders,
+              headers: filterSecretHeaders(props.responseHeaders),
               body: props.requestBody,
               lastStatus: props.responseStatus,
             });
       }
       case "explain":
-        return `Explique les headers et le body de cette réponse de manière pédagogique. Si le body contient du JSON, annote la structure. Si un header Authorization est présent, décode le JWT.\n\n${props.method} ${props.url}\nStatus: ${props.responseStatus}\n\nHeaders: ${JSON.stringify(props.responseHeaders ?? {}, null, 2)}\n\nBody (extrait):\n${(props.responseBody ?? "").slice(0, 2000)}`;
+        return `Explique les headers et le body de cette réponse de manière pédagogique. Si le body contient du JSON, annote la structure. Si un header Authorization est présent, décode le JWT.\n\n${props.method} ${props.url}\nStatus: ${props.responseStatus}\n\nHeaders:\n${safeHeadersForPrompt(props.responseHeaders)}\n\nBody (extrait):\n${safeBodyForPrompt(props.responseBody)}`;
       default:
         return "";
     }

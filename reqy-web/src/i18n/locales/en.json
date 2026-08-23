@@ -463,6 +463,7 @@
     "columns": "Columns",
     "file": "File:",
     "clearDataset": "Clear dataset",
+    "currentlyExecuting": "In progress:",
     "pasteDataset": "Paste a JSON array of objects or CSV data here…\n\nExample (JSON):\n[{\"id\":\"1\",\"name\":\"Alice\"},{\"id\":\"2\",\"name\":\"Bob\"}]\n\nExample (CSV):\nid,name\n1,Alice\n2,Bob",
     "loadDataset": "Load dataset",
     "uploadFile": "Upload .json/.csv",
@@ -626,6 +627,8 @@
       "cancel": "Cancel",
       "delete": "Delete"
     },
+    "removeRequestTitle": "Remove request?",
+    "removeRequestDescription": "The request \"{{name}}\" will be removed from the collection. This action cannot be undone.",
     "row": {
       "renameFolder": "Rename folder",
       "deleteFolder": "Delete folder",
@@ -644,8 +647,7 @@
       "delete": "Delete",
       "dragLabel": "Drag {{name}}",
       "loadAndSend": "Load & send",
-      "removeRequest": "Remove request",
-      "deleteRequest": "Delete request \"{{name}}\"?"
+      "removeRequest": "Remove request"
     },
     "folder": {
       "namePlaceholder": "Folder name",
@@ -2150,6 +2152,8 @@
     "captures": "Captures",
     "changePort": "Change port",
     "clear": "Clear",
+    "clearConfirmDescription": "All captured sessions will be permanently deleted. This action cannot be undone.",
+    "clearConfirmTitle": "Clear all captured sessions?",
     "collectionName": "Collection name",
     "copied": "Copied",
     "copyAll": "Copy all",

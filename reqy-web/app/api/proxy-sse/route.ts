@@ -8,6 +8,7 @@ import { rateLimiter, getRateLimitKey } from "../proxy-ai/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const MAX_SSE_BODY_BYTES = 2 * 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 5 * 60 * 1000;

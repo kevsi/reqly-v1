@@ -1004,7 +1004,9 @@ export default function RunnerPage() {
                             onChange={() =>
                               toggleFolderRequestsSelection(folder.id, requestsInFolder)
                             }
+                            onClick={(e) => e.stopPropagation()}
                             disabled={isRunning}
+                            aria-label={folder.name}
                             className="rounded border-border text-primary size-3.5"
                           />
                           {isFolderExpanded ? (
@@ -1049,8 +1051,10 @@ export default function RunnerPage() {
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
-                                    onChange={() => {}}
+                                    onChange={() => toggleRequestSelection(req.id)}
+                                    onClick={(e) => e.stopPropagation()}
                                     disabled={isRunning}
+                                    aria-label={req.name}
                                     className="rounded border-border text-primary size-3 shrink-0"
                                   />
                                   <span
@@ -1112,8 +1116,10 @@ export default function RunnerPage() {
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => {}}
+                              onChange={() => toggleRequestSelection(req.id)}
+                              onClick={(e) => e.stopPropagation()}
                               disabled={isRunning}
+                              aria-label={req.name}
                               className="rounded border-border text-primary focus:ring-primary size-3.5 shrink-0"
                             />
                             <span
@@ -1518,7 +1524,7 @@ export default function RunnerPage() {
                   {currentExecutingName && (
                     <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
                       <ChevronRight className="size-3 text-orange-500" />
-                      Encours:{" "}
+                      {t("runner.currentlyExecuting")}{" "}
                       <span className="text-foreground font-medium">{currentExecutingName}</span>
                     </p>
                   )}
@@ -1536,8 +1542,8 @@ export default function RunnerPage() {
                 </div>
               )}
 
-              {/* Error Message */}
-              {error && !report && (
+              {/* Error Message (shown even when a previous report exists, e.g. re-run failure) */}
+              {error && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                   {error}
                 </div>

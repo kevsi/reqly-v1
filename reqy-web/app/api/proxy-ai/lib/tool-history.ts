@@ -1,3 +1,5 @@
+import { maskSensitivePayload, escapeXml, truncate } from "@/src/ai/cloud-engine/prompt";
+
 export type PreviousTurn = {
   assistantToolCalls: Array<{
     id: string;
@@ -26,6 +28,21 @@ export type GeminiChunk = {
   text?: string;
 };
 
+/**
+ * SECURITY FIX: les contenus de tool results proviennent de réponses HTTP
+ * externes et sont rejoués au modèle aux tours suivants (injection indirecte
+ * possible). Même traitement que le fix H9 de prompt.ts / buildContextSummary :
+ * masquage des secrets (maskSensitivePayload), troncature à 2000 chars
+ * (truncate, même limite que MAX_BODY_CHARS), échappement XML (escapeXml) et
+ * confinement entre délimiteurs <tool_result>. Le résultat reste une string,
+ * donc conforme aux schémas openai/deepseek/anthropic/gemini.
+ */
+function sanitizeToolContent(raw: string): string {
+  if (!raw) return "";
+  const masked = maskSensitivePayload(raw);
+  return `<tool_result>\n${escapeXml(truncate(masked))}\n</tool_result>`;
+}
+
 export function buildOpenAIToolHistory(
   prev?: PreviousTurn[],
   opts?: { includeReasoning?: boolean },
@@ -53,7 +70,7 @@ export function buildOpenAIToolHistory(
       msgs.push({
         role: "tool",
         tool_call_id: r.callId,
-        content: r.error ?? r.content,
+        content: sanitizeToolContent(r.error ?? r.content),
       });
     }
   }
@@ -81,7 +98,7 @@ export function buildAnthropicToolHistory(prev?: PreviousTurn[]): Record<string,
       content: turn.toolResults.map((r) => ({
         type: "tool_result",
         tool_use_id: r.callId,
-        content: r.error ?? r.content,
+        content: sanitizeToolContent(r.error ?? r.content),
       })),
     });
   }
@@ -111,7 +128,7 @@ export function buildGeminiToolHistory(prev?: PreviousTurn[]): Record<string, un
           {
             functionResponse: {
               name: r.name,
-              response: { content: r.error ?? r.content },
+              response: { content: sanitizeToolContent(r.error ?? r.content) },
             },
           },
         ],

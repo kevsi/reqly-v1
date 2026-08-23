@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { structuredError } from "../lib/errors";
 import { buildGeminiToolHistory, tryParseGeminiError } from "../lib/tool-history";
-import type { PreviousTurn, GeminiChunk } from "../lib/tool-history";
+import type { PreviousTurn } from "../lib/tool-history";
 
 export interface GeminiBody {
   provider: string;
@@ -9,6 +9,8 @@ export interface GeminiBody {
   model?: string;
   system?: string;
   message?: string;
+  /** Same streaming request flag as openai-compat.ts. */
+  stream?: boolean;
   tools?: Record<string, unknown>[];
   previousTurns?: PreviousTurn[];
 }
@@ -23,10 +25,18 @@ interface GeminiFunctionCall {
   id?: string;
 }
 
-interface GeminiCandidateExt {
-  content?: { parts?: Array<{ text?: string }>; text?: string };
+interface GeminiPartExt {
   text?: string;
   functionCall?: GeminiFunctionCall;
+}
+
+interface GeminiCandidateExt {
+  content?: { parts?: GeminiPartExt[] };
+}
+
+interface GeminiExtracted {
+  content: string;
+  toolCalls: Array<{ id?: string; name: string; arguments: string }>;
 }
 
 function mapGeminiUsage(m: Record<string, unknown> | undefined) {
@@ -35,6 +45,55 @@ function mapGeminiUsage(m: Record<string, unknown> | undefined) {
   const output_tokens = Number(m.candidatesTokenCount ?? 0);
   if (input_tokens === 0 && output_tokens === 0) return undefined;
   return { input_tokens, output_tokens };
+}
+
+// The real Gemini API nests everything under candidates[*].content.parts[]:
+// text arrives as { text } parts and tool invocations as
+// { functionCall: { name, args } } parts. A single response can mix several
+// text fragments and emit multiple function calls in one turn, so collect ALL
+// of them.
+function extractGeminiParts(candidates: GeminiCandidateExt[] | undefined): GeminiExtracted {
+  const extracted: GeminiExtracted = { content: "", toolCalls: [] };
+  if (!candidates) return extracted;
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts;
+    if (!Array.isArray(parts)) continue;
+    for (const part of parts) {
+      if (typeof part.text === "string") {
+        extracted.content += part.text;
+      } else if (part.functionCall?.name) {
+        const { name, args, id } = part.functionCall;
+        extracted.toolCalls.push({
+          ...(typeof id === "string" ? { id } : {}),
+          name,
+          arguments: JSON.stringify(args ?? {}),
+        });
+      }
+    }
+  }
+  return extracted;
+}
+
+// Single response contract for both paths (plain JSON and aggregated SSE):
+// { content, tool_calls?, provider_tool_format?, usage? } — exactly the shape
+// src/ai/cloud-engine/llm.ts parses in its JSON fallback branch.
+function buildGeminiResponse(
+  extracted: GeminiExtracted,
+  usage: ReturnType<typeof mapGeminiUsage>,
+): NextResponse {
+  if (extracted.toolCalls.length > 0) {
+    return NextResponse.json({
+      content: extracted.content,
+      tool_calls: extracted.toolCalls,
+      provider_tool_format: "gemini" as const,
+      ...(usage ? { usage } : {}),
+    });
+  }
+
+  return NextResponse.json({
+    content: extracted.content,
+    ...(usage ? { usage } : {}),
+  });
 }
 
 export async function handleGemini(
@@ -56,7 +115,11 @@ export async function handleGemini(
     return structuredError("Missing message", "MISSING_MESSAGE", 400);
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  // :generateContent never streams. When the client asks for streaming,
+  // hit the SSE endpoint instead and aggregate the chunks below.
+  const wantsStream = Boolean(body.stream);
+  const method = wantsStream ? "streamGenerateContent?alt=sse" : "generateContent";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:${method}`;
 
   // Convert OpenAI-style tools to Gemini format
   const geminiTools = tools?.length
@@ -91,69 +154,37 @@ export async function handleGemini(
 
   const contentType = res.headers.get("content-type") || "";
 
-  // Handle SSE streaming response
+  // Handle SSE streaming response (chunks share the candidates/content/parts
+  // shape; they are aggregated into a single JSON payload for the client).
   if (contentType.includes("text/event-stream")) {
     const rawText = await res.text();
-    let combined = "";
     let usageMetadata: Record<string, unknown> | undefined;
-    const functionCallCalls: Array<{
-      id?: string;
-      name?: string;
-      arguments: string;
-    }> = [];
+    const chunkCandidates: GeminiCandidateExt[][] = [];
 
     for (const line of rawText.split("\n")) {
-      if (line.startsWith("data: ")) {
-        const jsonStr = line.slice(6).trim();
-        if (!jsonStr || jsonStr === "[DONE]") continue;
-        try {
-          const chunk: GeminiChunk & {
-            candidates?: Array<GeminiCandidateExt>;
-            usageMetadata?: Record<string, unknown>;
-          } = JSON.parse(jsonStr);
-          const text =
-            chunk.candidates?.[0]?.content?.parts?.[0]?.text ||
-            chunk.candidates?.[0]?.content?.text ||
-            chunk.text ||
-            "";
-          if (text) combined += text;
-
-          if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
-
-          const fc = chunk.candidates?.[0]?.functionCall;
-          if (fc?.name) {
-            functionCallCalls.push({
-              id: fc.id,
-              name: fc.name,
-              arguments: JSON.stringify(fc.args ?? {}),
-            });
-          }
-        } catch {
-          // skip malformed chunks
-        }
+      if (!line.startsWith("data:")) continue;
+      const jsonStr = line.slice(5).trim();
+      if (!jsonStr || jsonStr === "[DONE]") continue;
+      try {
+        const chunk: {
+          candidates?: GeminiCandidateExt[];
+          usageMetadata?: Record<string, unknown>;
+        } = JSON.parse(jsonStr);
+        if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
+        if (chunk.candidates?.length) chunkCandidates.push(chunk.candidates);
+      } catch {
+        // skip malformed chunks
       }
     }
 
-    if (!res.ok && !combined && functionCallCalls.length === 0) {
+    const extracted = extractGeminiParts(chunkCandidates.flat());
+
+    if (!res.ok && !extracted.content && extracted.toolCalls.length === 0) {
       const errData = tryParseGeminiError(rawText);
       return NextResponse.json({ error: errData }, { status: res.status });
     }
 
-    const usage = mapGeminiUsage(usageMetadata);
-
-    if (functionCallCalls.length > 0) {
-      return NextResponse.json({
-        content: combined,
-        tool_calls: functionCallCalls,
-        provider_tool_format: "gemini" as const,
-        ...(usage ? { usage } : {}),
-      });
-    }
-
-    return NextResponse.json({
-      content: combined,
-      ...(usage ? { usage } : {}),
-    });
+    return buildGeminiResponse(extracted, mapGeminiUsage(usageMetadata));
   }
 
   // Non-streaming JSON response
@@ -185,34 +216,11 @@ export async function handleGemini(
     });
   }
 
-  const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
-  const firstCandidate =
-    Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : undefined;
-  const candidateContent = firstCandidate?.content as Record<string, unknown> | undefined;
-  const parts = candidateContent?.parts as Array<Record<string, unknown>> | undefined;
-  const firstPart = Array.isArray(parts) && parts.length > 0 ? parts[0] : undefined;
-  const content = (firstPart?.text as string) ?? (candidateContent?.text as string) ?? "";
+  const candidates = data.candidates as GeminiCandidateExt[] | undefined;
+  const extracted = extractGeminiParts(candidates);
 
-  // Detect functionCall in non-streamed response
-  const functionCall = firstCandidate?.functionCall as GeminiFunctionCall | undefined;
-  const usage = mapGeminiUsage(data.usageMetadata as Record<string, unknown> | undefined);
-  if (functionCall?.name) {
-    return NextResponse.json({
-      content,
-      tool_calls: [
-        {
-          id: functionCall.id,
-          name: functionCall.name,
-          arguments: JSON.stringify(functionCall.args ?? {}),
-        },
-      ],
-      provider_tool_format: "gemini" as const,
-      ...(usage ? { usage } : {}),
-    });
-  }
-
-  return NextResponse.json({
-    content,
-    ...(usage ? { usage } : {}),
-  });
+  return buildGeminiResponse(
+    extracted,
+    mapGeminiUsage(data.usageMetadata as Record<string, unknown> | undefined),
+  );
 }

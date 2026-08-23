@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { formatTime, extractHost, prettyJson } from "@/lib/capture-utils";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Loader2,
@@ -186,6 +187,7 @@ export default function CapturePage() {
   const [bundle, setBundle] = useState<ExportBundle | null>(null);
   const [collectionName, setCollectionName] = useState<string>("");
   const [savedName, setSavedName] = useState<string | null>(null);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<string | null>(null);
@@ -555,7 +557,7 @@ export default function CapturePage() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={clearAll}
+              onClick={() => setClearConfirmOpen(true)}
               disabled={busy || sessions.length === 0}
               className="gap-1.5 text-xs text-muted-foreground hover:text-destructive"
             >
@@ -1381,6 +1383,18 @@ export default function CapturePage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={clearConfirmOpen}
+        onOpenChange={setClearConfirmOpen}
+        title={t("capturePage.clearConfirmTitle")}
+        description={t("capturePage.clearConfirmDescription")}
+        confirmLabel={t("capturePage.clear")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => {
+          void clearAll();
+        }}
+      />
     </main>
   );
 }

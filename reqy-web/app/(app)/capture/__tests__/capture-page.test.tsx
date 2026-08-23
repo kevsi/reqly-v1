@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, cleanup, within } from "@testing-library/react";
 import CapturePage from "@/app/(app)/capture/page";
 
 // jsdom renderers accumulate in document.body; clean up between tests so
@@ -78,10 +78,15 @@ describe("Page Capture (persistance + UI)", () => {
     expect(row.closest("button")?.textContent).toContain("GET");
   });
 
-  it("efface les captures quand on clique sur « Clear »", async () => {
+  it("efface les captures après confirmation du dialogue « Clear »", async () => {
     render(<CapturePage />);
     await waitFor(() => expect(hoisted.listCapturedSessions).toHaveBeenCalled());
+    // Le clic sur « Effacer » ouvre le dialogue de confirmation sans supprimer
     fireEvent.click(screen.getByRole("button", { name: /effacer|clear/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(hoisted.clearCapturedSessions).not.toHaveBeenCalled();
+    // La confirmation dans le dialogue déclenche la suppression
+    fireEvent.click(within(dialog).getByRole("button", { name: /effacer|clear/i }));
     await waitFor(() => expect(hoisted.clearCapturedSessions).toHaveBeenCalled());
   });
 
