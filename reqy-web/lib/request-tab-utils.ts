@@ -1,22 +1,6 @@
 // ── Utilitaires pour les onglets de requête ──────────────────────────────
 
-import type { Header, QueryParam, PathParam, RequestTab } from "@/lib/request-executor";
-import type { HttpMethod } from "@/lib/types";
-import {
-  methodBadge,
-  getMethodBadgeClass,
-  getMethodDotClass,
-  getMethodPanelClass,
-} from "@/lib/http-method-colors";
-
-// Réexportations pour rétrocompatibilité
-/** @deprecated Utilise `methodBadge` depuis `@/lib/http-method-colors` */
-export const methodColors: Record<HttpMethod, string> = methodBadge;
-
-export const defaultQueryParams: QueryParam[] = [];
-export const defaultPathParams: PathParam[] = [];
-export const defaultHeaders: Header[] = [];
-export const defaultBody = "";
+import type { Header, RequestTab } from "@/lib/request-executor";
 
 export const STORAGE_KEY_TABS = "reqly-request-tabs";
 
@@ -66,10 +50,10 @@ export function createEmptyTab(overrides: Partial<RequestTab> = {}): RequestTab 
     method: "GET",
     url: "",
     endpoint: "",
-    headers: defaultHeaders,
-    queryParams: defaultQueryParams,
-    pathParams: defaultPathParams,
-    body: defaultBody,
+    headers: [] as Header[],
+    queryParams: [],
+    pathParams: [],
+    body: "",
     bodyType: "json",
     authType: "none",
     authToken: "",
@@ -81,6 +65,3 @@ export function createEmptyTab(overrides: Partial<RequestTab> = {}): RequestTab 
 }
 
 export const initialTabs: RequestTab[] = [createEmptyTab({ id: "1", name: "New Request" })];
-
-// Fonctions déléguées à http-method-colors (gardées pour compatibilité)
-export { getMethodBadgeClass, getMethodDotClass, getMethodPanelClass };

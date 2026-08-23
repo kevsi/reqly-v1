@@ -277,10 +277,11 @@ function getJsonPathValue(obj: unknown, path: string): unknown {
 }
 
 function interpolate(value: string, ctx: RunnerContext): string {
-  return value.replace(
-    /\{\{(\w+)\}\}/g,
-    (_, k) => ctx.environment[k] ?? ctx.iterationData[k] ?? `{{${k}}}`,
-  );
+  return value.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    const v = ctx.environment[k] ?? ctx.iterationData[k];
+    // Strip CR/LF so a variable cannot smuggle extra HTTP headers (CRLF).
+    return v === undefined ? `{{${k}}}` : String(v).replace(/[\r\n]/g, " ");
+  });
 }
 
 function headersToRecord(

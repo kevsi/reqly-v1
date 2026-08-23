@@ -20,7 +20,8 @@ import { SimpleRequestBuilder } from "@/components/simple-mode/simple-request-bu
 import { persistence } from "@/lib/persistence";
 import { cn } from "@/lib/utils";
 import { useShallow } from "zustand/react/shallow";
-import { getMethodPanelClass, recordToHeaderArray } from "@/lib/request-tab-utils";
+import { getMethodPanelClass } from "@/lib/http-method-colors";
+import { recordToHeaderArray } from "@/lib/request-tab-utils";
 import type { AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";

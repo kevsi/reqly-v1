@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { RequestTab } from "@/lib/request-executor";
-import { methodColors, getMethodDotClass } from "@/lib/request-tab-utils";
+import { methodBadge, getMethodDotClass } from "@/lib/http-method-colors";
 import type { TabContextMenu } from "@/hooks/use-request-tabs-state";
 
 export interface RequestTabBarProps {
@@ -293,7 +293,7 @@ export function RequestTabBar({
                   onSelect={() => onSelectTab(tab.id)}
                   className="gap-2 text-xs cursor-pointer"
                 >
-                  <span className={cn("method-pill shrink-0", methodColors[tab.method])}>
+                  <span className={cn("method-pill shrink-0", methodBadge[tab.method])}>
                     {tab.method}
                   </span>
                   <span className="truncate flex-1">{tab.name}</span>
