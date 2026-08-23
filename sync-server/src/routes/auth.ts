@@ -1,12 +1,18 @@
 import { Hono, type Context } from "hono";
 import { setCookie, deleteCookie } from "hono/cookie";
 import { z } from "zod";
-import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
 import { promisify } from "node:util";
 import db from "../db.js";
 import { requireAuth, createSessionToken, type AuthContext } from "../auth.js";
+import { createWsTicket } from "../ws-ticket.js";
 import { safeParseJson } from "../validation.js";
-import { generateVerificationCode, sendVerificationCode, sendWelcomeEmail } from "../email.js";
+import {
+  generateVerificationCode,
+  sendVerificationCode,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+} from "../email.js";
 
 const scryptAsync = promisify(scrypt);
 
@@ -16,12 +22,38 @@ const COOKIE_NAME = "auth_session";
 
 // Brute-force guard for the 6-digit verification code (10^6 space — guesses
 // are cheap, so a per-code attempt cap is required). In-memory is fine here:
-// this server is single-instance by design. Keyed by the code value so each
-// issuance starts with a fresh counter.
+// this server is single-instance by design. Keyed by the stored (hashed) code
+// value so each issuance starts with a fresh counter.
 const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60_000;
+// Same per-code attempt cap applies to password-reset codes; the code is
+// voided once exhausted.
+const MAX_RESET_ATTEMPTS = 5;
+
+// Brute-force guard for password logins: after MAX_FAILED_LOGINS consecutive
+// failures the account is locked for LOCKOUT_MS (persisted on the user row so
+// it survives restarts and applies across clients). Counters reset on success.
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
 const codeAttempts = new Map<string, number>();
 const resendCooldowns = new Map<string, number>();
+const resetAttempts = new Map<string, number>();
+
+/**
+ * Verification and reset codes are persisted as SHA-256 hashes instead of
+ * plaintext. Comparisons stay timing-safe (fixed-length hex).
+ */
+function hashCode(code: string): string {
+  return createHash("sha256").update(code, "utf8").digest("hex");
+}
+
+/** Test-only: exposes freshly issued plaintext codes when running under vitest
+ * (the sync-server vitest config forces NODE_ENV=production, so we key on the
+ * VITEST env var instead). */
+export const _testCodes = new Map<string, string>();
+function recordTestCode(kind: "verify" | "reset", email: string, plain: string) {
+  if (process.env.VITEST) _testCodes.set(`${kind}:${email}`, plain);
+}
 
 function invalidateCode(userId: string, code: string | null) {
   if (code) codeAttempts.delete(code);
@@ -101,14 +133,15 @@ function getUserByEmail(email: string): UserRow | undefined {
     .get(email) as UserRow | undefined;
 }
 
-function setVerificationCode(userId: string, code: string) {
+function setVerificationCode(email: string, userId: string, code: string) {
   const expiresAt = Date.now() + VERIFICATION_CODE_TTL_MS;
   const prev = db.prepare("SELECT verification_code FROM users WHERE id = ?").get(userId) as
     { verification_code: string | null } | undefined;
   if (prev?.verification_code) codeAttempts.delete(prev.verification_code);
   db.prepare(
     "UPDATE users SET verification_code = ?, verification_code_expires_at = ? WHERE id = ?",
-  ).run(code, expiresAt, userId);
+  ).run(hashCode(code), expiresAt, userId);
+  recordTestCode("verify", email, code);
 }
 
 function markVerified(userId: string) {
@@ -140,6 +173,29 @@ const VerifySchema = z.object({
 
 const ResendCodeSchema = z.object({
   email: z.string().email(),
+});
+
+const ForgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const ResetPasswordSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
+  newPassword: z.string().min(8).max(200),
+});
+
+const OAuthLoginSchema = z.object({
+  provider: z.string().min(1).max(50),
+  providerId: z.string().min(1).max(100),
+  email: z.string().email(),
+  name: z.string().max(80).optional(),
+  /**
+   * The caller must present the GitHub access token obtained through the
+   * OAuth code exchange. The server validates it against api.github.com/user
+   * and only proceeds when the account id and verified email match.
+   */
+  accessToken: z.string().min(1),
 });
 
 const auth = new Hono<{ Variables: { auth: AuthContext } }>();
@@ -176,7 +232,7 @@ auth.post("/signup", async (c) => {
 
   // Generate and send verification code
   const code = generateVerificationCode();
-  setVerificationCode(id, code);
+  setVerificationCode(email, id, code);
 
   try {
     await sendVerificationCode(email, code);
@@ -229,15 +285,32 @@ auth.post("/verify", async (c) => {
   const attempts = codeAttempts.get(user.verification_code) ?? 0;
   if (attempts >= MAX_VERIFY_ATTEMPTS) {
     invalidateCode(user.id, user.verification_code);
-    return c.json({ error: "Trop de tentatives. Demandez un nouveau code." }, 429);
+    return c.json(
+      {
+        error: "Trop de tentatives. Ce code a été annulé — demandez-en un nouveau.",
+        attemptsRemaining: 0,
+      },
+      429,
+    );
   }
 
-  // Timing-safe comparison
-  const codeBuf = Buffer.from(code);
+  // Timing-safe comparison: the submitted code is hashed the same way as the
+  // stored value before comparing.
+  const codeBuf = Buffer.from(hashCode(code));
   const storedBuf = Buffer.from(user.verification_code);
   if (codeBuf.length !== storedBuf.length || !timingSafeEqual(codeBuf, storedBuf)) {
     codeAttempts.set(user.verification_code, attempts + 1);
-    return c.json({ error: "Code de vérification incorrect." }, 400);
+    const remaining = Math.max(MAX_VERIFY_ATTEMPTS - (attempts + 1), 0);
+    return c.json(
+      {
+        error:
+          remaining > 1
+            ? `Code de vérification incorrect. Il vous reste ${remaining} tentatives avant invalidation du code.`
+            : "Code de vérification incorrect. Dernière tentative avant invalidation du code.",
+        attemptsRemaining: remaining,
+      },
+      400,
+    );
   }
 
   // Mark verified
@@ -278,7 +351,7 @@ auth.post("/resend-code", async (c) => {
 
   // Generate a new code (invalidates old one)
   const code = generateVerificationCode();
-  setVerificationCode(user.id, code);
+  setVerificationCode(email, user.id, code);
   resendCooldowns.set(email, Date.now());
 
   try {
@@ -291,6 +364,402 @@ auth.post("/resend-code", async (c) => {
   return c.json({ message: "Un nouveau code de vérification vous a été envoyé par email." });
 });
 
+// ── POST /forgot-password ────────────────────────────────────────────────
+// Sends a 6-digit reset code to the user's email. Always returns success
+// to avoid revealing whether the email exists.
+
+auth.post("/forgot-password", async (c) => {
+  const parsed = await safeParseJson(c, ForgotPasswordSchema);
+  if (!parsed.success) return parsed.response;
+  const email = parsed.data.email.toLowerCase();
+
+  const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as
+    { id: string } | undefined;
+
+  if (!user) {
+    // Always return success to prevent email enumeration
+    return c.json({
+      message: "Si un compte existe avec cet email, un code de réinitialisation vous a été envoyé.",
+    });
+  }
+
+  // Generate and store reset code
+  const code = generateVerificationCode();
+  const resetId = crypto.randomUUID();
+  const expiresAt = Date.now() + VERIFICATION_CODE_TTL_MS; // 15 minutes
+
+  db.prepare(
+    "INSERT INTO password_resets (id, user_id, code, expires_at, used, created_at) VALUES (?, ?, ?, ?, 0, ?)",
+  ).run(resetId, user.id, hashCode(code), expiresAt, Date.now());
+  recordTestCode("reset", email, code);
+
+  // Send email (fire-and-forget — don't block the response)
+  sendPasswordResetEmail(email, code).catch((err) =>
+    console.error("[auth] Failed to send password reset email:", err),
+  );
+
+  return c.json({
+    message: "Si un compte existe avec cet email, un code de réinitialisation vous a été envoyé.",
+  });
+});
+
+// ── POST /verify-reset-code ──────────────────────────────────────────────
+// Two-step reset flow (UX): validates a password-reset code WITHOUT consuming
+// it, so the client can confirm the code first and only then collect the new
+// password. Failed attempts share the same per-code counter as /reset-password,
+// so splitting the flow cannot bypass the attempt cap.
+
+const VerifyResetCodeSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
+});
+
+auth.post("/verify-reset-code", async (c) => {
+  const parsed = await safeParseJson(c, VerifyResetCodeSchema);
+  if (!parsed.success) return parsed.response;
+  const email = parsed.data.email.toLowerCase();
+  const code = parsed.data.code;
+
+  const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as
+    { id: string } | undefined;
+  if (!user) {
+    return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
+  }
+
+  const resetRow = db
+    .prepare(
+      "SELECT id, code, expires_at FROM password_resets WHERE user_id = ? AND used = 0 ORDER BY created_at DESC LIMIT 1",
+    )
+    .get(user.id) as { id: string; code: string; expires_at: number } | undefined;
+
+  if (!resetRow) {
+    return c.json({ error: "Aucun code de réinitialisation actif. Demandez-en un nouveau." }, 400);
+  }
+
+  if (Date.now() > resetRow.expires_at) {
+    return c.json({ error: "Le code de réinitialisation a expiré. Demandez-en un nouveau." }, 400);
+  }
+
+  // Same per-code attempt cap as /reset-password.
+  const attempts = resetAttempts.get(resetRow.id) ?? 0;
+  if (attempts >= MAX_RESET_ATTEMPTS) {
+    db.prepare("UPDATE password_resets SET used = 1 WHERE id = ?").run(resetRow.id);
+    resetAttempts.delete(resetRow.id);
+    return c.json(
+      {
+        error:
+          "Trop de tentatives. Ce code a été annulé — demandez un nouveau code de réinitialisation.",
+        attemptsRemaining: 0,
+        codeInvalidated: true,
+      },
+      429,
+    );
+  }
+
+  const submittedBuf = Buffer.from(hashCode(code));
+  const storedBuf = Buffer.from(resetRow.code);
+  if (submittedBuf.length !== storedBuf.length || !timingSafeEqual(submittedBuf, storedBuf)) {
+    resetAttempts.set(resetRow.id, attempts + 1);
+    const remaining = Math.max(MAX_RESET_ATTEMPTS - (attempts + 1), 0);
+    return c.json(
+      {
+        error:
+          remaining > 1
+            ? `Code incorrect. Il vous reste ${remaining} tentatives avant invalidation du code.`
+            : "Code incorrect. Dernière tentative avant invalidation du code.",
+        attemptsRemaining: remaining,
+      },
+      400,
+    );
+  }
+
+  // Valid — deliberately NOT consumed here; /reset-password performs the
+  // actual change and marks the code used.
+  return c.json({ valid: true });
+});
+
+// ── POST /reset-password ─────────────────────────────────────────────────
+// Validates the reset code and updates the password.
+
+auth.post("/reset-password", async (c) => {
+  const parsed = await safeParseJson(c, ResetPasswordSchema);
+  if (!parsed.success) return parsed.response;
+  const email = parsed.data.email.toLowerCase();
+  const code = parsed.data.code;
+
+  const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as
+    { id: string } | undefined;
+
+  if (!user) {
+    return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
+  }
+
+  // Find the most recent unused reset code for this user
+  const resetRow = db
+    .prepare(
+      "SELECT id, code, expires_at FROM password_resets WHERE user_id = ? AND used = 0 ORDER BY created_at DESC LIMIT 1",
+    )
+    .get(user.id) as { id: string; code: string; expires_at: number } | undefined;
+
+  if (!resetRow) {
+    return c.json({ error: "Aucun code de réinitialisation actif. Demandez-en un nouveau." }, 400);
+  }
+
+  if (Date.now() > resetRow.expires_at) {
+    return c.json({ error: "Le code de réinitialisation a expiré. Demandez-en un nouveau." }, 400);
+  }
+
+  // Per-code attempt cap: after too many failed submissions the code is voided.
+  const attempts = resetAttempts.get(resetRow.id) ?? 0;
+  if (attempts >= MAX_RESET_ATTEMPTS) {
+    db.prepare("UPDATE password_resets SET used = 1 WHERE id = ?").run(resetRow.id);
+    resetAttempts.delete(resetRow.id);
+    return c.json(
+      {
+        error:
+          "Trop de tentatives. Ce code a été annulé — demandez un nouveau code de réinitialisation.",
+        attemptsRemaining: 0,
+        codeInvalidated: true,
+      },
+      429,
+    );
+  }
+
+  // Timing-safe comparison of hashed codes.
+  const submittedBuf = Buffer.from(hashCode(code));
+  const storedBuf = Buffer.from(resetRow.code);
+  if (submittedBuf.length !== storedBuf.length || !timingSafeEqual(submittedBuf, storedBuf)) {
+    resetAttempts.set(resetRow.id, attempts + 1);
+    const remaining = Math.max(MAX_RESET_ATTEMPTS - (attempts + 1), 0);
+    return c.json(
+      {
+        error:
+          remaining > 1
+            ? `Code de réinitialisation incorrect. Il vous reste ${remaining} tentatives avant invalidation du code.`
+            : "Code de réinitialisation incorrect. Dernière tentative avant invalidation du code.",
+        attemptsRemaining: remaining,
+      },
+      400,
+    );
+  }
+  resetAttempts.delete(resetRow.id);
+
+  // Mark the reset code as used
+  db.prepare("UPDATE password_resets SET used = 1 WHERE id = ?").run(resetRow.id);
+
+  // Invalidate outstanding sessions: token_version is embedded in all session
+  // tokens and checked on every authenticated request, so bumping it here ends
+  // previously issued sessions for this user.
+  db.prepare("UPDATE users SET token_version = token_version + 1 WHERE id = ?").run(user.id);
+
+  // Update the password
+  const passwordHash = await hashPassword(parsed.data.newPassword);
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, user.id);
+
+  return c.json({
+    message:
+      "Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.",
+  });
+});
+
+// ── POST /oauth-login ───────────────────────────────────────────────────
+// OAuth login/register: verifies the caller's GitHub access token against
+// api.github.com/user, then finds or creates a user by the VERIFIED email and
+// issues a session token. The Next.js callback route and the desktop loopback
+// both call this AFTER exchanging the OAuth code for an access token.
+
+const GITHUB_API_HEADERS = {
+  Accept: "application/vnd.github+json",
+  "User-Agent": "reqly-sync",
+} as const;
+
+async function resolveVerifiedGithubEmail(
+  accessToken: string,
+  fallbackEmail: string | null,
+): Promise<string | null> {
+  if (fallbackEmail) return fallbackEmail;
+  try {
+    const res = await fetch("https://api.github.com/user/emails", {
+      headers: { ...GITHUB_API_HEADERS, Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const emails = (await res.json()) as Array<{
+      email: string;
+      primary: boolean;
+      verified: boolean;
+    }>;
+    const primary = emails.find((e) => e.primary && e.verified);
+    return primary?.email ?? emails.find((e) => e.verified)?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+auth.post("/oauth-login", async (c) => {
+  const parsed = await safeParseJson(c, OAuthLoginSchema);
+  if (!parsed.success) return parsed.response;
+
+  const email = parsed.data.email.toLowerCase();
+  const provider = parsed.data.provider;
+  const providerId = parsed.data.providerId;
+  const name = parsed.data.name ?? null;
+
+  // Only GitHub is supported here, and the access token must match the
+  // claimed provider id and verified email.
+  if (provider !== "github") {
+    return c.json({ error: "Provider non supporté" }, 400);
+  }
+
+  let githubId = "";
+  let githubEmail: string | null = null;
+  try {
+    const userRes = await fetch("https://api.github.com/user", {
+      headers: { ...GITHUB_API_HEADERS, Authorization: `Bearer ${parsed.data.accessToken}` },
+    });
+    if (!userRes.ok) {
+      return c.json({ error: "Token GitHub invalide ou expiré" }, 401);
+    }
+    const ghUser = (await userRes.json()) as {
+      id?: number | string;
+      login?: string;
+      email?: string | null;
+    };
+    githubId = String(ghUser.id ?? "");
+    githubEmail = await resolveVerifiedGithubEmail(parsed.data.accessToken, ghUser.email ?? null);
+  } catch {
+    return c.json({ error: "Vérification du compte GitHub impossible" }, 401);
+  }
+
+  if (!githubId || githubId !== providerId) {
+    return c.json({ error: "Le token GitHub ne correspond pas à ce compte" }, 401);
+  }
+  if (!githubEmail || githubEmail.toLowerCase() !== email) {
+    return c.json(
+      { error: "L'email vérifié du compte GitHub ne correspond pas à celui fourni" },
+      401,
+    );
+  }
+
+  // Find existing user by email
+  let user = db
+    .prepare("SELECT id, email, name, verified FROM users WHERE email = ?")
+    .get(email) as { id: string; email: string; name: string | null; verified: number } | undefined;
+
+  if (user) {
+    // User exists — update name if empty, ensure verified
+    if (!user.name && name) {
+      db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name, user.id);
+      user.name = name;
+    }
+    if (!user.verified) {
+      db.prepare("UPDATE users SET verified = 1 WHERE id = ?").run(user.id);
+      user.verified = 1;
+    }
+  } else {
+    // Create new user — OAuth users are pre-verified (email confirmed by provider)
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    try {
+      db.prepare(
+        `INSERT INTO users (id, email, name, verified, created_at) VALUES (?, ?, ?, 1, ?)`,
+      ).run(id, email, name, now);
+      user = { id, email, name, verified: 1 };
+    } catch (err) {
+      if (String(err).includes("UNIQUE")) {
+        // Race condition: another request created the user — retry select
+        user = db
+          .prepare("SELECT id, email, name, verified FROM users WHERE email = ?")
+          .get(email) as
+          { id: string; email: string; name: string | null; verified: number } | undefined;
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  if (!user) {
+    return c.json({ error: "Impossible de créer ou trouver le compte" }, 500);
+  }
+
+  // Issue session
+  const token = issueSession(c, user);
+  return c.json({ user: publicUser(user), token });
+});
+
+// ── POST /github-exchange ───────────────────────────────────────────────
+// Exchange a GitHub OAuth code for an access token. Used by the desktop
+// app which can't do CORS requests to GitHub directly.
+
+const GitHubExchangeSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().optional(),
+  redirect_uri: z.string().optional(),
+  // PKCE verifier from the desktop loopback flow; forwarded verbatim to
+  // GitHub on the token exchange.
+  code_verifier: z.string().min(43).max(128).optional(),
+});
+
+/**
+ * Strict allowlist of redirect URIs this endpoint will complete. Any other
+ * value is rejected.
+ */
+function githubRedirectAllowlist(): string[] {
+  return [
+    process.env.GITHUB_OAUTH_REDIRECT_WEB ||
+      "https://reqly-app.duckdns.org/api/github-auth/callback",
+    process.env.GITHUB_OAUTH_REDIRECT_DESKTOP || "http://127.0.0.1:18234/callback",
+  ];
+}
+
+auth.post("/github-exchange", async (c) => {
+  const parsed = await safeParseJson(c, GitHubExchangeSchema);
+  if (!parsed.success) return parsed.response;
+
+  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return c.json({ error: "GitHub OAuth non configuré" }, 500);
+  }
+
+  const allowlist = githubRedirectAllowlist();
+  const redirectUri = parsed.data.redirect_uri ?? allowlist[0];
+  if (!allowlist.includes(redirectUri)) {
+    return c.json({ error: "redirect_uri non autorisé" }, 400);
+  }
+
+  try {
+    const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: parsed.data.code,
+        redirect_uri: redirectUri,
+        ...(parsed.data.code_verifier ? { code_verifier: parsed.data.code_verifier } : {}),
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      return c.json(
+        { error: tokenData.error_description || "Échec de l'échange du code GitHub" },
+        400,
+      );
+    }
+
+    return c.json({ access_token: accessToken });
+  } catch (err) {
+    return c.json({ error: "Erreur lors de l'échange du code GitHub" }, 500);
+  }
+});
+
 // ── POST /login ──────────────────────────────────────────────────────────
 // Authenticates and issues a session — ONLY if the account is verified.
 
@@ -300,7 +769,10 @@ auth.post("/login", async (c) => {
   const email = parsed.data.email.toLowerCase();
 
   const user = db
-    .prepare("SELECT id, email, name, password_hash, verified FROM users WHERE email = ?")
+    .prepare(
+      `SELECT id, email, name, password_hash, verified, failed_login_attempts, locked_until
+       FROM users WHERE email = ?`,
+    )
     .get(email) as
     | {
         id: string;
@@ -308,24 +780,54 @@ auth.post("/login", async (c) => {
         name: string | null;
         password_hash: string | null;
         verified: number;
+        failed_login_attempts: number;
+        locked_until: number | null;
       }
     | undefined;
 
+  // Account temporarily locked after too many failed logins. Checked before
+  // any password work so locked accounts cost nothing to evaluate.
+  if (user?.locked_until && user.locked_until > Date.now()) {
+    return c.json({ error: "Trop de tentatives. Réessayez plus tard." }, 429);
+  }
+
+  const passwordOk =
+    !!user &&
+    !!user.password_hash &&
+    (await verifyPassword(parsed.data.password, user.password_hash));
+
   // Generic failure: never reveal whether the email exists or the password was wrong.
-  if (
-    !user ||
-    !user.password_hash ||
-    !(await verifyPassword(parsed.data.password, user.password_hash))
-  ) {
+  if (!passwordOk || !user) {
+    // Count the failure only for existing accounts (nothing to lock otherwise).
+    if (user) {
+      const attempts = (user.failed_login_attempts ?? 0) + 1;
+      if (attempts >= MAX_FAILED_LOGINS) {
+        db.prepare("UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?").run(
+          attempts,
+          Date.now() + LOCKOUT_MS,
+          user.id,
+        );
+      } else {
+        db.prepare("UPDATE users SET failed_login_attempts = ? WHERE id = ?").run(
+          attempts,
+          user.id,
+        );
+      }
+    }
     return c.json({ error: "Identifiants invalides" }, 401);
   }
+
+  // Successful password verification — reset the lockout counters.
+  db.prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?").run(
+    user.id,
+  );
 
   // Block unverified accounts
   if (!user.verified) {
     // Send a fresh verification code so the user always has a valid one.
     // A code from signup may have expired (15 min TTL) or failed to deliver.
     const code = generateVerificationCode();
-    setVerificationCode(user.id, code);
+    setVerificationCode(email, user.id, code);
     try {
       await sendVerificationCode(email, code);
     } catch (err) {
@@ -372,6 +874,23 @@ auth.get("/me", requireAuth, (c) => {
     { id: string; email: string; name: string | null } | undefined;
   if (!user) return c.json({ error: "Unauthorized" }, 401);
   return c.json({ user: publicUser(user) });
+});
+
+// ── GET /ws-ticket ───────────────────────────────────────────────────────
+// Émet un ticket WS à usage unique (30 s) pour le WebSocket de sync, afin de
+// ne jamais exposer le token de session dans le header Sec-WebSocket-Protocol
+// (visible dans les logs proxys/load-balancers).
+
+auth.get("/ws-ticket", requireAuth, (c) => {
+  const authCtx = c.get("auth") as AuthContext;
+  const workspaceId = c.req.query("workspaceId");
+  if (!workspaceId) return c.json({ error: "workspaceId requis" }, 400);
+  const user = db
+    .prepare("SELECT id, token_version FROM users WHERE id = ?")
+    .get(authCtx.userId) as { id: string; token_version: number } | undefined;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const ticket = createWsTicket(user.id, user.token_version, workspaceId);
+  return c.json({ ticket });
 });
 
 export default auth;

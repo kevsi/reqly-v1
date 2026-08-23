@@ -35,6 +35,7 @@ const authHeaders = (userId = USER) => ({
 });
 
 beforeEach(() => {
+  process.env.NODE_ENV = "test";
   process.env.AUTH_SIGNING_SECRET = "test-secret-do-not-use-in-prod";
   db.exec(
     "DELETE FROM hooklet_devices; DELETE FROM hooklet_events; DELETE FROM hooklet_endpoints; DELETE FROM users;",
@@ -94,6 +95,24 @@ describe("routes/hooklet — endpoints", () => {
     const { endpoints } = (await list.json()) as { endpoints: any[] };
     expect(endpoints).toHaveLength(1);
     expect(endpoints[0].id).toBe(endpoint.id);
+  });
+
+  it("requires a secret when creating endpoints in production", async () => {
+    const app = buildApp();
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const res = await app.request("/api/hooklet/endpoints", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ name: "Production endpoint", withSecret: false }),
+      });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Webhook secret required in production" });
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 
   it("toggles notify", async () => {

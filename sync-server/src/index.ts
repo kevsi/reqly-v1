@@ -12,9 +12,11 @@ import auth from "./routes/auth.js";
 import sync from "./routes/sync.js";
 import hooklet from "./routes/hooklet.js";
 import hookletHooks from "./routes/hooklet-hooks.js";
-import { handleWsUpgradeFactory } from "./routes/ws.js";
+import admin from "./routes/admin.js";
+import { handleWsUpgradeFactory, SYNC_WS_AUTH_PROTOCOL } from "./routes/ws.js";
 import { closeAll } from "./ws-hub.js";
 import { parseOrigins } from "./cors.js";
+import db from "./db.js";
 import {
   apiLimiter,
   authLimiter,
@@ -27,6 +29,27 @@ import {
 if (process.env.AUTH_BYPASS === "true" && process.env.NODE_ENV === "production") {
   console.error("[reqly-sync] FATAL: AUTH_BYPASS is enabled in production. Refusing to start.");
   process.exit(1);
+}
+
+// Fail fast in production without a signing secret: every session token would
+// otherwise be rejected (or, worse, signed with an empty secret).
+if (process.env.NODE_ENV === "production" && !process.env.AUTH_SIGNING_SECRET) {
+  console.error(
+    "[reqly-sync] FATAL: AUTH_SIGNING_SECRET is not set in production. Refusing to start.",
+  );
+  process.exit(1);
+}
+
+if (
+  process.env.NODE_ENV === "production" &&
+  (!process.env.ALLOWED_ORIGIN || process.env.ALLOWED_ORIGIN === "*")
+) {
+  console.warn(
+    "[reqly-sync] WARNING: NODE_ENV=production with ALLOWED_ORIGIN " +
+      (process.env.ALLOWED_ORIGIN === "*" ? '"*"' : "unset") +
+      ". Set it to the exact list of allowed origins — wildcard/unset CORS " +
+      "breaks cookie credentials and exposes the API to any origin.",
+  );
 }
 
 const app = new Hono();
@@ -52,7 +75,16 @@ app.use(
   }),
 );
 
-app.get("/health", (c) => c.json({ status: "ok" }));
+// Health check: 200 only when the database answers, so orchestrators can
+// restart a wedged instance (SQLite WAL lock, disk full, ...).
+app.get("/health", (c) => {
+  try {
+    db.prepare("SELECT 1").get();
+    return c.json({ status: "ok", db: true });
+  } catch {
+    return c.json({ status: "error", db: false }, 503);
+  }
+});
 
 // Body size limit: rejects bodies larger than 5 MB. bodyLimit wraps the
 // request stream with a byte counter, so Transfer-Encoding: chunked bodies
@@ -86,6 +118,9 @@ app.route("/api/auth", auth);
 app.route("/api/sync", sync);
 app.route("/api/hooklet", hooklet);
 app.route("/api/hooks", hookletHooks);
+// Admin surface: shared-secret bearer, stricter limiter.
+app.use("/api/admin/*", rateLimitMiddleware(authLimiter));
+app.route("/api/admin", admin);
 
 // Global error handler — prevent stack traces leaking to clients
 app.onError((err, c) => {
@@ -110,7 +145,12 @@ const node = serve(
 
 // maxPayload: the server never reads inbound messages, so a tiny cap prevents
 // any single connection from pinning ~100 MiB (ws default) of receive buffer.
-const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
+const wss = new WebSocketServer({
+  noServer: true,
+  maxPayload: 4096,
+  handleProtocols: (protocols) =>
+    protocols.has(SYNC_WS_AUTH_PROTOCOL) ? SYNC_WS_AUTH_PROTOCOL : false,
+});
 
 node.on("upgrade", (req, socket, head) => {
   if (req.url?.startsWith("/api/sync/ws")) {

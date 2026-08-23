@@ -126,7 +126,11 @@ hooklet.post("/endpoints", async (c) => {
   const parsed = await safeParseJson(c, CreateEndpointSchema);
   if (!parsed.success) return parsed.response;
   const name = parsed.data.name?.trim() || "New endpoint";
-  const secret = parsed.data.withSecret ? randomSlug() : null;
+  const withSecret = parsed.data.withSecret === true;
+  if (process.env.NODE_ENV === "production" && !withSecret) {
+    return c.json({ error: "Webhook secret required in production" }, 400);
+  }
+  const secret = withSecret ? randomSlug() : null;
   const now = Date.now();
   const info = db
     .prepare(

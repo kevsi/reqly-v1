@@ -32,10 +32,10 @@ const JOINER = "user-joiner";
 beforeEach(() => {
   process.env.AUTH_SIGNING_SECRET = "test-secret-do-not-use-in-prod";
   db.exec(`
-    DELETE FROM folders;
+    DELETE FROM activity_log; DELETE FROM folders;
     DELETE FROM environments;
     DELETE FROM collections;
-    DELETE FROM memberships;
+    DELETE FROM activity_log; DELETE FROM memberships;
     DELETE FROM invitations;
     DELETE FROM workspaces;
     DELETE FROM users;
@@ -135,7 +135,7 @@ describe("routes/memberships", () => {
       expect(body.error).toMatch(/expired/i);
     });
 
-    it("does not duplicate the membership if the user joins twice", async () => {
+    it("refuses a second join with the same (now used) token, without duplicating the membership", async () => {
       const token = "inv-double";
       db.prepare(
         "INSERT INTO invitations (token, workspace_id, role, created_at, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?)",
@@ -149,14 +149,15 @@ describe("routes/memberships", () => {
         headers: { "Content-Type": "application/json", cookie: `auth_session=${cookie}` },
         body: JSON.stringify({ token }),
       });
-      // Second join with the same token
+      // Second join with the same token â†’ refused (single-use tokens, spec §6)
       const res2 = await app.request(`/memberships`, {
         method: "POST",
         headers: { "Content-Type": "application/json", cookie: `auth_session=${cookie}` },
         body: JSON.stringify({ token }),
       });
-      expect(res2.status).toBe(200);
+      expect(res2.status).toBe(400);
 
+      // And the membership was never duplicated.
       const rows = db
         .prepare("SELECT user_id FROM memberships WHERE workspace_id = ? AND user_id = ?")
         .all(WS, JOINER);

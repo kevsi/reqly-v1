@@ -138,6 +138,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_hooklet_events_user ON hooklet_events(user_id);
   CREATE INDEX IF NOT EXISTS idx_hooklet_events_endpoint ON hooklet_events(endpoint_id);
   CREATE INDEX IF NOT EXISTS idx_hooklet_devices_user ON hooklet_devices(user_id);
+
+  -- ── Password reset tokens ────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    code TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
 `);
 
 // Defensive migration: an existing DB file created before the `version`/`deleted`
@@ -157,6 +168,29 @@ for (const table of ["collections", "environments", "folders"]) {
 // Password hash is optional: OAuth-based sessions don't set it.
 ensureColumn("users", "password_hash", "TEXT");
 
+// Single-use invitations (spec §6): a consumed token can never grant access again.
+ensureColumn("invitations", "used", "INTEGER NOT NULL DEFAULT 0");
+
+// Resource provenance (spec §5.1): who created each shared entity. Nullable
+// because rows predating the column have no recorded creator.
+for (const table of ["collections", "environments", "folders"]) {
+  ensureColumn(table, "created_by", "TEXT");
+}
+
+// Minimal activity log (spec §5.2): key workspace events only.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    actor_id TEXT NOT NULL REFERENCES users(id),
+    action TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_activity_ws ON activity_log(workspace_id, id);
+`);
+
 // Email verification support
 ensureColumn("users", "verified", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("users", "verification_code", "TEXT");
@@ -165,23 +199,60 @@ ensureColumn("users", "verification_code_expires_at", "INTEGER");
 // Session revocation: bumped on logout so existing (stateless) tokens die.
 ensureColumn("users", "token_version", "INTEGER NOT NULL DEFAULT 0");
 
+// Login brute-force lockout: failed attempts counter + lock deadline (epoch ms).
+ensureColumn("users", "failed_login_attempts", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("users", "locked_until", "INTEGER");
+
+// Admin soft-ban (reqly-admin dashboard): disabled users fail requireAuth.
+ensureColumn("users", "disabled", "INTEGER NOT NULL DEFAULT 0");
+
 // Migration: enforce a single account per email. Older DBs may already hold
 // duplicates from a signup race (SELECT-then-INSERT). Dedupe first — keep the
 // account that is in use (has memberships), tiebreak by insertion order — then
 // create the unique index. Fresh DBs already have email UNIQUE from the DDL.
-db.exec(`
-  DELETE FROM users WHERE id NOT IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (
-        PARTITION BY lower(email)
-        ORDER BY
-          (SELECT COUNT(*) FROM memberships m WHERE m.user_id = users.id) DESC,
-          rowid ASC
-      ) AS rn
-      FROM users
-    ) WHERE rn = 1
-  );
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
-`);
+// The destructive DELETE only runs while the unique index is still missing:
+// once idx_users_email exists it can never match anything, so we skip it to
+// avoid a full-table scan on every boot.
+const hasUsersEmailIndex = !!db
+  .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_users_email'`)
+  .get();
+if (!hasUsersEmailIndex) {
+  const dupCount = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM users WHERE id NOT IN (
+           SELECT id FROM (
+             SELECT id, ROW_NUMBER() OVER (
+               PARTITION BY lower(email)
+               ORDER BY
+                 (SELECT COUNT(*) FROM memberships m WHERE m.user_id = users.id) DESC,
+                 rowid ASC
+             ) AS rn
+             FROM users
+           ) WHERE rn = 1
+         )`,
+      )
+      .get() as { n: number }
+  ).n;
+  if (dupCount > 0) {
+    db.exec(`
+      DELETE FROM users WHERE id NOT IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY lower(email)
+            ORDER BY
+              (SELECT COUNT(*) FROM memberships m WHERE m.user_id = users.id) DESC,
+              rowid ASC
+          ) AS rn
+          FROM users
+        ) WHERE rn = 1
+      );
+    `);
+    console.warn(
+      `[db] Deduplicated ${dupCount} duplicate user row(s) by email before creating idx_users_email`,
+    );
+  }
+}
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);`);
 
 export default db;

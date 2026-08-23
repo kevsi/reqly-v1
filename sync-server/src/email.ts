@@ -179,3 +179,36 @@ export async function sendWelcomeEmail(email: string, name?: string): Promise<vo
 
   await send(email, subject, html);
 }
+
+/**
+ * Send a password reset code to the given email address.
+ * Throws if sending fails.
+ */
+export async function sendPasswordResetEmail(email: string, code: string): Promise<void> {
+  await ensureInit();
+
+  const subject = "Réinitialisation de votre mot de passe Reqly";
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+      <h1 style="font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #111;">
+        Réinitialisation du mot de passe
+      </h1>
+      <p style="font-size: 14px; line-height: 1.6; color: #555; margin-bottom: 24px;">
+        Vous avez demandé la réinitialisation de votre mot de passe. Utilisez le
+        code ci-dessous pour créer un nouveau mot de passe&nbsp;:
+      </p>
+      <div style="background: #f5f5f5; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; font-family: monospace; color: #111;">
+          ${code}
+        </span>
+      </div>
+      <p style="font-size: 13px; line-height: 1.5; color: #888;">
+        Ce code expire dans 15 minutes. Si vous n'avez pas demandé cette
+        réinitialisation, ignorez cet email. Votre mot de passe actuel reste
+        inchangé.
+      </p>
+    </div>
+  `;
+
+  await send(email, subject, html);
+}

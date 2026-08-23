@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+﻿import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Hono } from "hono";
 import { createHmac } from "node:crypto";
 import syncRoute from "../routes/sync.js";
@@ -48,10 +48,10 @@ const USER_A = "user-a";
 beforeEach(() => {
   process.env.AUTH_SIGNING_SECRET = "test-secret-do-not-use-in-prod";
   db.exec(`
-    DELETE FROM folders;
+    DELETE FROM activity_log; DELETE FROM folders;
     DELETE FROM environments;
     DELETE FROM collections;
-    DELETE FROM memberships;
+    DELETE FROM activity_log; DELETE FROM memberships;
     DELETE FROM invitations;
     DELETE FROM workspaces;
     DELETE FROM users;
@@ -247,7 +247,7 @@ describe("routes/sync", () => {
     });
   });
 
-  describe("e2e: push → poll → verify cycle", () => {
+  describe("e2e: push â†’ poll â†’ verify cycle", () => {
     it("adds, updates, deletes and returns the latest version of each entity", async () => {
       const cookie = makeSessionCookie(USER_A);
       const app = buildApp();
@@ -274,7 +274,7 @@ describe("routes/sync", () => {
       const r1 = (await push1.json()) as { accepted: string[] };
       expect(r1.accepted).toEqual(["col-e2e"]);
 
-      // Poll for the add — we should see it
+      // Poll for the add â€” we should see it
       const poll1 = await app.request(`/sync/poll?workspaceId=${WS}&since=${now - 1000}`, {
         headers: { cookie: `auth_session=${cookie}` },
       });
@@ -300,7 +300,7 @@ describe("routes/sync", () => {
       });
       expect(push2.status).toBe(200);
 
-      // Poll — should see the updated name
+      // Poll â€” should see the updated name
       const poll2 = await app.request(`/sync/poll?workspaceId=${WS}&since=${now - 1000}`, {
         headers: { cookie: `auth_session=${cookie}` },
       });
@@ -329,7 +329,7 @@ describe("routes/sync", () => {
       });
       expect(push3.status).toBe(200);
 
-      // Poll — should see the deletion flag
+      // Poll â€” should see the deletion flag
       const poll3 = await app.request(`/sync/poll?workspaceId=${WS}&since=${now - 1000}`, {
         headers: { cookie: `auth_session=${cookie}` },
       });

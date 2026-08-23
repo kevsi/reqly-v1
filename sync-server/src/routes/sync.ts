@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth, type AuthContext } from "../auth.js";
 import {
   getChangesSince,
+  POLL_PAGE_LIMIT_DEFAULT,
   isMember,
   canWrite,
   pushChanges,
@@ -41,8 +42,23 @@ sync.get("/poll", (c) => {
   if (!workspaceId) return c.json({ error: "Missing workspaceId" }, 400);
   if (!isMember(workspaceId, auth.userId)) return c.json({ error: "Not a member" }, 403);
 
-  const changes = getChangesSince(workspaceId, since);
-  return c.json({ changes, serverTime: Date.now() });
+  // Optional keyset cursor from the previous page (`${updatedAt}|${id}`).
+  const cursorRaw = c.req.query("cursor") ?? null;
+  if (cursorRaw !== null && !/^\d+\|.+$/.test(cursorRaw)) {
+    return c.json({ error: "Invalid 'cursor' parameter; expected '<updatedAt>|<id>'" }, 400);
+  }
+  // Optional page size; the engine clamps it into [1, POLL_PAGE_LIMIT_MAX].
+  const limitRaw = c.req.query("limit");
+  let limit: number | undefined = POLL_PAGE_LIMIT_DEFAULT;
+  if (limitRaw !== undefined) {
+    if (!/^\d+$/.test(limitRaw) || Number(limitRaw) < 1) {
+      return c.json({ error: "Invalid 'limit' parameter; expected a positive integer" }, 400);
+    }
+    limit = Number(limitRaw);
+  }
+
+  const { changes, nextCursor, hasMore } = getChangesSince(workspaceId, since, cursorRaw, limit);
+  return c.json({ changes, nextCursor, hasMore, serverTime: Date.now() });
 });
 
 sync.post("/push", async (c) => {

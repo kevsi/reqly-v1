@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+﻿import { describe, it, expect, beforeEach } from "vitest";
 import db from "../db.js";
 
 describe("sync-server DB", () => {
@@ -6,10 +6,10 @@ describe("sync-server DB", () => {
     // Each test starts from a known-empty state. We rely on the singleton
     // db.ts opens on import; this just clears rows from the relevant tables.
     db.exec(`
-      DELETE FROM folders;
+      DELETE FROM activity_log; DELETE FROM folders;
       DELETE FROM environments;
       DELETE FROM collections;
-      DELETE FROM memberships;
+      DELETE FROM activity_log; DELETE FROM memberships;
       DELETE FROM invitations;
       DELETE FROM workspaces;
       DELETE FROM users;

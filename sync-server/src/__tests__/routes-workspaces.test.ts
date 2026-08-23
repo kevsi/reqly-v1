@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+﻿import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
 import { createHmac } from "node:crypto";
 import workspacesRoute from "../routes/workspaces.js";
@@ -35,10 +35,10 @@ const USER_B = "user-b";
 beforeEach(() => {
   process.env.AUTH_SIGNING_SECRET = "test-secret-do-not-use-in-prod";
   db.exec(`
-    DELETE FROM folders;
+    DELETE FROM activity_log; DELETE FROM folders;
     DELETE FROM environments;
     DELETE FROM collections;
-    DELETE FROM memberships;
+    DELETE FROM activity_log; DELETE FROM memberships;
     DELETE FROM invitations;
     DELETE FROM workspaces;
     DELETE FROM users;

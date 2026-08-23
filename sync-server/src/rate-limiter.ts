@@ -88,13 +88,17 @@ export class InMemoryRateLimiter {
  *   - Sync:    60 req / 60 s  (poll/push — bursty but bounded)
  *   - Sync:    60 req / 60 s  (poll/push — bursty but bounded)
  *   - WS:      10 conn / 60 s (WebSocket upgrade)
- *   - Hook:    60 req / 60 s  (public webhook ingest — must be bounded)
+ *   - Hook:   100 req / 60 s  (public webhook ingest — must be bounded)
+ *
+ * 🔐 SECURITY: Webhook rate limiting is critical to prevent DB exhaustion
+ * from DoS attacks on public endpoints. Increased from 60 to 100 req/min
+ * to accommodate webhook bursts while still protecting against abuse.
  */
 export const apiLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 120 });
 export const authLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 20 });
 export const syncLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 60 });
 export const wsLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 10 });
-export const hookLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 60 });
+export const hookLimiter = new InMemoryRateLimiter({ windowMs: 60_000, maxRequests: 100 });
 
 /**
  * Hono middleware that checks the rate limiter for the client IP.

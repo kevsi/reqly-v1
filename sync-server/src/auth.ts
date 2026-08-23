@@ -18,6 +18,11 @@ interface SessionPayload {
   expires: number;
   /** Session token version — bumped on logout to revoke outstanding tokens. */
   ver?: number;
+  /**
+   * Hard expiry carried by WS-ticket-derived sessions (epoch ms). Regular
+   * tokens rely on `expires`; this stays optional so legacy tokens validate.
+   */
+  exp?: number;
 }
 
 const COOKIE_NAME = "auth_session";
@@ -126,6 +131,12 @@ export async function requireAuth(c: Context, next: Next) {
     // current token_version (bumped on logout). Stale tokens are rejected.
     if (isSessionRevoked(session.userId, session.ver)) {
       return c.json({ error: "Unauthorized" }, 401);
+    }
+    // Admin soft-ban: disabled users are rejected everywhere.
+    const row = db.prepare(`SELECT disabled FROM users WHERE id = ?`).get(session.userId) as
+      { disabled: number | bigint } | undefined;
+    if (row?.disabled) {
+      return c.json({ error: "Account disabled" }, 403);
     }
     c.set("auth", {
       userId: session.userId,
