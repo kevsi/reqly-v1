@@ -3,6 +3,7 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { WebSocketServer } from "ws";
@@ -55,6 +56,10 @@ if (
 const app = new Hono();
 
 const allowedOrigins = parseOrigins();
+
+// gzip/deflate responses (poll payloads are the big ones). Skips small
+// bodies and no-transform requests internally.
+app.use("*", compress());
 
 app.use(
   "*",

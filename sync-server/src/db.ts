@@ -15,6 +15,12 @@ if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
+// WAL-recommended durability/perf tradeoff: durable across app crashes, only a
+// power-loss window remains (EBS already provides its own crash consistency).
+db.pragma("synchronous = NORMAL");
+// Transient lock tolerance (e.g. concurrent readers / litestream) instead of
+// an instant SQLITE_BUSY error.
+db.pragma("busy_timeout = 5000");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
