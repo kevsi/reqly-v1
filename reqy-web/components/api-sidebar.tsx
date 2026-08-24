@@ -15,6 +15,7 @@ import {
   Play,
   Radio,
   Boxes,
+  Activity,
 } from "lucide-react";
 import { AppIcon } from "@/components/app-icon";
 import { ToolsSection } from "@/components/sidebar/tools-section";
@@ -71,6 +72,13 @@ const NAV_ITEMS = [
     fallback: "Capture",
   },
   { icon: Boxes, key: "sidebar.nav.mocks", href: "/mocks/", id: "mocks", fallback: "Mocks" },
+  {
+    icon: Activity,
+    key: "sidebar.nav.monitors",
+    href: "/monitors/",
+    id: "monitors",
+    fallback: "Monitors",
+  },
   {
     icon: Settings,
     key: "sidebar.nav.settings",

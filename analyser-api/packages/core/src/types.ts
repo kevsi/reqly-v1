@@ -35,6 +35,13 @@ export interface AstGrepRule {
   kind?: string;
 }
 
+export interface RegexRule {
+  id: string;
+  pattern: RegExp;
+  /** named capture groups to extract from the match */
+  capture?: Record<string, number>;
+}
+
 export interface AstGrepMatch {
   ruleId: string;
   file: string;
@@ -64,6 +71,7 @@ export interface Detector {
   ignoreDirs?: string[];
   canHandle(manifestFiles: string[], rootPath: string): boolean;
   rules: AstGrepRule[];
+  regexRules?: RegexRule[];
   assemble(matches: AstGrepMatch[], rootPath?: string): ApiRoute[];
 }
 

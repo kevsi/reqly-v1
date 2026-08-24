@@ -1,7 +1,7 @@
 import type { MatchRule, MockRoute, RequestContext } from "./types.js";
 /** Match a request path against a route pattern. Returns path params or null. */
 export declare function matchPath(pattern: string, actualPath: string): Record<string, string> | null;
-/** Find the first matching route for a method + path. */
+/** Find the first matching route for a method + path (disabled routes skipped). */
 export declare function findRoute(routes: MockRoute[], method: string, actualPath: string): {
     route: MockRoute;
     params: Record<string, string>;

@@ -12,6 +12,8 @@ export interface Toast {
   variant?: ToastVariant;
   duration?: number;
   onClick?: () => void;
+  /** Inline action button (e.g. "Undo"), rendered next to the close button. */
+  action?: { label: React.ReactNode; onClick: () => void };
   /** Metadata used for event-based filtering (e.g., { event: "requestComplete" }). */
   meta?: Record<string, string>;
 }

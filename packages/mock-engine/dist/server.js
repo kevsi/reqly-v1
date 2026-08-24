@@ -308,8 +308,14 @@ export function createMockServer(initialConfig, options = {}) {
             }
             if (kind === "timeout") {
                 const entry = {
-                    id: randomId(), at: started, method, url: pathname, matchedRouteId: route.id,
-                    responseStatus: null, durationMs: Date.now() - started, requestHeaders: headers,
+                    id: randomId(),
+                    at: started,
+                    method,
+                    url: pathname,
+                    matchedRouteId: route.id,
+                    responseStatus: null,
+                    durationMs: Date.now() - started,
+                    requestHeaders: headers,
                     note: `failure:timeout`,
                 };
                 record(entry);
@@ -319,8 +325,14 @@ export function createMockServer(initialConfig, options = {}) {
                 return;
             }
             const entry = {
-                id: randomId(), at: started, method, url: pathname, matchedRouteId: route.id,
-                responseStatus: null, durationMs: Date.now() - started, requestHeaders: headers,
+                id: randomId(),
+                at: started,
+                method,
+                url: pathname,
+                matchedRouteId: route.id,
+                responseStatus: null,
+                durationMs: Date.now() - started,
+                requestHeaders: headers,
                 note: `failure:${kind}`,
             };
             record(entry);
@@ -347,16 +359,19 @@ export function createMockServer(initialConfig, options = {}) {
         // Stateful-lite CRUD before templating.
         let statefulResult;
         const stateful = route.stateful?.enabled
-            ? { resource: resourceFromPath(route.path, route.stateful.resource), idField: route.stateful.idField ?? "id" }
+            ? {
+                resource: resourceFromPath(route.path, route.stateful.resource),
+                idField: route.stateful.idField ?? "id",
+            }
             : null;
         if (stateful) {
             const idFromPath = params[stateful.idField];
-            const patch = parsedBody && typeof parsedBody === "object"
-                ? parsedBody
-                : {};
+            const patch = parsedBody && typeof parsedBody === "object" ? parsedBody : {};
             switch (method) {
                 case "POST": {
-                    const shape = response.schema ? generate(response.schema, rng) : {};
+                    const shape = response.schema
+                        ? generate(response.schema, rng)
+                        : {};
                     statefulResult = store.create(stateful.resource, { ...shape, ...patch }, stateful.idField);
                     break;
                 }
@@ -375,16 +390,14 @@ export function createMockServer(initialConfig, options = {}) {
                         // Empty bucket + a schema → serve a generated sample as preview
                         // (nicer first-contact than a bare []).
                         statefulResult =
-                            all.length > 0 || !response.schema
-                                ? all
-                                : [generate(response.schema, rng)];
+                            all.length > 0 || !response.schema ? all : [generate(response.schema, rng)];
                     }
                     break;
                 case "PUT":
                 case "PATCH":
                     statefulResult = idFromPath
-                        ? store.update(stateful.resource, idFromPath, patch, stateful.idField) ??
-                            finish(404, JSON.stringify({ error: "not_found", resource: stateful.resource, id: idFromPath }), route.id)
+                        ? (store.update(stateful.resource, idFromPath, patch, stateful.idField) ??
+                            finish(404, JSON.stringify({ error: "not_found", resource: stateful.resource, id: idFromPath }), route.id))
                         : undefined;
                     break;
                 case "DELETE": {
@@ -398,8 +411,7 @@ export function createMockServer(initialConfig, options = {}) {
             }
             if (res.writableEnded)
                 return; // a 404 was already sent by the guard above
-            if (statefulResult === null &&
-                (method === "GET" || method === "PUT" || method === "PATCH")) {
+            if (statefulResult === null && (method === "GET" || method === "PUT" || method === "PATCH")) {
                 // get/update miss already finished with 404; defensive early-return.
                 if (res.writableEnded)
                     return;

@@ -64,9 +64,7 @@ export const EXAMPLE_MOCK_CONFIG = {
                     id: "card-declined",
                     name: "Carte refusée (si amount > 10000)",
                     statusCode: 402,
-                    rules: [
-                        { target: "body", name: "amount", op: "regex", value: "^\\d{5,}" },
-                    ],
+                    rules: [{ target: "body", name: "amount", op: "regex", value: "^\\d{5,}" }],
                     body: '{"error":"card_declined","message":"Montant {{request.body.amount}} refusé"}',
                 },
                 { id: "ok", statusCode: 200, body: '{"authorized":true,"tx":"{{uuid}}"}' },

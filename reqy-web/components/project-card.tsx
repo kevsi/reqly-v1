@@ -1,6 +1,19 @@
 "use client";
 
-import { Trash2, RefreshCw, FolderOpen, GitBranch } from "lucide-react";
+import {
+  AlertTriangle,
+  Flower2,
+  Guitar,
+  Package,
+  PawPrint,
+  RefreshCw,
+  FolderOpen,
+  GitBranch,
+  Rocket,
+  Trash2,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SavedProject } from "@/lib/config";
 import { useTranslation } from "react-i18next";
@@ -18,13 +31,13 @@ const FRAMEWORK_COLORS: Record<string, string> = {
   unknown: "bg-muted text-muted-foreground border-border",
 };
 
-const FRAMEWORK_ICONS: Record<string, string> = {
-  express: "⚡",
-  fastapi: "🚀",
-  nestjs: "🐱",
-  laravel: "🌸",
-  django: "🎸",
-  unknown: "📦",
+const FRAMEWORK_ICONS: Record<string, LucideIcon> = {
+  express: Zap,
+  fastapi: Rocket,
+  nestjs: PawPrint,
+  laravel: Flower2,
+  django: Guitar,
+  unknown: Package,
 };
 
 function fmt(iso: string, language: string) {
@@ -69,8 +82,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
     >
       {/* Framework badge */}
       <div className="flex items-start justify-between gap-2">
-        <span className="text-2xl" role="img" aria-label={fw}>
-          {FRAMEWORK_ICONS[fw] ?? "📦"}
+        <span className="text-muted-foreground" role="img" aria-label={fw}>
+          {(() => {
+            const Icon = FRAMEWORK_ICONS[fw] ?? Package;
+            return <Icon aria-hidden="true" className="size-6" />;
+          })()}
         </span>
         <span
           className={cn(
@@ -103,10 +119,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {/* Analysis warnings — e.g. low-confidence fallback or no manifest */}
       {project.warnings && project.warnings.length > 0 && (
         <p
-          className="truncate text-[11px] text-amber-600 dark:text-amber-400"
+          className="flex items-center gap-1 truncate text-[11px] text-amber-600 dark:text-amber-400"
           title={project.warnings.join("\n")}
         >
-          ⚠ {project.warnings[0]}
+          <AlertTriangle aria-hidden="true" className="size-3 shrink-0" />
+          {project.warnings[0]}
         </p>
       )}
 

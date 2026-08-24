@@ -13,6 +13,7 @@ import {
   Shield,
   Building2,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -302,7 +303,7 @@ export default function WorkspacesPage() {
                               className="text-muted-foreground/60"
                               title={t("workspace.localTooltip")}
                             >
-                              🔒
+                              <Lock aria-hidden="true" className="size-3" />
                             </span>
                           )}
                         </CardTitle>

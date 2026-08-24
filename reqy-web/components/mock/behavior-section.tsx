@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Play } from "lucide-react";
+import { AlertTriangle, ChevronDown } from "lucide-react";
 import type { MockRoute } from "@reqly/mock-engine";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { runTransformLocal } from "./local-engine";
+import { TransformTester } from "./transform-tester";
 
 const K = {
   title: "mocks.behavior.title",
@@ -42,9 +41,6 @@ const K = {
   statefulIdField: "mocks.behavior.stateful.idField",
   transform: "mocks.behavior.transform.title",
   transformWarning: "mocks.behavior.transform.warning",
-  transformTest: "mocks.behavior.transform.test",
-  transformResult: "mocks.behavior.transform.result",
-  transformError: "mocks.behavior.transform.error",
 } as const;
 
 interface BehaviorSectionProps {
@@ -52,12 +48,51 @@ interface BehaviorSectionProps {
   onChange: (patch: Partial<MockRoute>) => void;
 }
 
+/** Fixed-width numeric field with a unit suffix (ms / %). */
+function NumberUnitField({
+  id,
+  label,
+  value,
+  suffix,
+  width,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  suffix: string;
+  width: string;
+  min?: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-1", width)}>
+      <Label htmlFor={id} className="text-muted-foreground text-xs">
+        {label}
+      </Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type="number"
+          min={0}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value) || 0)}
+          className="h-8 pr-7 font-mono tabular-nums"
+        />
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[10px]"
+        >
+          {suffix}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function BehaviorSection({ route, onChange }: BehaviorSectionProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [testOutput, setTestOutput] = useState<string | null>(null);
-  const [testError, setTestError] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
 
   const latency = route.latency;
   const failure = route.failure;
@@ -85,35 +120,22 @@ export function BehaviorSection({ route, onChange }: BehaviorSectionProps) {
     onChange({ stateful: next.enabled ? next : undefined });
   }
 
-  function testTransform() {
-    setTesting(true);
-    setTestError(null);
-    setTestOutput(null);
+  function safeParseBody(): unknown {
+    const raw = route.responses[0]?.body;
+    if (!raw) return null;
     try {
-      const result = runTransformLocal(route.transform ?? "", {
-        request: {
-          method: String(route.method).toUpperCase(),
-          path: route.path,
-          query: { id: "42" },
-          headers: {},
-        },
-        body: safeParse(route.responses[0]?.body) ?? { id: 42 },
-        state: {},
-      });
-      setTestOutput(typeof result === "string" ? result : JSON.stringify(result, null, 2));
-    } catch (err) {
-      setTestError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setTesting(false);
+      return JSON.parse(raw);
+    } catch {
+      return null;
     }
   }
 
   return (
-    <div className="rounded-lg border bg-card/60">
+    <div className="bg-card/60 rounded-lg border">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="hover:text-foreground text-muted-foreground flex w-full items-center gap-2 px-3 py-2 text-sm font-medium transition-colors"
         aria-expanded={open}
       >
         <ChevronDown
@@ -122,7 +144,7 @@ export function BehaviorSection({ route, onChange }: BehaviorSectionProps) {
         />
         {t(K.title, { defaultValue: "Comportement" })}
         {(route.latency || route.failure || route.stateful || route.transform) && (
-          <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+          <span className="bg-primary size-1.5 rounded-full" aria-hidden="true" />
         )}
       </button>
       {open && (
@@ -130,34 +152,24 @@ export function BehaviorSection({ route, onChange }: BehaviorSectionProps) {
           <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold">{t(K.latency, { defaultValue: "Latence" })}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex w-28 flex-col gap-1">
-                <Label htmlFor={`bh-lat-min`} className="text-xs text-muted-foreground">
-                  {t(K.latencyMin, { defaultValue: "Min (ms)" })}
-                </Label>
-                <Input
-                  id={`bh-lat-min`}
-                  type="number"
-                  min={0}
-                  value={latency?.minMs ?? 0}
-                  onChange={(e) => setLatency({ minMs: Number(e.target.value) || 0 })}
-                  className="h-8"
-                />
-              </div>
-              <div className="flex w-28 flex-col gap-1">
-                <Label htmlFor={`bh-lat-max`} className="text-xs text-muted-foreground">
-                  {t(K.latencyMax, { defaultValue: "Max (ms)" })}
-                </Label>
-                <Input
-                  id={`bh-lat-max`}
-                  type="number"
-                  min={0}
-                  value={latency?.maxMs ?? 0}
-                  onChange={(e) => setLatency({ maxMs: Number(e.target.value) || 0 })}
-                  className="h-8"
-                />
-              </div>
+              <NumberUnitField
+                id="bh-lat-min"
+                label={t(K.latencyMin, { defaultValue: "Min" })}
+                value={latency?.minMs ?? 0}
+                suffix="ms"
+                width="w-24"
+                onChange={(v) => setLatency({ minMs: v })}
+              />
+              <NumberUnitField
+                id="bh-lat-max"
+                label={t(K.latencyMax, { defaultValue: "Max" })}
+                value={latency?.maxMs ?? 0}
+                suffix="ms"
+                width="w-24"
+                onChange={(v) => setLatency({ maxMs: v })}
+              />
               {(latency?.minMs ?? 0) === 0 && (latency?.maxMs ?? 0) === 0 && (
-                <p className="text-xs text-muted-foreground/70">
+                <p className="text-muted-foreground/70 text-xs">
                   {t(K.latencyHint, { defaultValue: "0 / 0 = aucune latence" })}
                 </p>
               )}
@@ -223,21 +235,23 @@ export function BehaviorSection({ route, onChange }: BehaviorSectionProps) {
                     </SelectContent>
                   </Select>
                   {failure?.kind === "status" && (
-                    <Input
-                      type="number"
+                    <NumberUnitField
+                      id="bh-fail-status"
+                      label={t(K.failureStatusCode, { defaultValue: "Code d'erreur" })}
                       value={failure.statusCode ?? 500}
-                      onChange={(e) => setFailure({ statusCode: Number(e.target.value) || 500 })}
-                      className="h-8 w-24"
-                      aria-label={t(K.failureStatusCode, { defaultValue: "Code d'erreur" })}
+                      suffix=""
+                      width="w-20"
+                      onChange={(v) => setFailure({ statusCode: v || 500 })}
                     />
                   )}
                   {failure?.kind === "timeout" && (
-                    <Input
-                      type="number"
+                    <NumberUnitField
+                      id="bh-fail-timeout"
+                      label={t(K.failureTimeoutMs, { defaultValue: "Durée du timeout" })}
                       value={failure.timeoutMs ?? 5000}
-                      onChange={(e) => setFailure({ timeoutMs: Number(e.target.value) || 5000 })}
-                      className="h-8 w-28"
-                      aria-label={t(K.failureTimeoutMs, { defaultValue: "Durée du timeout (ms)" })}
+                      suffix="ms"
+                      width="w-24"
+                      onChange={(v) => setFailure({ timeoutMs: v || 5000 })}
                     />
                   )}
                 </div>
@@ -300,52 +314,21 @@ export function BehaviorSection({ route, onChange }: BehaviorSectionProps) {
               placeholder={'return { ...body, source: "mock" }'}
               aria-label={t(K.transform, { defaultValue: "Transform (JS)" })}
             />
-            <p className="text-[11px] text-amber-600 dark:text-amber-400">
-              ⚠{" "}
+            <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+              <AlertTriangle aria-hidden="true" className="size-3 shrink-0" />
               {t(K.transformWarning, {
                 defaultValue: "Sandbox JS 250 ms — pas d'IO, pas de require.",
               })}
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 w-fit text-xs"
-              onClick={testTransform}
-              disabled={testing || !route.transform}
-            >
-              <Play aria-hidden="true" className="size-3" />
-              {t(K.transformTest, { defaultValue: "Tester" })}
-            </Button>
-            {(testOutput !== null || testError !== null) && (
-              <div className="rounded-md border bg-muted/30 p-2">
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {testError
-                    ? t(K.transformError, { defaultValue: "Erreur" })
-                    : t(K.transformResult, { defaultValue: "Résultat" })}
-                </p>
-                <pre
-                  className={cn(
-                    "max-h-40 overflow-auto font-mono text-xs whitespace-pre-wrap",
-                    testError && "text-destructive",
-                  )}
-                >
-                  {testError ?? testOutput}
-                </pre>
-              </div>
-            )}
+            <TransformTester
+              code={route.transform ?? ""}
+              method={String(route.method).toUpperCase()}
+              path={route.path}
+              sampleBody={safeParseBody() ?? { id: 42 }}
+            />
           </div>
         </div>
       )}
     </div>
   );
-}
-
-function safeParse(raw: string | undefined): unknown {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
 }

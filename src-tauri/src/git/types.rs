@@ -32,6 +32,7 @@ pub struct FileStatus {
     pub head: u8,    // 0=absent, 1=present
     pub workdir: u8, // 0=absent, 1=unchanged, 2=modified
     pub staged: u8,  // 0=absent, 1=unchanged, 2=modified, 3=added
+    pub conflicted: bool, // index avec entrées non fusionnées (conflit)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -87,3 +88,21 @@ pub struct RemoteInfo {
     pub name: String,
     pub url: String,
 }
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCredentials {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "ts-export", derive(TS))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", ts(export, rename_all = "camelCase"))]
+pub struct GitStashEntry {
+    pub index: usize,
+    pub message: String,
+    pub oid: String,
+}
+

@@ -21,6 +21,7 @@ export type {
 
 import { GitService } from "@/lib/git/git-service";
 import { TauriGitBackend, WebGitBackend } from "@/lib/git/git-backend";
+import { registerGitService } from "@/lib/git/git-ai-bridge";
 import { isTauriAvailable } from "@/lib/tauri";
 import { secureKeys } from "@/lib/secure-storage";
 import type { DiffFile, GitCredentials, GitState } from "@/lib/git/types";
@@ -49,6 +50,8 @@ export function useGit(collections: Collection[]) {
       );
     }
     const svc = serviceRef.current;
+    // Pont outils IA : expose le service courant (lecture seule côté IA).
+    registerGitService(() => serviceRef.current);
     setState(svc.getState());
     const unsub = svc.subscribe((newState) => setState(newState));
 
@@ -67,6 +70,7 @@ export function useGit(collections: Collection[]) {
 
     return () => {
       cancelled = true;
+      registerGitService(null);
       unsub();
     };
   }, []);

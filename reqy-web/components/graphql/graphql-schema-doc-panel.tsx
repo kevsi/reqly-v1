@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { X, Search } from "lucide-react";
+import { ArrowLeft, X, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 interface SchemaDocPanelProps {
   schema: unknown;
@@ -113,7 +113,8 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
               onClick={() => setSelectedType(null)}
               className="text-xs text-muted-foreground hover:text-foreground mb-3 flex items-center gap-1"
             >
-              ← {t("graphql.schemaDoc.backToTypes")}
+              <ArrowLeft aria-hidden="true" className="size-3" />
+              {t("graphql.schemaDoc.backToTypes")}
             </button>
             <div className="text-sm font-bold text-primary mb-2">{selectedTypeObj.name}</div>
             <p className="text-[11px] text-muted-foreground mb-3">

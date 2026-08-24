@@ -41,10 +41,12 @@ export function matchPath(pattern, actualPath) {
         return null;
     return params;
 }
-/** Find the first matching route for a method + path. */
+/** Find the first matching route for a method + path (disabled routes skipped). */
 export function findRoute(routes, method, actualPath) {
     const upper = method.toUpperCase();
     for (const route of routes) {
+        if (route.enabled === false)
+            continue;
         if (route.method.toUpperCase() !== upper)
             continue;
         const params = matchPath(route.path, actualPath);
@@ -84,8 +86,7 @@ export function evaluateRule(rule, ctx) {
                 : ctx.headers;
             break;
         case "body": {
-            const parsed = ctx.body ??
-                safeParse(ctx.rawBody);
+            const parsed = ctx.body ?? safeParse(ctx.rawBody);
             actual = readDotPath(parsed, rule.name);
             break;
         }
@@ -96,8 +97,7 @@ export function evaluateRule(rule, ctx) {
         case "missing":
             return actual === undefined || actual === null || actual === "";
         case "equals":
-            return (valueToComparable(actual).toLowerCase() ===
-                valueToComparable(rule.value).toLowerCase());
+            return (valueToComparable(actual).toLowerCase() === valueToComparable(rule.value).toLowerCase());
         case "contains": {
             if (Array.isArray(actual))
                 return actual.map(valueToComparable).includes(String(rule.value));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Loader2, CheckCircle2, XCircle, Play, StopCircle, AlertCircle } from "lucide-react";
+import { Loader2, Check, CheckCircle2, X, XCircle, Play, StopCircle, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { methodBadge } from "@/lib/http-method-colors";
 import { cn } from "@/lib/utils";
@@ -303,13 +303,18 @@ export function BatchRunProgress({
                               }))
                         }
                         className={cn(
-                          "inline-flex items-center rounded px-1 py-0.5 text-[9px] font-mono font-medium leading-none",
+                          "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-mono font-medium leading-none",
                           ar.passed
                             ? "bg-success/10 text-success"
                             : "bg-destructive/10 text-destructive",
                         )}
                       >
-                        {ar.passed ? "✓" : "✗"} {ar.assertion.type}
+                        {ar.passed ? (
+                          <Check aria-hidden="true" className="size-2.5" />
+                        ) : (
+                          <X aria-hidden="true" className="size-2.5" />
+                        )}
+                        {ar.assertion.type}
                       </span>
                     ))}
                   </div>

@@ -48,7 +48,7 @@ export function matchPath(pattern: string, actualPath: string): Record<string, s
   return params;
 }
 
-/** Find the first matching route for a method + path. */
+/** Find the first matching route for a method + path (disabled routes skipped). */
 export function findRoute(
   routes: MockRoute[],
   method: string,
@@ -56,6 +56,7 @@ export function findRoute(
 ): { route: MockRoute; params: Record<string, string> } | null {
   const upper = method.toUpperCase();
   for (const route of routes) {
+    if (route.enabled === false) continue;
     if (route.method.toUpperCase() !== upper) continue;
     const params = matchPath(route.path, actualPath);
     if (params) return { route, params };

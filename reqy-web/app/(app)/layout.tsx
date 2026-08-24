@@ -24,6 +24,7 @@ const ACTIVE_PAGE_MAP: Record<string, string> = {
   workspaces: "workspaces",
   graphql: "graphql",
   mocks: "mocks",
+  monitors: "monitors",
   "my-projects": "projects", // URL /my-projects but sidebar expects "projects"
   sdks: "sdks",
   capture: "capture",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { RefreshCw, Wand2 } from "lucide-react";
+import { Braces, Loader2, RefreshCw, Wand2 } from "lucide-react";
 import type { BodySchema } from "@reqly/mock-engine";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ const K = {
   preview: "mocks.response.schema.preview",
   regenerate: "mocks.response.schema.regenerate",
   invalid: "mocks.response.schema.invalid",
+  format: "mocks.response.schema.format",
   chipEmail: "mocks.response.schema.chipEmail",
   chipUuid: "mocks.response.schema.chipUuid",
   chipDateTime: "mocks.response.schema.chipDateTime",
@@ -148,6 +149,21 @@ export function SchemaEditor({ schema, onChange }: SchemaEditorProps) {
           {t(K.schemaTab, { defaultValue: "Schéma (BodySchema JSON)" })}
         </Label>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => {
+              if (parsed.valid) commit(JSON.stringify(parsed.schema, null, 2));
+            }}
+            disabled={!parsed.valid}
+            aria-label={t(K.format, { defaultValue: "Formater" })}
+            title={t(K.format, { defaultValue: "Formater (JSON.stringify)" })}
+          >
+            <Braces aria-hidden="true" className="size-3" />
+            {t(K.format, { defaultValue: "Formater" })}
+          </Button>
           <Switch
             id={`${id}-preview`}
             checked={previewOn}
@@ -216,7 +232,9 @@ export function SchemaEditor({ schema, onChange }: SchemaEditorProps) {
               {preview ?? ""}
             </pre>
           )}
-          {!preview && !previewError && <span className="text-xs text-muted-foreground">⋯</span>}
+          {!preview && !previewError && (
+            <Loader2 aria-hidden="true" className="size-3.5 animate-spin text-muted-foreground" />
+          )}
         </div>
       )}
     </div>

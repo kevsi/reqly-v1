@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
+mod analyzer;
 mod capture;
 mod error;
 mod fetch;
@@ -15,8 +16,9 @@ mod store;
 mod ts_bindings;
 
 use crate::capture::{
-    clear_captured_sessions, get_captured_session, list_captured_sessions, set_bandwidth_limit,
-    start_capture_proxy, stop_capture_proxy, ManagedCaptureProxyState,
+    clear_captured_sessions, delete_captured_session, get_captured_session,
+    list_captured_sessions, set_bandwidth_limit, start_capture_proxy, stop_capture_proxy,
+    ManagedCaptureProxyState,
 };
 use crate::fetch::{fetch_proxy, SharedClient};
 use crate::open::{export_json, open_external, save_file};
@@ -81,10 +83,12 @@ pub fn run() {
             fetch_proxy,
             export_json,
             open_external,
+            analyzer::analyze_backend,
             start_capture_proxy,
             stop_capture_proxy,
             list_captured_sessions,
             get_captured_session,
+            delete_captured_session,
             clear_captured_sessions,
             set_bandwidth_limit,
             git::commands::git_init,
@@ -111,6 +115,11 @@ pub fn run() {
             git::commands::git_sync_collections,
             git::commands::git_write_collection_file,
             git::commands::git_ls_remote,
+            git::commands::git_stash_save,
+            git::commands::git_stash_pop,
+            git::commands::git_stash_apply,
+            git::commands::git_stash_drop,
+            git::commands::git_stash_list,
             mcp::start_mcp_server,
             mcp::stop_mcp_server,
             mcp::get_mcp_server_status,
@@ -124,6 +133,7 @@ pub fn run() {
             store::get_encryption_passphrase,
             oauth::start_device_flow_cmd,
             oauth::poll_device_token_cmd,
+            oauth::start_github_oauth_server,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -135,6 +145,7 @@ pub fn run() {
             }
             // Enregistrer le schéma de deep-link pour que le navigateur externe puisse rediriger vers reqly://
             app.deep_link().register("reqly").ok();
+
             // Point the offline queue store at the app's data directory (falls back
             // to a temp dir if it cannot be resolved).
             if let Ok(app_data_dir) = app.path().app_data_dir() {

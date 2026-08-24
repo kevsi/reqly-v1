@@ -43,6 +43,13 @@ describe("findRoute", () => {
     expect(findRoute(routes, "get", "/users/9")?.route.id).toBe("r1");
   });
 
+  it("skips disabled routes", () => {
+    const off: MockRoute = { id: "off", method: "GET", path: "/x", enabled: false, responses: [] };
+    expect(findRoute([off], "GET", "/x")).toBeNull();
+    const on: MockRoute = { id: "on", method: "GET", path: "/x", responses: [] };
+    expect(findRoute([off, on], "GET", "/x")?.route.id).toBe("on");
+  });
+
   it("returns null for unknown route/method combos", () => {
     expect(findRoute(routes, "DELETE", "/users/1")).toBeNull();
   });

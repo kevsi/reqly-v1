@@ -221,7 +221,9 @@ export function GraphqlTabBar({
                   {tab.name}
                 </span>
               )}
-              {tab.dirty && !tab.saved && <span className="ml-1 text-warning">●</span>}
+              {tab.dirty && !tab.saved && (
+                <span className="ml-1 inline-block size-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+              )}
               <span
                 role="button"
                 tabIndex={0}
@@ -289,7 +291,9 @@ export function GraphqlTabBar({
               >
                 <span className="truncate flex-1">
                   {tab.name}
-                  {tab.dirty && !tab.saved && <span className="ml-1 text-warning">●</span>}
+                  {tab.dirty && !tab.saved && (
+                <span className="ml-1 inline-block size-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+              )}
                 </span>
                 {tab.id === activeTabId && <CheckCircle className="size-3 text-primary shrink-0" />}
               </DropdownMenuItem>

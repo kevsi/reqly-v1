@@ -128,7 +128,7 @@ function buildCsp(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
-    `connect-src 'self' https: wss: http://localhost:* ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
+    `connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ipc: http://ipc.localhost tauri: https://tauri.localhost ${syncConnectTargets}`,
     "font-src 'self' data:",
     "frame-ancestors 'none'",
     "object-src 'none'",

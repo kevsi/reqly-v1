@@ -137,6 +137,12 @@ export function registerMock(program: Command): void {
           chalk.gray(`  config: ${resolved}${opts.watch ? chalk.cyan("  (watching)") : ""}`),
         );
         console.log(chalk.gray(`  reset state: POST /mock/reset · stop: Ctrl+C`));
+        if (adminToken) {
+          console.log(chalk.cyan(`  admin token: ${adminToken}`));
+          console.log(
+            chalk.gray(`  attach from reqly-web → page Mocks → connecter avec ce token`),
+          );
+        }
 
         let watcher: import("node:fs").FSWatcher | undefined;
         if (opts.watch) {

@@ -25,8 +25,10 @@ export interface StreamLLMOptions {
   host?: string;
   port?: number | string;
   openaiUrl?: string;
-  question: string;
-  ctx: RequestContext;
+  /** Requis sauf si `rawMessage` est fourni. */
+  question?: string;
+  /** Requis sauf si `rawMessage` est fourni. */
+  ctx?: RequestContext;
   diagnostics?: Diagnostic[];
   signal?: AbortSignal;
   /** Outils LLM exposés au modèle. Si absent, pas de function calling. */
@@ -106,6 +108,21 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
   // garantit que les deux chemins (web et Tauri) envoient des tools valides.
   const openAITools = opts.tools?.map(toOpenAITool);
 
+  // Prompt utilisateur : rawMessage auto-suffisant, sinon question+ctx requis.
+  let userMessage: string;
+  if (opts.rawMessage != null) {
+    userMessage = opts.rawMessage;
+  } else if (opts.question && opts.ctx) {
+    userMessage = buildUserPrompt(
+      opts.question,
+      opts.ctx,
+      opts.diagnostics ?? [],
+      opts.retrievedChunks ?? [],
+    );
+  } else {
+    throw new Error("streamLLM: fournir rawMessage, ou question + ctx.");
+  }
+
   if (isTauriAvailable()) {
     const result = await callAiProxyTauri({
       provider: opts.provider,
@@ -115,14 +132,7 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
       port: opts.port,
       openaiUrl: opts.openaiUrl,
       system: opts.system ?? SYSTEM_PROMPT,
-      message:
-        opts.rawMessage ??
-        buildUserPrompt(
-          opts.question,
-          opts.ctx,
-          opts.diagnostics ?? [],
-          opts.retrievedChunks ?? [],
-        ),
+      message: userMessage,
       tools: openAITools,
       tool_choice: opts.tool_choice,
       previousTurns: opts.previousTurns,
@@ -140,10 +150,6 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
     return;
   }
 
-  const userPrompt =
-    opts.rawMessage ??
-    buildUserPrompt(opts.question, opts.ctx, opts.diagnostics ?? [], opts.retrievedChunks ?? []);
-
   const body: Record<string, unknown> = {
     provider: opts.provider,
     apiKey: opts.apiKey,
@@ -152,7 +158,7 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
     port: opts.port,
     openaiUrl: opts.openaiUrl,
     system: opts.system ?? SYSTEM_PROMPT,
-    message: userPrompt,
+    message: userMessage,
     stream: true,
   };
 

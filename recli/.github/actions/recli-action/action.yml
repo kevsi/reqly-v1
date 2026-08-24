@@ -39,8 +39,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Actions épinglées par SHA (anti supply-chain) :
+    #   setup-node v4      -> 49933ea5288caeca8642d1e84afbd3f7d6820020
+    #   upload-artifact v4 -> ea165f8d65b6e75b540449e92b4886f43607fa02
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
         node-version: "20"
 
@@ -50,24 +53,38 @@ runs:
 
     - name: Validate collection
       shell: bash
-      run: recli validate "${{ inputs.collection }}"
+      env:
+        RECLI_COLLECTION: ${{ inputs.collection }}
+      run: recli validate "$RECLI_COLLECTION"
 
     - name: Run collection
       shell: bash
+      env:
+        # Les inputs GitHub Actions sont des données non fiables : on les
+        # passe par des variables d'environnement citées ("$VAR") au lieu de
+        # les interpoler dans le script shell (anti-injection de commandes).
+        RECLI_COLLECTION: ${{ inputs.collection }}
+        RECLI_ENV: ${{ inputs.env }}
+        RECLI_TIMEOUT: ${{ inputs.timeout }}
+        RECLI_REPORTER: ${{ inputs.reporter }}
+        RECLI_OUTPUT: ${{ inputs.output }}
+        RECLI_PARALLEL: ${{ inputs.parallel }}
+        RECLI_ITERATIONS: ${{ inputs.iterations }}
+        RECLI_DATA: ${{ inputs.data }}
       run: |
         RECLI_ARGS=""
-        if [ -n "${{ inputs.env }}" ]; then RECLI_ARGS="$RECLI_ARGS --env ${{ inputs.env }}"; fi
-        if [ -n "${{ inputs.timeout }}" ]; then RECLI_ARGS="$RECLI_ARGS --timeout ${{ inputs.timeout }}"; fi
-        if [ -n "${{ inputs.reporter }}" ]; then RECLI_ARGS="$RECLI_ARGS --reporter ${{ inputs.reporter }}"; fi
-        if [ -n "${{ inputs.output }}" ]; then RECLI_ARGS="$RECLI_ARGS --output ${{ inputs.output }}"; fi
-        if [ "${{ inputs.parallel }}" = "true" ]; then RECLI_ARGS="$RECLI_ARGS --parallel"; fi
-        if [ -n "${{ inputs.iterations }}" ]; then RECLI_ARGS="$RECLI_ARGS --iterations ${{ inputs.iterations }}"; fi
-        if [ -n "${{ inputs.data }}" ]; then RECLI_ARGS="$RECLI_ARGS --data ${{ inputs.data }}"; fi
-        recli run "${{ inputs.collection }}" $RECLI_ARGS
+        if [ -n "$RECLI_ENV" ]; then RECLI_ARGS="$RECLI_ARGS --env $RECLI_ENV"; fi
+        if [ -n "$RECLI_TIMEOUT" ]; then RECLI_ARGS="$RECLI_ARGS --timeout $RECLI_TIMEOUT"; fi
+        if [ -n "$RECLI_REPORTER" ]; then RECLI_ARGS="$RECLI_ARGS --reporter $RECLI_REPORTER"; fi
+        if [ -n "$RECLI_OUTPUT" ]; then RECLI_ARGS="$RECLI_ARGS --output $RECLI_OUTPUT"; fi
+        if [ "$RECLI_PARALLEL" = "true" ]; then RECLI_ARGS="$RECLI_ARGS --parallel"; fi
+        if [ -n "$RECLI_ITERATIONS" ]; then RECLI_ARGS="$RECLI_ARGS --iterations $RECLI_ITERATIONS"; fi
+        if [ -n "$RECLI_DATA" ]; then RECLI_ARGS="$RECLI_ARGS --data $RECLI_DATA"; fi
+        recli run "$RECLI_COLLECTION" $RECLI_ARGS
 
     - name: Upload report
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: recli-report
         path: ${{ inputs.output }}

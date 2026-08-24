@@ -75,6 +75,8 @@ export interface StatefulSpec {
 }
 export interface MockRoute {
     id: string;
+    /** Disabled routes are skipped by the matcher entirely. Default: true. */
+    enabled?: boolean;
     method: Uppercase<HttpMethod> | Lowercase<HttpMethod>;
     /**
      * Path pattern supporting `:param` segments and a trailing `*splat`

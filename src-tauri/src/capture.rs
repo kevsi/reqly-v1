@@ -8,7 +8,7 @@
 //! between the proxy thread and the Tauri command that stops it.
 
 use std::fs;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -23,29 +23,111 @@ use uuid::Uuid;
 
 const SENSITIVE_HEADER_PREFIXES: &[&str] = &[
     "authorization",
-    "cookie",
     "proxy-authorization",
+    "cookie",
+    "set-cookie",
     "x-api-key",
+    "api-key",
     "x-auth-token",
+    "x-access-token",
+    "x-refresh-token",
+    "x-session-token",
+    "x-csrf-token",
+    "credentials",
 ];
 
 fn redact_headers(headers: &[(String, String)]) -> Vec<(String, String)> {
     headers
         .iter()
         .filter(|(k, _)| {
-            !SENSITIVE_HEADER_PREFIXES
+            let lower = k.to_ascii_lowercase();
+            if SENSITIVE_HEADER_PREFIXES
                 .iter()
-                .any(|p| k.eq_ignore_ascii_case(p))
+                .any(|p| lower.as_str().eq_ignore_ascii_case(p))
+            {
+                return false;
+            }
+            // Élargit la détection aux variantes (x-…-token, …-secret, …-password…)
+            !(lower.contains("authorization")
+                || lower.contains("auth-token")
+                || lower.contains("access-token")
+                || lower.contains("refresh-token")
+                || lower.contains("session-token")
+                || lower.contains("secret")
+                || lower.contains("password")
+                || lower.ends_with("-key"))
         })
         .cloned()
         .collect()
 }
 
-use crate::error::AppError;
+use crate::error::{AppError, NetworkErrorKind};
 use crate::fetch::SharedClient;
 
 /// Maximum response body size the capture proxy will forward (50 MB).
 const MAX_RESPONSE_SIZE: usize = 50 * 1024 * 1024;
+
+/// IMDS endpoint over IPv6 on AWS EC2 (fd00:ec2::254).
+const AWS_METADATA_IPV6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x0254);
+
+/// `true` si l'IP est un point de terminaison de métadonnées cloud (SSRF).
+///
+/// Politique : le LAN reste autorisé (cas d'usage principal de Reqly), mais
+/// les adresses de métadonnées cloud sont TOUJOURS refusées car un simple GET
+/// permettrait de dérober les credentials de la VM hôte via le proxy :
+/// - IPv4 : plage link-local 169.254.0.0/16 (inclut 169.254.169.254)
+/// - IPv6 : fe80::/10 (link-local) et fd00:ec2::254 (IMDS EC2 sur IPv6)
+/// - Formes mappées ::ffff:a.b.c.d : l'IPv4 encapsulée est revérifiée
+fn is_blocked_metadata_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_link_local(),
+        IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return is_blocked_metadata_ip(IpAddr::V4(mapped));
+            }
+            (v6.segments()[0] & 0xffc0) == 0xfe80 || v6 == AWS_METADATA_IPV6
+        }
+    }
+}
+
+/// Résout l'hôte cible et refuse la requête dès qu'une IP résolue est un
+/// endpoint de métadonnées cloud (`is_blocked_metadata_ip`). Un échec de
+/// résolution n'est pas traité comme un blocage : reqwest signalera l'erreur
+/// au moment de l'envoi réel.
+async fn block_metadata_targets(url: &reqwest::Url) -> Result<(), AppError> {
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::InvalidInput("Invalid URL: missing host".into()))?
+        .to_string();
+    let port = url
+        .port_or_known_default()
+        .unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
+
+    // La résolution DNS est bloquante ; on la sort du thread async du runtime
+    // dédié au proxy pour ne pas immobiliser l'exécuteur.
+    let addrs = tokio::task::spawn_blocking(move || {
+        std::net::ToSocketAddrs::to_socket_addrs(&(host.as_str(), port))
+            .map(|it| it.map(|a| a.ip()).collect::<Vec<IpAddr>>())
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let addrs = match addrs {
+        Ok(a) => a,
+        Err(_) => return Ok(()),
+    };
+
+    if addrs.into_iter().any(is_blocked_metadata_ip) {
+        return Err(AppError::InvalidInput(
+            "metadata endpoint blocked".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Nombre maximal de sessions gardées en mémoire + sur disque (les plus
+/// anciennes sont évincées). 2000 = quelques Mo de JSON, limite raisonnable.
+const MAX_CAPTURED_SESSIONS: usize = 2000;
 
 #[derive(Default)]
 pub struct CaptureProxyState {
@@ -235,11 +317,14 @@ async fn forward_request_async(
     headers: &[(String, String)],
     body: Option<&str>,
 ) -> Result<(u16, Vec<(String, String)>, String), AppError> {
-    let _parsed_url = reqwest::Url::parse(url)
+    let parsed_url = reqwest::Url::parse(url)
         .map_err(|e| AppError::InvalidInput(format!("Invalid URL: {}", e)))?;
 
-    // No SSRF blocking here — same rationale as fetch_proxy: Reqly is a
-    // desktop client, testing local/LAN APIs is a core use case.
+    // SSRF policy: local/LAN targets stay allowed (core desktop use-case),
+    // but cloud-metadata endpoints are ALWAYS blocked — the host is resolved
+    // and any address landing on an IMDS/link-local range is refused, so the
+    // capture proxy cannot be used to steal cloud VM credentials.
+    block_metadata_targets(&parsed_url).await?;
 
     let mut request = client.request(
         method
@@ -256,23 +341,42 @@ async fn forward_request_async(
         request = request.body(reqwest::Body::from(b.to_string()));
     }
 
-    let response = request.send().await?;
+let response = request.send().await?;
     let status = response.status().as_u16();
     let resp_headers: Vec<(String, String)> = response
         .headers()
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
         .collect();
+
+    // Vérification précoce du Content-Length pour éviter de bufferiser une
+    // réponse trop volumineuse (le corps est tout de même lu en mémoire, mais
+    // on refuse avant d'allouer si l'en-tête l'annonce).
+    if let Some(cl) = response.content_length() {
+        if cl as usize > MAX_RESPONSE_SIZE {
+            return Err(AppError::network(
+                NetworkErrorKind::MalformedResponse,
+                "La réponse du serveur est trop volumineuse.",
+                format!(
+                    "Response body too large: {cl} bytes (max: {MAX_RESPONSE_SIZE} bytes)"
+                ),
+            ));
+        }
+    }
+
     let response_body = response
         .bytes()
         .await
-        .map_err(|e| AppError::Network(e.to_string()))?;
+        .map_err(AppError::from)?;
     if response_body.len() > MAX_RESPONSE_SIZE {
-        return Err(AppError::Network(format!(
-            "Response body too large: {} bytes (max: {} bytes)",
-            response_body.len(),
-            MAX_RESPONSE_SIZE
-        )));
+        return Err(AppError::network(
+            NetworkErrorKind::MalformedResponse,
+            "La réponse du serveur est trop volumineuse.",
+            format!(
+                "Response body too large: {} bytes (max: {MAX_RESPONSE_SIZE} bytes)",
+                response_body.len(),
+            ),
+        ));
     }
     let body_str = String::from_utf8(response_body.to_vec())
         .map_err(|e| AppError::Internal(format!("Response body is not valid UTF-8: {}", e)))?;
@@ -288,7 +392,12 @@ fn start_proxy_server(
 ) -> Result<(), AppError> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let server = Server::http(addr)
-        .map_err(|e| AppError::Network(format!("Failed to bind port {}: {}", port, e)))?;
+        .map_err(|e| AppError::network(
+            NetworkErrorKind::Unknown,
+            format!("Le port {} est déjà utilisé ou bloqué par une autre application. Choisissez un autre port (ex: 8888 ou 9090).", port),
+            format!("Failed to bind port {}: {}", port, e),
+        ))?;
+
 
     let shutdown_flag = Arc::new(AtomicBool::new(false));
     let flag_for_server = shutdown_flag.clone();
@@ -420,7 +529,7 @@ fn start_proxy_server(
             let (status, resp_headers, resp_body) = match forward_result {
                 Ok((s, h, b)) => (s, Some(h), Some(b)),
                 Err(e) => {
-                    captured.error = Some(e.to_string());
+                    captured.error = Some(e.user_message());
                     captured.duration_ms = Some(start.elapsed().as_millis() as u64);
                     let _ = handle.emit("captured-request-updated", &captured);
                     match tiny_http::Header::from_bytes(
@@ -429,7 +538,7 @@ fn start_proxy_server(
                     ) {
                         Ok(header) => {
                             let _ = request.respond(
-                                Response::from_string(format!("Proxy error: {}", e))
+                                Response::from_string(format!("Proxy error: {}", e.user_message()))
                                     .with_status_code(502)
                                     .with_header(header),
                             );
@@ -460,6 +569,13 @@ fn start_proxy_server(
             // and persist to disk so captures survive an app restart.
             if let Ok(mut g) = captured_store.lock() {
                 g.captured.push(captured.clone());
+                // Rétention bornée : au-delà de MAX_CAPTURED_SESSIONS on évince
+                // les plus anciennes (mémoire + disque) pour éviter une
+                // croissance illimitée du fichier captures.json.
+                if g.captured.len() > MAX_CAPTURED_SESSIONS {
+                    let overflow = g.captured.len() - MAX_CAPTURED_SESSIONS;
+                    g.captured.drain(0..overflow);
+                }
                 let _ = write_captures(&g.captured);
             }
 
@@ -635,6 +751,33 @@ pub fn clear_captured_sessions(
     write_captures(&[])
 }
 
+/// Supprime une session capturée par son id (memory + disque).
+#[tauri::command]
+pub fn delete_captured_session(
+    id: String,
+    state: tauri::State<'_, ManagedCaptureProxyState>,
+) -> Result<(), AppError> {
+    {
+        let mut guard = state.lock()?;
+        let before = guard.captured.len();
+        guard.captured.retain(|c| c.id != id);
+        if guard.captured.len() == before {
+            return Err(AppError::NotFound(
+                "Captured session not found".into(),
+            ));
+        }
+    }
+    write_captures_from_state(&state)
+}
+
+/// Raccourci : réécrit le fichier captures.json depuis l'état courant.
+fn write_captures_from_state(
+    state: &tauri::State<'_, ManagedCaptureProxyState>,
+) -> Result<(), AppError> {
+    let guard = state.lock()?;
+    write_captures(&guard.captured)
+}
+
 #[tauri::command]
 pub fn set_bandwidth_limit(
     kbps: Option<u32>,
@@ -731,5 +874,46 @@ mod tests {
             .join(uuid::Uuid::new_v4().to_string())
             .join("does-not-exist.json");
         assert!(read_captures_from(&missing).is_empty());
+    }
+
+    // ── SSRF: cloud-metadata endpoints (SEC-3) ───────────────────
+
+    #[test]
+    fn aws_metadata_ipv4_is_blocked() {
+        assert!(is_blocked_metadata_ip("169.254.169.254".parse().unwrap()));
+    }
+
+    #[test]
+    fn link_local_range_is_blocked_not_only_imds() {
+        assert!(is_blocked_metadata_ip("169.254.0.1".parse().unwrap()));
+        assert!(is_blocked_metadata_ip("169.254.255.254".parse().unwrap()));
+    }
+
+    #[test]
+    fn ipv4_mapped_metadata_form_is_blocked() {
+        assert!(is_blocked_metadata_ip("::ffff:169.254.169.254".parse().unwrap()));
+    }
+
+    #[test]
+    fn imds_over_ipv6_is_blocked() {
+        assert!(is_blocked_metadata_ip("fd00:ec2::254".parse().unwrap()));
+    }
+
+    #[test]
+    fn ipv6_link_local_range_is_blocked() {
+        assert!(is_blocked_metadata_ip("fe80::1".parse().unwrap()));
+        assert!(is_blocked_metadata_ip("febf::ffff".parse().unwrap()));
+    }
+
+    #[test]
+    fn lan_and_public_ips_are_allowed() {
+        // LAN reste autorisé (cas d'usage principal du client desktop).
+        assert!(!is_blocked_metadata_ip("192.168.1.10".parse().unwrap()));
+        assert!(!is_blocked_metadata_ip("10.0.0.5".parse().unwrap()));
+        assert!(!is_blocked_metadata_ip("8.8.8.8".parse().unwrap()));
+        assert!(!is_blocked_metadata_ip(
+            "::ffff:192.168.1.10".parse().unwrap()
+        ));
+        assert!(!is_blocked_metadata_ip("2001:db8::1".parse().unwrap()));
     }
 }

@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "name": "demo-complet",
+  "port": 4015,
+  "cors": true,
+  "routes": [
+    {
+      "id": "get-todos",
+      "method": "GET",
+      "path": "/api/todos",
+      "responses": [
+        {
+          "id": "get-todos-r1",
+          "statusCode": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "[{\"id\": 1, \"title\": \"Learn Reqly\", \"completed\": false}, {\"id\": 2, \"title\": \"Build API\", \"completed\": true}]"
+        }
+      ]
+    },
+    {
+      "id": "post-todos",
+      "method": "POST",
+      "path": "/api/todos",
+      "responses": [
+        {
+          "id": "post-todos-r1",
+          "statusCode": 201,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"id\": 3, \"title\": \"New Task\", \"completed\": false}"
+        },
+        {
+          "id": "post-todos-r2",
+          "statusCode": 400,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"error\": \"Invalid input\", \"message\": \"Title is required\"}"
+        }
+      ]
+    },
+    {
+      "id": "get-todo-by-id",
+      "method": "GET",
+      "path": "/api/todos/:id",
+      "responses": [
+        {
+          "id": "get-todo-by-id-r1",
+          "statusCode": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"id\": 1, \"title\": \"Learn Reqly\", \"completed\": false}"
+        },
+        {
+          "id": "get-todo-by-id-r2",
+          "statusCode": 404,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"error\": \"Not found\", \"message\": \"Todo not found\"}"
+        }
+      ]
+    },
+    {
+      "id": "put-todo-by-id",
+      "method": "PUT",
+      "path": "/api/todos/:id",
+      "responses": [
+        {
+          "id": "put-todo-by-id-r1",
+          "statusCode": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"id\": 1, \"title\": \"Updated Task\", \"completed\": true}"
+        },
+        {
+          "id": "put-todo-by-id-r2",
+          "statusCode": 404,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"error\": \"Not found\", \"message\": \"Todo not found\"}"
+        }
+      ]
+    },
+    {
+      "id": "delete-todo-by-id",
+      "method": "DELETE",
+      "path": "/api/todos/:id",
+      "responses": [
+        {
+          "id": "delete-todo-by-id-r1",
+          "statusCode": 204,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{}"
+        },
+        {
+          "id": "delete-todo-by-id-r2",
+          "statusCode": 404,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{\"error\": \"Not found\", \"message\": \"Todo not found\"}"
+        }
+      ]
+    }
+  ]
+}

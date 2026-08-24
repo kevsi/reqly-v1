@@ -25,6 +25,10 @@ export interface RequestTestResult {
   status: AssertionStatus;
   statusCode?: number;
   responseTimeMs?: number;
+  /** Extrait du corps de réponse (≤2 Ko) pour les checks monitors hors assertions. */
+  responseBodyPreview?: string;
+  /** Headers de réponse en minuscules, pour les checks monitors hors assertions. */
+  responseHeaders?: Record<string, string>;
   assertionResults: AssertionResult[];
   scriptOutput?: { pre?: string; post?: string };
   error?: string;

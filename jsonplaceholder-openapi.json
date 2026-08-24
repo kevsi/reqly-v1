@@ -1,0 +1,494 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "JSONPlaceholder",
+    "description": "Fake REST API gratuite, sans authentification, pour prototypage et tests. 6 ressources relationnelles : posts, comments, albums, photos, todos, users. Les écritures (POST/PUT/PATCH/DELETE) sont simulées mais jamais persistées : un POST /posts renvoie un id 101, mais un GET /posts/101 renverra 404 car la donnée n'existe pas vraiment côté serveur.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "https://jsonplaceholder.typicode.com" }
+  ],
+  "tags": [
+    { "name": "posts" },
+    { "name": "comments" },
+    { "name": "albums" },
+    { "name": "photos" },
+    { "name": "todos" },
+    { "name": "users" }
+  ],
+  "paths": {
+    "/posts": {
+      "get": {
+        "tags": ["posts"],
+        "summary": "Lister les posts",
+        "operationId": "listPosts",
+        "parameters": [
+          { "name": "userId", "in": "query", "required": false, "schema": { "type": "integer" }, "description": "Filtrer par auteur" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste de posts",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Post" } } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["posts"],
+        "summary": "Créer un post (simulé, non persisté)",
+        "operationId": "createPost",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } } }
+        },
+        "responses": {
+          "201": { "description": "Post créé (fictif)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } } }
+        }
+      }
+    },
+    "/posts/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+      "get": {
+        "tags": ["posts"],
+        "summary": "Récupérer un post",
+        "operationId": "getPost",
+        "responses": { "200": { "description": "Post", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } } } }
+      },
+      "put": {
+        "tags": ["posts"],
+        "summary": "Remplacer un post (simulé)",
+        "operationId": "updatePost",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } } },
+        "responses": { "200": { "description": "Post mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } } } }
+      },
+      "patch": {
+        "tags": ["posts"],
+        "summary": "Modifier partiellement un post (simulé)",
+        "operationId": "patchPost",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Post modifié", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } } } }
+      },
+      "delete": {
+        "tags": ["posts"],
+        "summary": "Supprimer un post (simulé)",
+        "operationId": "deletePost",
+        "responses": { "200": { "description": "Supprimé (fictif)" } }
+      }
+    },
+    "/posts/{id}/comments": {
+      "get": {
+        "tags": ["posts", "comments"],
+        "summary": "Commentaires d'un post (route imbriquée)",
+        "operationId": "listCommentsForPost",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de commentaires", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Comment" } } } } } }
+      }
+    },
+    "/comments": {
+      "get": {
+        "tags": ["comments"],
+        "summary": "Lister les commentaires",
+        "operationId": "listComments",
+        "parameters": [ { "name": "postId", "in": "query", "required": false, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de commentaires", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Comment" } } } } } }
+      },
+      "post": {
+        "tags": ["comments"],
+        "summary": "Créer un commentaire (simulé)",
+        "operationId": "createComment",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CommentInput" } } } },
+        "responses": { "201": { "description": "Commentaire créé (fictif)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Comment" } } } } }
+      }
+    },
+    "/comments/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+      "get": {
+        "tags": ["comments"],
+        "summary": "Récupérer un commentaire",
+        "operationId": "getComment",
+        "responses": { "200": { "description": "Commentaire", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Comment" } } } } }
+      },
+      "put": {
+        "tags": ["comments"],
+        "summary": "Remplacer un commentaire (simulé)",
+        "operationId": "updateComment",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Comment" } } } },
+        "responses": { "200": { "description": "Commentaire mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Comment" } } } } }
+      },
+      "patch": {
+        "tags": ["comments"],
+        "summary": "Modifier partiellement un commentaire (simulé)",
+        "operationId": "patchComment",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Commentaire modifié", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Comment" } } } } }
+      },
+      "delete": {
+        "tags": ["comments"],
+        "summary": "Supprimer un commentaire (simulé)",
+        "operationId": "deleteComment",
+        "responses": { "200": { "description": "Supprimé (fictif)" } }
+      }
+    },
+    "/albums": {
+      "get": {
+        "tags": ["albums"],
+        "summary": "Lister les albums",
+        "operationId": "listAlbums",
+        "parameters": [ { "name": "userId", "in": "query", "required": false, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste d'albums", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Album" } } } } } }
+      },
+      "post": {
+        "tags": ["albums"],
+        "summary": "Créer un album (simulé)",
+        "operationId": "createAlbum",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AlbumInput" } } } },
+        "responses": { "201": { "description": "Album créé (fictif)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Album" } } } } }
+      }
+    },
+    "/albums/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+      "get": {
+        "tags": ["albums"],
+        "summary": "Récupérer un album",
+        "operationId": "getAlbum",
+        "responses": { "200": { "description": "Album", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Album" } } } } }
+      },
+      "put": {
+        "tags": ["albums"],
+        "summary": "Remplacer un album (simulé)",
+        "operationId": "updateAlbum",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Album" } } } },
+        "responses": { "200": { "description": "Album mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Album" } } } } }
+      },
+      "patch": {
+        "tags": ["albums"],
+        "summary": "Modifier partiellement un album (simulé)",
+        "operationId": "patchAlbum",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Album modifié", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Album" } } } } }
+      },
+      "delete": {
+        "tags": ["albums"],
+        "summary": "Supprimer un album (simulé)",
+        "operationId": "deleteAlbum",
+        "responses": { "200": { "description": "Supprimé (fictif)" } }
+      }
+    },
+    "/albums/{id}/photos": {
+      "get": {
+        "tags": ["albums", "photos"],
+        "summary": "Photos d'un album (route imbriquée)",
+        "operationId": "listPhotosForAlbum",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de photos", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Photo" } } } } } }
+      }
+    },
+    "/photos": {
+      "get": {
+        "tags": ["photos"],
+        "summary": "Lister les photos",
+        "operationId": "listPhotos",
+        "parameters": [ { "name": "albumId", "in": "query", "required": false, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de photos", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Photo" } } } } } }
+      },
+      "post": {
+        "tags": ["photos"],
+        "summary": "Créer une photo (simulé)",
+        "operationId": "createPhoto",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PhotoInput" } } } },
+        "responses": { "201": { "description": "Photo créée (fictif)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Photo" } } } } }
+      }
+    },
+    "/photos/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+      "get": {
+        "tags": ["photos"],
+        "summary": "Récupérer une photo",
+        "operationId": "getPhoto",
+        "responses": { "200": { "description": "Photo", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Photo" } } } } }
+      },
+      "put": {
+        "tags": ["photos"],
+        "summary": "Remplacer une photo (simulé)",
+        "operationId": "updatePhoto",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Photo" } } } },
+        "responses": { "200": { "description": "Photo mise à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Photo" } } } } }
+      },
+      "patch": {
+        "tags": ["photos"],
+        "summary": "Modifier partiellement une photo (simulé)",
+        "operationId": "patchPhoto",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Photo modifiée", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Photo" } } } } }
+      },
+      "delete": {
+        "tags": ["photos"],
+        "summary": "Supprimer une photo (simulé)",
+        "operationId": "deletePhoto",
+        "responses": { "200": { "description": "Supprimé (fictif)" } }
+      }
+    },
+    "/todos": {
+      "get": {
+        "tags": ["todos"],
+        "summary": "Lister les todos",
+        "operationId": "listTodos",
+        "parameters": [ { "name": "userId", "in": "query", "required": false, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de todos", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } } } } } }
+      },
+      "post": {
+        "tags": ["todos"],
+        "summary": "Créer un todo (simulé)",
+        "operationId": "createTodo",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TodoInput" } } } },
+        "responses": { "201": { "description": "Todo créé (fictif)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } } }
+      }
+    },
+    "/todos/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+      "get": {
+        "tags": ["todos"],
+        "summary": "Récupérer un todo",
+        "operationId": "getTodo",
+        "responses": { "200": { "description": "Todo", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } } }
+      },
+      "put": {
+        "tags": ["todos"],
+        "summary": "Remplacer un todo (simulé)",
+        "operationId": "updateTodo",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } },
+        "responses": { "200": { "description": "Todo mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } } }
+      },
+      "patch": {
+        "tags": ["todos"],
+        "summary": "Modifier partiellement un todo (simulé)",
+        "operationId": "patchTodo",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Todo modifié", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } } }
+      },
+      "delete": {
+        "tags": ["todos"],
+        "summary": "Supprimer un todo (simulé)",
+        "operationId": "deleteTodo",
+        "responses": { "200": { "description": "Supprimé (fictif)" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Lister les utilisateurs",
+        "operationId": "listUsers",
+        "responses": { "200": { "description": "Liste d'utilisateurs", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } } } }
+      },
+      "post": {
+        "tags": ["users"],
+        "summary": "Créer un utilisateur (simulé)",
+        "operationId": "createUser",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserInput" } } } },
+        "responses": { "201": { "description": "Utilisateur créé (fictif)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      }
+    },
+    "/users/{id}": {
+      "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+      "get": {
+        "tags": ["users"],
+        "summary": "Récupérer un utilisateur",
+        "operationId": "getUser",
+        "responses": { "200": { "description": "Utilisateur", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      },
+      "put": {
+        "tags": ["users"],
+        "summary": "Remplacer un utilisateur (simulé)",
+        "operationId": "updateUser",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } },
+        "responses": { "200": { "description": "Utilisateur mis à jour", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      },
+      "patch": {
+        "tags": ["users"],
+        "summary": "Modifier partiellement un utilisateur (simulé)",
+        "operationId": "patchUser",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Utilisateur modifié", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      },
+      "delete": {
+        "tags": ["users"],
+        "summary": "Supprimer un utilisateur (simulé)",
+        "operationId": "deleteUser",
+        "responses": { "200": { "description": "Supprimé (fictif)" } }
+      }
+    },
+    "/users/{id}/posts": {
+      "get": {
+        "tags": ["users", "posts"],
+        "summary": "Posts d'un utilisateur (route imbriquée)",
+        "operationId": "listPostsForUser",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de posts", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Post" } } } } } }
+      }
+    },
+    "/users/{id}/albums": {
+      "get": {
+        "tags": ["users", "albums"],
+        "summary": "Albums d'un utilisateur (route imbriquée)",
+        "operationId": "listAlbumsForUser",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste d'albums", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Album" } } } } } }
+      }
+    },
+    "/users/{id}/todos": {
+      "get": {
+        "tags": ["users", "todos"],
+        "summary": "Todos d'un utilisateur (route imbriquée)",
+        "operationId": "listTodosForUser",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Liste de todos", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } } } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Post": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "body": { "type": "string" }
+        }
+      },
+      "PostInput": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string", "example": "foo" },
+          "body": { "type": "string", "example": "bar" }
+        },
+        "required": ["userId", "title", "body"]
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "postId": { "type": "integer", "example": 1 },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "body": { "type": "string" }
+        }
+      },
+      "CommentInput": {
+        "type": "object",
+        "properties": {
+          "postId": { "type": "integer", "example": 1 },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "body": { "type": "string" }
+        },
+        "required": ["postId", "name", "email", "body"]
+      },
+      "Album": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" }
+        }
+      },
+      "AlbumInput": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" }
+        },
+        "required": ["userId", "title"]
+      },
+      "Photo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "albumId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "thumbnailUrl": { "type": "string", "format": "uri" }
+        }
+      },
+      "PhotoInput": {
+        "type": "object",
+        "properties": {
+          "albumId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "thumbnailUrl": { "type": "string", "format": "uri" }
+        },
+        "required": ["albumId", "title", "url", "thumbnailUrl"]
+      },
+      "Todo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "completed": { "type": "boolean" }
+        }
+      },
+      "TodoInput": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "completed": { "type": "boolean", "example": false }
+        },
+        "required": ["userId", "title", "completed"]
+      },
+      "Geo": {
+        "type": "object",
+        "properties": {
+          "lat": { "type": "string" },
+          "lng": { "type": "string" }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "street": { "type": "string" },
+          "suite": { "type": "string" },
+          "city": { "type": "string" },
+          "zipcode": { "type": "string" },
+          "geo": { "$ref": "#/components/schemas/Geo" }
+        }
+      },
+      "Company": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "catchPhrase": { "type": "string" },
+          "bs": { "type": "string" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string" },
+          "username": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "address": { "$ref": "#/components/schemas/Address" },
+          "phone": { "type": "string" },
+          "website": { "type": "string" },
+          "company": { "$ref": "#/components/schemas/Company" }
+        }
+      },
+      "UserInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "username": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "address": { "$ref": "#/components/schemas/Address" },
+          "phone": { "type": "string" },
+          "website": { "type": "string" },
+          "company": { "$ref": "#/components/schemas/Company" }
+        },
+        "required": ["name", "username", "email"]
+      }
+    }
+  }
+}

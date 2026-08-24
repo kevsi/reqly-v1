@@ -1,6 +1,11 @@
 packages:
   - "packages/*"
 
+# Supply-chain hardening (pnpm >= 10.16)
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+
 onlyBuiltDependencies:
   - "@ast-grep/lang-go"
   - "@ast-grep/lang-python"

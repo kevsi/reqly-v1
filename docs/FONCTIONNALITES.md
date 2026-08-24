@@ -88,11 +88,11 @@ Les intégrations externes peuvent nécessiter une authentification ou des varia
 
 L’assistant IA peut être utilisé pour formuler une requête, générer des assertions, expliquer une réponse ou proposer une correction. Les providers configurables incluent notamment OpenAI, Anthropic, OpenRouter, Gemini, DeepSeek, Grok, Ollama et Opencode Zen. Les modèles locaux nécessitent un service local disponible ; les providers distants nécessitent une clé ou un connecteur valide.
 
-Les actions d’agent disposent de permissions et de modes d’application contrôlés. Une action qui pourrait modifier une collection ou exécuter une requête doit être relue par l’utilisateur lorsque le mode automatique n’est pas explicitement activé.
+Les actions d’agent disposent de permissions et de modes d’application contrôlés. Une action qui pourrait modifier une collection ou exécuter une requête doit être relue par l’utilisateur lorsque le mode automatique n’est pas explicitement activé. Les scripts pre/post utilisent le sandbox Node/Tauri lorsqu’il est disponible ; l’exécution de scripts n’est pas proposée comme sandbox dans le navigateur et renvoie un message explicite.
 
 ## 6. Persistance, synchronisation et desktop
 
-La persistance web repose principalement sur IndexedDB, avec des mécanismes de repli prévus pour les environnements où IndexedDB n’est pas disponible. La version desktop ajoute un adaptateur de fichiers Tauri et une file offline Rust. Cette file conserve les requêtes à rejouer, respecte l’ordre FIFO et retire une entrée après confirmation d’envoi.
+La persistance web repose principalement sur IndexedDB, avec des mécanismes de repli prévus pour les environnements où IndexedDB n’est pas disponible. Les tokens de session et secrets ne sont pas persistés dans le stockage web ; la session web doit être rétablie après un rechargement. La version desktop ajoute un adaptateur de fichiers Tauri et une file offline Rust. Cette file conserve les requêtes à rejouer, respecte l’ordre FIFO et retire une entrée après confirmation d’envoi. La file offline est desktop-only et son API est un no-op explicite dans le navigateur.
 
 Le desktop Tauri expose également des commandes IPC pour l’exécution native, la capture, Git, le système de fichiers, les notifications, les serveurs MCP, OAuth et la clé de chiffrement de session. Les commandes sont déclarées dans `src-tauri/src/lib.rs` et les types partagés sont maintenus avec le pont TypeScript prévu à cet effet.
 

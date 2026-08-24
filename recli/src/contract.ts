@@ -61,6 +61,8 @@ function resolveRef(ref: string, root: OAS3Doc): Record<string, unknown> | undef
   let node: unknown = root;
   for (const seg of ref.slice(2).split("/")) {
     if (node == null || typeof node !== "object") return undefined;
+    // Anti-prototype-pollution : ne jamais suivre __proto__/constructor/prototype
+    if (seg === "__proto__" || seg === "constructor" || seg === "prototype") return undefined;
     node = (node as Record<string, unknown>)[seg];
   }
   return node && typeof node === "object" ? (node as Record<string, unknown>) : undefined;

@@ -362,7 +362,8 @@
       "sdks": "SDKs",
       "graphql": "GraphQL",
       "git": "Git",
-      "sse": "SSE"
+      "sse": "SSE",
+      "monitors": "Monitors"
     },
     "aiAssist": "Ask Monu IA",
     "ariaLabel": "Navigation principale",
@@ -2259,6 +2260,54 @@
     "targetUnreachable": "Serveur cible injoignable (connexion refusée ou DNS introuvable) — vérifie que le service tourne sur ce port et que l'URL est correcte.",
     "certificateError": "Certificat TLS invalide ou auto-signé — corrige le certificat du serveur cible (ou désactive la vérification SSL côté desktop pour tester)."
   },
+  "monitors": {
+    "title": "Monitors",
+    "subtitle": "Rejoue tes collections à intervalle régulier tant que l'app est ouverte. Alertes webhook sur échec, dégradation et rétablissement.",
+    "new": "Nouveau monitor",
+    "generate": "Générer depuis collections",
+    "generateDesc": "Un monitor par collection sélectionnée, toutes ses requêtes incluses.",
+    "runNow": "Exécuter maintenant",
+    "empty": {
+      "title": "Aucun monitor",
+      "description": "Crée un monitor ou génère-les automatiquement depuis tes collections."
+    },
+    "requestsCount": "{{count}} requêtes",
+    "interval": "Intervalle",
+    "expectedStatus": "Statut attendu",
+    "latencyThreshold": "Seuil latence (ms)",
+    "latencyHint": "Optionnel — au-delà, l'exécution passe en « dégradé ».",
+    "webhook": "Webhook d'alerte",
+    "webhookHint": "POST JSON sur transition échec/dégradé/rétabli.",
+    "name": "Nom",
+    "editTitle": "Modifier le monitor",
+    "createTitle": "Nouveau monitor",
+    "history": {
+      "title": "Historique",
+      "empty": "Aucune exécution pour le moment.",
+      "export": "Exporter l'historique (JSON)"
+    },
+    "lastRun": "Dernier",
+    "nextRun": "Prochain dans",
+    "never": "jamais",
+    "paused": "En pause",
+    "deleteTitle": "Supprimer ce monitor ?",
+    "generatedToast": "{{count}} monitor(s) créé(s)",
+    "pickCollection": "Collection surveillée",
+    "pickedRequests": "{{count}} requête(s) surveillée(s).",
+    "generateProjectsDesc": "Un monitor par projet scanné. Les routes détectées n'ont pas d'hôte : indique la base URL de chaque environnement.",
+    "sourceCollections": "Collections",
+    "sourceProjects": "Projets scannés",
+    "noScannedProjects": "Aucun projet scanné avec des routes.",
+    "baseUrlFor": "Base URL — {{name}}",
+    "advancedChecks": "Vérifications avancées (par requête)",
+    "headerChecks": "Headers requis",
+    "headerName": "Nom du header",
+    "headerContains": "contient (optionnel)",
+    "addHeader": "Ajouter un header",
+    "bodyContains": "Le corps contient…",
+    "bodyJsonPath": "JSON-path requis",
+    "webhookHttpWarning": "Webhook en http:// : le payload transite en clair. Préfère https://"
+  },
   "mocks": {
     "behavior": {
       "title": "Routes",
@@ -2307,6 +2356,7 @@
       "total": "{{count}} requêtes",
       "filterPlaceholder": "Filtrer…",
       "filter": "Filtrer les logs",
+      "clearFilter": "Effacer le filtre",
       "pause": "Pause",
       "resume": "Reprendre",
       "colTime": "Heure",
@@ -2341,6 +2391,9 @@
       "baseUrlPlaceholder": "http://127.0.0.1:4015",
       "token": "Token admin",
       "tokenPlaceholder": "x-admin-token",
+      "tokenShow": "Afficher le token",
+      "tokenHide": "Masquer le token",
+      "openConnect": "Ouvrir la connexion au mock",
       "connecting": "Connexion…"
     },
     "actions": {
@@ -2354,8 +2407,44 @@
       "generate": "Générer depuis collection",
       "importJson": "Importer JSON",
       "exportJson": "Exporter .json",
-      "copyCmd": "Copier cmd",
-      "apply": "Appliquer au mock"
+      "copyCmd": "Copier commande CLI",
+      "fileMenu": "Fichier",
+      "apply": "Appliquer au mock",
+      "applyDirty": "non appliqué",
+      "applyTooltipOffline": "Connecte-toi à un mock en cours (`recli mock start`) pour appliquer ta config.",
+      "applyTooltipDirty": "Des modifications du brouillon ne sont pas encore appliquées au mock."
+    },
+    "offline": {
+      "banner": "Aucun mock détecté — lance",
+      "openForm": "Connecter un mock"
+    },
+    "simple": {
+      "toggle": "Mode simple IA",
+      "title": "Créer un mock avec l'IA",
+      "subtitle": "Décris ton API en une phrase : routes, réponses, erreurs. La config est validée par le moteur avant application.",
+      "placeholder": "Ex. : API de tâches avec GET /api/todos, POST /api/todos (201), DELETE /api/todos/:id (204) et 404 sur les ids inconnus.",
+      "generate": "Générer la config",
+      "generating": "Génération…",
+      "applyDraft": "Remplacer le brouillon",
+      "appliedToast": "Config IA appliquée au brouillon",
+      "example1": "API users CRUD + 404 : décrire les routes /api/users…",
+      "example2": "E-commerce produits/panier/commandes…",
+      "example3": "Mock instable (latence + pannes aléatoires)…"
+    },
+    "undo": {
+      "action": "Annuler"
+    },
+    "saved": {
+      "title": "Gestion des configs",
+      "empty": "Aucune config enregistrée. Les configs générées par l'IA apparaîtront ici.",
+      "saveCurrent": "Sauvegarder le brouillon actuel",
+      "load": "Charger dans le brouillon",
+      "download": "Télécharger",
+      "remove": "Supprimer",
+      "sourceAi": "IA",
+      "sourceDraft": "Brouillon",
+      "sourceImport": "Import",
+      "savedToast": "Config sauvegardée"
     },
     "routes": {
       "deletedToast": "Route supprimée",

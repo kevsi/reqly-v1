@@ -85,7 +85,7 @@ export function runProactiveAnalysis(store: RequestStore) {
         const hash = hashAlert("slow", endpoint)
         if (dismissed.has(hash)) continue
         toast({
-          title: `⚠️ Slow endpoint detected`,
+          title: `Slow endpoint detected`,
           description: `${endpoint} responds ~${Math.round(recentAvg)}ms on average (normal: ~${Math.round(allAvg)}ms, +${Math.round((recentAvg / allAvg - 1) * 100)}%).`,
           variant: "default",
           onClick: () => addDismissedAlert(hash),

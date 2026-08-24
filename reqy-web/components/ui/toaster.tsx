@@ -110,6 +110,19 @@ export function Toaster() {
             {t.title && <div className="text-sm font-semibold leading-snug">{t.title}</div>}
             {t.description && <div className="mt-1 text-xs leading-relaxed opacity-80">{t.description}</div>}
           </div>
+          {t.action && (
+            <button
+              onClick={(e) => { e.stopPropagation(); t.action?.onClick(); remove(t.id) }}
+              className={cn(
+                'shrink-0 rounded-md px-2 py-1 text-xs font-semibold transition-all duration-200',
+                t.variant === 'destructive'
+                  ? 'text-destructive-foreground hover:bg-destructive-foreground/15'
+                  : 'text-primary hover:bg-primary/10'
+              )}
+            >
+              {t.action.label}
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); remove(t.id) }}
             className={cn(

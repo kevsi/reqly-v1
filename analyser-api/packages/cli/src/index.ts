@@ -7,11 +7,12 @@ import { detectorJs } from "@analyser/detector-js";
 import { detectorRust } from "@analyser/detector-rust";
 import { detectorPython } from "@analyser/detector-python";
 import { detectorGo } from "@analyser/detector-go";
+import { detectorPhp } from "@analyser/detector-php";
 
 const program = new Command();
 
 const VALID_FORMATS = new Set(["json", "md", "markdown", "reqly", "openapi"]);
-const VALID_LANGS = new Set(["javascript", "typescript", "rust", "python", "go"]);
+const VALID_LANGS = new Set(["javascript", "typescript", "rust", "python", "go", "php"]);
 
 program
   .name("analyser")
@@ -36,11 +37,11 @@ program
         process.exit(1);
       }
       if (opts.lang && !VALID_LANGS.has(opts.lang)) {
-        console.error(`Unknown language "${opts.lang}". Use javascript, rust, python or go.`);
+        console.error(`Unknown language "${opts.lang}". Use javascript, typescript, rust, python, go or php.`);
         process.exit(1);
       }
       const rootPath = path.resolve(target);
-      const detectors = [detectorJs, detectorRust, detectorPython, detectorGo];
+      const detectors = [detectorJs, detectorRust, detectorPython, detectorGo, detectorPhp];
       const result = await analyze({
         rootPath,
         detectors,

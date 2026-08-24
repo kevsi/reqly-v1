@@ -168,12 +168,12 @@ export function sanitizeConfig(raw: unknown): MockConfig | null {
   return { ...candidate, version: 1, routes };
 }
 
-export function downloadMockConfig(config: MockConfig): void {
+export function downloadMockConfig(config: MockConfig, filename = "mock.config.json"): void {
   const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "mock.config.json";
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
 }

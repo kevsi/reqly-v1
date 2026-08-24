@@ -10,7 +10,7 @@
  */
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Sparkles, Clipboard, FileText, Lightbulb, Key, Square } from "lucide-react";
+import { Bot, Sparkles, Clipboard, FileText, Lightbulb, Key, Square, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -434,7 +434,7 @@ export function AIModal(props: AIModalProps) {
               ? {
                   ...s,
                   status: "awaiting_confirmation" as const,
-                  label: `⚠ ${tc.name} — confirmation requise`,
+                  label: `${tc.name} — confirmation requise`,
                 }
               : s,
           ),
@@ -447,7 +447,7 @@ export function AIModal(props: AIModalProps) {
             ? {
                 ...s,
                 status: result.error ? ("error" as const) : ("done" as const),
-                label: result.error ? `❌ ${tc.name}` : `✅ ${tc.name}`,
+                label: tc.name,
               }
             : s,
         ),
@@ -534,9 +534,9 @@ export function AIModal(props: AIModalProps) {
                   status: hasError ? ("error" as const) : ("done" as const),
                   label: confirmed
                     ? hasError
-                      ? `❌ ${toolCall.name} : ${result.error}`
-                      : `✅ ${toolCall.name}`
-                    : `⛔ ${toolCall.name} (annulé)`,
+                      ? `${toolCall.name} : ${result.error}`
+                      : toolCall.name
+                    : `${toolCall.name} (annulé)`,
                 }
               : s,
           ),
@@ -556,7 +556,7 @@ export function AIModal(props: AIModalProps) {
                   ? {
                       ...s,
                       status: "error" as const,
-                      label: `⛔ ${toolCallsThisTurn[i].name} (annulé)`,
+                      label: `${toolCallsThisTurn[i].name} (annulé)`,
                     }
                   : s,
               ),
@@ -577,7 +577,7 @@ export function AIModal(props: AIModalProps) {
                     ? {
                         ...s,
                         status: "awaiting_confirmation" as const,
-                        label: `⚠ ${nextTc.name} — confirmation requise`,
+                        label: `${nextTc.name} — confirmation requise`,
                       }
                     : s,
                 ),
@@ -600,7 +600,7 @@ export function AIModal(props: AIModalProps) {
                   ? {
                       ...s,
                       status: nextResult.error ? ("error" as const) : ("done" as const),
-                      label: nextResult.error ? `❌ ${nextTc.name}` : `✅ ${nextTc.name}`,
+                      label: nextTc.name,
                     }
                   : s,
               ),
@@ -1050,8 +1050,9 @@ function ExplainTab({
                   {ex.warnings.length > 0 && (
                     <ul className="pl-3 space-y-0.5">
                       {ex.warnings.map((w, i) => (
-                        <li key={i} className="text-warning">
-                          ⚠ {w}
+                        <li key={i} className="flex items-start gap-1 text-warning">
+                          <AlertTriangle aria-hidden="true" className="mt-px size-3 shrink-0" />
+                          {w}
                         </li>
                       ))}
                     </ul>

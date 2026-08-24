@@ -453,7 +453,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
           </span>
           <span
             className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
               isError
                 ? "bg-destructive/10 text-destructive ring-destructive/20"
                 : isDone
@@ -462,8 +462,18 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
             )}
           >
             {isPending && <Loader2 className="size-2.5 animate-spin" />}
-            {isDone && "✓ fait"}
-            {isError && "✗ erreur"}
+            {isDone && (
+              <>
+                <Check className="size-2.5" />
+                fait
+              </>
+            )}
+            {isError && (
+              <>
+                <X className="size-2.5" />
+                erreur
+              </>
+            )}
           </span>
         </button>
 

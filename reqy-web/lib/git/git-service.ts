@@ -67,7 +67,7 @@ export function friendlyGitError(raw: string): string {
     return (
       "Push refusé : le dépôt distant contient des commits que vous n'avez pas en local. " +
       "Récupérez d'abord les changements (flèche vers le bas), puis réessayez — ou utilisez le " +
-      "Force Push (icône ⚠) si vous souhaitez écraser l'historique distant." +
+      "Force Push si vous souhaitez écraser l'historique distant." +
       detail
     );
   }

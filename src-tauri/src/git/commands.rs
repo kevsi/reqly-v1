@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use git2::{DiffOptions, Repository, Signature, StatusOptions};
+use git2::{Cred, DiffOptions, FetchOptions, PushOptions, RemoteCallbacks, Repository, Signature, StatusOptions};
 use tauri::State;
 
-use crate::error::AppError;
+use crate::error::{AppError, NetworkErrorKind};
 use crate::git::types::*;
 
 /// État partagé pour connaître le chemin du repo courant et le répertoire de base autorisé.
@@ -80,6 +80,96 @@ fn validate_url_scheme(url: &str) -> Result<(), AppError> {
     }
 }
 
+/// `true` si l'IP appartient à un range privé/réservé (local, non routable).
+fn is_private_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            v4.is_private()          // 10/8, 172.16/12, 192.168/16
+                || v4.is_loopback()  // 127/8
+                || v4.is_link_local()// 169.254/16 (y compris 169.254.169.254)
+                || v4.is_unspecified()   // 0.0.0.0
+                || v4.is_broadcast()     // 255.255.255.255
+                || v4.is_documentation() // 192.0.2/24, 198.51.100/24, 203.0.113/24
+                || octets[0] == 100      // 100.64/10 (CGNAT)
+                || octets[0] == 198 && octets[1] == 18   // 198.18/15 (benchmarking)
+                || octets[0] == 198 && octets[1] == 19
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()  // fc00::/7
+                || v6.is_multicast()
+                || v6.segments()[0] == 0xfe80 // fe80::/10 (link-local)
+                // ::ffff:0:0/96 (IPv4 mappé) — vérifier l'IPv4 encapsulée
+                || (v6.segments()[0..5].iter().all(|&s| s == 0)
+                    && v6.segments()[5] == 0xffff)
+        }
+    }
+}
+
+/// `true` si le hostname est un nom réservé local (localhost, *.local, ...)
+/// ou une IP privée littérale. N'effectue PAS de résolution DNS (l'appelant
+/// décide si c'est nécessaire).
+fn is_reserved_git_host(url: &reqwest::Url) -> bool {
+    let host = match url.host_str() {
+        Some(h) => h,
+        None => return false,
+    };
+    let lower = host.to_ascii_lowercase();
+    // Noms réservés / TLD internes
+    if lower == "localhost"
+        || lower.ends_with(".localhost")
+        || lower.ends_with(".local")
+        || lower.ends_with(".internal")
+        || lower.ends_with(".lan")
+        || lower.ends_with(".home")
+        || lower.ends_with(".home.arpa")
+        || lower.ends_with(".test")
+        || lower.ends_with(".invalid")
+        || lower.ends_with(".example")
+    {
+        return true;
+    }
+    // IP littérale
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_private_ip(ip);
+    }
+    false
+}
+
+/// Valide un URL de dépôt : schéma http/https + hôte non privé.
+/// `ALLOW_PRIVATE_GIT_HOSTS=true` est l'échappatoire pour les dépôts
+/// auto-hébergés sur le réseau local.
+fn validate_remote_url(url: &str) -> Result<(), AppError> {
+    validate_url_scheme(url)?;
+    if std::env::var("ALLOW_PRIVATE_GIT_HOSTS").map(|v| v == "true").unwrap_or(false) {
+        return Ok(());
+    }
+    if let Ok(parsed) = reqwest::Url::parse(url.trim()) {
+        if is_reserved_git_host(&parsed) {
+            return Err(AppError::InvalidInput(format!(
+                "URL de dépôt bloquée : l'hôte '{}' est privé ou réservé (localhost, IP interne). \
+                 Utilisez une URL publique, ou définissez ALLOW_PRIVATE_GIT_HOSTS=true pour les dépôts \
+                 auto-hébergés en réseau local.",
+                parsed.host_str().unwrap_or("?")
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn remote_callbacks(credentials: Option<GitCredentials>) -> RemoteCallbacks<'static> {
+    let mut callbacks = RemoteCallbacks::new();
+    if let Some(credentials) = credentials {
+        callbacks.credentials(move |_url, username_from_url, _allowed| {
+            let username = username_from_url.unwrap_or(&credentials.username);
+            Cred::userpass_plaintext(username, &credentials.password)
+        });
+    }
+    callbacks
+}
+
 /// Check if a path resides in a system directory that must not be used for git repos.
 fn is_system_directory(path: &Path) -> bool {
     let canonical = match std::fs::canonicalize(path) {
@@ -112,6 +202,7 @@ fn is_system_directory(path: &Path) -> bool {
 }
 
 /// Check if a path is contained within a base directory.
+#[cfg(test)]
 fn is_within_base(path: &Path, base: &Path) -> bool {
     let canonical_path = match std::fs::canonicalize(path) {
         Ok(p) => p,
@@ -140,20 +231,6 @@ pub async fn git_init(path: String, state: State<'_, GitRepoState>) -> Result<()
         )));
     }
 
-    if let Some(ref workspace) = *state
-        .workspace_dir
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
-        if !is_within_base(&repo_path, workspace) {
-            return Err(AppError::InvalidInput(format!(
-                "Path '{}' must be within the workspace directory '{}'.",
-                path,
-                workspace.display()
-            )));
-        }
-    }
-
     Repository::init(&repo_path)
         .map_err(|e| AppError::Internal(format!("git init failed: {}", e)))?;
     state.set_path(repo_path)?;
@@ -169,20 +246,6 @@ pub async fn git_open(path: String, state: State<'_, GitRepoState>) -> Result<()
             "Path '{}' is in a system directory and cannot be used for a git repository.",
             path
         )));
-    }
-
-    if let Some(ref workspace) = *state
-        .workspace_dir
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
-        if !is_within_base(&repo_path, workspace) {
-            return Err(AppError::InvalidInput(format!(
-                "Path '{}' must be within the workspace directory '{}'.",
-                path,
-                workspace.display()
-            )));
-        }
     }
 
     // Validate by trying to open
@@ -231,6 +294,7 @@ pub async fn git_status(state: State<'_, GitRepoState>) -> Result<Vec<FileStatus
             } else {
                 1
             },
+            conflicted: flags.contains(git2::Status::CONFLICTED),
         });
     }
     Ok(result)
@@ -553,6 +617,7 @@ pub async fn git_branch_create(
     from_oid: Option<String>,
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
+    validate_ref_name(&name, "Nom de branche")?;
     let repo = state.open_repo()?;
     let target_oid = match from_oid {
         Some(oid_str) => git2::Oid::from_str(&oid_str)
@@ -636,13 +701,58 @@ pub async fn git_remote_list(state: State<'_, GitRepoState>) -> Result<Vec<Remot
     Ok(remotes)
 }
 
+/// Valide un nom de remote/branche avant interpolation dans les refspecs :
+/// seuls `[A-Za-z0-9._/-]` sont acceptés (anti-injection de refspec comme
+/// `origin; rm -rf /` ou `foo refs/heads/bar`). Les remotes n'autorisent pas
+/// `/` (règle git) — voir `validate_remote_name`.
+fn validate_ref_name(name: &str, kind: &str) -> Result<(), AppError> {
+    if name.is_empty() || name.len() > 100 {
+        return Err(AppError::InvalidInput(format!(
+            "{kind} invalide : nom vide ou trop long."
+        )));
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/'))
+    {
+        return Err(AppError::InvalidInput(format!(
+            "{kind} invalide : seuls les caractères A-Z, a-z, 0-9, '.', '_', '-' et '/' sont autorisés."
+        )));
+    }
+    // Règles git : pas de début par « - » (confusion d'option dans les
+    // refspecs), pas de « .. », pas de fin en « .lock », « / » ou « . »
+    if name.starts_with('-')
+        || name.contains("..")
+        || name.ends_with(".lock")
+        || name.ends_with('/')
+        || name.ends_with('.')
+    {
+        return Err(AppError::InvalidInput(format!(
+            "{kind} invalide : début par '-', séquence '..', ou fin par '.lock', '/' ou '.' interdits."
+        )));
+    }
+    Ok(())
+}
+
+/// Les noms de remote ne peuvent pas contenir de `/` (contrainte git).
+fn validate_remote_name(name: &str) -> Result<(), AppError> {
+    validate_ref_name(name, "Nom de remote")?;
+    if name.contains('/') {
+        return Err(AppError::InvalidInput(
+            "Nom de remote invalide : le caractère '/' n'est pas autorisé.".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn git_remote_add(
     name: String,
     url: String,
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
-    validate_url_scheme(&url)?;
+    validate_remote_name(&name)?;
+    validate_remote_url(&url)?;
     let repo = state.open_repo()?;
     repo.remote(&name, &url)
         .map_err(|e| AppError::Internal(format!("Failed to add remote {name}: {e}")))?;
@@ -664,17 +774,27 @@ pub async fn git_remote_remove(
 pub async fn git_push(
     remote: String,
     branch: String,
+    credentials: Option<GitCredentials>,
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
+    validate_ref_name(&branch, "Nom de branche")?;
     let repo = state.open_repo()?;
     let mut remote_obj = repo
         .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
 
+    if let Some(remote_url) = remote_obj.url() {
+        validate_remote_url(remote_url)?;
+    }
+
     let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+    let had_credentials = credentials.is_some();
+    let callbacks = remote_callbacks(credentials);
+    let mut push_options = PushOptions::new();
+    push_options.remote_callbacks(callbacks);
     remote_obj
-        .push(&[&refspec], None)
-        .map_err(|e| push_error(e))?;
+        .push(&[&refspec], Some(&mut push_options))
+        .map_err(|e| remote_op_error("L'envoi vers le dépôt distant a échoué", e, had_credentials))?;
     Ok(())
 }
 
@@ -683,17 +803,17 @@ pub async fn git_ls_remote(
     url: String,
     state: State<'_, GitRepoState>,
 ) -> Result<Vec<String>, AppError> {
-    validate_url_scheme(&url)?;
+    validate_remote_url(&url)?;
     let repo = state.open_repo()?;
     let mut remote = repo
         .remote_anonymous(&url)
         .map_err(|e| AppError::InvalidInput(format!("Invalid remote URL: {e}")))?;
     remote
         .connect(git2::Direction::Fetch)
-        .map_err(|e| AppError::Network(format!("Cannot connect to {url}: {e}")))?;
+        .map_err(|e| remote_op_error("La connexion au dépôt distant a échoué", e, false))?;
     let refs = remote
         .list()
-        .map_err(|e| AppError::Network(format!("Cannot list remote refs: {e}")))?;
+        .map_err(|e| remote_op_error("La lecture des références du dépôt distant a échoué", e, false))?;
     let mut branches: Vec<String> = Vec::new();
     for head in refs.iter() {
         let name = head.name();
@@ -711,49 +831,114 @@ pub async fn git_ls_remote(
 pub async fn git_push_force(
     remote: String,
     branch: String,
+    credentials: Option<GitCredentials>,
+    state: State<'_, GitRepoState>,
+) -> Result<(), AppError> {
+    validate_ref_name(&branch, "Nom de branche")?;
+    let repo = state.open_repo()?;
+    let mut remote_obj = repo
+        .find_remote(&remote)
+        .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
+
+    if let Some(remote_url) = remote_obj.url() {
+        validate_remote_url(remote_url)?;
+    }
+
+    let refspec = format!("+refs/heads/{branch}:refs/heads/{branch}");
+    let had_credentials = credentials.is_some();
+    let callbacks = remote_callbacks(credentials);
+    let mut push_options = PushOptions::new();
+    push_options.remote_callbacks(callbacks);
+    remote_obj
+        .push(&[&refspec], Some(&mut push_options))
+        .map_err(|e| remote_op_error("Le push forcé vers le dépôt distant a échoué", e, had_credentials))?;
+    Ok(())
+}
+
+/// Classifie une erreur `git2::Error` d'opération distante (push/fetch/pull/
+/// clone) en `AppError` avec un message français actionnable :
+/// - non-fast-forward → message dédié (récupérer / rebaser / force push)
+/// - 401/403 ou « could not read username » → authentification refusée, avec
+///   une aide adaptée selon que des identifiants ont été fournis ou non
+/// - 404 → dépôt introuvable
+/// - sinon → message générique avec le détail technique conservé
+fn remote_op_error(action: &str, e: git2::Error, had_credentials: bool) -> AppError {
+    if e.code() == git2::ErrorCode::NotFastForward {
+        return AppError::NonFastForward(
+            "Push rejeté (non-fast-forward). La branche distante contient des commits que vous \
+             n'avez pas en local.\nSuggestions :\n  1. Récupérer : cliquez sur la flèche vers le \
+             bas (cloud ↓) pour obtenir les derniers changements\n  2. Rebaser : \
+             git rebase origin/<branche>\n  3. Ou Force Push (icône ⚠ sur le remote) — écrase \
+             l'historique distant"
+                .into(),
+        );
+    }
+    let lower = e.message().to_ascii_lowercase();
+    let is_auth = lower.contains("authentication")
+        || lower.contains("could not read username")
+        || lower.contains("authorization failed")
+        || lower.contains("invalid credentials")
+        || lower.contains("terminal prompts disabled")
+        || lower.contains("requested url returned error: 401")
+        || lower.contains("requested url returned error: 403")
+        || lower.contains("http 401")
+        || lower.contains("http 403");
+    let is_not_found = lower.contains("requested url returned error: 404")
+        || lower.contains("repository not found")
+        || lower.contains("404 not found");
+
+    if is_auth {
+        let hint = if had_credentials {
+            "Les identifiants fournis sont invalides ou ont expiré. Reconnectez votre compte dans \
+             Paramètres → Outils intégrés, ou vérifiez les scopes du token ('repo' pour GitHub)."
+        } else {
+            "Aucun identifiant n'a été trouvé. Connectez votre compte GitHub/GitLab dans \
+             Paramètres → Outils intégrés : le token est utilisé automatiquement par Git, aucune \
+             saisie n'est nécessaire sur la page Git."
+        };
+        AppError::network(
+            NetworkErrorKind::Unknown,
+            format!("{action} : l'authentification a été refusée par le dépôt distant."),
+            format!("{hint}\nDétail technique : {e}"),
+        )
+    } else if is_not_found {
+        AppError::network(
+            NetworkErrorKind::Unknown,
+            format!("{action} : dépôt distant introuvable ou accès refusé."),
+            format!(
+                "Vérifiez l'URL du remote et que votre compte a bien accès au dépôt.\nDétail technique : {e}"
+            ),
+        )
+    } else {
+        AppError::network(
+            NetworkErrorKind::Unknown,
+            format!("{action}."),
+            format!("Vérifiez votre connexion internet et l'URL du remote.\nDétail technique : {e}"),
+        )
+    }
+}
+
+#[tauri::command]
+pub async fn git_fetch(
+    remote: String,
+    credentials: Option<GitCredentials>,
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo = state.open_repo()?;
     let mut remote_obj = repo
         .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
-
-    let refspec = format!("+refs/heads/{branch}:refs/heads/{branch}");
-    remote_obj
-        .push(&[&refspec], None)
-        .map_err(|e| AppError::Network(format!("Force push failed: {e}")))?;
-    Ok(())
-}
-
-/// Map a `git2::Error` from a push to the most helpful `AppError` variant.
-///
-/// Non-fast-forward rejections get a dedicated, actionnable message that
-/// tells the user *why* and *what to do* instead of a generic "Push failed".
-fn push_error(e: git2::Error) -> AppError {
-    if e.code() == git2::ErrorCode::NotFastForward {
-        AppError::NonFastForward(
-            "Push rejected (non-fast-forward). The remote branch has commits you don't have locally.\n\
-             Suggestions:\n  \
-             1. Fetch: click the cloud ↓ button to get the latest changes\n  \
-             2. Rebase: git rebase origin/<branch>\n  \
-             3. Or force push (⎇  click Push, or use Force Push) — this overwrites remote history"
-                .into(),
-        )
-    } else {
-        AppError::Network(format!("Push failed: {e}"))
+    if let Some(remote_url) = remote_obj.url() {
+        validate_remote_url(remote_url)?;
     }
-}
-
-#[tauri::command]
-pub async fn git_fetch(remote: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
-    let repo = state.open_repo()?;
-    let mut remote_obj = repo
-        .find_remote(&remote)
-        .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
     let refspec = format!("+refs/heads/*:refs/remotes/{remote}/*");
+    let had_credentials = credentials.is_some();
+    let callbacks = remote_callbacks(credentials);
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
     remote_obj
-        .fetch(&[&refspec], None, None)
-        .map_err(|e| AppError::Network(format!("Fetch failed: {e}")))?;
+        .fetch(&[&refspec], Some(&mut fetch_options), None)
+        .map_err(|e| remote_op_error("La récupération depuis le dépôt distant a échoué", e, had_credentials))?;
     Ok(())
 }
 
@@ -761,6 +946,7 @@ pub async fn git_fetch(remote: String, state: State<'_, GitRepoState>) -> Result
 pub async fn git_pull(
     remote: String,
     branch_name: String,
+    credentials: Option<GitCredentials>,
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo = state.open_repo()?;
@@ -769,16 +955,44 @@ pub async fn git_pull(
     let mut remote_obj = repo
         .find_remote(&remote)
         .map_err(|_| AppError::InvalidInput(format!("Remote {remote} not found")))?;
+    if let Some(remote_url) = remote_obj.url() {
+        validate_remote_url(remote_url)?;
+    }
     let refspec = format!("+refs/heads/{branch_name}:refs/remotes/{remote}/{branch_name}");
+    let had_credentials = credentials.is_some();
+    let callbacks = remote_callbacks(credentials);
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
     remote_obj
-        .fetch(&[&refspec], None, None)
-        .map_err(|e| AppError::Network(format!("Fetch failed: {e}")))?;
+        .fetch(&[&refspec], Some(&mut fetch_options), None)
+        .map_err(|e| remote_op_error("La récupération depuis le dépôt distant a échoué", e, had_credentials))?;
 
     // Fast-forward merge: trouver le remote tracking branch et merger dans HEAD
     let remote_ref_name = format!("refs/remotes/{remote}/{branch_name}");
-    let remote_branch = repo
-        .find_reference(&remote_ref_name)
-        .map_err(|e| AppError::InvalidInput(format!("Remote branch not found: {e}")))?;
+    let remote_branch = match repo.find_reference(&remote_ref_name) {
+        Ok(reference) => reference,
+        Err(_) => {
+            // Certains dépôts n'actualisent pas la référence de suivi après un
+            // fetch libgit2. Recréer cette référence depuis la liste du remote
+            // permet au pull de fonctionner même si origin/<branche> manque.
+            remote_obj
+                .connect(git2::Direction::Fetch)
+                .map_err(|e| remote_op_error("La connexion à la branche distante a échoué", e, had_credentials))?;
+            let remote_head = remote_obj
+                .list()
+                .map_err(|e| remote_op_error("La lecture de la branche distante a échoué", e, had_credentials))?
+                .into_iter()
+                .find(|head| head.name() == format!("refs/heads/{branch_name}"))
+                .ok_or_else(|| AppError::InvalidInput(format!("La branche distante '{branch_name}' n'existe pas sur le remote '{remote}'.")))?;
+            repo.reference(
+                &remote_ref_name,
+                remote_head.oid(),
+                true,
+                "Update remote tracking branch",
+            )
+            .map_err(|e| AppError::Internal(format!("Unable to update remote tracking branch: {e}")))?
+        }
+    };
     let remote_oid = remote_branch
         .target()
         .ok_or_else(|| AppError::Internal("Remote branch has no target".into()))?;
@@ -872,28 +1086,29 @@ pub async fn git_pull(
 pub async fn git_clone(
     url: String,
     dest_path: String,
+    credentials: Option<GitCredentials>,
     state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
-    validate_url_scheme(&url)?;
+    validate_remote_url(&url)?;
 
     let dest = PathBuf::from(&dest_path);
 
-    if let Some(ref workspace) = *state
-        .workspace_dir
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
-        if !is_within_base(&dest, workspace) {
-            return Err(AppError::InvalidInput(format!(
-                "Destination path '{}' must be within the workspace directory '{}'.",
-                dest_path,
-                workspace.display()
-            )));
-        }
+    if is_system_directory(&dest) {
+        return Err(AppError::InvalidInput(format!(
+            "Destination path '{}' is in a system directory.",
+            dest_path
+        )));
     }
 
-    let _repo = Repository::clone(&url, &dest_path)
-        .map_err(|e| AppError::Network(format!("Clone failed: {e}")))?;
+    let had_credentials = credentials.is_some();
+    let callbacks = remote_callbacks(credentials);
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fetch_options);
+    let _repo = builder
+        .clone(&url, &dest)
+        .map_err(|e| remote_op_error("Le clonage du dépôt distant a échoué", e, had_credentials))?;
     state.set_path(dest)?;
     Ok(())
 }
@@ -904,7 +1119,7 @@ pub async fn git_write_collection_file(
     id: String,
     content: String,
     repo_dir: String,
-    state: State<'_, GitRepoState>,
+    _state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo_path = PathBuf::from(&repo_dir);
 
@@ -922,20 +1137,6 @@ pub async fn git_write_collection_file(
         )));
     }
 
-    if let Some(ref workspace) = *state
-        .workspace_dir
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
-        if !is_within_base(&repo_path, workspace) {
-            return Err(AppError::InvalidInput(format!(
-                "Repository path '{}' must be within the workspace directory '{}'.",
-                repo_dir,
-                workspace.display()
-            )));
-        }
-    }
-
     let collections_dir = repo_path.join("collections");
     std::fs::create_dir_all(&collections_dir)
         .map_err(|e| AppError::Internal(format!("Failed to create dir: {e}")))?;
@@ -951,29 +1152,22 @@ pub async fn git_write_collection_file(
 pub async fn git_sync_collections(
     collections_json: String,
     repo_dir: String,
-    state: State<'_, GitRepoState>,
+    _state: State<'_, GitRepoState>,
 ) -> Result<(), AppError> {
     let repo_path = PathBuf::from(&repo_dir);
+
+    if is_system_directory(&repo_path) {
+        return Err(AppError::InvalidInput(format!(
+            "Path '{}' is in a system directory and cannot be used for a git repository.",
+            repo_dir
+        )));
+    }
 
     if !is_valid_git_repo(&repo_path) {
         return Err(AppError::InvalidInput(format!(
             "Path '{}' is not a valid git repository.",
             repo_dir
         )));
-    }
-
-    if let Some(ref workspace) = *state
-        .workspace_dir
-        .lock()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
-        if !is_within_base(&repo_path, workspace) {
-            return Err(AppError::InvalidInput(format!(
-                "Repository path '{}' must be within the workspace directory '{}'.",
-                repo_dir,
-                workspace.display()
-            )));
-        }
     }
 
     // Écrire les collections sur le filesystem
@@ -1014,9 +1208,80 @@ pub async fn git_sync_collections(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn git_stash_save(
+    message: Option<String>,
+    state: State<'_, GitRepoState>,
+) -> Result<String, AppError> {
+    let mut repo = state.open_repo()?;
+    let sig = git2::Signature::now("Reqly User", "user@reqly.local")
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let msg_ref = message.as_deref();
+    let oid = repo
+        .stash_save(&sig, msg_ref.unwrap_or("WIP on local changes"), None)
+        .map_err(|e| AppError::Internal(format!("git stash save failed: {e}")))?;
+    Ok(oid.to_string())
+}
+
+#[tauri::command]
+pub async fn git_stash_pop(
+    index: Option<usize>,
+    state: State<'_, GitRepoState>,
+) -> Result<(), AppError> {
+    let mut repo = state.open_repo()?;
+    let idx = index.unwrap_or(0);
+    repo.stash_pop(idx, None)
+        .map_err(|e| AppError::Internal(format!("git stash pop failed: {e}")))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_stash_apply(
+    index: Option<usize>,
+    state: State<'_, GitRepoState>,
+) -> Result<(), AppError> {
+    let mut repo = state.open_repo()?;
+    let idx = index.unwrap_or(0);
+    repo.stash_apply(idx, None)
+        .map_err(|e| AppError::Internal(format!("git stash apply failed: {e}")))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_stash_drop(
+    index: Option<usize>,
+    state: State<'_, GitRepoState>,
+) -> Result<(), AppError> {
+    let mut repo = state.open_repo()?;
+    let idx = index.unwrap_or(0);
+    repo.stash_drop(idx)
+        .map_err(|e| AppError::Internal(format!("git stash drop failed: {e}")))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_stash_list(
+    state: State<'_, GitRepoState>,
+) -> Result<Vec<GitStashEntry>, AppError> {
+    let mut repo = state.open_repo()?;
+    let stashes = RefCell::new(Vec::<GitStashEntry>::new());
+
+    repo.stash_foreach(|idx, name, oid| {
+        stashes.borrow_mut().push(GitStashEntry {
+            index: idx,
+            message: name.to_string(),
+            oid: oid.to_string(),
+        });
+        true
+    })
+    .map_err(|e| AppError::Internal(format!("git stash list failed: {e}")))?;
+
+    Ok(stashes.into_inner())
+}
+
 #[cfg(test)]
 mod path_validation_tests {
-    use super::{is_system_directory, is_within_base};
+    use super::{is_private_ip, is_reserved_git_host, is_system_directory, is_within_base};
     use std::path::Path;
 
     #[test]
@@ -1056,5 +1321,105 @@ mod path_validation_tests {
         assert!(is_within_base(&inside, base));
         assert!(!is_within_base(&outside, base));
         assert!(!is_within_base(base, &outside));
+    }
+
+    #[test]
+    fn private_ipv4_ranges_are_detected() {
+        for ip in [
+            "127.0.0.1",
+            "10.0.0.1",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.1.1",
+            "169.254.169.254",
+            "0.0.0.0",
+            "100.64.0.1",
+            "198.18.0.1",
+            "192.0.2.1",
+        ] {
+            assert!(is_private_ip(ip.parse().unwrap()), "{} should be private", ip);
+        }
+    }
+
+    #[test]
+    fn public_ipv4_is_allowed() {
+        for ip in ["8.8.8.8", "1.1.1.1", "140.82.112.3", "172.32.0.1"] {
+            assert!(!is_private_ip(ip.parse().unwrap()), "{} should be public", ip);
+        }
+    }
+
+    #[test]
+    fn private_ipv6_ranges_are_detected() {
+        for ip in ["::1", "fc00::1", "fe80::1", "::ffff:10.0.0.1", "::"] {
+            assert!(is_private_ip(ip.parse().unwrap()), "{} should be private", ip);
+        }
+    }
+
+    #[test]
+    fn reserved_hostnames_are_rejected() {
+        for url in [
+            "http://localhost/repo.git",
+            "http://intranet.local/repo.git",
+            "http://git.internal/repo.git",
+            "http://server.lan/repo.git",
+            "http://10.0.0.5:8080/repo.git",
+            "http://169.254.169.254/latest/meta-data",
+        ] {
+            let parsed = reqwest::Url::parse(url).unwrap();
+            assert!(is_reserved_git_host(&parsed), "{} should be reserved", url);
+        }
+    }
+
+    #[test]
+    fn public_hosts_are_allowed() {
+        for url in [
+            "https://github.com/user/repo.git",
+            "https://gitlab.com/user/repo.git",
+            "https://gitea.example.org/user/repo.git",
+        ] {
+            let parsed = reqwest::Url::parse(url).unwrap();
+            assert!(!is_reserved_git_host(&parsed), "{} should be allowed", url);
+        }
+    }
+
+    #[test]
+    fn ref_names_are_validated() {
+        use super::{validate_ref_name, validate_remote_name};
+        for ok in ["origin", "upstream-2", "feature/valid_x", "v1.2.3", "a"] {
+            assert!(validate_ref_name(ok, "test").is_ok(), "{} should be valid", ok);
+        }
+        for bad in ["", "a b", "origin;rm -rf /", "x\"y", "x'y", "..", "@", "a\tb", "a\\b"] {
+            assert!(validate_ref_name(bad, "test").is_err(), "{} should be rejected", bad);
+        }
+        // Remotes : pas de slash
+        assert!(validate_remote_name("origin").is_ok());
+        assert!(validate_remote_name("feature/x").is_err());
+    }
+
+    #[test]
+    fn push_branch_names_are_validated_before_refspec_interpolation() {
+        // SEC-5 : git_push / git_push_force valident la branche avant
+        // l'interpolation dans la refspec `refs/heads/{branch}:…`. La
+        // validation doit court-circuiter pour ces noms d'injection.
+        use super::validate_ref_name;
+        for bad in [
+            "",
+            "a b",
+            "..",
+            "-leading-dash",
+            "-oProxyCommand=evil",
+            "origin;rm -rf /",
+        ] {
+            assert!(
+                validate_ref_name(bad, "Nom de branche").is_err(),
+                "{bad:?} should be rejected"
+            );
+        }
+        for ok in ["main", "feature/login", "release/v2.0", "fix_1"] {
+            assert!(
+                validate_ref_name(ok, "Nom de branche").is_ok(),
+                "{ok:?} should be valid"
+            );
+        }
     }
 }

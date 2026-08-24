@@ -9,7 +9,7 @@ import { AuthBrandPanel } from "@/components/auth-brand-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, Mail, ArrowLeft, CheckCircle2, KeyRound } from "lucide-react";
+import { Loader2, AlertCircle, Mail, ArrowLeft, CheckCircle2, KeyRound, Hourglass } from "lucide-react";
 
 type Step = "form" | "verify";
 
@@ -242,8 +242,9 @@ export default function SignupPage() {
                     <div>
                       <p className="text-sm text-destructive">{error}</p>
                       {attemptsLeft !== null && attemptsLeft > 0 && (
-                        <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                          ⏳ {attemptsLeft} tentative{attemptsLeft > 1 ? "s" : ""} restante
+                        <p className="mt-1 flex items-start gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                          <Hourglass aria-hidden="true" className="mt-px size-3 shrink-0" />
+                          {attemptsLeft} tentative{attemptsLeft > 1 ? "s" : ""} restante
                           {attemptsLeft > 1 ? "s" : ""} — vérifiez l'email le plus récent reçu.
                         </p>
                       )}

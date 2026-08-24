@@ -22,7 +22,7 @@ mod tests {
             .unwrap();
 
         let state = GitRepoState::new();
-        state.set_path(tmp.path().to_path_buf());
+        let _ = state.set_path(tmp.path().to_path_buf());
         (tmp, state)
     }
 

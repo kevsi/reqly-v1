@@ -8,6 +8,7 @@ export const MANIFEST_NAMES = [
   "pyproject.toml",
   "Pipfile",
   "go.mod",
+  "composer.json",
 ] as const;
 
 export function languageFromManifest(basename: string): string | undefined {
@@ -22,6 +23,8 @@ export function languageFromManifest(basename: string): string | undefined {
       return "python";
     case "go.mod":
       return "go";
+    case "composer.json":
+      return "php";
     default:
       return undefined;
   }

@@ -6,6 +6,11 @@ description = "Allows the fetch_proxy command"
 commands.allow = ["fetch_proxy"]
 
 [[permission]]
+identifier = "allow-analyze-backend"
+description = "Allows the analyze_backend command"
+commands.allow = ["analyze_backend"]
+
+[[permission]]
 identifier = "allow-export-json"
 description = "Allows the export_json command"
 commands.allow = ["export_json"]
@@ -104,6 +109,11 @@ commands.allow = ["start_device_flow_cmd"]
 identifier = "allow-poll-device-token"
 description = "Allows the poll_device_token_cmd command"
 commands.allow = ["poll_device_token_cmd"]
+
+[[permission]]
+identifier = "allow-start-github-oauth-server"
+description = "Allows the start_github_oauth_server command"
+commands.allow = ["start_github_oauth_server"]
 
 [[permission]]
 identifier = "allow-mark-sent"

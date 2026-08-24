@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "demo-admin",
+  "port": 4021,
+  "cors": true,
+  "routes": [
+    {
+      "id": "hello",
+      "method": "GET",
+      "path": "/hello",
+      "responses": [{ "id": "ok", "statusCode": 200, "body": "{\"salut\":true}" }]
+    },
+    {
+      "id": "counter",
+      "method": "POST",
+      "path": "/visites",
+      "responses": [{ "id": "created", "statusCode": 201 }],
+      "stateful": { "enabled": true, "resource": "visites" }
+    }
+  ]
+}

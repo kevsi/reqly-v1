@@ -25,6 +25,10 @@ const SIDE_EFFECT_TOOLS = new Set([
   "archive_workspace",
   "unarchive_workspace",
   "clear_workspace_cache",
+  // Mock Server : remplace le brouillon de routes (confirmé par l'UI).
+  "replace_mock_draft",
+  // Capture proxy : génère et applique un mock depuis le trafic réel.
+  "generate_mock_from_capture",
   // Actions du dispatcher JSON historique.
   "legacy_fill_request",
   "legacy_add_assertions",
@@ -49,6 +53,15 @@ const READ_ONLY_TOOLS = new Set([
   "get_workspace",
   "search_workspaces",
   "get_workspace_stats",
+  // Mock Server : lecture du brouillon + validation pure.
+  "get_mock_draft",
+  "validate_mock_config",
+  // Capture proxy : lecture des sessions capturées.
+  "get_capture_sessions",
+  // Git read-only (dépôt ouvert dans le panneau Git).
+  "git_status",
+  "git_branches",
+  "git_diff",
 ]);
 
 // Ces outils ne peuvent jamais recevoir allow persistant ni autoApply.

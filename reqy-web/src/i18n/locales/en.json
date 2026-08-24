@@ -362,7 +362,8 @@
       "sdks": "SDKs",
       "graphql": "GraphQL",
       "git": "Git",
-      "sse": "SSE"
+      "sse": "SSE",
+      "monitors": "Monitors"
     },
     "aiAssist": "Ask Monu AI",
     "ariaLabel": "Main navigation",
@@ -2259,6 +2260,54 @@
     "targetUnreachable": "Target server unreachable (connection refused or DNS not found) — check that the service is running on this port and the URL is correct.",
     "certificateError": "Invalid or self-signed TLS certificate — fix the target server certificate (or disable SSL verification in desktop mode to test)."
   },
+  "monitors": {
+    "title": "Monitors",
+    "subtitle": "Replays your collections on a schedule while the app is open. Webhook alerts on failure, degradation and recovery.",
+    "new": "New monitor",
+    "generate": "Generate from collections",
+    "generateDesc": "One monitor per selected collection, including all of its requests.",
+    "runNow": "Run now",
+    "empty": {
+      "title": "No monitors yet",
+      "description": "Create a monitor or generate them automatically from your collections."
+    },
+    "requestsCount": "{{count}} requests",
+    "interval": "Interval",
+    "expectedStatus": "Expected status",
+    "latencyThreshold": "Latency threshold (ms)",
+    "latencyHint": "Optional — above it, the run is marked “degraded”.",
+    "webhook": "Alert webhook",
+    "webhookHint": "POST JSON on failure/degraded/recovered transitions.",
+    "name": "Name",
+    "editTitle": "Edit monitor",
+    "createTitle": "New monitor",
+    "history": {
+      "title": "History",
+      "empty": "No runs yet.",
+      "export": "Export history (JSON)"
+    },
+    "lastRun": "Last",
+    "nextRun": "Next in",
+    "never": "never",
+    "paused": "Paused",
+    "deleteTitle": "Delete this monitor?",
+    "generatedToast": "{{count}} monitor(s) created",
+    "pickCollection": "Monitored collection",
+    "pickedRequests": "{{count}} request(s) monitored.",
+    "generateProjectsDesc": "One monitor per scanned project. Detected routes have no host: enter the base URL for each environment.",
+    "sourceCollections": "Collections",
+    "sourceProjects": "Scanned projects",
+    "noScannedProjects": "No scanned project with routes yet.",
+    "baseUrlFor": "Base URL — {{name}}",
+    "advancedChecks": "Advanced checks (per request)",
+    "headerChecks": "Required headers",
+    "headerName": "Header name",
+    "headerContains": "contains (optional)",
+    "addHeader": "Add header",
+    "bodyContains": "Body contains…",
+    "bodyJsonPath": "Required JSON-path",
+    "webhookHttpWarning": "Webhook uses http:// : payload travels in clear text. Prefer https://"
+  },
   "mocks": {
     "behavior": {
       "title": "Behavior",
@@ -2307,6 +2356,7 @@
       "total": "{{count}} requests",
       "filterPlaceholder": "Filter…",
       "filter": "Filter logs",
+      "clearFilter": "Clear filter",
       "pause": "Pause",
       "resume": "Resume",
       "colTime": "Time",
@@ -2341,6 +2391,9 @@
       "baseUrlPlaceholder": "http://127.0.0.1:4015",
       "token": "Admin token",
       "tokenPlaceholder": "x-admin-token",
+      "tokenShow": "Show token",
+      "tokenHide": "Hide token",
+      "openConnect": "Open mock connection",
       "connecting": "Connecting…"
     },
     "actions": {
@@ -2354,8 +2407,44 @@
       "generate": "Generate from collection",
       "importJson": "Import JSON",
       "exportJson": "Export .json",
-      "copyCmd": "Copy cmd",
-      "apply": "Apply to mock"
+      "copyCmd": "Copy CLI command",
+      "fileMenu": "File",
+      "apply": "Apply to mock",
+      "applyDirty": "not applied",
+      "applyTooltipOffline": "Connect to a running mock (`recli mock start`) to apply your config.",
+      "applyTooltipDirty": "Draft changes have not been applied to the mock yet."
+    },
+    "offline": {
+      "banner": "No running mock detected — run",
+      "openForm": "Connect a mock"
+    },
+    "simple": {
+      "toggle": "AI simple mode",
+      "title": "Create a mock with AI",
+      "subtitle": "Describe your API in one sentence: routes, responses, errors. The config is validated by the engine before applying.",
+      "placeholder": "E.g.: todo API with GET /api/todos, POST /api/todos (201), DELETE /api/todos/:id (204), and 404 on unknown ids.",
+      "generate": "Generate config",
+      "generating": "Generating…",
+      "applyDraft": "Replace draft",
+      "appliedToast": "AI config applied to draft",
+      "example1": "Users CRUD API + 404: describe /api/users routes…",
+      "example2": "E-commerce products/cart/orders…",
+      "example3": "Unstable mock (latency + random failures)…"
+    },
+    "undo": {
+      "action": "Undo"
+    },
+    "saved": {
+      "title": "Config manager",
+      "empty": "No saved config yet. AI-generated configs will appear here.",
+      "saveCurrent": "Save current draft",
+      "load": "Load into draft",
+      "download": "Download",
+      "remove": "Delete",
+      "sourceAi": "AI",
+      "sourceDraft": "Draft",
+      "sourceImport": "Import",
+      "savedToast": "Config saved"
     },
     "routes": {
       "deletedToast": "Route deleted",

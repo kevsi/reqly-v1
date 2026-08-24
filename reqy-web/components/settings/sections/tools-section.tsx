@@ -28,7 +28,6 @@ const TOOLS: Tool[] = [
   {
     id: "postman",
     name: "Postman",
-    logoEmoji: "📬",
     logo: PostmanIcon,
     apiKey: {
       endpoint: "/api/postman-auth",
@@ -47,14 +46,12 @@ const TOOLS: Tool[] = [
   {
     id: "github",
     name: "GitHub",
-    logoEmoji: "🐙",
     logo: GithubIcon,
     oauthUrl: "/api/github-auth/start",
   },
   {
     id: "gitlab",
     name: "GitLab",
-    logoEmoji: "🦊",
     logo: GitlabIcon,
     oauthUrl: "/api/gitlab-auth/start",
   },
@@ -127,13 +124,7 @@ function ToolRow({
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/60">
-          {tool.logo ? (
-            <tool.logo className="max-h-5 max-w-5 h-auto w-auto" aria-hidden="true" />
-          ) : (
-            <span className="text-lg leading-none" aria-hidden="true">
-              {tool.logoEmoji}
-            </span>
-          )}
+          {tool.logo && <tool.logo className="max-h-5 max-w-5 h-auto w-auto" aria-hidden="true" />}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium">{tool.name}</p>

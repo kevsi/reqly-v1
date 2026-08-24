@@ -9,7 +9,35 @@ import {
   readAnalyserConfig,
 } from "./scanner.ts";
 import { dedupeRoutes } from "./helpers.ts";
-import type { AnalysisResult, ApiRoute, AstGrepMatch, Detector } from "./types.ts";
+import type { AnalysisResult, ApiRoute, AstGrepMatch, Detector, HttpMethod, RegexRule } from "./types.ts";
+
+function runRegexRules(src: string, rules: RegexRule[]): AstGrepMatch[] {
+  const out: AstGrepMatch[] = [];
+  for (const rule of rules) {
+    for (const m of src.matchAll(rule.pattern)) {
+      const line = src.slice(0, m.index).split("\n").length;
+      const text = m[0];
+      const capture = (name: string): string | undefined => {
+        if (rule.capture && name in rule.capture) return m[rule.capture[name]!];
+        return m.groups?.[name];
+      };
+      const node: AstGrepMatch["node"] = {
+        text: () => text,
+        kind: () => rule.id,
+        line: () => line,
+        get: capture,
+        getAll: (name: string) => {
+          const v = capture(name);
+          return v ? [v] : [];
+        },
+        parent: () => null,
+        children: () => [],
+      };
+      out.push({ ruleId: rule.id, file: "", lang: "", line, text, node });
+    }
+  }
+  return out;
+}
 
 export interface AnalyzeOptions {
   rootPath: string;
@@ -81,6 +109,39 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
 
   const frameworks = new Set<string>();
   const allRoutes: ApiRoute[] = [];
+  const seenRoutes = new Set<string>();
+
+  function methodFromFile(file: string): HttpMethod | undefined {
+    const base = path.basename(file, path.extname(file)).toLowerCase();
+    const map: Record<string, HttpMethod> = {
+      ajouter: "POST", creer: "POST", create: "POST", add: "POST", insert: "POST",
+      modifier: "PUT", update: "PUT", editer: "PUT",
+      supprimer: "DELETE", delete: "DELETE", remove: "DELETE",
+      rechercher: "GET", trouver: "GET", lister: "GET", get: "GET", index: "GET",
+      rechercherun: "GET", show: "GET",
+      recherchertous: "GET", all: "GET", list: "GET",
+    };
+    const m = map[base];
+    if (m) return m;
+    const upper = base.toUpperCase();
+    if (["GET","POST","PUT","PATCH","DELETE","OPTIONS","HEAD"].includes(upper)) return upper as HttpMethod;
+    return undefined;
+  }
+
+  function languageFromFile(file: string): string {
+    switch (path.extname(file).toLowerCase()) {
+      case ".php": return "php";
+      case ".js": case ".mjs": case ".cjs": case ".jsx": return "javascript";
+      case ".ts": case ".tsx": return "typescript";
+      case ".py": return "python";
+      case ".java": return "java";
+      case ".cs": return "csharp";
+      case ".rb": return "ruby";
+      case ".go": return "go";
+      case ".rs": return "rust";
+      default: return "unknown";
+    }
+  }
 
   for (const detector of active) {
     if (fromManifest && !detector.canHandle(manifestFiles, rootPath)) continue;
@@ -96,7 +157,18 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
       options.onFile?.(file);
       try {
         const src = await fs.readFile(file, "utf8");
-        const matches = await runRules(langForFile(file, detector.language), src, detector.rules);
+        let matches: AstGrepMatch[];
+        try {
+          matches = await runRules(langForFile(file, detector.language), src, detector.rules);
+        } catch {
+          // ast-grep does not support this language (e.g. PHP); fall back to
+          // regex-based rules if the detector provides them.
+          if (detector.regexRules && detector.regexRules.length > 0) {
+            matches = runRegexRules(src, detector.regexRules);
+          } else {
+            throw new Error(`No ast-grep support for ${detector.language} and no regex fallback`);
+          }
+        }
         return matches.map((m) => ({ ...m, file })) satisfies AstGrepMatch[];
       } catch (err) {
         warnings.push(`Skipped ${file}: ${String(err instanceof Error ? err.message : err)}`);
@@ -108,6 +180,60 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
     const routes = detector.assemble(matches, rootPath);
     for (const r of routes) frameworks.add(r.framework);
     allRoutes.push(...routes);
+  }
+
+  // Generic file-structure fallback: when no routes were found but source
+  // files exist, derive routes from directory + filename conventions (common
+  // in custom PHP/JS/etc. APIs where each resource folder holds action files
+  // like `ajouter.php` → POST /resource).
+  if (allRoutes.length === 0) {
+    const fallbackExtensions = [
+      ".php", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
+      ".py", ".java", ".cs", ".rb", ".go", ".rs",
+    ];
+    const fallbackFiles = await collectSourceFiles(
+      rootPath,
+      fallbackExtensions,
+      ["vendor", "node_modules"],
+      gitignore,
+    );
+    for (const file of fallbackFiles) {
+      const rel = path.relative(rootPath, file).replace(/\\/g, "/");
+      const dir = path.dirname(rel).replace(/\\/g, "/");
+      // Skip files in root directory (no resource context).
+      if (dir === "." || dir === "") continue;
+      const resource = dir.split("/").pop() ?? "";
+      if (!resource) continue;
+      const method = methodFromFile(file);
+      if (!method) continue;
+      const routePath = `/${resource}`;
+      const key = `${method} ${routePath}`;
+      if (seenRoutes.has(key)) continue;
+      seenRoutes.add(key);
+      const line = (await fs.readFile(file, "utf8")).split("\n").findIndex(() => true) + 1;
+      allRoutes.push({
+        id: `fs-${method.toLowerCase()}-${routePath.replace(/[^a-z0-9]/gi, "-")}`,
+        method,
+        path: routePath,
+        file,
+        line,
+        framework: "custom",
+        language: languageFromFile(file),
+        auth: { required: false, confidence: "low" },
+        params: [],
+        raw: `File-based route: ${rel}`,
+      });
+    }
+    if (allRoutes.length > 0) {
+      frameworks.add("custom");
+      warnings.push(
+        "No framework-specific routes detected; routes inferred from file structure. Confidence is low.",
+      );
+    } else if (fallbackFiles.length > 0) {
+      warnings.push(
+        "Source files found but no routes could be inferred from the file structure.",
+      );
+    }
   }
 
   const routes = dedupeRoutes(allRoutes);

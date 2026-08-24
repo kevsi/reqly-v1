@@ -34,6 +34,7 @@ sync-server/dist/
 sync-server/data/
 reqy-mcp/dist/
 **/test-results/
+playwright-report/
 *.tsbuildinfo
 
 # ── Agent/tooling working directories ──────────────────────────
@@ -67,6 +68,13 @@ sync-server/pnpm-lock.yaml
 # Build artifacts
 recli/dist/
 packages/shared/dist/
+# Generated analyser-api sidecar (source copy + prod node_modules);
+# the .gitkeep stub stays so `tauri build` resources resolve before `beforeBuildCommand`.
+src-tauri/resources/analyser-api/packages/
+src-tauri/resources/analyser-api/node_modules/
+src-tauri/resources/analyser-api/pnpm-lock.yaml
+src-tauri/resources/analyser-api/package.json
+src-tauri/resources/analyser-api/pnpm-workspace.yaml
 
 # OS artifacts
 *.deb
@@ -75,3 +83,5 @@ packages/shared/dist/
 .opencode/
 reqy-web/vitest-output.txt
 tmp_test.txt
+
+env/.

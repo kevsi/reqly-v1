@@ -204,6 +204,21 @@ async function runOne(
   result.statusCode = response.statusCode;
   result.responseTimeMs = response.responseTimeMs;
 
+  // Snapshot réponse pour les checks monitors (body/headers) hors assertions.
+  try {
+    const rawBody =
+      typeof response.body === "string" ? response.body : JSON.stringify(response.body);
+    if (rawBody) result.responseBodyPreview = rawBody.slice(0, 2048);
+    const headerEntries = Object.entries(response.headers ?? {});
+    if (headerEntries.length > 0) {
+      const lower: Record<string, string> = {};
+      for (const [k, v] of headerEntries) lower[k.toLowerCase()] = String(v);
+      result.responseHeaders = lower;
+    }
+  } catch {
+    /* snapshot best-effort */
+  }
+
   // Post script (disabled server-side — user JS is never executed)
   const postScript = options.disableScripts
     ? undefined

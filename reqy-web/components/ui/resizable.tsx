@@ -30,7 +30,7 @@ const ResizablePanel = React.forwardRef<
 >((props, ref) => <ResizablePrimitive.Panel ref={ref} data-slot="resizable-panel" {...props} />);
 
 const ResizableHandle = React.forwardRef<HTMLDivElement, ResizableHandleProps>(
-  ({ withHandle, className, ...props }, _ref) => (
+  ({ withHandle, className, children, ...props }, _ref) => (
     <ResizablePrimitive.PanelResizeHandle
       data-slot="resizable-handle"
       className={cn(
@@ -39,6 +39,7 @@ const ResizableHandle = React.forwardRef<HTMLDivElement, ResizableHandleProps>(
       )}
       {...props}
     >
+      {children}
       {withHandle && (
         <div className="bg-border z-10 flex h-4 w-3 items-center justify-center rounded-xs border">
           <GripVerticalIcon className="size-2.5" />

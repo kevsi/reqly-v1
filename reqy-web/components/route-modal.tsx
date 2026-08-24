@@ -21,6 +21,7 @@ import {
   Code2,
   Link2,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -318,8 +319,9 @@ export function RouteModal({ project, open, onClose }: RouteModalProps) {
           {project.warnings && project.warnings.length > 0 && (
             <div className="mt-3 flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
               {project.warnings.map((w, i) => (
-                <p key={i} className="text-[11px] leading-snug text-warning">
-                  ⚠ {w}
+                <p key={i} className="flex items-start gap-1 text-[11px] leading-snug text-warning">
+                  <AlertTriangle aria-hidden="true" className="mt-px size-3 shrink-0" />
+                  {w}
                 </p>
               ))}
             </div>

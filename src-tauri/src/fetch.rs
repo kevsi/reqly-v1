@@ -262,7 +262,7 @@ pub async fn fetch_proxy(
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| AppError::Network(e.to_string()))?;
+            .map_err(AppError::from)?;
         (
             general_purpose::STANDARD.encode(&bytes),
             "base64".to_string(),
@@ -271,7 +271,7 @@ pub async fn fetch_proxy(
         let text = response
             .text()
             .await
-            .map_err(|e| AppError::Network(e.to_string()))?;
+            .map_err(AppError::from)?;
         // HTML entity decoding is only meaningful for HTML documents. Applying
         // it to JSON/XML/text corrupts legitimate data (e.g. `&#123;` inside a
         // JSON string becomes `{`).

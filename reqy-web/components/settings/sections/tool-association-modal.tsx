@@ -2,6 +2,7 @@
 
 import { useState, type ComponentType, type FormEvent, type SVGProps } from "react";
 import { useTranslation } from "react-i18next";
+import { Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,6 @@ export interface Tool {
   id: string;
   name: string;
   description?: string;
-  logoEmoji?: string;
   logo?: ComponentType<SVGProps<SVGSVGElement>>;
   scopes?: string[];
   oauthUrl?: string;
@@ -123,7 +123,11 @@ function ApiKeyForm({ tool, onSuccess }: { tool: Tool; onSuccess: () => void }) 
               onClick={() => setShow((s) => !s)}
               aria-label={show ? t("settings.integrations.hide") : t("settings.integrations.show")}
             >
-              {show ? "🙈" : "👁"}
+              {show ? (
+                <EyeOff aria-hidden="true" className="size-4" />
+              ) : (
+                <Eye aria-hidden="true" className="size-4" />
+              )}
             </Button>
           </div>
         </Field>
@@ -320,15 +324,11 @@ export function ToolAssociationModal({
           <>
             <DialogHeader>
               <div className="flex items-start gap-3">
-                {tool.logo ? (
+                {tool.logo && (
                   <tool.logo
                     className="max-h-8 max-w-8 h-auto w-auto shrink-0"
                     aria-hidden="true"
                   />
-                ) : (
-                  <span className="text-3xl" aria-hidden="true">
-                    {tool.logoEmoji}
-                  </span>
                 )}
                 <div>
                   <DialogTitle>

@@ -16,6 +16,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -365,7 +366,7 @@ export function GitRemoteBar({
                   ) : (
                     <GitFork className="size-3" />
                   )}
-                  {branchesLoading ? "…" : "⟳"}
+                  {branchesLoading ? "…" : <RefreshCw aria-hidden="true" className="size-3" />}
                 </Button>
               )}
             </div>

@@ -51,7 +51,7 @@ function buildStepState(
   }
   return {
     type: "create",
-    label: `${tc.name} ${result.error ? "❌" : "✅"}`,
+    label: tc.name,
     status: result.error ? "error" : "done",
   };
 }
@@ -651,10 +651,10 @@ export function useAiSidebarChat() {
                 // En attente de confirmation (permission « ask ») : l'outil n'a
                 // PAS échoué — il attend l'accord de l'utilisateur. Ne pas le
                 // marquer en erreur, sinon tous les outils suivants de la file
-                // s'affichent « ❌ » alors qu'ils attendent simplement leur tour.
+                // s'affichent en erreur alors qu'ils attendent simplement leur tour.
                 steps[steps.length - calls.length + i] = {
                   type: "create",
-                  label: `⚠ ${tc.name} — confirmation requise`,
+                  label: `${tc.name} — confirmation requise`,
                   status: "awaiting_confirmation",
                 };
               } else {
@@ -701,7 +701,7 @@ export function useAiSidebarChat() {
             const targetTc = calls[confirmIdx];
             steps[steps.length - calls.length + confirmIdx] = {
               type: "create",
-              label: `⚠ ${targetTc.name} — confirmation requise`,
+              label: `${targetTc.name} — confirmation requise`,
               status: "awaiting_confirmation",
             };
             syncSteps();

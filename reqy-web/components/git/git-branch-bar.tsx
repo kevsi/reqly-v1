@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, Plus, Trash2, GitBranch } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Plus, Trash2, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,8 +70,11 @@ export function GitBranchBar({
               <div className="flex items-center gap-2">
                 {b.isCurrent && <Check className="size-3 text-primary" />}
                 {(b.ahead !== 0 || b.behind !== 0) && (
-                  <span className="text-[10px] text-muted-foreground">
-                    ↑{b.ahead}↓{b.behind}
+                  <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                    <ArrowUp aria-hidden="true" className="size-2.5" />
+                    {b.ahead}
+                    <ArrowDown aria-hidden="true" className="size-2.5" />
+                    {b.behind}
                   </span>
                 )}
               </div>

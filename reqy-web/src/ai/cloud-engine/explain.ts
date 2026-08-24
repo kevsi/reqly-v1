@@ -104,7 +104,7 @@ export function explainHeader(name: string, value: string): HeaderExplanation {
       const token = value.replace(/^Bearer\s+/i, "").trim();
       const jwt = decodeJwt(token);
       if (jwt) {
-        const exp = jwt.expiresAt ? (jwt.expired ? ` ⚠️ expiré le ${jwt.expiresAt}` : ` expire le ${jwt.expiresAt}`) : "";
+        const exp = jwt.expiresAt ? (jwt.expired ? `, expiré depuis le ${jwt.expiresAt}` : `, expire le ${jwt.expiresAt}`) : "";
         description = `Token Bearer (JWT${exp}).`;
       } else {
         description = `Token Bearer (opaque).`;

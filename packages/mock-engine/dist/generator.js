@@ -1,5 +1,27 @@
-const FIRST_NAMES = ["Alice", "Bruno", "Chloé", "Diego", "Emma", "Farid", "Lucie", "Marco", "Nina", "Oscar"];
-const LAST_NAMES = ["Bernard", "Cruz", "Dupont", "Eriksson", "Foster", "Garcia", "Haddad", "Ivanov", "Jones", "Kim"];
+const FIRST_NAMES = [
+    "Alice",
+    "Bruno",
+    "Chloé",
+    "Diego",
+    "Emma",
+    "Farid",
+    "Lucie",
+    "Marco",
+    "Nina",
+    "Oscar",
+];
+const LAST_NAMES = [
+    "Bernard",
+    "Cruz",
+    "Dupont",
+    "Eriksson",
+    "Foster",
+    "Garcia",
+    "Haddad",
+    "Ivanov",
+    "Jones",
+    "Kim",
+];
 const CITIES = ["Lyon", "Berlin", "Madrid", "Lisbonne", "Prague", "Vienne", "Porto", "Anvers"];
 const COUNTRIES = ["France", "Allemagne", "Espagne", "Portugal", "Italie", "Belgique", "Suisse"];
 function pick(rng, arr) {

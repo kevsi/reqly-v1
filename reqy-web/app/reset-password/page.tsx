@@ -15,6 +15,7 @@ import {
   Mail,
   ShieldCheck,
   ArrowLeft,
+  Hourglass,
 } from "lucide-react";
 
 type Step = "code" | "password";
@@ -343,8 +344,9 @@ function ErrorBanner({
         <div>
           <p className="text-sm text-destructive">{error}</p>
           {attemptsLeft !== null && attemptsLeft > 0 && (
-            <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-              ⏳ {attemptsLeft} tentative{attemptsLeft > 1 ? "s" : ""} restante
+            <p className="mt-1 flex items-start gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <Hourglass aria-hidden="true" className="mt-px size-3 shrink-0" />
+              {attemptsLeft} tentative{attemptsLeft > 1 ? "s" : ""} restante
               {attemptsLeft > 1 ? "s" : ""} — vérifiez l&apos;email le plus récent reçu.
             </p>
           )}

@@ -75,6 +75,10 @@ export function resolveJsonPath(obj: unknown, path: string): unknown {
       return undefined;
     }
     if (typeof current === "object") {
+      // Anti-prototype-pollution : ne jamais suivre __proto__/constructor/prototype
+      if (part === "__proto__" || part === "constructor" || part === "prototype") {
+        return undefined;
+      }
       current = (current as Record<string, unknown>)[part];
     } else {
       return undefined;

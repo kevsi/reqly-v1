@@ -204,7 +204,8 @@ type ImportSchemaRequest = z.infer<typeof requestItemSchema>;
 import { maskSensitivePayload } from "@/src/ai/cloud-engine/prompt";
 import { runSubAgent, assertDelegationAllowed } from "@/src/ai/agent/subagent";
 import { runCollection } from "@/lib/test-runner/runner";
-import type { RunnerContext, RequestResponse } from "@/lib/test-runner/types";
+import { createProxyExecutor } from "@/lib/test-runner/proxy-executor";
+import type { RunnerContext } from "@/lib/test-runner/types";
 import { parseOpenApiSpec, convertToCollections } from "@/lib/openapi-import";
 import { parseBrunoCollection, convertBrunoToCollections } from "@/lib/bruno-import";
 import { searchIndex } from "@/src/ai/cloud-engine/search-index";
@@ -217,6 +218,9 @@ import {
 import { proposeAssertionCorrection } from "@/src/ai/cloud-engine/actions/propose-correction";
 import { generateOpenApiSpec } from "@/lib/openapi-export";
 import { authorizeToolCall, type ApprovalSource } from "@/src/ai/agent/permissions";
+import { MOCK_AI_TOOLS } from "@/lib/mock/mock-ai-tools";
+import { CAPTURE_AI_TOOLS } from "@/lib/capture/capture-ai-tools";
+import { GIT_AI_TOOLS } from "@/lib/git/git-ai-tools";
 import {
   loadAIProvider,
   loadApiKey,
@@ -761,45 +765,7 @@ async function handleRunCollection(args: Record<string, unknown>): Promise<ToolR
     };
   }
 
-  const executor = async (req: {
-    method: string;
-    url: string;
-    headers: Record<string, string>;
-    body?: unknown;
-  }): Promise<RequestResponse> => {
-    const started = Date.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-      const proxyRes = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: req.url,
-          method: req.method,
-          headers: req.headers,
-          body: req.body,
-        }),
-        signal: controller.signal,
-      });
-      const proxyResult = await proxyRes.json();
-      const text = proxyResult.body ?? "";
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = text;
-      }
-      return {
-        statusCode: proxyResult.status ?? proxyRes.status,
-        responseTimeMs: Date.now() - started,
-        body: parsed,
-        headers: proxyResult.headers || {},
-      };
-    } finally {
-      clearTimeout(timeout);
-    }
-  };
+  const executor = createProxyExecutor();
 
   try {
     const ctx: RunnerContext = {
@@ -817,7 +783,13 @@ async function handleRunCollection(args: Record<string, unknown>): Promise<ToolR
 
     const lines = report.results.map((r) => {
       const status =
-        r.status === "pass" ? "✓" : r.status === "fail" ? "✗" : r.status === "errored" ? "!" : "○";
+        r.status === "pass"
+          ? "[PASS]"
+          : r.status === "fail"
+            ? "[FAIL]"
+            : r.status === "errored"
+              ? "[ERROR]"
+              : "[SKIP]";
       const code = r.statusCode ? ` (${r.statusCode})` : "";
       const time = r.responseTimeMs ? ` ${r.responseTimeMs}ms` : "";
       return `${status} ${r.requestName}${code}${time}`;
@@ -2213,4 +2185,10 @@ export const REQLY_TOOLS: ReqlyTool[] = [
     },
     handler: handleCreateFolder,
   },
+  // Outils Mock Server (pont brouillon via components/mock/mock-draft-bridge).
+  ...MOCK_AI_TOOLS,
+  // Outils capture proxy (trafic réel → mock).
+  ...CAPTURE_AI_TOOLS,
+  // Outils Git read-only (dépôt ouvert via le panneau Git).
+  ...GIT_AI_TOOLS,
 ];

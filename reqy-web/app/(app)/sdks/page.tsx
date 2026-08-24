@@ -25,6 +25,7 @@ import {
   Check,
   Globe,
   Cpu,
+  Lightbulb,
 } from "lucide-react";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { generateOpenApiSpec } from "@/lib/openapi-export";
@@ -283,10 +284,13 @@ export default function SdksPage() {
                   </Select>
 
                   {!hasCapturedResponses && (
-                    <p className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-md border border-border/40">
-                      💡 <strong>Astuce :</strong> Exécutez vos requêtes au moins une fois dans
-                      Reqly. Les modèles de réponse de votre SDK seront automatiquement typés à
-                      partir des réponses JSON réelles.
+                    <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-md border border-border/40">
+                      <Lightbulb aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+                      <span>
+                        <strong>Astuce :</strong> Exécutez vos requêtes au moins une fois dans
+                        Reqly. Les modèles de réponse de votre SDK seront automatiquement typés à
+                        partir des réponses JSON réelles.
+                      </span>
                     </p>
                   )}
                 </CardContent>

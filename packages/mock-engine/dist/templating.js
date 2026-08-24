@@ -58,8 +58,20 @@ function resolveToken(token, ctx) {
     if (fakerMatch) {
         const fmt = fakerMatch[1].toLowerCase();
         const known = [
-            "email", "name", "firstname", "lastname", "city", "country",
-            "phone", "url", "uuid", "date", "date-time", "price", "ipv4", "slug",
+            "email",
+            "name",
+            "firstname",
+            "lastname",
+            "city",
+            "country",
+            "phone",
+            "url",
+            "uuid",
+            "date",
+            "date-time",
+            "price",
+            "ipv4",
+            "slug",
         ];
         const canonical = known.find((k) => k.toLowerCase() === fmt.replace(/_/g, "-"));
         if (canonical)
