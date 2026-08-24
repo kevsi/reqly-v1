@@ -17,7 +17,7 @@ const SIGNUP = (email: string, password = "supersecret", name?: string) => ({
 });
 
 /**
- * Codes are stored HASHED since audit M4 â€” tests fetch the freshly issued
+ * Codes are stored HASHED since audit M4 — tests fetch the freshly issued
  * plaintext from the NODE_ENV=test-only side channel instead of the DB.
  */
 function issuedCode(kind: "verify" | "reset", email: string): string {
@@ -52,10 +52,11 @@ async function requestReset(app: ReturnType<typeof buildApp>, email: string) {
 
 beforeEach(() => {
   process.env.AUTH_SIGNING_SECRET = "test-secret-do-not-use-in-prod";
-  // password_resets references users(id) with FK enforcement on â€” clear it first.
+  // password_resets references users(id) with FK enforcement on — clear it first.
   db.exec("DELETE FROM password_resets;");
   db.exec(`
-    DELETE FROM activity_log; DELETE FROM memberships;
+    DELETE FROM activity_log;
+    DELETE FROM memberships;
     DELETE FROM invitations;
     DELETE FROM workspaces;
     DELETE FROM users;
@@ -63,7 +64,7 @@ beforeEach(() => {
   _testCodes.clear();
 });
 
-describe("routes/auth â€” signup", () => {
+describe("routes/auth — signup", () => {
   it("creates an unverified user and returns userId + email (no token, no password hash leaked)", async () => {
     const app = buildApp();
     const res = await app.request(
@@ -121,7 +122,7 @@ describe("routes/auth â€” signup", () => {
   });
 });
 
-describe("routes/auth â€” verify (no bypass)", () => {
+describe("routes/auth — verify (no bypass)", () => {
   it("rejects a wrong code even for an already-verified account (no session minted)", async () => {
     const app = buildApp();
     await signupAndVerify(app, "mallory@example.com", "supersecret");
@@ -168,7 +169,7 @@ describe("routes/auth â€” verify (no bypass)", () => {
   });
 });
 
-describe("routes/auth â€” login", () => {
+describe("routes/auth — login", () => {
   it("returns a token for valid credentials", async () => {
     const app = buildApp();
     await signupAndVerify(app, "carol@example.com", "supersecret", "Carol");
@@ -194,7 +195,7 @@ describe("routes/auth â€” login", () => {
     const res = await app.request("/api/auth/login", SIGNUP("elise@example.com", "wrongpass"));
     expect(res.status).toBe(401);
     const body = (await res.json()) as { error: string };
-    // Generic message â€” must not reveal whether the email exists or the password was wrong.
+    // Generic message — must not reveal whether the email exists or the password was wrong.
     expect(body.error).not.toMatch(/password|mot de passe|existe/i);
   });
 
@@ -205,7 +206,7 @@ describe("routes/auth â€” login", () => {
   });
 });
 
-describe("routes/auth â€” login lockout", () => {
+describe("routes/auth — login lockout", () => {
   it("locks the account after MAX_FAILED_LOGINS wrong passwords, then rejects even the correct one with 429", async () => {
     const app = buildApp();
     await signupAndVerify(app, "lock1@example.com", "supersecret");
@@ -230,7 +231,7 @@ describe("routes/auth â€” login lockout", () => {
     const locked = await app.request("/api/auth/login", SIGNUP("lock2@example.com", "supersecret"));
     expect(locked.status).toBe(429);
 
-    // Lock expired â†’ login works again.
+    // Lock expired → login works again.
     db.prepare("UPDATE users SET locked_until = ? WHERE email = ?").run(
       Date.now() - 1000,
       "lock2@example.com",
@@ -262,7 +263,7 @@ describe("routes/auth â€” login lockout", () => {
   });
 });
 
-describe("routes/auth â€” me / session", () => {
+describe("routes/auth — me / session", () => {
   it("GET /me returns the user when authenticated via Bearer token", async () => {
     const app = buildApp();
     const verifyRes = await signupAndVerify(app, "erin@example.com", "supersecret", "Erin");
@@ -305,9 +306,9 @@ describe("routes/auth â€” me / session", () => {
   });
 });
 
-// â”€â”€ Regression tests from the 2026-08 security audit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Regression tests from the 2026-08 security audit ──────────────────────
 
-describe("routes/auth â€” audit M4: codes are stored hashed, never plaintext", () => {
+describe("routes/auth — audit M4: codes are stored hashed, never plaintext", () => {
   it("stores verification codes as SHA-256 hex (64 chars), not the plaintext", async () => {
     const app = buildApp();
     await app.request("/api/auth/signup", SIGNUP("hashed@example.com"));
@@ -334,7 +335,7 @@ describe("routes/auth â€” audit M4: codes are stored hashed, never plaintex
   });
 });
 
-describe("routes/auth â€” audit H2: reset-code brute-force guard", () => {
+describe("routes/auth — audit H2: reset-code brute-force guard", () => {
   it("reports remaining attempts on each wrong submission", async () => {
     const app = buildApp();
     await signupAndVerify(app, "attempts@example.com", "supersecret");
@@ -354,7 +355,7 @@ describe("routes/auth â€” audit H2: reset-code brute-force guard", () => {
     const firstBody = (await first.json()) as { attemptsRemaining?: number };
     expect(firstBody.attemptsRemaining).toBe(4);
 
-    // Burn the rest â€” the last one must announce zero remaining.
+    // Burn the rest — the last one must announce zero remaining.
     for (let i = 0; i < 3; i++) {
       await app.request("/api/auth/reset-password", {
         method: "POST",
@@ -440,13 +441,13 @@ describe("routes/auth â€” audit H2: reset-code brute-force guard", () => {
     });
     expect(res.status).toBe(200);
 
-    // Login works with the new passwordâ€¦
+    // Login works with the new password…
     const login = await app.request(
       "/api/auth/login",
       SIGNUP("happy-path@example.com", "newsecret123"),
     );
     expect(login.status).toBe(200);
-    // â€¦and no longer with the old one.
+    // …and no longer with the old one.
     const oldLogin = await app.request(
       "/api/auth/login",
       SIGNUP("happy-path@example.com", "supersecret"),
@@ -455,19 +456,19 @@ describe("routes/auth â€” audit H2: reset-code brute-force guard", () => {
   });
 });
 
-describe("routes/auth â€” audit H3: password reset revokes outstanding sessions", () => {
+describe("routes/auth — audit H3: password reset revokes outstanding sessions", () => {
   it("invalidates a previously issued session token after a successful reset", async () => {
     const app = buildApp();
     const verifyRes = await signupAndVerify(app, "revoke@example.com", "supersecret");
     const { token } = (await verifyRes.json()) as { token: string };
 
-    // Session is valid before the resetâ€¦
+    // Session is valid before the reset…
     const before = await app.request("/api/auth/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(before.status).toBe(200);
 
-    // â€¦then the password is reset.
+    // …then the password is reset.
     const code = await requestReset(app, "revoke@example.com");
     const reset = await app.request("/api/auth/reset-password", {
       method: "POST",
@@ -483,7 +484,7 @@ describe("routes/auth â€” audit H3: password reset revokes outstanding sess
     expect(after.status).toBe(401);
   });
 
-  it("bumps token_version on the user row (parseSessionCookie ver mismatch â‡’ revoked)", async () => {
+  it("bumps token_version on the user row (parseSessionCookie ver mismatch ⇒ revoked)", async () => {
     const app = buildApp();
     const verifyRes = await signupAndVerify(app, "ver@example.com", "supersecret");
     const { token } = (await verifyRes.json()) as { token: string };
@@ -506,7 +507,7 @@ describe("routes/auth â€” audit H3: password reset revokes outstanding sess
   });
 });
 
-describe("routes/auth â€” two-step reset (/verify-reset-code)", () => {
+describe("routes/auth — two-step reset (/verify-reset-code)", () => {
   it("validates the code without consuming it; the real reset still works after", async () => {
     const app = buildApp();
     await signupAndVerify(app, "twostep@example.com", "supersecret");
@@ -535,7 +536,7 @@ describe("routes/auth â€” two-step reset (/verify-reset-code)", () => {
     await signupAndVerify(app, "sharedctr@example.com", "supersecret");
     const code = await requestReset(app, "sharedctr@example.com");
 
-    // 4 wrong guesses through the CHECK endpointâ€¦
+    // 4 wrong guesses through the CHECK endpoint…
     for (let i = 0; i < 4; i++) {
       const bad = await app.request("/api/auth/verify-reset-code", {
         method: "POST",
@@ -544,7 +545,7 @@ describe("routes/auth â€” two-step reset (/verify-reset-code)", () => {
       });
       expect(bad.status).toBe(400);
     }
-    // â€¦and the 5th wrong guess through RESET exhausts the shared budget.
+    // …and the 5th wrong guess through RESET exhausts the shared budget.
     const fifth = await app.request("/api/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -568,7 +569,7 @@ describe("routes/auth â€” two-step reset (/verify-reset-code)", () => {
   });
 });
 
-describe("routes/auth â€” audit C1: /oauth-login requires proof of GitHub ownership", () => {
+describe("routes/auth — audit C1: /oauth-login requires proof of GitHub ownership", () => {
   it("rejects a request without an accessToken (schema-level)", async () => {
     const app = buildApp();
     const res = await app.request("/api/auth/oauth-login", {

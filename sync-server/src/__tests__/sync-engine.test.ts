@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import db from "../db.js";
 import { getChangesSince, pushChanges, isMember, type ChangesPage } from "../sync-engine.js";
 
@@ -221,10 +221,10 @@ describe("sync engine", () => {
   });
 });
 
-describe("sync engine â€” poll pagination (keyset cursor)", () => {
+describe("sync engine — poll pagination (keyset cursor)", () => {
   beforeEach(() => {
     db.exec(
-      "DELETE FROM activity_log; DELETE FROM folders; DELETE FROM environments; DELETE FROM collections; DELETE FROM activity_log; DELETE FROM memberships; DELETE FROM invitations; DELETE FROM workspaces; DELETE FROM users;",
+      "DELETE FROM activity_log; DELETE FROM folders; DELETE FROM environments; DELETE FROM collections; DELETE FROM memberships; DELETE FROM invitations; DELETE FROM workspaces; DELETE FROM users;",
     );
     db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
       USER_A,
@@ -411,3 +411,4 @@ describe("cross-workspace isolation", () => {
     expect(row.workspace_id).toBe(WS);
   });
 });
+
