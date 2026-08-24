@@ -2258,5 +2258,173 @@
     "ssrfBlockedLocal": "URL refusée par le proxy : localhost et adresses privées sont bloqués en mode web. En développement, utilise le mode dev ou définis ALLOW_LOCAL_HOSTS=true pour tester localhost.",
     "targetUnreachable": "Serveur cible injoignable (connexion refusée ou DNS introuvable) — vérifie que le service tourne sur ce port et que l'URL est correcte.",
     "certificateError": "Certificat TLS invalide ou auto-signé — corrige le certificat du serveur cible (ou désactive la vérification SSL côté desktop pour tester)."
+  },
+  "mocks": {
+    "behavior": {
+      "title": "Routes",
+      "latency": {
+        "title": "Latence",
+        "min": "Min (ms)",
+        "max": "Max (ms)",
+        "hint": "0 / 0 = aucune latence"
+      },
+      "failure": {
+        "title": "Panne",
+        "enable": "Activer",
+        "probability": "Probabilité",
+        "kind": "Type de panne",
+        "kindStatus": "Statut HTTP",
+        "kindTimeout": "Timeout",
+        "kindReset": "Reset socket",
+        "kindMalformed": "Réponse malformée",
+        "statusCode": "Code d'erreur",
+        "timeoutMs": "Durée du timeout (ms)"
+      },
+      "stateful": {
+        "title": "Stateful",
+        "enable": "Activer",
+        "resource": "Ressource",
+        "resourcePlaceholder": "users",
+        "idField": "Champ id"
+      },
+      "transform": {
+        "title": "Transform (JS)",
+        "warning": "Sandbox JS 250 ms — pas d'IO, pas de require.",
+        "test": "Tester",
+        "error": "Erreur",
+        "result": "Résultat"
+      }
+    },
+    "generate": {
+      "description": "Chaque requête sélectionnée devient une route avec une réponse squelette à affiner.",
+      "empty": "Aucune route pour le moment.",
+      "requestsCount": "{{count}} requête(s) seront converties.",
+      "confirm": "Générer",
+      "generatedToast": "Routes générées"
+    },
+    "logs": {
+      "notAttached": "Connecte-toi à un mock en cours pour voir les logs.",
+      "total": "{{count}} requêtes",
+      "filterPlaceholder": "Filtrer…",
+      "filter": "Filtrer les logs",
+      "pause": "Pause",
+      "resume": "Reprendre",
+      "colTime": "Heure",
+      "colMethod": "Méthode",
+      "colPath": "Path",
+      "colStatus": "Statut",
+      "colDuration": "Durée",
+      "colMatched": "Route matchée",
+      "colNote": "Note",
+      "unmatched": "aucune"
+    },
+    "status": {
+      "connectFailedToast": "Mock introuvable — vérifie l'URL et le token.",
+      "connectedToast": "Mock connecté",
+      "disconnectedToast": "Mock déconnecté",
+      "resetOkToast": "État du mock réinitialisé",
+      "resetKoToast": "Reset impossible",
+      "resetConfirmTitle": "Réinitialiser l'état du mock ?",
+      "resetConfirmDesc": "Toutes les ressources stateful enregistrées seront effacées.",
+      "resetStateLabel": "Reset state",
+      "connected": "Connecté",
+      "offline": "Hors-ligne",
+      "checking": "Recherche du mock…",
+      "routesCount": "{{count}} routes",
+      "pollingActive": "Polling actif — mettre en pause",
+      "pollingPaused": "Polling en pause — reprendre",
+      "connect": "Connecter",
+      "resetState": "Reset state",
+      "disconnect": "Déconnecter",
+      "formTitle": "Mock en cours (`recli mock start`)",
+      "baseUrl": "Base URL",
+      "baseUrlPlaceholder": "http://127.0.0.1:4015",
+      "token": "Token admin",
+      "tokenPlaceholder": "x-admin-token",
+      "connecting": "Connexion…"
+    },
+    "actions": {
+      "applySuccess": "Config appliquée au mock",
+      "applyFailed": "Application impossible : {{message}}",
+      "importInvalid": "Fichier invalide : version 1 et routes requises.",
+      "imported": "Config importée",
+      "copiedCmd": "Commande copiée",
+      "copyFailed": "Copie impossible",
+      "newRoute": "Nouvelle route",
+      "generate": "Générer depuis collection",
+      "importJson": "Importer JSON",
+      "exportJson": "Exporter .json",
+      "copyCmd": "Copier cmd",
+      "apply": "Appliquer au mock"
+    },
+    "routes": {
+      "deletedToast": "Route supprimée",
+      "searchPlaceholder": "Filtrer les routes…",
+      "search": "Recherche",
+      "noMatch": "Aucun résultat.",
+      "ariaSelect": "Sélectionner la route",
+      "tooltipLatency": "Latence {{min}}–{{max}} ms",
+      "tooltipFailure": "Panne {{percent}} % · {{kind}}",
+      "tooltipStateful": "Stateful",
+      "tooltipTransform": "Transform JS",
+      "deleteTitle": "Supprimer cette route ?"
+    },
+    "pageTitle": "Mock Server",
+    "editor": {
+      "draftSaved": "Brouillon sauvegardé à {{time}}",
+      "method": "Méthode",
+      "path": "Chemin",
+      "pathPlaceholder": "/api/users/:id",
+      "advanced": "Options avancées de la route",
+      "routeId": "ID de route (unique)",
+      "responses": "Réponses",
+      "addResponse": "Ajouter une réponse"
+    },
+    "empty": {
+      "title": "Aucune route dans cette config",
+      "description": "Crée une route manuellement ou génère une config complète depuis tes collections Reqly.",
+      "cta": "Générer depuis une collection"
+    },
+    "replace": {
+      "title": "Remplacer les routes actuelles ?",
+      "description": "Les {{count}} routes existantes seront remplacées par la nouvelle config."
+    },
+    "response": {
+      "statusCode": "Statut",
+      "name": "Nom (optionnel)",
+      "namePlaceholder": "ex. carte refusée",
+      "defaultResponse": "Réponse par défaut",
+      "duplicate": "Dupliquer",
+      "remove": "Supprimer",
+      "rules": {
+        "title": "Règles",
+        "target": "Cible",
+        "namePlaceholder": "nom",
+        "name": "Nom du paramètre",
+        "op": "Opérateur",
+        "valuePlaceholder": "valeur",
+        "value": "Valeur attendue",
+        "remove": "Supprimer la règle",
+        "add": "Ajouter une règle"
+      },
+      "conditional": "conditionnelle",
+      "schema": {
+        "invalid": "JSON invalide",
+        "title": "Schéma (BodySchema JSON)",
+        "preview": "Aperçu",
+        "regenerate": "Régénérer"
+      }
+    },
+    "body": {
+      "static": "Statique",
+      "schema": "Schéma"
+    },
+    "headers": {
+      "title": "En-têtes",
+      "keyPlaceholder": "Clé",
+      "valuePlaceholder": "Valeur",
+      "remove": "Supprimer l'en-tête",
+      "add": "Ajouter un en-tête"
+    }
   }
 }

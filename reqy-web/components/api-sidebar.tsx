@@ -14,6 +14,7 @@ import {
   FolderKanban,
   Play,
   Radio,
+  Boxes,
 } from "lucide-react";
 import { AppIcon } from "@/components/app-icon";
 import { ToolsSection } from "@/components/sidebar/tools-section";
@@ -26,14 +27,57 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
 
 const NAV_ITEMS = [
-  { icon: LayoutDashboard, key: "sidebar.nav.dashboard", href: "/dashboard/", id: "dashboard" },
-  { icon: Zap, key: "sidebar.nav.apiEndpoints", href: "/", id: "api-endpoints" },
-  { icon: Folder, key: "sidebar.nav.collections", href: "/collections/", id: "collections" },
-  { icon: FolderCode, key: "sidebar.nav.projects", href: "/my-projects/", id: "projects" },
-  { icon: FolderKanban, key: "sidebar.nav.workspaces", href: "/workspaces/", id: "workspaces" },
-  { icon: Play, key: "sidebar.nav.runner", href: "/runner/", id: "runner" },
-  { icon: Radio, key: "sidebar.nav.capture", href: "/capture/", id: "capture" },
-  { icon: Settings, key: "sidebar.nav.settings", href: "/settings/", id: "settings" },
+  {
+    icon: LayoutDashboard,
+    key: "sidebar.nav.dashboard",
+    href: "/dashboard/",
+    id: "dashboard",
+    fallback: "Tableau de bord",
+  },
+  {
+    icon: Zap,
+    key: "sidebar.nav.apiEndpoints",
+    href: "/",
+    id: "api-endpoints",
+    fallback: "API Endpoints",
+  },
+  {
+    icon: Folder,
+    key: "sidebar.nav.collections",
+    href: "/collections/",
+    id: "collections",
+    fallback: "Collections",
+  },
+  {
+    icon: FolderCode,
+    key: "sidebar.nav.projects",
+    href: "/my-projects/",
+    id: "projects",
+    fallback: "Projets",
+  },
+  {
+    icon: FolderKanban,
+    key: "sidebar.nav.workspaces",
+    href: "/workspaces/",
+    id: "workspaces",
+    fallback: "Espaces de travail",
+  },
+  { icon: Play, key: "sidebar.nav.runner", href: "/runner/", id: "runner", fallback: "Runner" },
+  {
+    icon: Radio,
+    key: "sidebar.nav.capture",
+    href: "/capture/",
+    id: "capture",
+    fallback: "Capture",
+  },
+  { icon: Boxes, key: "sidebar.nav.mocks", href: "/mocks/", id: "mocks", fallback: "Mocks" },
+  {
+    icon: Settings,
+    key: "sidebar.nav.settings",
+    href: "/settings/",
+    id: "settings",
+    fallback: "Paramètres",
+  },
 ];
 
 interface ApiSidebarProps {
@@ -154,7 +198,7 @@ export function ApiSidebar({
       >
         <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
-            const label = t(item.key);
+            const label = t(item.key, { defaultValue: item.fallback });
             const isActive = item.id === activePage;
             const linkContent = (
               <>

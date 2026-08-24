@@ -17,6 +17,7 @@ import { registerServe } from "./commands/serve.js";
 import { registerContract } from "./commands/contract.js";
 import { registerGenerate } from "./commands/generate.js";
 import { registerImportPostman } from "./commands/import-postman.js";
+import { registerMock } from "./commands/mock.js";
 
 const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
@@ -69,5 +70,6 @@ registerServe(program);
 registerContract(program);
 registerGenerate(program);
 registerImportPostman(program);
+registerMock(program);
 
 program.parse();

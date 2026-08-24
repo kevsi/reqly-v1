@@ -98,6 +98,18 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/mock-engine:
+    devDependencies:
+      "@types/node":
+        specifier: ^22
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.7.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.20.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
+
   packages/shared:
     dependencies:
       js-yaml:
@@ -122,6 +134,9 @@ importers:
       "@modelcontextprotocol/sdk":
         specifier: ^1.0.0
         version: 1.29.0(zod@3.25.76)
+      "@reqly/mock-engine":
+        specifier: workspace:*
+        version: link:../packages/mock-engine
       "@reqly/shared":
         specifier: workspace:*
         version: link:../packages/shared
@@ -250,6 +265,9 @@ importers:
       "@radix-ui/react-tooltip":
         specifier: 1.2.8
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      "@reqly/mock-engine":
+        specifier: workspace:*
+        version: link:../packages/mock-engine
       "@reqly/shared":
         specifier: workspace:*
         version: link:../packages/shared

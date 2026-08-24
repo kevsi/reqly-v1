@@ -2258,5 +2258,173 @@
     "ssrfBlockedLocal": "URL rejected by the proxy: localhost and private addresses are blocked in web mode. In development, use dev mode or set ALLOW_LOCAL_HOSTS=true to test localhost.",
     "targetUnreachable": "Target server unreachable (connection refused or DNS not found) — check that the service is running on this port and the URL is correct.",
     "certificateError": "Invalid or self-signed TLS certificate — fix the target server certificate (or disable SSL verification in desktop mode to test)."
+  },
+  "mocks": {
+    "behavior": {
+      "title": "Behavior",
+      "latency": {
+        "title": "Latency",
+        "min": "Min (ms)",
+        "max": "Max (ms)",
+        "hint": "0 / 0 = no latency"
+      },
+      "failure": {
+        "title": "Failure",
+        "enable": "Enable",
+        "probability": "Probability",
+        "kind": "Failure kind",
+        "kindStatus": "HTTP status",
+        "kindTimeout": "Timeout",
+        "kindReset": "Socket reset",
+        "kindMalformed": "Malformed response",
+        "statusCode": "Error code",
+        "timeoutMs": "Timeout duration (ms)"
+      },
+      "stateful": {
+        "title": "Stateful",
+        "enable": "Enable",
+        "resource": "Resource",
+        "resourcePlaceholder": "users",
+        "idField": "Id field"
+      },
+      "transform": {
+        "title": "JS transform",
+        "warning": "250 ms JS sandbox — no IO, no require.",
+        "test": "Test",
+        "error": "Error",
+        "result": "Result"
+      }
+    },
+    "generate": {
+      "description": "Each selected request becomes a route with a skeleton response to refine.",
+      "empty": "No collection available.",
+      "requestsCount": "{{count}} request(s) will be converted.",
+      "confirm": "Generate",
+      "generatedToast": "Routes generated"
+    },
+    "logs": {
+      "notAttached": "Connect to a running mock to see the logs.",
+      "total": "{{count}} requests",
+      "filterPlaceholder": "Filter…",
+      "filter": "Filter logs",
+      "pause": "Pause",
+      "resume": "Resume",
+      "colTime": "Time",
+      "colMethod": "Method",
+      "colPath": "Path",
+      "colStatus": "Status",
+      "colDuration": "Duration",
+      "colMatched": "Matched route",
+      "colNote": "Note",
+      "unmatched": "none"
+    },
+    "status": {
+      "connectFailedToast": "Mock not found — check URL and token.",
+      "connectedToast": "Mock connected",
+      "disconnectedToast": "Mock disconnected",
+      "resetOkToast": "Mock state reset",
+      "resetKoToast": "Reset failed",
+      "resetConfirmTitle": "Reset mock state?",
+      "resetConfirmDesc": "All stored stateful resources will be wiped.",
+      "resetStateLabel": "Reset state",
+      "connected": "Connected",
+      "offline": "Offline",
+      "checking": "Looking for mock…",
+      "routesCount": "{{count}} routes",
+      "pollingActive": "Polling active — pause",
+      "pollingPaused": "Polling paused — resume",
+      "connect": "Connect",
+      "resetState": "Reset state",
+      "disconnect": "Disconnect",
+      "formTitle": "Running mock (`recli mock start`)",
+      "baseUrl": "Base URL",
+      "baseUrlPlaceholder": "http://127.0.0.1:4015",
+      "token": "Admin token",
+      "tokenPlaceholder": "x-admin-token",
+      "connecting": "Connecting…"
+    },
+    "actions": {
+      "applySuccess": "Config applied to mock",
+      "applyFailed": "Apply failed: {{message}}",
+      "importInvalid": "Invalid file: version 1 and routes required.",
+      "imported": "Config imported",
+      "copiedCmd": "Command copied",
+      "copyFailed": "Copy failed",
+      "newRoute": "New route",
+      "generate": "Generate from collection",
+      "importJson": "Import JSON",
+      "exportJson": "Export .json",
+      "copyCmd": "Copy cmd",
+      "apply": "Apply to mock"
+    },
+    "routes": {
+      "deletedToast": "Route deleted",
+      "searchPlaceholder": "Filter routes…",
+      "search": "Search routes",
+      "noMatch": "No match.",
+      "ariaSelect": "Select route",
+      "tooltipLatency": "Latency {{min}}–{{max}} ms",
+      "tooltipFailure": "Failure {{percent}}% · {{kind}}",
+      "tooltipStateful": "Stateful",
+      "tooltipTransform": "JS transform",
+      "deleteTitle": "Delete this route?"
+    },
+    "pageTitle": "Mock Server",
+    "editor": {
+      "draftSaved": "Draft saved at {{time}}",
+      "method": "Method",
+      "path": "Path",
+      "pathPlaceholder": "/api/users/:id",
+      "advanced": "Advanced route options",
+      "routeId": "Route ID (unique)",
+      "responses": "Responses",
+      "addResponse": "Add response"
+    },
+    "empty": {
+      "title": "No routes in this config",
+      "description": "Create a route manually or generate a full config from your Reqly collections.",
+      "cta": "Generate from a collection"
+    },
+    "replace": {
+      "title": "Replace current routes?",
+      "description": "The existing {{count}} routes will be replaced by the new config."
+    },
+    "response": {
+      "statusCode": "Status",
+      "name": "Name (optional)",
+      "namePlaceholder": "e.g. card declined",
+      "defaultResponse": "Default response",
+      "duplicate": "Duplicate response",
+      "remove": "Delete response",
+      "rules": {
+        "title": "Rules",
+        "target": "Target",
+        "namePlaceholder": "name",
+        "name": "Parameter name",
+        "op": "Operator",
+        "valuePlaceholder": "value",
+        "value": "Expected value",
+        "remove": "Remove rule",
+        "add": "Add rule"
+      },
+      "conditional": "conditional",
+      "schema": {
+        "invalid": "Invalid JSON",
+        "title": "Schema (BodySchema JSON)",
+        "preview": "Preview",
+        "regenerate": "Regenerate"
+      }
+    },
+    "body": {
+      "static": "Static",
+      "schema": "Schema"
+    },
+    "headers": {
+      "title": "Headers",
+      "keyPlaceholder": "Key",
+      "valuePlaceholder": "Value",
+      "remove": "Remove header",
+      "add": "Add header"
+    }
   }
 }
