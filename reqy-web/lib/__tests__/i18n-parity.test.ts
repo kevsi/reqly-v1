@@ -53,6 +53,8 @@ const ALLOWED_IDENTICAL = new Set([
   // reqly-mocks : termes techniques identiques dans les deux langues
   "Mock Server",
   "Base URL",
+  // template interpolé technique (monitors) — identique FR/EN par nature
+  "Base URL — {{name}}",
   "Reset state",
   "Stateful",
   "Timeout",

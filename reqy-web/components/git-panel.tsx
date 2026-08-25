@@ -50,6 +50,29 @@ import { GitConflictResolver } from "@/components/git/git-conflict-resolver";
 
 import type { Collection } from "@/hooks/use-request-store";
 
+// Identité de commit persistée localement (préremplissage uniquement —
+// l'utilisateur peut toujours la modifier avant chaque commit).
+const GIT_AUTHOR_KEY = "reqly.git.author";
+
+function readGitAuthor(): { name: string; email: string } {
+  // SSR-safe : pas de localStorage pendant le prerender serveur.
+  if (typeof window === "undefined") return { name: "", email: "" };
+  try {
+    const raw = window.localStorage.getItem(GIT_AUTHOR_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) as { name?: string; email?: string };
+      return { name: saved.name ?? "", email: saved.email ?? "" };
+    }
+  } catch {
+    // stockage indisponible ou JSON invalide
+  }
+  return { name: "", email: "" };
+}
+
+function emailValid(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 interface GitPanelProps {
   collections: Collection[];
 }
@@ -60,8 +83,8 @@ export function GitPanel({ collections }: GitPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [commitLoading, setCommitLoading] = useState(false);
-  const [commitAuthorName, setCommitAuthorName] = useState("");
-  const [commitAuthorEmail, setCommitAuthorEmail] = useState("");
+  const [commitAuthorName, setCommitAuthorName] = useState(() => readGitAuthor().name);
+  const [commitAuthorEmail, setCommitAuthorEmail] = useState(() => readGitAuthor().email);
   const [stashDialogOpen, setStashDialogOpen] = useState(false);
   const [stashMessage, setStashMessage] = useState("");
   const [stashLoading, setStashLoading] = useState(false);
@@ -94,14 +117,22 @@ export function GitPanel({ collections }: GitPanelProps) {
   };
 
   const handleCommit = async () => {
-    if (!commitMessage.trim()) return;
+    const authorName = commitAuthorName.trim();
+    const authorEmail = commitAuthorEmail.trim();
+    // Identité OBLIGATOIRE : un commit poussé en "Reqly User <user@reqly.local>"
+    // est irrécupérable une fois sur le distant.
+    if (!commitMessage.trim() || !authorName || !emailValid(authorEmail)) return;
     setCommitLoading(true);
     try {
-      await git.commit(
-        commitMessage.trim(),
-        commitAuthorName.trim() || undefined,
-        commitAuthorEmail.trim() || undefined,
-      );
+      await git.commit(commitMessage.trim(), authorName, authorEmail);
+      try {
+        localStorage.setItem(
+          GIT_AUTHOR_KEY,
+          JSON.stringify({ name: authorName, email: authorEmail }),
+        );
+      } catch {
+        // stockage indisponible : l'identité ne sera juste pas préremplie
+      }
       setCommitMessage("");
       setCommitAuthorName("");
       setCommitAuthorEmail("");
@@ -568,7 +599,12 @@ export function GitPanel({ collections }: GitPanelProps) {
             <Button
               size="sm"
               onClick={handleCommit}
-              disabled={!commitMessage.trim() || commitLoading}
+              disabled={
+                !commitMessage.trim() ||
+                !commitAuthorName.trim() ||
+                !emailValid(commitAuthorEmail.trim()) ||
+                commitLoading
+              }
               className="text-xs"
             >
               {commitLoading ? (

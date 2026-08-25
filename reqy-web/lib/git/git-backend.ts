@@ -5,6 +5,18 @@ import { FileSystemAccessFs, type WebFsClient } from "./web-fs";
 import { diffText } from "./web-diff";
 
 /**
+ * Entrée d'index du stash web : `oid` pointe vers un commit git réel dont
+ * l'arbre contient les fichiers stashés ; `deleted` liste les chemins qui
+ * étaient supprimés (à re-supprimer au pop).
+ */
+interface WebStashEntry {
+  index: number;
+  message: string;
+  oid: string;
+  deleted?: string[];
+}
+
+/**
  * GitBackend is the seam between GitService and the actual git engine.
  * In production, TauriGitBackend calls `invoke()` (desktop IPC).
  * WebGitBackend uses isomorphic-git over the File System Access API.
@@ -220,17 +232,33 @@ export class WebGitBackend implements GitBackend {
         const branchName = args?.branchName as string;
         const credentials = args?.credentials as GitCredentials | null | undefined;
         const http = await this._getWebHttpClient();
-        await git.pull({
-          fs,
-          dir,
-          remote,
-          ref: branchName,
-          singleBranch: true,
-          http,
-          onAuth: this._authCallback(credentials),
-          author: { name: "Reqly User", email: "user@reqly.local" },
-          committer: { name: "Reqly User", email: "user@reqly.local" },
-        });
+        try {
+          await git.pull({
+            fs,
+            dir,
+            remote,
+            ref: branchName,
+            singleBranch: true,
+            http,
+            onAuth: this._authCallback(credentials),
+            author: { name: "Reqly User", email: "user@reqly.local" },
+            committer: { name: "Reqly User", email: "user@reqly.local" },
+          });
+        } catch (err) {
+          // isomorphic-git ne gère pas les merges conflictuels : il échoue
+          // avant d'écrire quoi que ce soit. On traduit en guidance actionnable
+          // au lieu de laisser une erreur brute incompréhensible.
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/conflict|merge|non.?fast.?forward/i.test(msg)) {
+            throw new Error(
+              `Conflit lors du pull de '${branchName}' : stash vos modifications ` +
+                `(git_stash_save), relancez le pull, puis ré-appliquez le stash ` +
+                `(git_stash_pop). Détail technique : ${msg}`,
+              { cause: err },
+            );
+          }
+          throw err;
+        }
         return undefined as T;
       }
 
@@ -239,11 +267,13 @@ export class WebGitBackend implements GitBackend {
         const credentials = args?.credentials as GitCredentials | null | undefined;
         const http = await this._getWebHttpClient();
         // Sur le web, le handle courant (défini via setHandle) est la destination.
+        // Clone COMPLET : un singleBranch empêcherait ensuite tout checkout vers
+        // une autre branche (objets absents → erreurs obscures).
         await git.clone({
           fs,
           dir,
           url,
-          singleBranch: true,
+          singleBranch: false,
           http,
           onAuth: this._authCallback(credentials),
         });
@@ -257,13 +287,13 @@ export class WebGitBackend implements GitBackend {
 
       case "git_stash_pop": {
         const index = (args?.index as number) ?? 0;
-        await this._webStashPop(fs, index, false);
+        await this._webStashPop(git, fs, dir, index, false);
         return undefined as T;
       }
 
       case "git_stash_apply": {
         const index = (args?.index as number) ?? 0;
-        await this._webStashPop(fs, index, true);
+        await this._webStashPop(git, fs, dir, index, true);
         return undefined as T;
       }
 
@@ -309,6 +339,7 @@ export class WebGitBackend implements GitBackend {
 
       case "git_status": {
         const matrix = await git.statusMatrix({ fs, dir });
+        const conflictedPaths = await this._detectConflicts(git, fs, dir, matrix);
         const status: FileStatus[] = matrix
           .filter(([, head, workdir, staged]) => head !== 1 || workdir !== 1 || staged !== 1)
           .map(([filepath, head, workdir, staged]) => ({
@@ -316,8 +347,9 @@ export class WebGitBackend implements GitBackend {
             head: head as 0 | 1,
             workdir: workdir as 0 | 1 | 2,
             staged: staged as 0 | 1 | 2 | 3,
-            // Le web n'a pas de flux de fusion : aucun conflit possible.
-            conflicted: false,
+            // isomorphic-git n'expose pas de flux de fusion : on détecte les
+            // conflits par marqueurs `<<<<<<<` dans les fichiers modifiés.
+            conflicted: conflictedPaths.has(filepath as string),
           }));
         return status as T;
       }
@@ -351,14 +383,28 @@ export class WebGitBackend implements GitBackend {
     const { default: http } = await import("isomorphic-git/http/web");
     return {
       async request(req: Parameters<typeof http.request>[0]) {
+        let directError: unknown;
         try {
           return await http.request(req);
-        } catch {
+        } catch (err) {
+          // On préserve la cause d'origine : si le fallback proxy échoue
+          // aussi, l'erreur finale doit mentionner LES DEUX causes.
+          directError = err;
+        }
+        try {
           const proxyUrl = `/api/git/proxy?url=${encodeURIComponent(req.url)}`;
           return await http.request({
             ...req,
             url: proxyUrl,
           });
+        } catch (proxyErr) {
+          const directMsg =
+            directError instanceof Error ? directError.message : String(directError);
+          const proxyMsg = proxyErr instanceof Error ? proxyErr.message : String(proxyErr);
+          throw new Error(
+            `Requête Git impossible en direct (${directMsg}) et via le proxy (${proxyMsg})`,
+            { cause: proxyErr },
+          );
         }
       },
     };
@@ -372,26 +418,77 @@ export class WebGitBackend implements GitBackend {
     });
   }
 
-  private async _readWebStashes(
-    fs: WebFsClient,
-  ): Promise<
-    Array<{ index: number; message: string; oid: string; files: Record<string, string> }>
-  > {
+  /**
+   * Stash web — stocké comme de VRAIS objets git (blob → tree → commit),
+   * pas comme un JSON en clair. L'index `.git/reqly-stashes.json` ne contient
+   * que des métadonnées (oid du commit stash, message, liste des suppressions).
+   * Les contenus de fichiers vivent dans les objets git compressés, au même
+   * titre qu'un `git stash` natif.
+   */
+  private async _readWebStashes(fs: WebFsClient): Promise<WebStashEntry[]> {
     try {
       const content = await fs.promises.readFile(".git/reqly-stashes.json", { encoding: "utf8" });
-      return JSON.parse(typeof content === "string" ? content : new TextDecoder().decode(content));
+      const parsed = JSON.parse(
+        typeof content === "string" ? content : new TextDecoder().decode(content),
+      ) as WebStashEntry[];
+      // Ancien format (contenus en clair dans `files`) : non supporté, ignoré.
+      return parsed.filter((e) => typeof e?.oid === "string" && e.oid.length >= 7);
     } catch {
       return [];
     }
   }
 
-  private async _writeWebStashes(
-    fs: WebFsClient,
-    stashes: Array<{ index: number; message: string; oid: string; files: Record<string, string> }>,
-  ): Promise<void> {
+  private async _writeWebStashes(fs: WebFsClient, stashes: WebStashEntry[]): Promise<void> {
     await fs.promises.writeFile(".git/reqly-stashes.json", JSON.stringify(stashes, null, 2), {
       encoding: "utf8",
     });
+  }
+
+  /**
+   * Construit l'arborescence d'objets tree correspondant à un mapping
+   * chemin → contenu (les arbres git sont à un niveau : "a/b.json" exige un
+   * sous-arbre "a" référencé en mode 040000).
+   */
+  private async _writeStashTree(
+    git: typeof import("isomorphic-git"),
+    fs: WebFsClient,
+    dir: string,
+    files: Record<string, string>,
+  ): Promise<string> {
+    const encoder = new TextEncoder();
+
+    const writeLevel = async (levelEntries: Record<string, string>): Promise<string> => {
+      const here: Array<{
+        mode: "100644" | "040000";
+        path: string;
+        oid: string;
+        type: "blob" | "tree";
+      }> = [];
+      const subtrees = new Map<string, Record<string, string>>();
+
+      for (const [path, content] of Object.entries(levelEntries)) {
+        const slash = path.indexOf("/");
+        if (slash === -1) {
+          const oid = await git.writeBlob({ fs, dir, blob: encoder.encode(content) });
+          here.push({ mode: "100644", path, oid, type: "blob" });
+        } else {
+          const head = path.slice(0, slash);
+          const rest = path.slice(slash + 1);
+          const bucket = subtrees.get(head) ?? {};
+          bucket[rest] = content;
+          subtrees.set(head, bucket);
+        }
+      }
+
+      for (const [name, bucket] of subtrees) {
+        const subOid = await writeLevel(bucket);
+        here.push({ mode: "040000", path: name, oid: subOid, type: "tree" });
+      }
+
+      return await git.writeTree({ fs, dir, tree: here });
+    };
+
+    return await writeLevel(files);
   }
 
   private async _webStashSave(
@@ -408,8 +505,21 @@ export class WebGitBackend implements GitBackend {
       throw new Error("No local changes to stash");
     }
 
+    let headOid: string | undefined;
+    try {
+      headOid = await git.resolveRef({ fs, dir, ref: "HEAD" });
+    } catch {
+      // dépôt sans commit initial : parent = []
+    }
+
+    // ── Capture de l'état du workdir ─────────────────────────────────
+    // - fichiers modifiés / ajoutés : contenu courant
+    // - fichiers supprimés : PAS de contenu (rien à sauver) mais on retient
+    //   le chemin pour re-supprimer le fichier au pop. Avant ce fix, la
+    //   suppression était perdue silencieusement par le checkout force.
     const filesToSave: Record<string, string> = {};
-    for (const [filepath, , workdir] of modified) {
+    const deletedPaths: string[] = [];
+    for (const [filepath, head, workdir] of modified) {
       if (workdir !== 0) {
         try {
           const content = await fs.promises.readFile(filepath, { encoding: "utf8" });
@@ -418,35 +528,53 @@ export class WebGitBackend implements GitBackend {
         } catch {
           filesToSave[filepath] = "";
         }
+      } else if (head === 1) {
+        deletedPaths.push(filepath);
       }
     }
 
-    const stashes = await this._readWebStashes(fs);
-    const oid =
-      Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
-    const stashMsg =
-      message || `WIP on ${await git.currentBranch({ fs, dir }).catch(() => "main")}`;
+    // ── Écriture en objets git réels : blobs → trees imbriqués → commit ──
+    // Un arbre git ne contient qu'UN niveau par objet : "a/b.json" exige un
+    // sous-arbre "a". On construit donc l'arborescence récursivement.
+    const stashTreeOid = await this._writeStashTree(git, fs, dir, filesToSave);
 
-    stashes.unshift({
-      index: 0,
-      message: stashMsg,
-      oid,
-      files: filesToSave,
+    const stashMsg = message || `WIP on ${await git.currentBranch({ fs, dir }).catch(() => "main")}`;
+    const author = {
+      name: "Reqly",
+      email: "stash@reqly.local",
+      timestamp: Math.floor(Date.now() / 1000),
+      timezoneOffset: 0,
+    };
+    const stashOid = await git.writeCommit({
+      fs,
+      dir,
+      commit: {
+        message: `stash: ${stashMsg}`,
+        tree: stashTreeOid,
+        parent: headOid ? [headOid] : [],
+        author,
+        committer: author,
+      },
     });
 
+    const stashes = await this._readWebStashes(fs);
+    stashes.unshift({ index: 0, message: stashMsg, oid: stashOid, deleted: deletedPaths });
     stashes.forEach((s, idx) => (s.index = idx));
     await this._writeWebStashes(fs, stashes);
 
+    // Restaure le workdir propre (= HEAD), comme un vrai git stash.
     const currentBranch = await git.currentBranch({ fs, dir }).catch(() => "main");
     if (currentBranch) {
       await git.checkout({ fs, dir, ref: currentBranch, force: true }).catch(() => undefined);
     }
 
-    return oid;
+    return stashOid;
   }
 
   private async _webStashPop(
+    git: typeof import("isomorphic-git"),
     fs: WebFsClient,
+    dir: string,
     index: number = 0,
     keep: boolean = false,
   ): Promise<void> {
@@ -456,8 +584,28 @@ export class WebGitBackend implements GitBackend {
     }
 
     const entry = stashes[index];
-    for (const [filepath, content] of Object.entries(entry.files)) {
-      await fs.promises.writeFile(filepath, content, { encoding: "utf8" });
+    // Relit l'arbre du commit stash (RÉCURSIF : les sous-dossiers sont des
+    // arbres séparés) et réécrit les fichiers du workdir.
+    // readTree renvoie { oid, tree: <entrées[]> }.
+    const { commit } = await git.readCommit({ fs, dir, oid: entry.oid });
+    const decoder = new TextDecoder();
+    const restoreLevel = async (prefix: string, treeOid: string): Promise<void> => {
+      const { tree } = await git.readTree({ fs, dir, oid: treeOid });
+      for (const item of tree) {
+        if (item.type === "tree") {
+          await restoreLevel(`${prefix}${item.path}/`, item.oid);
+        } else if (item.type === "blob") {
+          const { blob } = await git.readBlob({ fs, dir, oid: item.oid });
+          await fs.promises.writeFile(`${prefix}${item.path}`, decoder.decode(blob), {
+            encoding: "utf8",
+          });
+        }
+      }
+    };
+    await restoreLevel("", commit.tree);
+    // Re-supprime les fichiers qui étaient supprimés au moment du stash.
+    for (const path of entry.deleted ?? []) {
+      await fs.promises.unlink(path).catch(() => undefined);
     }
 
     if (!keep) {
@@ -497,16 +645,111 @@ export class WebGitBackend implements GitBackend {
       } catch {
         // branche sans commit
       }
+
+      // Tracking : upstream = refs/remotes/<origin>/<branche> si présent,
+      // et ahead/behind calculés par comparaison des historiques (profondeur
+      // plafonnée — approximation suffisante pour l'affichage UI).
+      let upstream: string | null = null;
+      let ahead = 0;
+      let behind = 0;
+      const remoteRef = `refs/remotes/origin/${name}`;
+      try {
+        const remoteOid = await git.resolveRef({ fs, dir, ref: remoteRef });
+        if (oid && remoteOid) {
+          upstream = `origin/${name}`;
+          if (oid !== remoteOid) {
+            const counts = await this._aheadBehind(git, fs, dir, oid, remoteOid);
+            ahead = counts.ahead;
+            behind = counts.behind;
+          }
+        }
+      } catch {
+        // pas d'upstream configuré pour cette branche
+      }
+
       result.push({
         name,
         isCurrent: name === current,
         oid,
-        upstream: null,
-        ahead: 0,
-        behind: 0,
+        upstream,
+        ahead,
+        behind,
       });
     }
     return result;
+  }
+
+  /**
+   * Compte les commits présents d'un seul côté entre deux refs, en comparant
+   * les ensembles d'oids des deux historiques (profondeur plafonnée à 100 :
+   * au-delà, l'affichage se contente de "≥").
+   */
+  private async _aheadBehind(
+    git: typeof import("isomorphic-git"),
+    fs: WebFsClient,
+    dir: string,
+    localOid: string,
+    remoteOid: string,
+  ): Promise<{ ahead: number; behind: number }> {
+    try {
+      const [localLog, remoteLog] = await Promise.all([
+        git.log({ fs, dir, ref: localOid, depth: 100 }),
+        git.log({ fs, dir, ref: remoteOid, depth: 100 }),
+      ]);
+      const localSet = new Set(localLog.map((c) => c.oid));
+      const remoteSet = new Set(remoteLog.map((c) => c.oid));
+      let ahead = 0;
+      for (const c of localLog) if (!remoteSet.has(c.oid)) ahead++;
+      let behind = 0;
+      for (const c of remoteLog) if (!localSet.has(c.oid)) behind++;
+      return { ahead, behind };
+    } catch {
+      return { ahead: 0, behind: 0 };
+    }
+  }
+
+  /**
+   * Détecte les fichiers en conflit dans le workdir. isomorphic-git n'expose
+   * pas de flux de fusion : un conflit se manifeste par des marqueurs
+   * `<<<<<<<` dans le contenu. Scan plafonné (200 fichiers × 64 Ko) pour ne
+   * pas transformer chaque statut en lecture intégrale du dépôt.
+   */
+  private async _detectConflicts(
+    _git: typeof import("isomorphic-git"),
+    fs: WebFsClient,
+    dir: string,
+    matrix: Awaited<ReturnType<typeof import("isomorphic-git").statusMatrix>>,
+  ): Promise<Set<string>> {
+    const conflicted = new Set<string>();
+    // Un merge est-il en cours ? (.git/MERGE_HEAD présent)
+    let mergeInProgress = false;
+    try {
+      await fs.promises.stat(`${dir}.git/MERGE_HEAD`);
+      mergeInProgress = true;
+    } catch {
+      /* pas de merge en cours */
+    }
+    if (!mergeInProgress) return conflicted;
+
+    const CAP_FILES = 200;
+    const CAP_BYTES = 65_536;
+    let scanned = 0;
+    for (const row of matrix) {
+      if (scanned >= CAP_FILES) break;
+      const filepath = row[0] as string;
+      const workdir = row[2] as number;
+      if (workdir === 0) continue; // fichier supprimé : rien à scanner
+      scanned++;
+      try {
+        const data = await fs.promises.readFile(filepath, { encoding: "utf8" });
+        const text =
+          typeof data === "string" ? data.slice(0, CAP_BYTES) : new TextDecoder().decode(data.slice(0, CAP_BYTES));
+        if (text.includes("<<<<<<<")) conflicted.add(filepath);
+      } catch {
+        /* illisible : ignoré */
+      }
+    }
+    return conflicted;
   }
 
   private async _computeDiff(
@@ -555,37 +798,75 @@ export class WebGitBackend implements GitBackend {
     for (const item of changed) {
       const { filepath, aOid, bOid } = item;
 
-      let oldText = "";
-      if (aOid) {
+      const readOldBytes = async (): Promise<Uint8Array | null> => {
+        if (!aOid) return null;
         try {
-          const { blob } = await git.readBlob({ fs, dir, oid: oldOid, filepath });
-          oldText = new TextDecoder().decode(blob);
+          const { blob } = await git.readBlob({ fs, dir, oid: aOid, filepath });
+          return blob;
         } catch {
-          oldText = "";
+          return null;
         }
-      }
-
-      let newText = "";
-      if (bOid) {
+      };
+      const readNewBytes = async (): Promise<Uint8Array | null> => {
+        if (!bOid) return null;
         if (newOid === "WORKING") {
           try {
-            const data = await fs.promises.readFile(filepath, { encoding: "utf8" });
-            newText = typeof data === "string" ? data : new TextDecoder().decode(data);
+            const data = await fs.promises.readFile(filepath);
+            return typeof data === "string" ? new TextEncoder().encode(data) : new Uint8Array(data);
           } catch {
-            newText = "";
-          }
-        } else {
-          try {
-            const { blob } = await git.readBlob({ fs, dir, oid: newOid, filepath });
-            newText = new TextDecoder().decode(blob);
-          } catch {
-            newText = "";
+            return null;
           }
         }
+        try {
+          const { blob } = await git.readBlob({ fs, dir, oid: bOid, filepath });
+          return blob;
+        } catch {
+          return null;
+        }
+      };
+
+      const [oldBytes, newBytes] = [await readOldBytes(), await readNewBytes()];
+
+      // Fichier binaire (octet NUL dans l'en-tête) : ne pas décoder en UTF-8
+      // (mojibake géant) — afficher un placeholder.
+      if (looksBinary(oldBytes) || looksBinary(newBytes)) {
+        files.push({
+          filepath,
+          hunks: [
+            {
+              oldStart: 1,
+              oldLines: 0,
+              newStart: 1,
+              newLines: 0,
+              lines: [
+                {
+                  origin: "context",
+                  content: "Fichier binaire non affiché.",
+                  oldLineno: null,
+                  newLineno: null,
+                },
+              ],
+            },
+          ],
+        });
+        continue;
       }
+
+      const oldText = oldBytes ? new TextDecoder().decode(oldBytes) : "";
+      const newText = newBytes ? new TextDecoder().decode(newBytes) : "";
 
       files.push({ filepath, hunks: diffText(oldText, newText) });
     }
     return files;
   }
+}
+
+/** Heuristique standard : un octet NUL dans les 8 000 premiers octets ⇒ binaire. */
+function looksBinary(bytes: Uint8Array | null): boolean {
+  if (!bytes) return false;
+  const cap = Math.min(bytes.length, 8000);
+  for (let i = 0; i < cap; i++) {
+    if (bytes[i] === 0) return true;
+  }
+  return false;
 }

@@ -28,7 +28,9 @@
     "messageCopied": "Message copied",
     "messageCopiedDesc": "The content was copied to the clipboard.",
     "copyFailed": "Failed to copy the message.",
-    "discard": "Discard"
+    "discard": "Discard",
+    "edit": "Edit",
+    "remove": "Remove"
   },
   "settings": {
     "sidebar": {
@@ -262,11 +264,18 @@
       },
       "github": {
         "description": "Access to your repositories and gists.",
-        "scopes": ["Read your repositories", "Read your profile", "Create gists"]
+        "scopes": [
+          "Read your repositories",
+          "Read your profile",
+          "Create gists"
+        ]
       },
       "gitlab": {
         "description": "Access to your GitLab repositories and profile.",
-        "scopes": ["Read your repositories", "Read your profile"]
+        "scopes": [
+          "Read your repositories",
+          "Read your profile"
+        ]
       },
       "apiKeyError": {
         "jina": "The key must start with jina_",
@@ -2514,6 +2523,9 @@
       "valuePlaceholder": "Value",
       "remove": "Remove header",
       "add": "Add header"
+    },
+    "bulk": {
+      "remove": "Remove"
     }
   }
 }

@@ -4,7 +4,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { isBlockedIp } from "@/lib/security/ssrf";
 import { resolveCached } from "@/lib/security/dns-cache";
 import { getServerEnv } from "@/lib/env";
+import { createRateLimiter } from "@/lib/rate-limiter";
 import { isIP } from "node:net";
+
+// Le proxy n'est pas une API publique générale : sans limite, il sert de
+// relais générique (abus bande passante, réputation IP du déploiement).
+const proxyLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 60 });
+
+function clientIp(request: NextRequest): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  return fwd?.split(",")[0]?.trim() || "unknown";
+}
 
 function validateGitUrl(rawUrl: string): { valid: boolean; parsed?: URL; error?: string } {
   if (!rawUrl || typeof rawUrl !== "string") {
@@ -23,6 +33,22 @@ function validateGitUrl(rawUrl: string): { valid: boolean; parsed?: URL; error?:
 
   if (!parsed.hostname) {
     return { valid: false, error: "L'URL doit contenir un nom d'hôte" };
+  }
+
+  // Restreindre aux endpoints du protocole smart-HTTP Git : le chemin peut
+  // contenir un sous-répertoire arbitraire (`/org/repo.git/info/refs`), donc
+  // on matche par suffixe et non par égalité.
+  const path = parsed.pathname;
+  const isGitSmartPath =
+    path.endsWith("/info/refs") ||
+    path.endsWith("/git-upload-pack") ||
+    path.endsWith("/git-receive-pack");
+  if (!isGitSmartPath) {
+    return {
+      valid: false,
+      error:
+        "Le proxy ne relaie que les endpoints Git (info/refs, git-upload-pack, git-receive-pack)",
+    };
   }
 
   return { valid: true, parsed };
@@ -102,6 +128,15 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleGitProxy(request: NextRequest, method: "GET" | "POST") {
+  // Rate limit par IP (les préflights OPTIONS passent, eux).
+  const { allowed } = await proxyLimiter.check(`gitproxy:${clientIp(request)}`);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Trop de requêtes vers le proxy Git", code: "RATE_LIMITED" },
+      { status: 429 },
+    );
+  }
+
   const urlParam = request.nextUrl.searchParams.get("url");
 
   if (!urlParam) {

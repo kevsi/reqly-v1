@@ -28,7 +28,9 @@
     "messageCopied": "Message copié",
     "messageCopiedDesc": "Le contenu a été copié dans le presse-papiers.",
     "copyFailed": "Impossible de copier le message.",
-    "discard": "Abandonner"
+    "discard": "Abandonner",
+    "edit": "Modifier",
+    "remove": "Supprimer"
   },
   "settings": {
     "sidebar": {
@@ -262,11 +264,18 @@
       },
       "github": {
         "description": "Accès à vos repositories et gists.",
-        "scopes": ["Lecture de vos repositories", "Lecture de votre profil", "Création de gists"]
+        "scopes": [
+          "Lecture de vos repositories",
+          "Lecture de votre profil",
+          "Création de gists"
+        ]
       },
       "gitlab": {
         "description": "Accès à vos repositories et profil GitLab.",
-        "scopes": ["Lecture de vos repositories", "Lecture de votre profil"]
+        "scopes": [
+          "Lecture de vos repositories",
+          "Lecture de votre profil"
+        ]
       },
       "apiKeyError": {
         "jina": "La clé doit commencer par jina_",
@@ -363,7 +372,7 @@
       "graphql": "GraphQL",
       "git": "Git",
       "sse": "SSE",
-      "monitors": "Monitors"
+      "monitors": "Moniteurs"
     },
     "aiAssist": "Ask Monu IA",
     "ariaLabel": "Navigation principale",
@@ -2261,7 +2270,7 @@
     "certificateError": "Certificat TLS invalide ou auto-signé — corrige le certificat du serveur cible (ou désactive la vérification SSL côté desktop pour tester)."
   },
   "monitors": {
-    "title": "Monitors",
+    "title": "Moniteurs",
     "subtitle": "Rejoue tes collections à intervalle régulier tant que l'app est ouverte. Alertes webhook sur échec, dégradation et rétablissement.",
     "new": "Nouveau monitor",
     "generate": "Générer depuis collections",
@@ -2443,7 +2452,7 @@
       "remove": "Supprimer",
       "sourceAi": "IA",
       "sourceDraft": "Brouillon",
-      "sourceImport": "Import",
+      "sourceImport": "Importer",
       "savedToast": "Config sauvegardée"
     },
     "routes": {
@@ -2514,6 +2523,9 @@
       "valuePlaceholder": "Valeur",
       "remove": "Supprimer l'en-tête",
       "add": "Ajouter un en-tête"
+    },
+    "bulk": {
+      "remove": "Supprimer"
     }
   }
 }

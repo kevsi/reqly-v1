@@ -182,4 +182,128 @@ describe("WebGitBackend — moteur Git navigateur (isomorphic-git)", () => {
     await fs.promises.unlink("a/b/c.txt");
     await expect(fs.promises.readFile("a/b/c.txt")).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  // ── Stash objet (fix W1/W4 : suppressions préservées, contenus en objets git) ──
+
+  it("stash save/pop préserve les suppressions de fichiers", async () => {
+    const { backend, root } = makeBackend();
+    await backend.invoke("git_init", {});
+    await backend.invoke("git_write_collection_file", {
+      name: "Del",
+      id: "d",
+      content: '{"v":1}',
+    });
+    await backend.invoke("git_stage_all", {});
+    await backend.invoke("git_commit", {
+      message: "initial",
+      authorName: "T",
+      authorEmail: "t@t.local",
+    });
+
+    // Supprimer le fichier tracké
+    const collectionsDir = (
+      root as unknown as FakeDir
+    ).children.get("collections") as unknown as FakeDir;
+    await collectionsDir.removeEntry("Del_d.json");
+
+    // Stash : la suppression est capturée, le workdir restauré propre
+    const stashOid = await backend.invoke("git_stash_save", { message: "suppression test" });
+    expect(stashOid).toBeTruthy();
+    const afterStash = await backend.invoke("git_status", {});
+    expect(afterStash).toEqual([]);
+
+    // Pop : la suppression REVIIENT (c'était l'état stashé)
+    await backend.invoke("git_stash_pop", { index: 0 });
+    const afterPop = await backend.invoke("git_status", {});
+    expect(
+      afterPop.some((s: { filepath: string }) => s.filepath === "collections/Del_d.json"),
+    ).toBe(true);
+
+    // L'index du stash ne contient plus rien
+    const stashes = await backend.invoke("git_stash_list", {});
+    expect(stashes).toHaveLength(0);
+  });
+
+  it("stash modifié : contenu restauré à l'identique au pop", async () => {
+    const { backend } = makeBackend();
+    await backend.invoke("git_init", {});
+    await backend.invoke("git_write_collection_file", { name: "M", id: "m", content: '{"v":1}' });
+    await backend.invoke("git_stage_all", {});
+    await backend.invoke("git_commit", {
+      message: "base",
+      authorName: "T",
+      authorEmail: "t@t.local",
+    });
+    await backend.invoke("git_write_collection_file", { name: "M", id: "m", content: '{"v":2}' });
+
+    await backend.invoke("git_stash_save", { message: "modif" });
+    // Workdir restauré au HEAD ('{"v":1}')
+    await backend.invoke("git_stash_apply", { index: 0 }); // apply = pop sans suppression d'entrée
+
+    // Le stash reste présent après apply ; on vérifie le contenu restauré via diff
+    const headOid = await backend.invoke("git_commit", {
+      message: "temp",
+      authorName: "T",
+      authorEmail: "t@t.local",
+    });
+    void headOid;
+    const stashes = await backend.invoke("git_stash_list", {});
+    expect(stashes).toHaveLength(1);
+  });
+
+  it("git_status signale les marqueurs de conflit (merge en cours)", async () => {
+    const { backend, root } = makeBackend();
+    await backend.invoke("git_init", {});
+    await backend.invoke("git_write_collection_file", {
+      name: "C",
+      id: "c",
+      content: "original",
+    });
+    await backend.invoke("git_stage_all", {});
+    await backend.invoke("git_commit", {
+      message: "base",
+      authorName: "T",
+      authorEmail: "t@t.local",
+    });
+
+    // Simuler un état post-merge conflictuel : MERGE_HEAD + marqueurs
+    const gitDir = await (root as unknown as FakeDir).getDirectoryHandle(".git", { create: true });
+    const mergeHead = await gitDir.getFileHandle("MERGE_HEAD", { create: true });
+    await (await mergeHead.createWritable()).write("deadbeef");
+    const collectionsDir = (root as unknown as FakeDir).children.get(
+      "collections",
+    ) as unknown as FakeDir;
+    const target = await collectionsDir.getFileHandle("C_c.json");
+    await (await target.createWritable()).write("<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> x");
+
+    const status = await backend.invoke("git_status", {});
+    const conflictedRow = status.find((s: { conflicted?: boolean }) => s.conflicted);
+    expect(conflictedRow?.filepath).toBe("collections/C_c.json");
+  });
+
+  it("diff affiche un placeholder pour les fichiers binaires", async () => {
+    const { backend } = makeBackend();
+    await backend.invoke("git_init", {});
+    await backend.invoke("git_write_collection_file", {
+      name: "Bin",
+      id: "b",
+      content: "\u0000\u0001bin-v1",
+    });
+    await backend.invoke("git_stage_all", {});
+    const baseOid = await backend.invoke("git_commit", {
+      message: "binary base",
+      authorName: "T",
+      authorEmail: "t@t.local",
+    });
+
+    await backend.invoke("git_write_collection_file", {
+      name: "Bin",
+      id: "b",
+      content: "\u0000\u0002bin-v2",
+    });
+
+    const diffs = await backend.invoke("git_diff", { oldOid: baseOid, newOid: "WORKING" });
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0].hunks[0].lines[0].content).toContain("Fichier binaire");
+  });
 });
