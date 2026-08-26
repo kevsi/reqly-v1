@@ -45,8 +45,8 @@ export const detectorPhp: Detector = {
   frameworks: ["custom"],
   extensions: [".php"],
   ignoreDirs: ["vendor", "node_modules"],
-  canHandle() {
-    return true;
+  canHandle(manifestFiles: string[]) {
+    return manifestFiles.some((f) => path.basename(f) === "composer.json");
   },
   rules: [],
   regexRules: RULES,

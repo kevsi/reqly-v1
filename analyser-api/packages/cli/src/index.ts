@@ -12,7 +12,17 @@ import { detectorPhp } from "@analyser/detector-php";
 const program = new Command();
 
 const VALID_FORMATS = new Set(["json", "md", "markdown", "reqly", "openapi"]);
-const VALID_LANGS = new Set(["javascript", "typescript", "rust", "python", "go", "php"]);
+const VALID_LANGS = new Set(["javascript", "typescript", "js", "ts", "rust", "python", "go", "php"]);
+
+const LANG_ALIASES: Record<string, string> = {
+  js: "javascript",
+  ts: "javascript",
+  typescript: "javascript",
+};
+
+function normalizeLang(lang: string): string {
+  return LANG_ALIASES[lang] ?? lang;
+}
 
 program
   .name("analyser")
@@ -23,9 +33,12 @@ program
   .command("scan")
   .description("Scan a directory and output the extracted API routes.")
   .argument("<path>", "directory to scan")
-  .option("-f, --format <fmt>", "output format: json, md, reqly", "json")
+  .option("-f, --format <fmt>", "output format: json, md, markdown, reqly, openapi", "json")
   .option("-o, --out <file>", "write output to file instead of stdout")
-  .option("-l, --lang <lang>", "restrict to one language (javascript, rust, python, go)")
+  .option(
+    "-l, --lang <lang>",
+    "restrict to one language (javascript, typescript/js/ts, rust, python, go, php)",
+  )
   .option("-d, --diff <file>", "compare with a previous scan (json) and print a diff")
   .action(
     async (
@@ -37,15 +50,16 @@ program
         process.exit(1);
       }
       if (opts.lang && !VALID_LANGS.has(opts.lang)) {
-        console.error(`Unknown language "${opts.lang}". Use javascript, typescript, rust, python, go or php.`);
+        console.error(`Unknown language "${opts.lang}". Use javascript, typescript, js, ts, rust, python, go or php.`);
         process.exit(1);
       }
       const rootPath = path.resolve(target);
       const detectors = [detectorJs, detectorRust, detectorPython, detectorGo, detectorPhp];
+      const normalizedLang = opts.lang ? normalizeLang(opts.lang) : undefined;
       const result = await analyze({
         rootPath,
         detectors,
-        langs: opts.lang ? [opts.lang] : undefined,
+        langs: normalizedLang ? [normalizedLang] : undefined,
       });
 
       let out: string;
