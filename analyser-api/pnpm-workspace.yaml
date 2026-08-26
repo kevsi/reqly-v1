@@ -6,6 +6,12 @@ minimumReleaseAge: 10080
 trustPolicy: no-downgrade
 blockExoticSubdeps: true
 
+# undici-types@6.21.0 dropped provenance relative to earlier releases while
+# remaining the version pinned by @types/node@22 — documented false positive
+# (https://github.com/pnpm/pnpm/issues/10329).
+trustPolicyExclude:
+  - "undici-types@6.21.0"
+
 onlyBuiltDependencies:
   - "@ast-grep/lang-go"
   - "@ast-grep/lang-python"

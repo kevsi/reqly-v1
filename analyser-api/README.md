@@ -17,6 +17,7 @@ Prérequis : Node.js >= 22.18, pnpm.
 
 ```sh
 pnpm install
+pnpm lint
 pnpm typecheck
 pnpm test
 ```

@@ -1,0 +1,6 @@
+[
+  { "method": "GET", "path": "/health", "framework": "custom", "auth": false },
+  { "method": "POST", "path": "/users", "framework": "custom", "auth": false },
+  { "method": "GET", "path": "/users/:id", "framework": "custom", "auth": false, "params": ["id"] },
+  { "method": "DELETE", "path": "/users/:id", "framework": "custom", "auth": false, "params": ["id"] }
+]

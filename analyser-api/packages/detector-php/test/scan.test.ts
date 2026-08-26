@@ -4,14 +4,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyze } from "@analyser/core";
 import { compactRoutes, discoverFixtures } from "@analyser/core/testing";
-import { detectorPython } from "../src/index.ts";
-
-const byKey = (a: unknown, b: unknown) => JSON.stringify(a).localeCompare(JSON.stringify(b));
+import { detectorPhp } from "../src/index.ts";
 
 for (const { name, rootPath } of discoverFixtures(import.meta.dirname)) {
-  test(`detector-python: ${name}`, async () => {
-    const result = await analyze({ rootPath, detectors: [detectorPython] });
+  test(`detector-php: ${name}`, async () => {
+    const result = await analyze({ rootPath, detectors: [detectorPhp] });
     const expected = JSON.parse(await readFile(path.join(rootPath, "expected.json"), "utf8"));
-    assert.deepEqual(compactRoutes(result.routes).sort(byKey), [...expected].sort(byKey));
+    assert.deepEqual(compactRoutes(result.routes), expected);
   });
 }
