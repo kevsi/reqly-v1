@@ -127,6 +127,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
         };
 
         // Pre-request script
+        const preScriptEntries: import("@/lib/test-runner/scripts").ConsoleEntry[] = [];
         if (tab.preRequestScript?.trim()) {
           let out;
           try {
@@ -154,6 +155,9 @@ export function useRequestExecutionCore(state: RequestTabsState) {
               title: t("request.preScriptOutput"),
               description: out.consoleLines.join("\n").slice(0, 200),
             });
+          }
+          if (out?.consoleEntries) {
+            preScriptEntries.push(...out.consoleEntries);
           }
         }
 
@@ -215,6 +219,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           if (abortRef.current === controller) abortRef.current = null;
         }
         // Post-response script
+        const postScriptEntries: import("@/lib/test-runner/scripts").ConsoleEntry[] = [];
         if (tab.postResponseScript?.trim()) {
           const responseForScript = {
             statusCode: result?.responseStatus ?? 0,
@@ -250,9 +255,18 @@ export function useRequestExecutionCore(state: RequestTabsState) {
               description: out.consoleLines.join("\n").slice(0, 200),
             });
           }
+          if (out?.consoleEntries) {
+            postScriptEntries.push(...out.consoleEntries);
+          }
         }
 
-        return result;
+        return {
+          ...result,
+          scriptLogs: {
+            pre: preScriptEntries,
+            post: postScriptEntries,
+          },
+        };
       } finally {
         if (showLoading) setLoadingCount((count) => Math.max(0, count - 1));
       }
@@ -294,6 +308,7 @@ export function useRequestExecutionCore(state: RequestTabsState) {
           responseTimings: result.responseTimings,
           transportError: result.transportError,
           testResults: result.testResults,
+          scriptLogs: result.scriptLogs,
         });
 
         setCurrentRequest({

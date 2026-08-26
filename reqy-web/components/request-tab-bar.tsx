@@ -105,7 +105,6 @@ export function RequestTabBar({
   return (
     <>
       <div className="flex items-center border-b border-border relative bg-muted/5">
-        <div className="ambient-bar" />
         {canScrollLeft && (
           <button
             type="button"

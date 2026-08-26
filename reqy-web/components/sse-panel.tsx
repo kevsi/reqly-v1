@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatBytes } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -44,12 +45,6 @@ function formatTimestamp(ts: number): string {
   const ss = d.getSeconds().toString().padStart(2, "0");
   const ms = d.getMilliseconds().toString().padStart(3, "0");
   return `${hh}:${mm}:${ss}.${ms}`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
-  return `${bytes} o`;
 }
 
 function prettyPrintJson(raw: string): string {

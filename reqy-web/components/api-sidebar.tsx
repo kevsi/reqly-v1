@@ -177,7 +177,7 @@ export function ApiSidebar({
           expanded ? "gap-3 px-4" : "justify-center",
         )}
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 shadow-sm">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary">
           <AppIcon aria-hidden="true" className="size-5" />
         </div>
         {expanded && (
@@ -222,7 +222,7 @@ export function ApiSidebar({
                 {isActive && (
                   <span
                     className={cn(
-                      "rounded-full bg-primary shadow-sm shadow-primary/50",
+                      "rounded-full bg-primary",
                       expanded
                         ? "ml-auto flex size-1.5"
                         : "absolute -right-0.5 top-1/2 -translate-y-1/2 size-2",
@@ -241,7 +241,7 @@ export function ApiSidebar({
             return (
               <li key={item.id} className="relative">
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary shadow-sm shadow-primary/50" />
+                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
                 )}
                 {!expanded ? (
                   <Tooltip>
@@ -276,17 +276,17 @@ export function ApiSidebar({
             handleNavClick();
           }}
           className={cn(
-            "group/ai relative flex w-full items-center rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-accent/30 px-3 py-2.5 text-sm font-medium text-foreground transition-colors duration-200 hover:from-primary/15 hover:via-primary/10 hover:to-accent/50",
+            "group/ai relative flex w-full items-center rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-primary/15",
             expanded ? "gap-3" : "justify-center px-2",
           )}
         >
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-sm shadow-primary/20">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary">
             <Sparkles aria-hidden="true" className="size-4 text-primary-foreground" />
           </div>
           {expanded && (
             <>
               <span className="font-medium">{t("sidebar.aiAssist")}</span>
-              <span className="ml-auto flex size-2 rounded-full bg-success shadow-sm shadow-success/50 group-hover/ai:animate-pulse" />
+              <span className="ml-auto flex size-2 rounded-full bg-success" />
             </>
           )}
         </button>
@@ -296,7 +296,7 @@ export function ApiSidebar({
       <button
         onClick={() => setCollapsed(!collapsed)}
         aria-label={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-        className="absolute -right-3 top-[72px] flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-[opacity,transform,box-shadow,color,background-color,border-color] duration-200 hover:border-primary/40 hover:bg-accent hover:text-foreground hover:shadow-md hover:shadow-primary/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-90 opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
+        className="absolute -right-3 top-[72px] flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring opacity-0 group-hover/sidebar:opacity-100 max-md:hidden z-10"
         title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
       >
         {collapsed ? (

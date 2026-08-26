@@ -20,7 +20,7 @@ import { SimpleRequestBuilder } from "@/components/simple-mode/simple-request-bu
 import { persistence } from "@/lib/persistence";
 import { cn } from "@/lib/utils";
 import { useShallow } from "zustand/react/shallow";
-import { getMethodPanelClass } from "@/lib/http-method-colors";
+import { getMethodPanelClass, getMethodHandleClass } from "@/lib/http-method-colors";
 import { recordToHeaderArray } from "@/lib/request-tab-utils";
 import type { AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
@@ -141,7 +141,6 @@ export function RequestTabsManager() {
     handleAnalyzeRequest,
     handleGenerateTests,
     handleGenerateFollowUp,
-    exportActiveRequest,
     createNewRequestInCollection,
     saveModalOpen,
     setSaveModalOpen,
@@ -577,7 +576,6 @@ export function RequestTabsManager() {
                     environmentVariableNames={envVariableNames}
                     queryParamKeySuggestions={queryParamKeySuggestions}
                     formDataKeySuggestions={formDataKeySuggestions}
-                    onExport={exportActiveRequest}
                   />
                 </ErrorBoundary>
                 {/* Payload size — real byte count of the request body */}
@@ -592,7 +590,7 @@ export function RequestTabsManager() {
               </div>
             </ResizablePanel>
 
-            <ResizableHandle withHandle className="bg-border max-md:hidden" />
+            <ResizableHandle withHandle className={cn("max-md:hidden", getMethodHandleClass(activeTab.method))} />
 
             <ResizablePanel
               ref={responsePanelRef}
@@ -630,6 +628,7 @@ export function RequestTabsManager() {
                       transportError={activeTab.transportError}
                       responseCookies={activeTab.responseCookies}
                       testResults={activeTab.testResults}
+                      scriptLogs={activeTab.scriptLogs}
                       isLoading={isLoading}
                       aiIsLoading={aiEngine.isLoading}
                       onRun={sendRequest}

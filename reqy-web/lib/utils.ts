@@ -155,3 +155,11 @@ export async function downloadJson(data: unknown, filename: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/** Format bytes into human-readable string (o / Ko / Mo). */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 o";
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}

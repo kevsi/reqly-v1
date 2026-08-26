@@ -18,6 +18,7 @@ import { ResponseHeadersTab } from "@/components/response-headers-tab";
 import { ResponseCookiesTab } from "@/components/response-cookies-tab";
 import { CodeSnippet } from "@/components/response-code-snippet";
 import { TestResultsSection } from "@/components/response-test-results";
+import { ConsoleTab } from "@/components/response-console-tab";
 import type { CorrectionSuggestion } from "@/src/ai/cloud-engine/actions/propose-correction";
 import type { TauriCookie, TauriErrorPayload } from "@/lib/tauri";
 import dynamic from "next/dynamic";
@@ -48,8 +49,8 @@ import {
   extractImageUrls,
 } from "@/components/response-utils";
 import type { HistoryItem, TestResult } from "@/lib/types";
-import { formatDataSize } from "@/lib/network/format";
-import { getStatusBorderAccentClass, getStatusGaugeClass } from "@/lib/http-status-colors";
+import type { ConsoleEntry } from "@/lib/test-runner/scripts";
+import { getStatusBorderAccentClass } from "@/lib/http-status-colors";
 
 interface ResponsePanelProps {
   responseBody?: string;
@@ -59,7 +60,11 @@ interface ResponsePanelProps {
   responseTimings?: {
     dnsMs?: number;
     connectMs?: number;
+    tlsMs?: number;
     ttfbMs?: number;
+    transferMs?: number;
+    totalMs?: number;
+    transport?: "native" | "proxy";
   };
   responseSize?: string;
   responseHeaders?: Record<string, string>;
@@ -85,6 +90,7 @@ interface ResponsePanelProps {
   authType?: string;
   authToken?: string;
   testResults?: TestResult[];
+  scriptLogs?: { pre: ConsoleEntry[]; post: ConsoleEntry[] };
   history?: HistoryItem[];
   proposeAskAI?: (prompt: string) => Promise<string>;
   onApplyCorrection?: (result: TestResult, suggestion: CorrectionSuggestion) => void;
@@ -101,6 +107,7 @@ export function ResponsePanel({
   transportError,
   responseCookies = [],
   testResults,
+  scriptLogs,
   isLoading = false,
   onRun,
   onRetry,
@@ -226,31 +233,7 @@ export function ResponsePanel({
 
   const hasResponse = Boolean(responseBody) || responseStatus !== undefined;
 
-  // Real byte size of the response body, used to show "Taille : X Ko / Mo".
-  const responseByteSize = useMemo(() => {
-    if (responseData instanceof Blob) return responseData.size;
-    if (typeof responseBody === "string") return new Blob([responseBody]).size;
-    return 0;
-  }, [responseBody, responseData]);
-
-  // â”€â”€ Timing gauge animation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const [timingGaugeWidth, setTimingGaugeWidth] = useState(0);
-
-  useEffect(() => {
-    if (hasResponse && responseTime !== undefined && !isLoading) {
-      const t0 = window.setTimeout(() => setTimingGaugeWidth(0), 0);
-      const timer = window.setTimeout(() => {
-        setTimingGaugeWidth(100);
-      }, 20);
-      return () => {
-        window.clearTimeout(t0);
-        window.clearTimeout(timer);
-      };
-    } else {
-      const t0 = window.setTimeout(() => setTimingGaugeWidth(0), 0);
-      return () => window.clearTimeout(t0);
-    }
-  }, [responseTime, hasResponse, isLoading]);
+  // (La taille brute reste exposée par la barre de statut via responseSize.)
 
   // â”€â”€ Auto-format helper is declared earlier to be available for useState init
 
@@ -330,25 +313,15 @@ export function ResponsePanel({
         onDiff={handleOpenDiff}
       />
 
-      {/* Response Timing Gauge â€” full-width animation bar */}
-      {hasResponse && !isLoading && (
-        <div className="h-1 bg-muted-foreground/10 overflow-hidden">
-          <div
-            className={cn(
-              "h-full transition-all duration-500 ease-out",
-              getStatusGaugeClass(responseTime),
-            )}
-            style={{ width: `${timingGaugeWidth}%` }}
-          />
-        </div>
-      )}
-
       <ResponseTimeline
         timings={{
           dnsMs: responseTimings?.dnsMs,
           connectMs: responseTimings?.connectMs,
+          tlsMs: responseTimings?.tlsMs,
           ttfbMs: responseTimings?.ttfbMs,
+          transferMs: responseTimings?.transferMs,
           totalMs: responseTime ?? 0,
+          transport: responseTimings?.transport,
         }}
       />
 
@@ -361,7 +334,7 @@ export function ResponsePanel({
             >
               {t("response.tabResponse")}
               {hasResponse && (
-                <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono text-primary">
+                <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-mono text-primary">
                   {responseStatus ?? "-"}
                 </span>
               )}
@@ -371,22 +344,14 @@ export function ResponsePanel({
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabHeaders")}
-              {hasResponse && responseHeaders && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
-                  {Object.keys(responseHeaders).length}
-                </span>
-              )}
+              
             </TabsTrigger>
             <TabsTrigger
               value="cookies"
               className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabCookies")}
-              {hasResponse && responseCookies && responseCookies.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
-                  {responseCookies.length}
-                </span>
-              )}
+              
             </TabsTrigger>
             <TabsTrigger
               value="code"
@@ -402,13 +367,30 @@ export function ResponsePanel({
               {testResults && testResults.length > 0 && (
                 <span
                   className={cn(
-                    "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-mono tabular-nums",
+                    "ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-mono tabular-nums",
                     testResults.every((r) => r.passed)
                       ? "bg-success/10 text-success"
                       : "bg-destructive/10 text-destructive",
                   )}
                 >
                   {testResults.filter((r) => r.passed).length}/{testResults.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="timeline"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+            >
+              {t("response.tabTimeline", "Timeline")}
+            </TabsTrigger>
+            <TabsTrigger
+              value="console"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+            >
+              {t("response.tabConsole", "Console")}
+              {scriptLogs && (scriptLogs.pre.length + scriptLogs.post.length) > 0 && (
+                <span className="ml-1.5 rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-xs font-mono tabular-nums">
+                  {scriptLogs.pre.length + scriptLogs.post.length}
                 </span>
               )}
             </TabsTrigger>
@@ -423,7 +405,7 @@ export function ResponsePanel({
               <Sparkles className="size-3.5" />
               {t("response.ai")}
               {diagnostics.length > 0 && (
-                <span className="ml-1 rounded-full bg-destructive/20 text-destructive px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
+                <span className="ml-1 rounded-full bg-destructive/20 text-destructive px-1.5 py-0.5 text-xs font-mono tabular-nums">
                   {diagnostics.length}
                 </span>
               )}
@@ -436,15 +418,8 @@ export function ResponsePanel({
           data-testid="response-body"
           className="m-0 min-h-0 flex-1 animate-fade-in relative overflow-hidden bg-muted/5"
         >
-          {/* Payload size â€” real byte count of the response body */}
-          {hasResponse && responseByteSize > 0 && (
-            <div
-              className="px-4 py-1 text-[11px] font-mono text-muted-foreground border-b border-border/50"
-              data-testid="response-size"
-            >
-              {t("response.sizeLabel", { size: formatDataSize(responseByteSize) })}
-            </div>
-          )}
+          {/* La taille est déjà affichée dans la barre de statut (haut) :
+              pas de doublon au-dessus du corps de réponse. */}
 
           {/* Content layer above giant code */}
           <div className="relative z-10 h-full">
@@ -461,12 +436,9 @@ export function ResponsePanel({
                   </div>
                 </div>
                 <div className="flex flex-col gap-3 p-6">
-                  <Skeleton className="h-4 w-[45%]" />
+                  <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-[92%]" />
-                  <Skeleton className="h-3 w-[78%]" />
-                  <Skeleton className="h-3 w-[88%]" />
-                  <Skeleton className="h-3 w-[65%]" />
+                  <Skeleton className="h-3 w-1/2" />
                 </div>
               </div>
             ) : hasResponse ? (
@@ -531,6 +503,34 @@ export function ResponsePanel({
             responseBody={responseBody}
             askAI={proposeAskAI}
             onApplyCorrection={onApplyCorrection}
+          />
+        </TabsContent>
+        <TabsContent value="timeline" className="m-0 min-h-0 flex-1 animate-fade-in overflow-auto">
+          <div className="p-4">
+            <ResponseTimeline
+              timings={{
+                dnsMs: responseTimings?.dnsMs,
+                connectMs: responseTimings?.connectMs,
+                tlsMs: responseTimings?.tlsMs,
+                ttfbMs: responseTimings?.ttfbMs,
+                transferMs: responseTimings?.transferMs,
+                totalMs: responseTime ?? 0,
+                transport: responseTimings?.transport,
+              }}
+            />
+            {!responseTime && (
+              <p className="text-xs text-muted-foreground italic mt-4">
+                {t("response.timelineEmpty", "Envoyez une requête pour voir le breakdown réseau")}
+              </p>
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="console" className="m-0 min-h-0 flex-1 animate-fade-in">
+          <ConsoleTab
+            entries={[
+              ...(scriptLogs?.pre ?? []),
+              ...(scriptLogs?.post ?? []),
+            ].sort((a, b) => a.timestamp - b.timestamp)}
           />
         </TabsContent>
       </Tabs>

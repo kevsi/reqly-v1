@@ -11,24 +11,20 @@ describe("ResponseTimeline", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders Transfert segment when all explicit timings are 0 but totalMs > 0", () => {
+  it("renders Download segment when all explicit timings are 0 but totalMs > 0", () => {
     const { container } = render(
       <ResponseTimeline timings={{ dnsMs: 0, connectMs: 0, ttfbMs: 0, totalMs: 100 }} />,
     );
-    // When no explicit segments are provided but totalMs > 0,
-    // the remaining time is treated as transfer time.
     expect(container.firstChild).not.toBeNull();
-    expect(screen.getByText("Transfert")).toBeTruthy();
-    // Transfert value should appear somewhere
+    expect(screen.getByText("Download")).toBeTruthy();
     const valueSpans = container.querySelectorAll("span");
     const values = Array.from(valueSpans).map((s) => s.textContent);
     expect(values).toContain("100");
   });
 
-  it("renders DNS, TTFB and total labels", () => {
+  it("renders DNS and total labels", () => {
     render(<ResponseTimeline timings={{ dnsMs: 10, ttfbMs: 100, totalMs: 200 }} />);
     expect(screen.getByText("DNS")).toBeTruthy();
-    expect(screen.getByText("TTFB")).toBeTruthy();
     expect(screen.getByText("Total")).toBeTruthy();
   });
 
@@ -44,43 +40,71 @@ describe("ResponseTimeline", () => {
     expect(screen.queryByText("DNS")).toBeNull();
   });
 
-  it("shows Connexion label when connectMs > 0", () => {
-    render(<ResponseTimeline timings={{ connectMs: 25, ttfbMs: 100, totalMs: 200 }} />);
-    expect(screen.getByText("Connexion")).toBeTruthy();
+  it("shows TCP label when connectMs > dnsMs", () => {
+    render(<ResponseTimeline timings={{ dnsMs: 10, connectMs: 25, ttfbMs: 100, totalMs: 200 }} />);
+    expect(screen.getByText("TCP")).toBeTruthy();
   });
 
   it("shows warning icon for dominant segment (>50%)", () => {
     render(<ResponseTimeline timings={{ dnsMs: 200, ttfbMs: 50, totalMs: 250 }} />);
-    // DNS takes 200/250 = 80% > 50%, should show warning
     const dnsLabel = screen.getByText("DNS");
     expect(dnsLabel.parentElement?.querySelector("svg")).toBeTruthy();
   });
 
   it("does not show warning for non-dominant segments", () => {
     render(<ResponseTimeline timings={{ dnsMs: 30, ttfbMs: 100, totalMs: 200 }} />);
-    // DNS takes 30/200 = 15% < 50%, no warning
     const dnsLabel = screen.getByText("DNS");
     expect(dnsLabel.parentElement?.querySelector("svg")).toBeNull();
   });
 
-  it("renders Transfert segment when remaining time exists", () => {
+  it("renders Download segment when remaining time exists", () => {
     render(<ResponseTimeline timings={{ dnsMs: 10, ttfbMs: 100, totalMs: 200 }} />);
-    expect(screen.getByText("Transfert")).toBeTruthy();
+    expect(screen.getByText("Download")).toBeTruthy();
   });
 
   it("handles only ttfbMs without connectMs", () => {
     render(<ResponseTimeline timings={{ ttfbMs: 150, totalMs: 200 }} />);
-    expect(screen.getByText("TTFB")).toBeTruthy();
-    expect(screen.getByText("Transfert")).toBeTruthy();
-    expect(screen.queryByText("Connexion")).toBeNull();
+    expect(screen.getByText("Download")).toBeTruthy();
   });
 
   it("renders multiple segments with correct proportions", () => {
     const { container } = render(
       <ResponseTimeline timings={{ dnsMs: 25, ttfbMs: 175, totalMs: 250 }} />,
     );
-    // Check that the bar exists with segments
     const segments = container.querySelectorAll(".h-2.rounded-full > div");
     expect(segments.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows TLS label when tlsMs > 0", () => {
+    render(<ResponseTimeline timings={{ tlsMs: 30, ttfbMs: 100, totalMs: 200 }} />);
+    expect(screen.getByText("TLS")).toBeTruthy();
+  });
+
+  it("shows transport indicator when provided", () => {
+    render(<ResponseTimeline timings={{ totalMs: 100, transport: "proxy" }} />);
+    expect(screen.getByText("via proxy")).toBeTruthy();
+  });
+
+  it("shows connection reuse indicator", () => {
+    render(<ResponseTimeline timings={{ totalMs: 100, connectionReused: true }} />);
+    expect(screen.getByText("keep-alive")).toBeTruthy();
+  });
+
+  it("shows new connection indicator when not reused", () => {
+    render(<ResponseTimeline timings={{ totalMs: 100, connectionReused: false }} />);
+    expect(screen.getByText("nouvelle connexion")).toBeTruthy();
+  });
+
+  it("shows request and response bytes", () => {
+    render(<ResponseTimeline timings={{ totalMs: 100, requestBytes: 1024, responseBytes: 2048 }} />);
+    expect(screen.getByText("↑ 1.0 Ko")).toBeTruthy();
+    expect(screen.getByText("↓ 2.0 Ko")).toBeTruthy();
+  });
+
+  it("shows threshold warning for slow TTFB", () => {
+    render(<ResponseTimeline timings={{ ttfbMs: 600, totalMs: 800 }} />);
+    // Wait > 500ms threshold should show alert triangle
+    const waitLabel = screen.getByText("Wait");
+    expect(waitLabel.parentElement?.querySelector("svg")).toBeTruthy();
   });
 });

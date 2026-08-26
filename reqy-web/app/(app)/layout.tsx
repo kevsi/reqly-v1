@@ -78,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AiSidebarContext.Provider value={{ aiSidebarOpen, setAiSidebarOpen }}>
-      <div className="flex h-[calc(var(--vh)*100)] bg-background bg-dot-pattern">
+      <div className="flex h-[calc(var(--vh)*100)] bg-background">
         {/* Mobile backdrop — clic pour fermer le drawer */}
         {isMobile && mobileOpen && (
           <div

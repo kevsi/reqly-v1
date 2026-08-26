@@ -12,7 +12,8 @@ import {
 } from "@/lib/tauri";
 import { persistence } from "@/lib/persistence";
 import { classifyError, enqueueOnNetworkFailure } from "@/lib/offline/queue";
-import type { ResponseTimings } from "@/components/response-timeline";
+import type { ResponseTimings } from "@/lib/types";
+import type { ConsoleEntry } from "@/lib/test-runner/scripts";
 import { applyPathParams, type PathParam } from "@/lib/path-params";
 import i18n from "@/src/i18n";
 export type BodyType = "json" | "form-data" | "x-www-form" | "raw" | "binary";
@@ -73,6 +74,13 @@ export interface RequestTab {
    */
   followRedirects?: boolean;
   /**
+   * Logs console.* des scripts pre/post request, pour l'onglet Console.
+   */
+  scriptLogs?: {
+    pre: ConsoleEntry[];
+    post: ConsoleEntry[];
+  };
+  /**
    * Key identifying the dataset row to use for data-driven execution.
    * Loaded from RequestItem.datasetKey via buildTabFromRequest; persisted
    * back via the save handlers. Optional and ignored by the live editor.
@@ -82,8 +90,25 @@ export interface RequestTab {
 
 export const formatSize = (size: number) => {
   if (size < 1024) return `${size} B`;
-  return `${Math.round(size / 1024)} KB`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
+
+/**
+ * Timeout de requête configurable (clé persistence `reqly_request_timeout_ms`).
+ * Plafond haut : le proxy web coupe lui-même à 60 s ; en desktop natif les
+ * 120 s sont réellement honorées.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+export const REQUEST_TIMEOUT_STORAGE_KEY = "reqly_request_timeout_ms";
+const MIN_REQUEST_TIMEOUT_MS = 5_000;
+const MAX_REQUEST_TIMEOUT_MS = 120_000;
+
+function resolveRequestTimeoutMs(): number {
+  const stored = Number(persistence.getItem<number>(REQUEST_TIMEOUT_STORAGE_KEY));
+  if (!Number.isFinite(stored) || stored <= 0) return DEFAULT_REQUEST_TIMEOUT_MS;
+  return Math.min(Math.max(Math.trunc(stored), MIN_REQUEST_TIMEOUT_MS), MAX_REQUEST_TIMEOUT_MS);
+}
 
 export const sanitizeUrl = (url: string) => {
   let sanitized = url.trim();
@@ -219,13 +244,29 @@ export interface ExecuteRequestContext {
 
 function buildFormDataBody(body: string): { body: string; boundary: string } {
   const boundary = `----ReqlyFormBoundary${Math.random().toString(36).slice(2, 16)}`;
+
+  // decodeURIComponent lève sur toute séquence % malformée ("a=100%") : on
+  // dégrade en valeur littérale au lieu de faire échouer toute la requête.
+  const safeDecode = (value: string): string => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  };
+
   const parts = body
     .split("&")
     .filter(Boolean)
     .map((pair) => {
       const eq = pair.indexOf("=");
-      const key = decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq));
-      const value = decodeURIComponent(eq === -1 ? "" : pair.slice(eq + 1));
+      const rawKey = eq === -1 ? pair : pair.slice(0, eq);
+      const rawValue = eq === -1 ? "" : pair.slice(eq + 1);
+      // La ligne Content-Disposition doit rester mono-ligne et sans guillemet
+      // non échappé ; les valeurs, elles, peuvent contenir des retours à la
+      // ligne (légal dans le corps d'une part multipart).
+      const key = safeDecode(rawKey).replace(/[\r\n"]/g, "");
+      const value = safeDecode(rawValue).replace(/\r\n/g, "\n");
       return `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}`;
     });
   parts.push(`--${boundary}--`);
@@ -392,7 +433,7 @@ export const executeRequest = async (
   let responseStatus: number | undefined;
   let responseSize: string;
   let responseTime: number | undefined;
-  let proxyTimings: { dnsMs?: number; connectMs?: number; ttfbMs?: number } | undefined;
+  let proxyTimings: Partial<ResponseTimings> | undefined;
   let responseCookies: TauriCookie[] = [];
   let transportError: TauriErrorPayload | null = null;
 
@@ -401,16 +442,20 @@ export const executeRequest = async (
   const sslEnabled = persistence.getItem<boolean>("reqly_ssl_verification_enabled");
   const acceptInvalidCerts = sslEnabled === false;
 
-  // Create an AbortController with a 30-second timeout to prevent hung
-  // requests. An external signal (user cancel) aborts the same controller.
+  // Create an AbortController with the configured timeout (default 30 s,
+  // réglable 5–120 s via la clé de persistence) to prevent hung requests.
+  // An external signal (user cancel) aborts the same controller.
+  const requestTimeoutMs = resolveRequestTimeoutMs();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
   const onExternalAbort = () => controller.abort();
   externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
 
   try {
     if (nativeMode) {
-      // Tauri native mode — run with a race against the abort signal
+      // Tauri native mode — run with a race against the abort signal.
+      // followRedirects: false explicite = reqwest NE suit PAS les 3xx
+      // (audit E3 : le toggle était ignoré côté desktop).
       const result = await withTimeout(
         invokeTauriFetch(
           tab.method,
@@ -418,6 +463,7 @@ export const executeRequest = async (
           headers,
           tab.method !== "GET" && tab.method !== "HEAD" ? finalBody : undefined,
           acceptInvalidCerts,
+          tab.followRedirects === false ? false : undefined,
         ),
         controller.signal,
       );
@@ -453,6 +499,11 @@ export const executeRequest = async (
           ...debugHeaders,
           ...proxyAuthHeaders(),
           ...(activeWorkspaceId ? { "x-workspace-id": activeWorkspaceId } : {}),
+          // Le proxy accepte jusqu'à 60 s (clampé côté serveur) : on lui
+          // transmet le timeout configuré au lieu du défaut silencieux.
+          ...(requestTimeoutMs > DEFAULT_REQUEST_TIMEOUT_MS
+            ? { "x-proxy-timeout": String(requestTimeoutMs) }
+            : {}),
         } as unknown as Record<string, string>,
         body: JSON.stringify({
           url: finalUrl,
@@ -582,8 +633,15 @@ export const executeRequest = async (
   const responseTimings: ResponseTimings = {
     dnsMs: proxyTimings?.dnsMs,
     connectMs: proxyTimings?.connectMs,
+    tlsMs: proxyTimings?.tlsMs,
     ttfbMs: proxyTimings?.ttfbMs,
+    transferMs: proxyTimings?.transferMs,
     totalMs: responseTime ?? 0,
+    transport: proxyTimings ? "proxy" : "native",
+    uploadMs: proxyTimings?.uploadMs,
+    requestBytes: proxyTimings?.requestBytes,
+    responseBytes: proxyTimings?.responseBytes,
+    connectionReused: proxyTimings?.connectionReused,
   };
 
   let testResults: TestResult[] | undefined;

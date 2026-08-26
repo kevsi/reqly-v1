@@ -53,6 +53,18 @@ pub fn run() {
         .build()
         .expect("failed to create HTTP client");
 
+    // Variante sans redirection : le toggle followRedirects de l'UI doit être
+    // respecté (les 3xx sont alors retournés tels quels au frontend).
+    let http_client_no_redirect = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(CLIENT_TIMEOUT_SECS))
+        .cookie_store(true)
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("failed to create no-redirect HTTP client");
+
     #[cfg(debug_assertions)]
     let insecure_client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(CLIENT_TIMEOUT_SECS))
@@ -64,6 +76,18 @@ pub fn run() {
         .build()
         .expect("failed to create insecure HTTP client");
 
+    #[cfg(debug_assertions)]
+    let insecure_client_no_redirect = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(CLIENT_TIMEOUT_SECS))
+        .cookie_store(true)
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
+        .danger_accept_invalid_certs(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("failed to create insecure no-redirect HTTP client");
+
     builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
@@ -71,8 +95,11 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(SharedClient {
             normal: http_client,
+            normal_no_redirect: http_client_no_redirect,
             #[cfg(debug_assertions)]
             insecure: insecure_client,
+            #[cfg(debug_assertions)]
+            insecure_no_redirect: insecure_client_no_redirect,
         })
         .manage::<ManagedCaptureProxyState>(Arc::new(Mutex::new(
             capture::CaptureProxyState::default(),

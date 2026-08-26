@@ -130,6 +130,7 @@ export async function invokeTauriFetch(
   headers: Record<string, string>,
   body?: string,
   acceptInvalidCerts?: boolean,
+  followRedirects?: boolean,
 ): Promise<TauriFetchResponse> {
   if (!isTauriAvailable()) {
     throw new Error("Tauri is not available in this environment");
@@ -143,6 +144,8 @@ export async function invokeTauriFetch(
     body,
   };
   if (acceptInvalidCerts === true) invokeArgs.acceptInvalidCerts = true;
+  // false seulement : absent/true conserve le comportement historique (suivre).
+  if (followRedirects === false) invokeArgs.followRedirects = false;
 
   let result: RawTauriFetchResponse;
   try {

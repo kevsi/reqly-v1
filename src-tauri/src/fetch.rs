@@ -52,8 +52,13 @@ pub struct TauriFetchResponse {
 #[derive(Clone)]
 pub struct SharedClient {
     pub normal: reqwest::Client,
+    /// Variante qui NE suit PAS les redirections : le toggle followRedirects
+    /// de l'UI doit être respecté (audit 25/08 — reqwest suivait toujours).
+    pub normal_no_redirect: reqwest::Client,
     #[cfg(debug_assertions)]
     pub insecure: reqwest::Client,
+    #[cfg(debug_assertions)]
+    pub insecure_no_redirect: reqwest::Client,
 }
 
 /// Decode common HTML entities in response bodies.
@@ -153,6 +158,9 @@ pub async fn fetch_proxy(
     headers: Vec<(String, String)>,
     body: Option<String>,
     accept_invalid_certs: Option<bool>,
+    // false = ne pas suivre les 3xx (surfacer la réponse de redirection).
+    // Absent/true = comportement historique (reqwest suit, max 10 sauts).
+    follow_redirects: Option<bool>,
     client: tauri::State<'_, SharedClient>,
 ) -> Result<TauriFetchResponse, AppError> {
     // Parse and validate URL
@@ -187,13 +195,22 @@ pub async fn fetch_proxy(
     }
 
     #[cfg(debug_assertions)]
-    let http_client = if accept_invalid_certs.unwrap_or(false) {
-        &client.insecure
-    } else {
-        &client.normal
+    let http_client = {
+        let use_insecure = accept_invalid_certs.unwrap_or(false);
+        let wants_redirects = follow_redirects.unwrap_or(true);
+        match (use_insecure, wants_redirects) {
+            (true, true) => &client.insecure,
+            (true, false) => &client.insecure_no_redirect,
+            (false, true) => &client.normal,
+            (false, false) => &client.normal_no_redirect,
+        }
     };
     #[cfg(not(debug_assertions))]
-    let http_client = &client.normal;
+    let http_client = if follow_redirects.unwrap_or(true) {
+        &client.normal
+    } else {
+        &client.normal_no_redirect
+    };
     let mut request = http_client.request(
         method
             .parse::<reqwest::Method>()

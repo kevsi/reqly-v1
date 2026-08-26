@@ -19,8 +19,15 @@ export function computeOrder(
 export interface ResponseTimings {
   dnsMs?: number;
   connectMs?: number;
+  tlsMs?: number;
   ttfbMs?: number;
+  transferMs?: number;
   totalMs: number;
+  transport?: "native" | "proxy";
+  uploadMs?: number;
+  requestBytes?: number;
+  responseBytes?: number;
+  connectionReused?: boolean;
 }
 
 export interface CollectionFolder {

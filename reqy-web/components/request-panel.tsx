@@ -1,8 +1,7 @@
 ﻿"use client";
 
-import { useRef, useMemo, useEffect } from "react";
-import { FlaskConical, Code, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRef, useMemo, useEffect, useState } from "react";
+import { FlaskConical, Code } from "lucide-react";
 import type { HttpMethod } from "@/lib/types";
 import type { AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import {
@@ -11,7 +10,9 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
+import { SSEEventsModal } from "@/components/sse/sse-events-modal";
 
+import { buildUrl } from "@/lib/request-executor";
 import type { BodyType, AuthType, QueryParam, Header, PathParam } from "@/lib/request-executor";
 import { syncPathParams } from "@/lib/path-params";
 import type { RequestTestAssertion } from "@/lib/types";
@@ -162,10 +163,10 @@ export function RequestPanel({
   environmentVariableNames,
   queryParamKeySuggestions,
   formDataKeySuggestions,
-  onExport,
-}: RequestPanelProps & { onExport?: () => Promise<void> }) {
+}: RequestPanelProps) {
   const { t } = useTranslation();
-  // Sync path params when URL changes — auto-add/remove :param patterns
+  const [sseModalOpen, setSseModalOpen] = useState(false);
+  // Sync path params when URL changes - auto-add/remove :param patterns
   // Uses a ref to track the last synced URL so we don't loop.
   const lastSyncedUrlRef = useRef(url);
   useEffect(() => {
@@ -339,22 +340,20 @@ export function RequestPanel({
           onCancel={onCancel}
           followRedirects={followRedirects}
           onFollowRedirectsChange={onFollowRedirectsChange}
+          onOpenSseStream={() => setSseModalOpen(true)}
         />
-        {onExport && (
-          <div className="mt-1 flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onExport}
-              className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-              title={t("request.exportTooltip")}
-            >
-              <Download className="size-3" />
-              {t("common.export")}
-            </Button>
-          </div>
-        )}
+        <SSEEventsModal
+          open={sseModalOpen}
+          onOpenChange={setSseModalOpen}
+          target={{
+            url: buildUrl(url, queryParams, pathParams),
+            headers: headers
+              .filter((h) => h.enabled !== false && h.key.trim())
+              .map((h) => ({ key: h.key.trim(), value: h.value })),
+            authType,
+            authToken,
+          }}
+        />
       </div>
 
       {/* Accordion — collapsed sections, expand to configure */}
@@ -366,11 +365,6 @@ export function RequestPanel({
               <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
                 <span className="flex items-center gap-2">
                   {t("request.pathVariables")}
-                  {(pathParams?.length ?? 0) > 0 && (
-                    <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
-                      {pathParams?.length ?? 0}
-                    </span>
-                  )}
                 </span>
               </AccordionTrigger>
               <AccordionContent>
@@ -394,7 +388,7 @@ export function RequestPanel({
               <span className="flex items-center gap-2">
                 {t("request.queryParams")}
                 {queryParams.length > 0 && (
-                  <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
+                  <span className="text-xs font-mono text-muted-foreground">
                     {queryParams.length}
                   </span>
                 )}
@@ -421,7 +415,7 @@ export function RequestPanel({
               <span className="flex items-center gap-2">
                 {t("request.headersLabel")}
                 {headers.length > 0 && (
-                  <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
+                  <span className="text-xs font-mono text-muted-foreground">
                     {headers.length}
                   </span>
                 )}
@@ -465,7 +459,7 @@ export function RequestPanel({
                 <FlaskConical className="size-3.5" />
                 {t("request.tests")}
                 {(assertions?.length ?? 0) > 0 && (
-                  <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
+                  <span className="text-xs font-mono text-muted-foreground">
                     {assertions?.filter((a) => a.enabled).length ?? 0}/{assertions?.length ?? 0}
                   </span>
                 )}
@@ -493,11 +487,6 @@ export function RequestPanel({
               <span className="flex items-center gap-2">
                 <FlaskConical className="size-3.5" />
                 {t("assertion.title")}
-                {(runnerAssertions?.length ?? 0) > 0 && (
-                  <span className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] font-mono font-normal">
-                    {runnerAssertions?.length ?? 0}
-                  </span>
-                )}
               </span>
             </AccordionTrigger>
             <AccordionContent>

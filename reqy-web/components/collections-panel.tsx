@@ -849,9 +849,6 @@ export function CollectionsPanel({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Ambient top highlight */}
-      <div className="ambient-bar shrink-0" />
-
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 shrink-0">
         <div className="flex items-center gap-2.5">

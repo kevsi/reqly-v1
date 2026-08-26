@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Terminal, Code, Copy, Check, Loader2, Play, Braces, X, Route, Square } from "lucide-react";
+import { Terminal, Code, Copy, Check, Loader2, Play, Braces, X, Route, Square, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeUrl as canonicalNormalizeUrl } from "@/lib/request-executor";
 import type { HttpMethod } from "@/lib/types";
@@ -42,6 +42,8 @@ export interface RequestPanelUrlBarProps {
   isLoading?: boolean;
   urlAutocompleteGroups: AutocompleteGroup[];
   hasUrl: boolean;
+  /** Ouvre le modal de flux SSE live sur l'URL courante. */
+  onOpenSseStream?: () => void;
 }
 
 export function RequestPanelUrlBar({
@@ -66,6 +68,7 @@ export function RequestPanelUrlBar({
   isLoading,
   urlAutocompleteGroups,
   hasUrl,
+  onOpenSseStream,
 }: RequestPanelUrlBarProps) {
   const { t } = useTranslation();
   const [exportFormat, setExportFormat] = useState<"curl" | "fetch">("curl");
@@ -162,14 +165,14 @@ ${bodyPart}})
   return (
     <>
       {/* URL Bar */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-input/50 px-2.5 py-1 transition-all duration-200 sm:flex-nowrap">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-input/50 px-2.5 py-1 transition-colors sm:flex-nowrap">
         {/* Method select */}
         <Select value={method} onValueChange={(value) => onMethodChange(value as HttpMethod)}>
           <SelectTrigger
             aria-label="HTTP method"
             data-testid="method-selector"
             className={cn(
-              "shrink-0 rounded-md border-0 px-2 py-0.5 text-[10px] font-bold font-mono cursor-pointer transition-all duration-200 outline-none ring-offset-0 focus:ring-0 focus:ring-offset-0 h-auto w-auto gap-0.5 [&>svg]:size-3",
+              "shrink-0 rounded-md border-0 px-2 py-0.5 text-xs font-bold font-mono cursor-pointer transition-colors outline-none ring-offset-0 focus:ring-0 focus:ring-offset-0 h-auto w-auto gap-0.5 [&>svg]:size-3",
               methodBg[method],
               "text-white",
             )}
@@ -216,6 +219,19 @@ ${bodyPart}})
           >
             <Terminal className="size-3.5" />
           </Button>
+          {/* Flux SSE live sur l'URL courante — icône jumelle du coller-cURL */}
+          {onOpenSseStream && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 sm:h-7 sm:w-7 p-0 text-muted-foreground/50 hover:text-foreground"
+              onClick={onOpenSseStream}
+              disabled={!hasUrl}
+              title={t("sse.openStream")}
+            >
+              <Radio className="size-3.5" />
+            </Button>
+          )}
           {curlImportOpen && (
             <div className="absolute right-0 top-full mt-1 z-50 w-[calc(100vw-2rem)] max-w-[420px] rounded-lg border border-border bg-popover shadow-xl animate-in fade-in-0 zoom-in-95">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/40">
@@ -312,7 +328,7 @@ ${bodyPart}})
           <div className="relative">
             <select
               aria-label="Insert variable"
-              className="h-8 sm:h-7 rounded-md border border-input/50 bg-muted/30 px-1.5 text-[10px] font-mono text-muted-foreground cursor-pointer outline-none hover:border-muted-foreground/30 appearance-none"
+              className="h-8 sm:h-7 rounded-md border border-input/50 bg-muted/30 px-1.5 text-xs font-mono text-muted-foreground cursor-pointer outline-none hover:border-muted-foreground/30 appearance-none"
               value=""
               onChange={(e) => {
                 const name = e.target.value;
@@ -350,7 +366,7 @@ ${bodyPart}})
             title={t("request.followRedirectsHint")}
             aria-pressed={followRedirects}
             className={cn(
-              "flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center rounded-md border transition-all duration-200",
+              "flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center rounded-md border transition-colors",
               followRedirects
                 ? "border-primary/40 bg-primary/10 text-primary"
                 : "border-input/50 bg-muted/30 text-muted-foreground/50 hover:text-foreground hover:border-muted-foreground/30",
@@ -369,7 +385,7 @@ ${bodyPart}})
             await onSend();
           }}
           className={cn(
-            "h-7 shrink-0 gap-1.5 px-2.5 text-xs font-semibold transition-all duration-200",
+            "h-7 shrink-0 gap-1.5 px-2.5 text-xs font-semibold transition-colors",
             methodBg[method],
             "text-white hover:opacity-85",
           )}
@@ -390,7 +406,7 @@ ${bodyPart}})
             size="sm"
             data-testid="cancel-request-button"
             onClick={onCancel}
-            className="h-7 shrink-0 gap-1.5 px-2.5 text-xs font-semibold border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+            className="h-7 shrink-0 gap-1.5 px-2.5 text-xs font-semibold border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors"
             title={t("request.cancel")}
           >
             <Square className="size-3 fill-current" />
@@ -432,7 +448,7 @@ ${bodyPart}})
             value={exportFormat}
             onValueChange={(value) => setExportFormat(value as "curl" | "fetch")}
           >
-            <SelectTrigger className="h-8 w-auto gap-2 border-input bg-muted/30 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-muted-foreground/30">
+            <SelectTrigger className="h-8 w-auto gap-2 border-input bg-muted/30 text-xs font-medium text-muted-foreground transition-colors hover:border-muted-foreground/30">
               <Code className="size-3.5" />
               <SelectValue placeholder={t("request.exportPlaceholder")} />
             </SelectTrigger>
@@ -445,7 +461,7 @@ ${bodyPart}})
             variant="outline"
             onClick={handleCopyExport}
             className={cn(
-              "h-8 gap-1.5 text-xs font-medium transition-all duration-200",
+              "h-8 gap-1.5 text-xs font-medium transition-colors",
               exportCopied ? "border-success/30 text-success bg-success/10" : "",
             )}
           >

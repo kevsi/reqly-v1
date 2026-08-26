@@ -79,6 +79,18 @@ export const methodPanelAccent: Record<HttpMethod, string> = {
   GRAPHQL: "border-b-pink-500/15 bg-pink-500/[0.02]",
 };
 
+/** Handle de redimensionnement — couleur de la barre entre les panneaux */
+export const methodHandle: Record<HttpMethod, string> = {
+  GET: "bg-emerald-500/30",
+  POST: "bg-blue-500/30",
+  PUT: "bg-amber-500/30",
+  PATCH: "bg-purple-500/30",
+  DELETE: "bg-red-500/30",
+  HEAD: "bg-slate-500/30",
+  OPTIONS: "bg-slate-500/30",
+  GRAPHQL: "bg-pink-500/30",
+};
+
 /** Fond plein pour le sélecteur de méthode et le bouton d'envoi */
 export const methodBg: Record<HttpMethod, string> = {
   GET: "bg-emerald-500",
@@ -118,4 +130,8 @@ export function getMethodDotClass(method: HttpMethod): string {
 
 export function getMethodPanelClass(method: HttpMethod): string {
   return methodPanelAccent[method] ?? "border-b-red-500/15 bg-red-500/[0.02]";
+}
+
+export function getMethodHandleClass(method: HttpMethod): string {
+  return methodHandle[method] ?? "bg-red-500/30";
 }

@@ -6,10 +6,17 @@ export interface ScriptOptions {
   timeoutMs?: number;
 }
 
+export interface ConsoleEntry {
+  level: "log" | "warn" | "error";
+  timestamp: number;
+  message: string;
+}
+
 export interface ScriptOutput {
   result?: unknown;
   error?: string;
   consoleLines: string[];
+  consoleEntries: ConsoleEntry[];
 }
 
 const FORBIDDEN_GLOBALS = [
@@ -122,14 +129,17 @@ export async function runScript(
   options: ScriptOptions,
 ): Promise<ScriptOutput> {
   const consoleLines: string[] = [];
-  const log = (msg: string) => {
-    consoleLines.push(msg);
-    ctx.log(msg);
+  const consoleEntries: ConsoleEntry[] = [];
+  const log = (level: ConsoleEntry["level"], args: unknown[]) => {
+    const message = args.map(stringify).join(" ");
+    consoleLines.push(level === "log" ? message : `[${level.toUpperCase()}] ${message}`);
+    consoleEntries.push({ level, timestamp: Date.now(), message });
+    ctx.log(message);
   };
   const consoleShim = {
-    log: (...args: unknown[]) => log(args.map(stringify).join(" ")),
-    warn: (...args: unknown[]) => log("[WARN] " + args.map(stringify).join(" ")),
-    error: (...args: unknown[]) => log("[ERROR] " + args.map(stringify).join(" ")),
+    log: (...args: unknown[]) => log("log", args),
+    warn: (...args: unknown[]) => log("warn", args),
+    error: (...args: unknown[]) => log("error", args),
   };
 
   const sandbox: Record<string, unknown> = {
@@ -157,23 +167,30 @@ export async function runScript(
   for (const key of FORBIDDEN_GLOBALS) sandbox[key] = undefined;
 
   const vm = await getVm();
-  if (!vm) {
-    return {
-      error: "Script execution requires Node.js `vm` module — not available in this environment.",
-      consoleLines,
-    };
-  }
 
   try {
-    const wrapped = `(function() { return (${code}); })()`;
-    const script = new vm.Script(wrapped);
-    const vmContext = vm.createContext(sandbox, {
-      codeGeneration: { strings: false, wasm: false },
-      microtaskMode: "afterEvaluate",
-    });
-    const result = script.runInContext(vmContext, { timeout: options.timeoutMs ?? 3000 });
-    return { result, consoleLines };
+    if (vm) {
+      // Node.js / Tauri backend: use the hardened vm sandbox
+      const wrapped = `(function() { return (${code}); })()`;
+      const script = new vm.Script(wrapped);
+      const vmContext = vm.createContext(sandbox, {
+        codeGeneration: { strings: false, wasm: false },
+        microtaskMode: "afterEvaluate",
+      });
+      const result = script.runInContext(vmContext, { timeout: options.timeoutMs ?? 3000 });
+      return { result, consoleLines, consoleEntries };
+    }
+
+    // Browser / Tauri webview fallback: use Function constructor.
+    // Less secure (no sandboxing, no timeout) but functional for local use.
+    const fnArgs = Object.keys(sandbox);
+    const fnValues = Object.values(sandbox);
+    // Execute code directly (statements or expression) — no return wrapper
+    // to avoid syntax errors with statements like console.log("x");
+    const fn = new Function(...fnArgs, `"use strict"; ${code}`);
+    const result = fn(...fnValues);
+    return { result, consoleLines, consoleEntries };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err), consoleLines };
+    return { error: err instanceof Error ? err.message : String(err), consoleLines, consoleEntries };
   }
 }

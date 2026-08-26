@@ -1,9 +1,8 @@
 "use client";
 
-import { memo, useState, useEffect } from "react";
+import { memo } from "react";
 import {
   CheckCircle,
-  FileText,
   Download,
   Play,
   Loader2,
@@ -51,35 +50,6 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
   onDiff,
 }: ResponseStatusBarProps) {
   const { t } = useTranslation();
-  // ── Animated gauge fill ────────────────────────────────────────
-  const targetGaugeWidth = Math.min((responseTime ?? 0) / 10, 100);
-  const [gaugeFillWidth, setGaugeFillWidth] = useState(0);
-
-  useEffect(() => {
-    let resetTimer: number | undefined;
-    let fillTimer: number | undefined;
-
-    if (hasResponse && responseTime !== undefined) {
-      resetTimer = window.setTimeout(() => setGaugeFillWidth(0), 0);
-      fillTimer = window.setTimeout(() => {
-        setGaugeFillWidth(targetGaugeWidth);
-      }, 20);
-    } else {
-      resetTimer = window.setTimeout(() => setGaugeFillWidth(0), 0);
-    }
-
-    return () => {
-      if (resetTimer) clearTimeout(resetTimer);
-      if (fillTimer) clearTimeout(fillTimer);
-    };
-  }, [responseTime, hasResponse, targetGaugeWidth]);
-
-  const getGaugeFillColor = (time?: number) => {
-    if (time === undefined || time === null) return "#6b7280";
-    if (time < 300) return "#10b981";
-    if (time < 3000) return "#f59e0b";
-    return "#ef4444";
-  };
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5">
@@ -111,30 +81,16 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
               </span>
             </div>
 
-            {/* Time — with animated gauge bar */}
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 rounded-full bg-muted-foreground/10 overflow-hidden w-16">
-                <div
-                  className="h-full rounded-full transition-all duration-500 ease-out"
-                  style={{
-                    width: `${gaugeFillWidth}%`,
-                    backgroundColor: getGaugeFillColor(responseTime),
-                  }}
-                />
-              </div>
-              <span className="text-[11px] font-mono font-semibold text-muted-foreground whitespace-nowrap tabular-nums">
-                {responseTime ?? 0}
-                <span className="text-muted-foreground/70">ms</span>
-              </span>
-            </div>
+            {/* Time */}
+            <span className="text-xs font-mono font-semibold text-muted-foreground whitespace-nowrap tabular-nums">
+              {responseTime ?? 0}
+              <span className="text-muted-foreground/70">ms</span>
+            </span>
 
-            {/* Size — compact */}
-            <div className="flex items-center gap-1 rounded-md border border-muted-foreground/10 bg-muted/20 px-2 py-1">
-              <FileText className="size-3 text-muted-foreground/70" />
-              <span className="text-[11px] font-mono font-semibold text-muted-foreground tabular-nums">
-                {responseSize ?? "0 B"}
-              </span>
-            </div>
+            {/* Size */}
+            <span className="text-xs font-mono text-muted-foreground tabular-nums">
+              {responseSize ?? "0 B"}
+            </span>
           </div>
         ) : (
           <span className="text-xs text-muted-foreground/70 italic">{t("response.awaiting")}</span>
@@ -147,7 +103,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
               disabled={isLoading}
               size="sm"
               className={cn(
-                "h-8 gap-1.5 text-xs font-semibold transition-all duration-200",
+                "h-8 gap-1.5 text-xs font-semibold transition-colors",
                 isLoading && "opacity-80",
               )}
             >
@@ -182,7 +138,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 text-xs font-medium transition-all duration-200"
+          className="h-8 gap-1.5 text-xs font-medium transition-colors"
           onClick={onExport}
           disabled={!hasResponse}
         >
@@ -195,7 +151,7 @@ export const ResponseStatusBar = memo(function ResponseStatusBar({
             size="sm"
             onClick={onDiff}
             disabled={!hasResponse}
-            className="h-8 gap-1.5 text-xs font-medium transition-all duration-200"
+            className="h-8 gap-1.5 text-xs font-medium transition-colors"
           >
             <GitCompare className="size-3.5" />
             {t("response.diff")}
