@@ -1,0 +1,6 @@
+{
+  "require": {
+    "laravel/framework": "^10",
+    "php": ">=8.1"
+  }
+}

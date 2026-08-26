@@ -182,11 +182,10 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
     allRoutes.push(...routes);
   }
 
-  // Generic file-structure fallback: when no routes were found but source
-  // files exist, derive routes from directory + filename conventions (common
-  // in custom PHP/JS/etc. APIs where each resource folder holds action files
-  // like `ajouter.php` → POST /resource).
-  if (allRoutes.length === 0) {
+  // Generic file-structure fallback: only when no manifest was found
+  // (custom projects without framework). In manifest-based projects the
+  // detectors are authoritative — spurious fs-routes would pollute the report.
+  if (allRoutes.length === 0 && !fromManifest) {
     const fallbackExtensions = [
       ".php", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
       ".py", ".java", ".cs", ".rb", ".go", ".rs",
@@ -210,7 +209,14 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
       const key = `${method} ${routePath}`;
       if (seenRoutes.has(key)) continue;
       seenRoutes.add(key);
-      const line = (await fs.readFile(file, "utf8")).split("\n").findIndex(() => true) + 1;
+      const src = await fs.readFile(file, "utf8");
+      // First non-empty, non-comment line: a stable anchor for the report.
+      let idx = src.split("\n").findIndex((l) => {
+        const t = l.trim();
+        return t.length > 0 && !t.startsWith("//") && !t.startsWith("#") && !t.startsWith("/*");
+      });
+      if (idx < 0) idx = 0;
+      const line = idx + 1;
       allRoutes.push({
         id: `fs-${method.toLowerCase()}-${routePath.replace(/[^a-z0-9]/gi, "-")}`,
         method,

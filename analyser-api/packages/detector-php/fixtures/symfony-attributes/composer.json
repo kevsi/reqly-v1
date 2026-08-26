@@ -1,0 +1,6 @@
+{
+  "require": {
+    "symfony/routing": "^6.0",
+    "php": ">=8.1"
+  }
+}

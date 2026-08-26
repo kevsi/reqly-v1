@@ -70,11 +70,19 @@ export interface AnalyserConfig {
   ignore?: string[];
 }
 
-/** Reads `.analyserrc` (JSON) from a root path, if present. */
+/** Reads `.analyserrc` (JSON) from a root path, if present. Validates shape. */
 export async function readAnalyserConfig(rootPath: string): Promise<AnalyserConfig> {
   try {
     const raw = await fs.readFile(path.join(rootPath, ".analyserrc"), "utf8");
-    return JSON.parse(raw) as AnalyserConfig;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const rec = parsed as Record<string, unknown>;
+    if (rec.ignore === undefined) return {};
+    if (Array.isArray(rec.ignore) && rec.ignore.every((v) => typeof v === "string")) {
+      return { ignore: rec.ignore as string[] };
+    }
+    // Invalid shape — ignore silently (warned via orchestrator warnings if needed).
+    return {};
   } catch {
     return {};
   }
