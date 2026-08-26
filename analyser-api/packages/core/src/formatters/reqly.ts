@@ -21,7 +21,13 @@ export interface ReqlyExport {
 }
 
 export function toReqly(result: AnalysisResult): ReqlyExport {
-  const requests: ReqlyRequest[] = result.routes.map((r, i) => ({
+  const sorted = [...result.routes].sort(
+    (a, b) =>
+      a.path.localeCompare(b.path) ||
+      a.method.localeCompare(b.method) ||
+      a.file.localeCompare(b.file),
+  );
+  const requests: ReqlyRequest[] = sorted.map((r, i) => ({
     id: `req_${i}`,
     name: `${r.method} ${r.path || "/"}`,
     method: r.method === "ALL" ? "GET" : r.method,
