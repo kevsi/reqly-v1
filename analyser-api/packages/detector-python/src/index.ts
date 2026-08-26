@@ -290,7 +290,7 @@ export const detectorPython: Detector = {
       const bodySchema = bodyModels
         .map((p) => p.trim())
         .filter((p) => /^\w+:\s*\w+/.test(p))
-        .map((p) => p.match(/^\w+:\s*(\w+)/)?.[1]!)
+        .map((p) => p.match(/^\w+:\s*(\w+)/)?.[1] ?? "")
         .find((t) => t && !PRIMITIVES.has(t) && !AUTH_HINTS.test(t));
 
       routes.push({
@@ -315,7 +315,7 @@ export const detectorPython: Detector = {
 
     for (const m of matches) {
       if (m.ruleId === "flask-route") {
-        const app = m.node.get("APP") ?? "";
+        const _app = m.node.get("APP") ?? "";
         const p = stripQuotes(nonCommaArgs(m)[0] ?? "");
         if (!p) continue;
         const method = methodFromKwargs(m.text);

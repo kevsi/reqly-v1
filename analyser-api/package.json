@@ -7,8 +7,12 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "lint": "oxlint packages --ignore-pattern \"**/fixtures/**\"",
     "typecheck": "pnpm -r run typecheck",
     "test": "node --test \"packages/*/test/*.test.ts\"",
     "scan": "node packages/cli/src/index.ts"
+  },
+  "devDependencies": {
+    "oxlint": "^1.79.0"
   }
 }

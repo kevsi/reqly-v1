@@ -9,8 +9,6 @@ import type {
   MatchedNode,
 } from "@analyser/core";
 
-const ACTIX_METHODS = new Set(["get", "post", "put", "patch", "delete", "options", "head"]);
-
 const RULES: AstGrepRule[] = [
   { id: "route", pattern: "$ROUTER.route($PATH, $HANDLER)" },
   { id: "actix-decorator", pattern: "#[$METHOD($PATH)]" },

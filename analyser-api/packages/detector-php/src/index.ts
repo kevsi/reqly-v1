@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { extractParams } from "@analyser/core";
 import type {
   ApiRoute,
   AstGrepMatch,
@@ -119,12 +120,4 @@ export const detectorPhp: Detector = {
   },
 };
 
-function extractParams(pathStr: string): string[] {
-  const params: string[] = [];
-  const re = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(pathStr)) !== null) {
-    params.push(m[1]!);
-  }
-  return params;
-}
+
