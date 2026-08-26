@@ -22,7 +22,11 @@ export interface SubAgentResult {
   usage: { inputTokens: number; outputTokens: number };
 }
 
-/** Garde-fou anti-récursion : un sous-agent ne peut pas déléguer à son tour. */
+/** Garde-fou anti-récursion — deux couches cohérentes :
+ *  - assertDelegationAllowed(depthCourant) : bloque un APPELANT déjà au max
+ *    (le sous-agent, qui reçoit depth=1, est bloqué ici s'il tente delegate) ;
+ *  - assertSpawnAllowed(nouvelleProfondeur) : la CRÉATION d'un sous-agent à
+ *    cette profondeur reste dans la limite (principal depth 0 → spawn 1 : ok). */
 export function assertDelegationAllowed(depth: number): void {
   if (depth >= MAX_DELEGATE_DEPTH) {
     throw new Error(
@@ -31,8 +35,20 @@ export function assertDelegationAllowed(depth: number): void {
   }
 }
 
+export function assertSpawnAllowed(newDepth: number): void {
+  if (newDepth > MAX_DELEGATE_DEPTH) {
+    throw new Error(
+      `Profondeur de délégation maximale dépassée (${newDepth} > ${MAX_DELEGATE_DEPTH}).`,
+    );
+  }
+}
+
 export async function runSubAgent(opts: SubAgentOptions): Promise<SubAgentResult> {
-  assertDelegationAllowed(opts.depth ?? 0);
+  // FIX : on vérifie que la NOUVELLE profondeur reste dans la limite.
+  // L'ancien code réutilisait assertDelegationAllowed sur la valeur DÉJÀ
+  // incrémentée par les handlers (0+1=1 ≥ 1) → toute délégation échouait,
+  // y compris depuis l'agent principal.
+  assertSpawnAllowed(opts.depth ?? 0);
 
   const prompt = `${opts.instruction}\n\nContexte:\n${opts.context}`;
   let text = "";

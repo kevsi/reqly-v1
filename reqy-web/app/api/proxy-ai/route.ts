@@ -42,9 +42,17 @@ const MAX_PREVIOUS_TURNS_BYTES = 200 * 1024;
 export async function POST(req: NextRequest) {
   const rateKey = getRateLimitKey(req);
   const rateResult = await rateLimiter.check(rateKey);
-  if (!rateResult.allowed) {
-    return structuredError("Rate limit exceeded", "RATE_LIMIT_EXCEEDED", 429);
-  }
+    if (!rateResult.allowed) {
+      // P2 — forward Retry-After : le client peut caler son backoff dessus.
+      const retryAfterSec = Math.max(
+        1,
+        Math.ceil((rateResult.resetAt - Date.now()) / 1000),
+      );
+      return NextResponse.json(
+        { error: "Rate limit exceeded", code: "RATE_LIMIT_EXCEEDED" },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+      );
+    }
 
   let rawBody: unknown;
   try {
@@ -72,10 +80,27 @@ export async function POST(req: NextRequest) {
       400,
     );
   }
-  const totalTurnsBytes = previousTurns.reduce(
-    (sum, turn) => sum + (typeof turn.content === "string" ? turn.content.length : 0),
-    0,
-  );
+  // H3 — mesure réelle : arguments des tool calls + contenus des résultats
+  // (l'ancienne somme portait sur `turn.content`, champ inexistant → limite
+  // jamais déclenchée, specs OpenAPI entières rejouées aux providers).
+  const totalTurnsBytes = previousTurns.reduce((sum: number, turn) => {
+    if (typeof turn !== "object" || turn === null) return sum;
+    const t = turn as {
+      assistantToolCalls?: Array<{ arguments?: unknown }>;
+      toolResults?: Array<{ content?: unknown; error?: unknown }>;
+      reasoningContent?: unknown;
+    };
+    let bytes = 0;
+    for (const c of Array.isArray(t.assistantToolCalls) ? t.assistantToolCalls : []) {
+      bytes += typeof c?.arguments === "string" ? c.arguments.length : 0;
+    }
+    for (const r of Array.isArray(t.toolResults) ? t.toolResults : []) {
+      bytes += typeof r?.content === "string" ? r.content.length : 0;
+      bytes += typeof r?.error === "string" ? r.error.length : 0;
+    }
+    bytes += typeof t.reasoningContent === "string" ? t.reasoningContent.length : 0;
+    return sum + bytes;
+  }, 0);
   if (totalTurnsBytes > MAX_PREVIOUS_TURNS_BYTES) {
     return structuredError(
       `Previous turns exceed maximum size of ${MAX_PREVIOUS_TURNS_BYTES} bytes`,

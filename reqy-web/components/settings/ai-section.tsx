@@ -21,7 +21,15 @@ import {
 } from "@/components/ui/card";
 import type { AIProvider } from "@/lib/types";
 import { persistence } from "@/lib/persistence";
-import { saveAIProvider, saveApiKey, saveAiBaseUrl, saveAiModel } from "@/lib/config";
+import {
+  saveAIProvider,
+  saveApiKey,
+  saveAiBaseUrl,
+  saveAiModel,
+  loadApiKey,
+  loadAiBaseUrl,
+  loadAiModel,
+} from "@/lib/config";
 import { AiProviderCard, PROVIDER_INFOS, type ProviderInfo } from "./ai-provider-card";
 import { AiProviderModal } from "./ai-provider-modal";
 import { useTranslation } from "react-i18next";
@@ -55,8 +63,8 @@ interface AISectionProps {
 export default function AISection({
   provider,
   apiKey,
-  aiModel,
-  aiBaseUrl,
+  aiModel: _aiModel,
+  aiBaseUrl: _aiBaseUrl,
   aiAutoApply,
   showAiConfirm,
   aiProviders,
@@ -75,19 +83,21 @@ export default function AISection({
   const [selectedProviderInfo, setSelectedProviderInfo] = useState<ProviderInfo | null>(null);
   const { t } = useTranslation();
 
-  // Track which providers are configured (have an API key saved)
+  // Track which providers are configured (have an API key saved) — lu depuis
+  // le stockage réel pour TOUS les providers : la config est multi-provider,
+  // chaque clé reste en place quand on change de provider actif.
   const [configuredProviders, setConfiguredProviders] = useState<Set<AIProvider>>(() => {
-    // Start with the current provider if it has a key
     const set = new Set<AIProvider>();
     if (apiKey) set.add(provider);
+    for (const info of PROVIDER_INFOS) {
+      if (info.value !== "ollama" && loadApiKey(info.value).length > 0) set.add(info.value);
+    }
     return set;
   });
 
   const handleCardClick = (info: ProviderInfo) => {
-    // Load the values for the clicked provider
-    if (info.value !== provider) {
-      onProviderChange(info.value);
-    }
+    // Configurer un provider ne doit PAS basculer le provider actif :
+    // on ouvre simplement son formulaire pré-rempli avec sa config stockée.
     setSelectedProviderInfo(info);
     setModalOpen(true);
   };
@@ -97,29 +107,32 @@ export default function AISection({
     if (!p) return;
 
     // 1. Persist DIRECTLY to localStorage (immediate, no stale closure risk)
-    saveAIProvider(p);
     saveApiKey(p, config.apiKey);
     saveAiModel(p, config.model);
     if (p === "custom" || p === "openai") {
       saveAiBaseUrl(p, config.baseUrl);
     }
 
-    // 2. Update React state for the current UI
-    setApiKey(config.apiKey);
-    setAiModel(config.model);
-    if (p === "custom" || p === "openai") {
-      setAiBaseUrl(config.baseUrl);
-    }
-    // Switch active provider — onProviderChange reloads from localStorage,
-    // but we've already saved the new values there, so it picks up the fresh data.
-    if (p !== provider) {
-      onProviderChange(p);
+    // 2. Si c'est le provider actif, synchronise l'état UI parent.
+    if (p === provider) {
+      setApiKey(config.apiKey);
+      setAiModel(config.model);
+      if (p === "custom" || p === "openai") {
+        setAiBaseUrl(config.baseUrl);
+      }
     }
 
     // 3. Mark as configured
     if (config.apiKey) {
       setConfiguredProviders((prev) => new Set(prev).add(p));
     }
+  };
+
+  /** Active un provider configuré sans rouvrir son formulaire. */
+  const handleSetActive = (p: AIProvider) => {
+    void saveAIProvider(p);
+    if (p !== provider) onProviderChange(p);
+    setModalOpen(false);
   };
 
   const handleModalDelete = () => {
@@ -134,9 +147,11 @@ export default function AISection({
     }
 
     // Update UI
-    setApiKey("");
-    setAiModel("");
-    setAiBaseUrl("");
+    if (p === provider) {
+      setApiKey("");
+      setAiModel("");
+      setAiBaseUrl("");
+    }
     setConfiguredProviders((prev) => {
       const next = new Set(prev);
       next.delete(p);
@@ -260,15 +275,20 @@ export default function AISection({
         </CardFooter>
       </Card>
 
-      {/* Configuration Modal */}
+      {/* Configuration Modal — pré-rempli avec la config STOCKÉE du provider
+          ciblé (pas seulement celle du provider actif) */}
       {selectedProviderInfo && (
         <AiProviderModal
           open={modalOpen}
           onOpenChange={setModalOpen}
           providerInfo={selectedProviderInfo}
-          currentApiKey={selectedProviderInfo.value === provider ? apiKey : ""}
-          currentModel={selectedProviderInfo.value === provider ? aiModel : ""}
-          currentBaseUrl={selectedProviderInfo.value === provider ? aiBaseUrl : ""}
+          currentApiKey={
+            selectedProviderInfo.value === "ollama" ? "" : loadApiKey(selectedProviderInfo.value)
+          }
+          currentModel={loadAiModel(selectedProviderInfo.value)}
+          currentBaseUrl={loadAiBaseUrl(selectedProviderInfo.value)}
+          isActiveProvider={selectedProviderInfo.value === provider}
+          onSetActive={() => handleSetActive(selectedProviderInfo.value)}
           onSave={handleModalSave}
           onDelete={handleModalDelete}
         />

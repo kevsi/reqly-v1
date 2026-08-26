@@ -116,6 +116,7 @@ async function handleGitDiff(args: Record<string, unknown>): Promise<ToolResult>
 export const GIT_AI_TOOLS: ReqlyTool[] = [
   {
     name: "git_status",
+    title: "Statut Git",
     description:
       "Liste les fichiers modifiés/staged/non-suivis du dépôt Git ouvert dans Reqly, avec la branche courante.",
     parameters: {},
@@ -123,6 +124,7 @@ export const GIT_AI_TOOLS: ReqlyTool[] = [
   },
   {
     name: "git_branches",
+    title: "Branches Git",
     description:
       "Liste les branches locales, la branche courante, les remotes et les compteurs ahead/behind.",
     parameters: {},
@@ -130,6 +132,7 @@ export const GIT_AI_TOOLS: ReqlyTool[] = [
   },
   {
     name: "git_diff",
+    title: "Diff Git",
     description:
       "Diff entre deux révisions du dépôt ouvert. Par défaut : commit parent → working directory. Champs newOid=\"WORKING\" supporté.",
     parameters: {

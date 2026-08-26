@@ -13,11 +13,11 @@ import { REQLY_TOOLS } from "@/lib/llm-tools";
 import { isHighImpactTool, loadPermissions, savePermission } from "@/src/ai/agent/permissions";
 import type { ToolPermission } from "@/src/ai/agent/types";
 
-const LABELS: Record<ToolPermission | "default", string> = {
-  allow: "Toujours autoriser",
-  ask: "Demander",
-  deny: "Toujours refuser",
-  default: "Défaut",
+const LABEL_KEYS: Record<ToolPermission | "default", string> = {
+  allow: "ai.permissions.allow",
+  ask: "ai.permissions.ask",
+  deny: "ai.permissions.deny",
+  default: "ai.permissions.default",
 };
 
 interface Props {
@@ -49,18 +49,24 @@ export function AiPermissionsPopover({ onClose }: Props) {
         </div>
       )}
       <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
-        {REQLY_TOOLS.map((t) => {
-          const persisted = perms[t.name] ?? "default";
+        {REQLY_TOOLS.map((tool) => {
+          const persisted = perms[tool.name] ?? "default";
           const current: ToolPermission | "default" =
-            isHighImpactTool(t.name) && persisted === "allow" ? "ask" : persisted;
+            isHighImpactTool(tool.name) && persisted === "allow" ? "ask" : persisted;
           return (
             <div
               key={t.name}
               className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-card/50 px-2.5 py-2 transition-colors hover:border-border/80"
             >
               <div className="min-w-0">
-                <p className="truncate font-mono text-[11px] text-foreground">{t.name}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{t.description}</p>
+                <p className="truncate text-[12px] font-medium text-foreground">{tool.title}</p>
+                <p
+                  className="truncate font-mono text-[10px] text-muted-foreground/70"
+                  title={tool.name}
+                >
+                  {tool.name}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">{tool.description}</p>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -70,36 +76,36 @@ export function AiPermissionsPopover({ onClose }: Props) {
                     size="sm"
                     className="h-6 px-2 text-[10px] shrink-0"
                   >
-                    {LABELS[current]}
+                    {t(LABEL_KEYS[current])}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  {!isHighImpactTool(t.name) && (
+                  {!isHighImpactTool(tool.name) && (
                     <DropdownMenuItem
                       onSelect={() => {
-                        if (savePermission(t.name, "allow")) {
-                          setPerms({ ...perms, [t.name]: "allow" });
+                        if (savePermission(tool.name, "allow")) {
+                          setPerms({ ...perms, [tool.name]: "allow" });
                         }
                       }}
                     >
-                      {LABELS.allow}
+                      {t(LABEL_KEYS.allow)}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
                     onSelect={() => {
-                      savePermission(t.name, "ask");
-                      setPerms({ ...perms, [t.name]: "ask" });
+                      savePermission(tool.name, "ask");
+                      setPerms({ ...perms, [tool.name]: "ask" });
                     }}
                   >
-                    {LABELS.ask}
+                    {t(LABEL_KEYS.ask)}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
-                      savePermission(t.name, "deny");
-                      setPerms({ ...perms, [t.name]: "deny" });
+                      savePermission(tool.name, "deny");
+                      setPerms({ ...perms, [tool.name]: "deny" });
                     }}
                   >
-                    {LABELS.deny}
+                    {t(LABEL_KEYS.deny)}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

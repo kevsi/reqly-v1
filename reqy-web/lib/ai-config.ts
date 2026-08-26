@@ -1,4 +1,10 @@
-import { loadAIProvider, loadApiKey, loadAiModel, loadOllamaConfig } from "@/lib/config";
+import {
+  loadAIProvider,
+  loadApiKey,
+  loadAiBaseUrl,
+  loadAiModel,
+  loadOllamaConfig,
+} from "@/lib/config";
 import type { AIProvider } from "@/lib/types";
 import type { AiProxyPayload } from "@/lib/ai-request-generator";
 
@@ -20,6 +26,41 @@ export function isAiConfigured(): boolean {
   const provider = loadAIProvider();
   if (provider === "ollama") return true;
   return loadApiKey(provider).trim().length > 0;
+}
+
+/** Configuration IA résolue — source unique pour toutes les surfaces
+ *  (sidebar, modal, runner). Remplace les lectures ad hoc divergentes. */
+export interface ResolvedAiConfig {
+  provider: ReturnType<typeof loadAIProvider>;
+  apiKey: string;
+  model?: string;
+  /** Base URL OpenAI-compatible : openai, custom et grok uniquement. */
+  openaiUrl?: string;
+  host?: string;
+  port?: number;
+}
+
+export function resolveAiConfig(): ResolvedAiConfig {
+  const provider = loadAIProvider();
+  const apiKey = loadApiKey(provider) ?? "";
+  const baseUrl = loadAiBaseUrl(provider);
+  const modelOverride = loadAiModel(provider);
+  const ollama = loadOllamaConfig();
+
+  return {
+    provider,
+    apiKey: apiKey.trim(),
+    model:
+      modelOverride?.trim() ||
+      (provider === "ollama" ? ollama.model : undefined) ||
+      DEFAULT_MODELS[provider],
+    openaiUrl:
+      provider === "openai" || provider === "custom" || provider === "grok"
+        ? baseUrl?.trim() || undefined
+        : undefined,
+    host: provider === "ollama" ? ollama.host || "127.0.0.1" : undefined,
+    port: provider === "ollama" ? ollama.port ?? 11434 : undefined,
+  };
 }
 
 export function buildAiProxyPayload(system: string, message: string): AiProxyPayload | null {

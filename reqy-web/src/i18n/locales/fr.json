@@ -85,6 +85,8 @@
       "confirmAndEnable": "Confirmer et activer",
       "save": "Sauvegarder",
       "activeProvider": "Fournisseur actif :",
+      "setActive": "Définir comme actif",
+      "setActiveTitle": "Utiliser ce fournisseur pour l'assistant IA",
       "configured": "Configuré",
       "desktopOnly": "App desktop requise",
       "providers": {
@@ -885,7 +887,15 @@
     "download": "Télécharger",
     "noMedia": "Lecture multimédia non disponible",
     "previewImage": "Image d'aperçu {{index}}",
-    "copyHeader": "Copier cet en-tête"
+    "copyHeader": "Copier cet en-tête",
+    "response.tabTimeline": "Chronologie",
+    "response.tabConsole": "Console",
+    "response.timelineEmpty": "Envoyez une requête pour voir le breakdown réseau",
+    "response.consoleEmpty": "Aucun log — les scripts peuvent utiliser console.log()",
+    "tabTimeline": "Chronologie",
+    "tabConsole": "Console",
+    "timelineEmpty": "Envoyez une requête pour voir le breakdown réseau",
+    "consoleEmpty": "Aucun log — les scripts peuvent utiliser console.log()"
   },
   "auth": {
     "accordion": "Auth",
@@ -1192,6 +1202,11 @@
     "stopGenerating": "Arrêter la génération",
     "stop": "Arrêter",
     "send": "Envoyer",
+    "attach": "Joindre",
+    "attachTitle": "Joindre des fichiers",
+    "enterToSend": "Entrée pour envoyer",
+    "fileTooLarge": "ignoré : > {{max}} Ko",
+    "fileBinary": "binaire non lisible",
     "generatingResponse": "Génération de la réponse…",
     "hint": "Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne · ⌘I pour fermer"
   },
@@ -1434,7 +1449,14 @@
     "resume": "Reprendre",
     "eventsPerSec": "{{rate}} év/s",
     "statsReconnects_one": "{{count}} reconnexion",
-    "statsReconnects_other": "{{count}} reconnexions"
+    "statsReconnects_other": "{{count}} reconnexions",
+    "openStream": "Ouvrir le flux SSE",
+    "copy": "Copier",
+    "copied": "Copié ✓",
+    "showMore": "Tout afficher",
+    "showLess": "Réduire",
+    "statsBytes": "{{bytes}}",
+    "statsEvents": "{{count}} événements"
   },
   "offline": {
     "replayTitle": "Reconnexion",
@@ -1956,6 +1978,24 @@
       "executionError": "La requête n'a pas pu être exécutée : {{error}}",
       "runRequestMessage": "Exécuter {{method}} {{url}}"
     },
+    "artifact": {
+      "title": "Artefact",
+      "previewGenerated": "Aperçu généré",
+      "codeBlock": "Bloc de code",
+      "tabPreview": "Aperçu",
+      "tabCode": "Code",
+      "download": "Télécharger",
+      "copyFailed": "Copie impossible"
+    },
+    "modelPicker": {
+      "aria": "Choisir le modèle IA",
+      "loading": "Modèle…",
+      "keyMissing": "clé manquante",
+      "customInvalid": "Identifiant invalide (pas d'espaces)",
+      "customItem": "Modèle personnalisé…",
+      "customPlaceholder": "ex : gpt-4o-mini-2024-07-18",
+      "manageSettings": "Configurer un autre provider…"
+    },
     "sidebar": {
       "title": "Assistant IA",
       "closePanelAria": "Fermer le panneau de l'assistant",
@@ -1969,8 +2009,13 @@
       "suggestion1": "Exécute GET /api/users",
       "suggestion2": "Crée une collection 'Tests API'",
       "suggestion3": "Importe le projet depuis GitHub",
+      "shortcutsHint": "Tapez / pour les commandes · @ pour joindre du contexte",
+      "configTitle": "Configurez l'accès IA",
+      "configDesc": "Ajoutez une clé API (ou Ollama) dans les réglages pour activer l'assistant.",
       "consentNote": "L'IA n'agit que sur demande explicite",
       "retry": "Réessayer",
+      "copyError": "Copier l'erreur",
+      "actionCompact": "Compacter la conversation",
       "configBannerTitle": "Aucune clé IA configurée pour cet espace.",
       "configCta": "Configurer l'accès IA"
     },
@@ -1987,6 +2032,7 @@
       "placeholder": "Toujours valider les bodies JSON.\nNe jamais exécuter de DELETE sans confirmation."
     },
     "plan": {
+      "title": "Plan proposé",
       "cancelTitle": "Annuler le plan",
       "approve": "Approuver & exécuter",
       "executing": "Exécution…"
@@ -2003,6 +2049,10 @@
       "controls": "Contrôles",
       "autoApplyOn": "Approbation automatique",
       "confirmationRequired": "Confirmation requise",
+      "batchConfirm": "Confirmer en lot",
+      "batchConfirmDesc": "Un seul « Confirmer » approuve toute la série en attente — sans activer l'approbation automatique permanente.",
+      "batchConfirmOn": "Confirmation en lot active",
+      "batchConfirmMutedByAutoApply": "Inactif tant que l'auto-approbation est activée.",
       "planModeTitle": "Mode Plan — l'IA propose un plan avant d'agir",
       "plan": "Plan",
       "actModeTitle": "Mode Action — l'IA agit directement",
@@ -2019,7 +2069,15 @@
       "executing": "Exécution…",
       "done": "Terminé",
       "inProgress": "En cours",
-      "waiting": "En attente"
+      "waiting": "En attente",
+      "collapsedOne": "1 exécution terminée",
+      "collapsedMany": "{{count}} exécutions terminées",
+      "collapsedErrors": "Terminé avec {{count}} erreur(s)",
+      "showDetail": "Voir le détail",
+      "hideDetail": "Réduire",
+      "confirmAll": "Tout confirmer",
+      "confirmAllTitle": "Approuver aussi toutes les actions suivantes en attente de cette série",
+      "waitingLive": "Confirmation requise"
     },
     "modal": {
       "responseHeaders": "Headers de réponse",
@@ -2039,7 +2097,11 @@
       "unhelpfulTitle": "Ce diagnostic n'est pas pertinent"
     },
     "permissions": {
-      "closeAria": "Fermer les permissions"
+      "closeAria": "Fermer les permissions",
+      "allow": "Toujours autoriser",
+      "ask": "Demander",
+      "deny": "Toujours refuser",
+      "default": "Défaut"
     },
     "hooks": {
       "requestLabel": "Requête HTTP",
@@ -2048,6 +2110,8 @@
       "confirmRequired": "Confirmation requise par la politique de permissions.",
       "analysisDone": "Analyse terminée",
       "noModelResponse": "Aucune réponse du modèle (timeout).",
+      "retrying": "Nouvelle tentative dans {{seconds}} s…",
+      "interrupted": "réponse interrompue",
       "planModeCount": "⏸ Mode plan — {{count}} action(s) proposée(s)",
       "missingApiKey": "Clé API manquante dans Settings",
       "configureProvider": "Configure ton provider IA dans Settings"

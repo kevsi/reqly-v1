@@ -6,31 +6,48 @@ import { useRequestStore } from "@/hooks/use-request-store";
 import i18n from "@/src/i18n";
 import { streamLLM } from "@/src/ai/cloud-engine/llm";
 import { buildRequestContext } from "@/src/ai/local-engine/context";
+import { isAiConfigured, resolveAiConfig } from "@/lib/ai-config";
 import {
-  loadAIProvider,
-  loadApiKey,
-  loadAiBaseUrl,
-  loadAiModel,
-  loadOllamaConfig,
-} from "@/lib/config";
-import { isAiConfigured } from "@/lib/ai-config";
+  classifyThrownError,
+  ProviderErrorCode,
+} from "@/src/ai/cloud-engine/provider-errors";
 import {
   REQLY_TOOLS,
   executeAuthorizedToolCall,
+  getToolTitle,
   maskSensitiveObject,
   type ToolResult,
   type ToolCall,
 } from "@/lib/llm-tools";
 import type { ProcessStep } from "@/src/ai/components/assistant-steps-renderer";
-import type { ChatMessage, ChatMessagePhase } from "@/src/ai/components/ai-sidebar-types";
+import type {
+  ChatMessage,
+  ChatMessagePhase,
+  FileAttachment,
+} from "@/src/ai/components/ai-sidebar-types";
 import type { ApprovalSource } from "@/src/ai/agent/permissions";
 import { loadRules, buildRulesSystemPrompt } from "@/src/ai/agent/rules";
 import { attachmentsToPrompt } from "@/src/ai/agent/context-picker";
+import { extractArtifacts } from "@/src/ai/agent/artifacts";
 import { emptyUsage, addUsage } from "@/src/ai/agent/usage";
 import { createDefaultCommands, type SlashCommandContext } from "@/src/ai/agent/commands";
 import { extractTextToolCalls, stripToolCallText } from "@/src/ai/agent/text-tools";
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
 import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
+import { persistence } from "@/lib/persistence";
+import {
+  MAX_FILE_BYTES,
+  MAX_FILE_TEXT_CHARS,
+  MAX_FILES_COUNT,
+} from "@/src/ai/agent/file-limits";
+
+/** Décision de confirmation utilisateur : simple ou « toute la série ». */
+interface ConfirmDecision {
+  confirmed: boolean;
+  all: boolean;
+}
+/** Clé de persistance de l'option « Confirmer en lot » (≠ auto-approval). */
+const BATCH_CONFIRM_KEY = "probe_ai_batch_confirm";
 
 const STALL_TIMEOUT_MS = 45_000;
 
@@ -51,8 +68,12 @@ function buildStepState(
   }
   return {
     type: "create",
-    label: tc.name,
-    status: result.error ? "error" : "done",
+    // L'erreur brute dans le libellé : sans elle, la timeline affiche
+    // « — Erreur » sans dire pourquoi (frustration debug).
+    label: result.error
+      ? `${getToolTitle(tc.name)} — ${result.error.slice(0, 140)}`
+      : getToolTitle(tc.name),
+    status: result.error ? ("error" as const) : ("done" as const),
   };
 }
 
@@ -63,6 +84,8 @@ export function useAiSidebarChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Code d'erreur classifié (rate_limit, context_too_long…) → actions banner. */
+  const [errorCode, setErrorCode] = useState<ProviderErrorCode | null>(null);
   // R19 — configuration IA absente/invalide : la sidebar affiche alors un CTA
   // « Configurer l'accès IA » au lieu de laisser filer une erreur proxy brute.
   const [missingConfig, setMissingConfig] = useState(false);
@@ -88,17 +111,47 @@ export function useAiSidebarChat() {
     reasoningContent?: string;
   } | null>(null);
   const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
+  const [files, setFiles] = useState<FileAttachment[]>([]);
   const [sessionUsage, setSessionUsage] = useState<AgentUsage>(emptyUsage());
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [rulesPanelOpen, setRulesPanelOpen] = useState(false);
   const [permissionsPanelOpen, setPermissionsPanelOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+  const confirmResolverRef = useRef<((decision: ConfirmDecision) => void) | null>(null);
+  // Exécution d'une action confirmée en cours (loader sur le bouton).
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  // Option « Confirmer en lot » : un seul Confirmer approuve la série entière
+  // en attente — SANS activer l'auto-approbation permanente.
+  const [batchConfirm, setBatchConfirmState] = useState<boolean>(() => {
+    try {
+      return persistence.getItem<boolean>(BATCH_CONFIRM_KEY) ?? false;
+    } catch {
+      return false;
+    }
+  });
+  const batchConfirmRef = useRef(batchConfirm);
+  useEffect(() => {
+    batchConfirmRef.current = batchConfirm;
+  }, [batchConfirm]);
+  const setBatchConfirm = useCallback((v: boolean) => {
+    setBatchConfirmState(v);
+    void persistence.setItem(BATCH_CONFIRM_KEY, v).catch(() => {});
+  }, []);
   const pendingPlanRef = useRef<{ toolCalls: ToolCall[]; reasoningContent?: string } | null>(null);
   const agentModeRef = useRef<AgentMode>(agentMode);
   useEffect(() => {
     agentModeRef.current = agentMode;
   }, [agentMode]);
+  // Génération courante : incrémenté par stopStreaming pour invalider toute
+  // boucle sendMessage en vol (y compris entre deux tours LLM, pendant une
+  // exécution d'outil ou une attente de confirmation).
+  const generationIdRef = useRef(0);
+  // Miroir des messages pour les handlers (édition, retry, plan) : lit toujours
+  // l'état courant, jamais une closure périmée de useCallback.
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   // Restore mode to previous value after plan execution completes.
   const restoreModeRef = useRef<AgentMode | null>(null);
   // Wired by the sidebar to call history.handleNewSession on /new.
@@ -115,13 +168,28 @@ export function useAiSidebarChat() {
   // Note: `messagesEndRef` pointe sur le conteneur scrollable lui-même (voir
   // AiSidebar). `scrollIntoView` ne scrollerait pas son propre contenu — on
   // positionne donc `scrollTop` sur la hauteur totale du contenu.
-  // On ne force le défilement que si l'utilisateur est déjà proche du bas,
-  // pour ne pas le tirer vers le bas pendant qu'il remonte lire du contenu.
+  // Deux comportements distincts :
+  //  - scrollToBottom (gardé) : pendant le streaming, on ne suit que si
+  //    l'utilisateur est déjà proche du bas (il peut remonter lire) ;
+  //  - forceScrollToBottom : À L'ENVOI, toujours — l'utilisateur doit voir
+  //    son propre message et la réponse qui arrive, même s'il lisait plus haut.
   const scrollToBottom = useCallback(() => {
     const el = messagesEndRef.current;
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
     if (nearBottom) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const forceScrollToBottom = useCallback(() => {
+    // Double passe : après commit React (rAF) + après layout markdown (80 ms).
+    requestAnimationFrame(() => {
+      const el = messagesEndRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+    window.setTimeout(() => {
+      const el = messagesEndRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 80);
   }, []);
 
   useEffect(() => {
@@ -218,12 +286,17 @@ export function useAiSidebarChat() {
         skipUserMessage?: boolean;
         /** Override des attachments à envoyer au modèle (utilisé par l'édition). */
         attachmentsOverride?: ContextAttachment[];
+        /** Fichiers joints au message (injectés dans le prompt). */
+        filesOverride?: FileAttachment[];
+        /** Historique explicite (édition/retry) — évite les closures périmées. */
+        historyOverride?: ChatMessage[];
         /** `reasoning_content` du tour de plan (DeepSeek thinking). */
         reasoningContent?: string;
       },
     ) => {
       if (!content.trim() || isLoading) return;
       setError(null);
+        setErrorCode(null);
       setMissingConfig(false);
 
       // R19 — pré-check config (même validation que parseAiConfig, via
@@ -234,16 +307,42 @@ export function useAiSidebarChat() {
         return;
       }
 
+      // H1 — génération identifiée : stopStreaming incrémente generationIdRef,
+      // tout await suivi d'un check isStale() abandonne proprement la boucle.
+      const myGeneration = generationIdRef.current;
+      const isStale = () => generationIdRef.current !== myGeneration;
+
       const effectiveAttachments = options?.attachmentsOverride ?? attachments;
+      const effectiveFiles = options?.filesOverride ?? files;
       if (!options?.planCalls?.length && !options?.skipUserMessage) {
         const userMsg: ChatMessage = {
           role: "user",
           content: content.trim(),
           attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
+          files: effectiveFiles.length > 0 ? effectiveFiles : undefined,
         };
-        setMessages([...messages, userMsg]);
+        setMessages((prev) => [...prev, userMsg]);
       }
+      setFiles([]);
       setIsLoading(true);
+
+      // Flux conversationnel (logique salutation vs action) : le message
+      // assistant est créé VIDE en phase « awaiting_response » — l'indicateur
+      // typing suffit pour une réponse simple. Les étapes (réflexion, outils,
+      // confirmations) n'apparaissent que si des outils sont réellement
+      // appelés : aucune timeline pour un « bonjour ».
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === "assistant") return prev;
+        return [
+          ...prev,
+          { role: "assistant", content: "", steps: [], phase: "awaiting_response" },
+        ];
+      });
+
+      // Scroll forcé : le message envoyé et la réponse doivent être visibles,
+      // même si l'utilisateur lisait plus haut dans la conversation.
+      forceScrollToBottom();
 
       // ── Step builder: accumulates process steps and syncs to the UI ──
       const steps: ProcessStep[] = [];
@@ -311,17 +410,13 @@ export function useAiSidebarChat() {
         syncSteps();
       };
 
-      try {
-        // Step 0: through
-        addStep("through", "Through...");
+      // M2 — config résolue par la source unique partagée (même sémantique
+      // que le runner : base URL pour openai/custom/grok, fallback modèles).
+      // Hors du try : le catch externe classifie l'erreur avec ce provider.
+      const cfg = resolveAiConfig();
 
-        // Load AI config from settings
-        const provider = loadAIProvider();
-        const apiKey = loadApiKey(provider);
-        const aiModel = loadAiModel(provider);
-        const aiBaseUrl = loadAiBaseUrl(provider);
-        const ollamaConfig = loadOllamaConfig();
-        setModelUsed(aiModel || null);
+      try {
+        setModelUsed(cfg.model ?? null);
 
         // Get fresh context for prompt building
         const fresh = useRequestStore.getState();
@@ -348,8 +443,6 @@ export function useAiSidebarChat() {
             : undefined,
         );
 
-        addStep("through", "Analyse en cours…");
-
         const rulesFile = loadRules(fresh.activeWorkspaceId ?? "ws-personal");
         const rulesPrompt = buildRulesSystemPrompt(rulesFile);
         const attachmentsPrompt = attachmentsToPrompt(effectiveAttachments);
@@ -369,10 +462,10 @@ export function useAiSidebarChat() {
         ].join("\n\n");
 
         // ── Conversation memory: inject prior messages for context ──
-        // Exclude the message being sent to avoid duplication.
-        let priorMessages = messages;
+        // M9 — historique explicite si fourni (édition/retry), sinon miroir ref.
+        let priorMessages = options?.historyOverride ?? messagesRef.current;
         if (options?.skipUserMessage || options?.planCalls?.length) {
-          priorMessages = messages.slice(0, -1);
+          priorMessages = priorMessages.slice(0, -1);
         }
         const transcript = priorMessages
           .slice(-8)
@@ -384,10 +477,32 @@ export function useAiSidebarChat() {
           .filter(Boolean)
           .join("\n\n");
 
+        // Fichiers joints : blocs de code injectés après les attachments.
+        const filesPrompt = effectiveFiles
+          .map((f) => {
+            if (f.text) {
+              return `[Fichier joint: ${f.name} (${f.mime})]\n\`\`\`\n${f.text}\n\`\`\``;
+            }
+            const reason =
+              f.unreadableReason === "too_large"
+                ? `trop volumineux (${Math.round(f.size / 1024)} Ko, max ${Math.round(MAX_FILE_BYTES / 1024)} Ko)`
+                : "format binaire non lisible en texte";
+            return `[Fichier joint: ${f.name} — ${reason}]`;
+          })
+          .join("\n\n");
+
+        // Instruction système dédiée quand des fichiers lisibles accompagnent
+        // la demande : sans cela le modèle peut ignorer les blocs ci-dessous.
+        const filesSystemNote = effectiveFiles.some((f) => f.text)
+          ? "Des fichiers sont joints à la demande : leur contenu complet est fourni dans des blocs « [Fichier joint: …] ». Appuie-toi sur ce contenu pour répondre (analyse, corrections, extraits cités)."
+          : null;
+        const systemPromptFinal = [systemPrompt, filesSystemNote].filter(Boolean).join("\n\n");
+
         const contentWithContext = [
           transcript ? `## Conversation précédente\n${transcript}` : null,
           content,
           attachmentsPrompt,
+          filesPrompt || null,
         ]
           .filter(Boolean)
           .join("\n\n");
@@ -407,6 +522,8 @@ export function useAiSidebarChat() {
         let retriedWithoutTools = false;
 
         const runTurn = async () => {
+          // H1 — génération invalidée par Stop : ne pas relancer de tour.
+          if (isStale()) return;
           // Texte du tour courant uniquement : on remplace le texte des tours
           // précédents (narration « je vais créer… ») pour que le message final
           // ne contienne que la réponse du dernier tour, pas un collage des
@@ -415,23 +532,22 @@ export function useAiSidebarChat() {
           const controller = new AbortController();
           abortRef.current = controller;
           const opts = {
-            provider,
-            apiKey,
-            model: aiModel || undefined,
-            openaiUrl:
-              provider === "openai" || provider === "custom" ? aiBaseUrl || undefined : undefined,
-            host: ollamaConfig?.host,
-            port: ollamaConfig?.port,
+            provider: cfg.provider,
+            apiKey: cfg.apiKey,
+            model: cfg.model,
+            openaiUrl: cfg.openaiUrl,
+            host: cfg.host,
+            port: cfg.port,
             question: contentWithContext,
             ctx: requestCtx,
-            system: systemPrompt,
+            system: systemPromptFinal,
             signal: controller.signal,
             tools: retriedWithoutTools ? undefined : REQLY_TOOLS,
             tool_choice: retriedWithoutTools ? undefined : "auto",
             previousTurns: previousTurns.length > 0 ? [...previousTurns] : undefined,
           };
 
-          const stream = streamLLM(opts);
+          let stream = streamLLM(opts);
           const toolCallsThisTurn: Array<{
             callId: string;
             name: string;
@@ -452,9 +568,10 @@ export function useAiSidebarChat() {
             }
           }, 5000);
 
-          try {
-            for await (const token of stream) {
+          const consumeStream = async (current: ReturnType<typeof streamLLM>) => {
+            for await (const token of current) {
               lastActivity = Date.now();
+              if (isStale()) return;
               if (token.type === "usage") {
                 setSessionUsage((prev) => addUsage(prev, token.usage));
                 setMessages((prev) => {
@@ -495,6 +612,37 @@ export function useAiSidebarChat() {
                 setPhase("tool_calling");
               }
             }
+          };
+
+          try {
+            // P2.7 — retry automatique sur 429/5xx/timeout réseau : max 2
+            // relances, UNIQUEMENT si rien n'a encore été reçu (pas de texte
+            // partiel ni de tool calls), avec backoff / Retry-After.
+            for (let attempt = 0; ; attempt++) {
+              try {
+                await consumeStream(stream);
+                break;
+              } catch (e) {
+                const cls = classifyThrownError(e, opts.provider);
+                const canRetry =
+                  cls.retryable &&
+                  attempt < 2 &&
+                  !didTimeout &&
+                  fullText === "" &&
+                  toolCallsThisTurn.length === 0 &&
+                  !isStale();
+                if (!canRetry) throw e;
+                const wait = Math.min(cls.retryAfterMs ?? 1200 * (attempt + 1), 6000);
+                steps.push({
+                  type: "through",
+                  label: i18n.t("ai.hooks.retrying", { seconds: Math.round(wait / 1000) }),
+                  status: "done",
+                });
+                syncSteps();
+                await new Promise((r) => setTimeout(r, wait));
+                stream = streamLLM(opts);
+              }
+            }
           } catch (e: unknown) {
             if (didTimeout) {
               steps.push({
@@ -533,6 +681,9 @@ export function useAiSidebarChat() {
           } finally {
             clearInterval(stallTimer);
           }
+
+          // H1 — Stop pendant le stream : ne pas enchaîner tools/texte.
+          if (isStale()) return;
 
           if (toolCallsThisTurn.length === 0) {
             // Text-fallback: some models write tool calls as plain text
@@ -611,6 +762,17 @@ export function useAiSidebarChat() {
           preApproved = false,
           reasoningContent?: string,
         ) => {
+          // Flux logique : la réflexion n'est affichée QUE si des outils sont
+          // appelés. Première exécution d'outils → insérer l'étape « Réflexion »
+          // (déjà terminée : elle a eu lieu pendant la génération), puis les
+          // étapes d'outils suivent dans l'ordre réflexion → outils → réponse.
+          if (!steps.some((s) => s.type === "through")) {
+            steps.push({
+              type: "through",
+              label: i18n.t("ai.hooks.analysisDone"),
+              status: "done",
+            });
+          }
           // Le raisonnement (« Through… ») est terminé dès que les outils
           // commencent : résoudre l'étape pour que le spinner ne tourne pas
           // en parallèle des étapes d'exécution (mode timeline).
@@ -637,11 +799,15 @@ export function useAiSidebarChat() {
           const results: ToolResult[] = [];
           for (let i = 0; i < calls.length; i++) {
             const tc = calls[i];
+            // H1 — Stop pendant la file d'outils : abandon immédiat.
+            if (isStale()) return;
             try {
               const result = await gatedExecute(
                 tc,
                 preApproved ? "plan" : autoApply ? "autoApply" : "none",
               );
+              // H1 — Stop pendant l'exécution de l'outil lui-même.
+              if (isStale()) return;
               const toolUsage = result.usage;
               if (toolUsage) {
                 setSessionUsage((prev) => addUsage(prev, toolUsage));
@@ -654,7 +820,7 @@ export function useAiSidebarChat() {
                 // s'affichent en erreur alors qu'ils attendent simplement leur tour.
                 steps[steps.length - calls.length + i] = {
                   type: "create",
-                  label: `${tc.name} — confirmation requise`,
+                  label: `${getToolTitle(tc.name)} — confirmation requise`,
                   status: "awaiting_confirmation",
                 };
               } else {
@@ -669,7 +835,7 @@ export function useAiSidebarChat() {
               });
               steps[steps.length - calls.length + i] = {
                 type: "error",
-                label: `${tc.name} — Erreur`,
+                label: `${getToolTitle(tc.name)} — Erreur`,
                 status: "error",
               };
             }
@@ -679,6 +845,9 @@ export function useAiSidebarChat() {
           // Check for requireConfirmation — await user confirmation via UI buttons
           let confirmIdx = results.findIndex((r) => r.requireConfirmation);
           const confirmedIndices = new Set<number>();
+          // Mode lot : un Confirmer approuve aussi les suivants de la série
+          // (bouton dédié OU option « Confirmer en lot » activée).
+          let batchApprove = false;
           while (confirmIdx !== -1) {
             // Garde-fou anti-boucle (bug #2) : si un même appel d'outil redemande
             // confirmation après avoir déjà été validé (handler ignorant `confirmed`),
@@ -692,47 +861,67 @@ export function useAiSidebarChat() {
               };
               steps[steps.length - calls.length + confirmIdx] = {
                 type: "error",
-                label: `${calls[confirmIdx].name} — confirmation non honorée`,
+                label: `${getToolTitle(calls[confirmIdx].name)} — confirmation non honorée`,
                 status: "error",
               };
               syncSteps();
               break;
             }
             const targetTc = calls[confirmIdx];
-            steps[steps.length - calls.length + confirmIdx] = {
-              type: "create",
-              label: `${targetTc.name} — confirmation requise`,
-              status: "awaiting_confirmation",
-            };
-            syncSteps();
-            // isLoading stays true: keeps input disabled so no new message
-            // can be sent while a confirmation is pending (race fix).
-            const confirmed = await new Promise<boolean>((resolve) => {
-              confirmResolverRef.current = resolve;
-            });
-            confirmResolverRef.current = null;
-            if (!confirmed) {
+            if (!batchApprove) {
               steps[steps.length - calls.length + confirmIdx] = {
-                type: "error",
-                label: `${targetTc.name} — annulé`,
-                status: "error",
+                type: "create",
+                label: `${getToolTitle(targetTc.name)} — confirmation requise`,
+                status: "awaiting_confirmation",
               };
-              // Les outils suivants de la file attendaient aussi une confirmation :
-              // les marquer annulés aussi, sinon ils restent affichés « en attente »
-              // sans boutons alors que le flux est arrêté.
-              for (let j = confirmIdx + 1; j < results.length; j++) {
-                if (results[j].requireConfirmation) {
-                  steps[steps.length - calls.length + j] = {
-                    type: "error",
-                    label: `${calls[j].name} — annulé`,
-                    status: "error",
-                  };
-                }
-              }
               syncSteps();
-              return;
+              // isLoading stays true: keeps input disabled so no new message
+              // can be sent while a confirmation is pending (race fix).
+              const decision = await new Promise<ConfirmDecision>((resolve) => {
+                confirmResolverRef.current = resolve;
+              });
+              confirmResolverRef.current = null;
+              // H1 — Stop pendant l'attente : abandon (stopStreaming a résolu
+              // {confirmed:false} et invalidé la génération).
+              if (!decision.confirmed || isStale()) {
+                steps[steps.length - calls.length + confirmIdx] = {
+                  type: "error",
+                  label: `${getToolTitle(targetTc.name)} — annulé`,
+                  status: "error",
+                };
+                // Les outils suivants de la file attendaient aussi une confirmation :
+                // les marquer annulés aussi, sinon ils restent affichés « en attente »
+                // sans boutons alors que le flux est arrêté.
+                for (let j = confirmIdx + 1; j < results.length; j++) {
+                  if (results[j].requireConfirmation) {
+                    steps[steps.length - calls.length + j] = {
+                      type: "error",
+                      label: `${getToolTitle(calls[j].name)} — annulé`,
+                      status: "error",
+                    };
+                  }
+                }
+                syncSteps();
+                return;
+              }
+              if (decision.all || batchConfirmRef.current) batchApprove = true;
+            } else {
+              // Approuvé en lot : montrer que l'action s'exécute (pas de boutons).
+              steps[steps.length - calls.length + confirmIdx] = {
+                type: "create",
+                label: `${getToolTitle(targetTc.name)}`,
+                status: "in_progress",
+              };
+              syncSteps();
             }
-            const result = await gatedExecute(targetTc, "user");
+            setConfirmBusy(true);
+            let result: ToolResult;
+            try {
+              result = await gatedExecute(targetTc, "user");
+            } finally {
+              setConfirmBusy(false);
+            }
+            if (isStale()) return;
             const toolUsage = result.usage;
             if (toolUsage) {
               setSessionUsage((prev) => addUsage(prev, toolUsage));
@@ -766,6 +955,9 @@ export function useAiSidebarChat() {
           // à la place de la bulle vide, que le provider stream ou non.
           setPhase("awaiting_response");
 
+          // H1 — Stop pendant les outils : ne pas relancer de tour LLM.
+          if (isStale()) return;
+
           // Continue loop
           await runTurn();
         };
@@ -798,6 +990,13 @@ export function useAiSidebarChat() {
         // ── Resolve the "Through…" spinner so it doesn't loop forever ──
         finishThrough();
 
+        // H1 — génération annulée : ne pas écraser l'état UI final.
+        if (isStale()) return;
+
+        // ── Artefacts : blocs de code notables promus en cartes + panneau ──
+        const extracted = extractArtifacts(fullText);
+        const finalText = extracted.artifacts.length > 0 ? extracted.text : fullText;
+
         // ── Set final content ────────────────────────────────
         setMessages((prev) => {
           const copy = [...prev];
@@ -805,15 +1004,17 @@ export function useAiSidebarChat() {
           if (last && last.role === "assistant") {
             copy[copy.length - 1] = {
               ...last,
-              content: fullText,
+              content: finalText,
               steps: [...steps],
+              artifacts: extracted.artifacts.length > 0 ? extracted.artifacts : undefined,
               phase: "done",
             };
           } else {
             copy.push({
               role: "assistant",
-              content: fullText,
+              content: finalText,
               steps: [...steps],
+              artifacts: extracted.artifacts.length > 0 ? extracted.artifacts : undefined,
               phase: "done",
             });
           }
@@ -836,25 +1037,32 @@ export function useAiSidebarChat() {
             return copy;
           });
         } else {
-          const msg = err instanceof Error ? err.message : "Erreur de communication avec l'IA";
-          setError(msg);
+          // P2.5 — erreur classifiée : message FR actionnable + code exposé à
+          // la banner (actions contextuelles Settings / Compact / Session).
+          const cls = classifyThrownError(err, cfg.provider);
+          setError(cls.userMessage);
+          setErrorCode(cls.code);
           // Resolve any in-flight steps so the spinners don't stay stuck forever.
           for (const s of steps) {
             if (s.status === "in_progress") {
               s.status = "error";
-              s.label = "Erreur";
+              s.label = i18n.t("common.error");
             }
           }
-          steps.push({ type: "error", label: msg, status: "error" });
-          // Show error in the steps timeline and the error banner —
-          // leave the bubble content empty so the error is not duplicated.
+          steps.push({ type: "error", label: cls.userMessage, status: "error" });
+          // P1.3 — le texte déjà streamé est PRÉSERVÉ (aligné sur le chemin
+          // stall-timeout) : on n'efface plus la réponse partielle.
           setMessages((prev) => {
             const copy = [...prev];
             const last = copy[copy.length - 1];
+            const partial =
+              last && last.role === "assistant" && last.content
+                ? `${last.content}\n\n*(${i18n.t("ai.hooks.interrupted")})*`
+                : "";
             if (last && last.role === "assistant") {
               copy[copy.length - 1] = {
                 ...last,
-                content: "",
+                content: partial,
                 steps: [...steps],
                 phase: "done",
               };
@@ -882,26 +1090,91 @@ export function useAiSidebarChat() {
         setEditingText("");
       }
     },
-    [messages, isLoading, pathname, autoApply, attachments, gatedExecute],
+    [isLoading, pathname, autoApply, attachments, files, gatedExecute, forceScrollToBottom],
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const stopStreaming = useCallback(() => {
-    confirmResolverRef.current?.(false);
+    // Invalide toute la génération en cours : les boucles sendMessage/runTurn/
+    // executeTools vérifient generationIdRef après chaque await et abandonnent.
+    generationIdRef.current += 1;
+    confirmResolverRef.current?.({ confirmed: false, all: false });
     confirmResolverRef.current = null;
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
   }, []);
 
-  const confirmAction = useCallback((confirmed: boolean) => {
-    confirmResolverRef.current?.(confirmed);
+  /** Répond à une demande de confirmation. `all` = approuver aussi toute la
+   *  série en attente (bouton « Tout confirmer »). */
+  const confirmAction = useCallback((confirmed: boolean, all = false) => {
+    confirmResolverRef.current?.({ confirmed, all });
     confirmResolverRef.current = null;
   }, []);
 
   const attachContext = useCallback((a: ContextAttachment) => {
     setAttachments((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
+  }, []);
+
+  // ── Fichiers joints (composer « Joindre ») ───────────────────────────────
+  // Lecture texte côté client, tronquée : le contenu est injecté dans le
+  // prompt au moment de l'envoi et affiché sous forme de chips.
+  // Bornes : voir MAX_FILE_BYTES / MAX_FILE_TEXT_CHARS en tête de module.
+
+  const attachFiles = useCallback(async (incoming: FileList | File[]) => {
+    const list = Array.from(incoming);
+    if (list.length === 0) return;
+
+    /** Décode un buffer en texte en détectant le BOM — file.text() suppose
+     *  toujours UTF-8 : un fichier UTF-16 (Windows/Notepad) donnerait des
+     *  caractères NUL et serait classé binaire à tort. */
+    const decodeBuffer = (buf: ArrayBuffer): string => {
+      const head = new Uint8Array(buf.slice(0, 2));
+      if (head[0] === 0xff && head[1] === 0xfe) {
+        return new TextDecoder("utf-16le").decode(buf.slice(2));
+      }
+      if (head[0] === 0xfe && head[1] === 0xff) {
+        return new TextDecoder("utf-16be").decode(buf.slice(2));
+      }
+      return new TextDecoder("utf-8").decode(buf);
+    };
+
+    const readAsText = async (file: File): Promise<FileAttachment> => {
+      const base: FileAttachment = {
+        id: `file:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: file.name,
+        mime: file.type || "application/octet-stream",
+        size: file.size,
+      };
+      if (file.size > MAX_FILE_BYTES) {
+        return { ...base, unreadableReason: "too_large" };
+      }
+      try {
+        const buf = await file.arrayBuffer();
+        const raw = decodeBuffer(buf);
+        // Heuristique binaire : trop de caractères de contrôle → pas de texte.
+        const sample = raw.slice(0, 2000);
+        let suspicious = 0;
+        for (let i = 0; i < sample.length; i++) {
+          const code = sample.charCodeAt(i);
+          if ((code < 9 || (code > 13 && code < 32)) && code !== 27) suspicious++;
+        }
+        if (sample.length > 0 && suspicious / sample.length >= 0.4) {
+          return { ...base, unreadableReason: "binary" };
+        }
+        return { ...base, text: raw.slice(0, MAX_FILE_TEXT_CHARS) };
+      } catch {
+        return { ...base, unreadableReason: "binary" };
+      }
+    };
+    const parsed = await Promise.all(list.map(readAsText));
+    // P3.9 — plafond du nombre de fichiers : on garde les plus récents.
+    setFiles((prev) => [...prev, ...parsed].slice(-MAX_FILES_COUNT));
+  }, []);
+
+  const removeFile = useCallback((id: string) => {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
 
   const rejectPlan = useCallback(() => {
@@ -916,7 +1189,7 @@ export function useAiSidebarChat() {
     restoreModeRef.current = agentModeRef.current;
     setAgentMode("act");
     agentModeRef.current = "act";
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const lastUser = [...messagesRef.current].reverse().find((m) => m.role === "user");
     if (!lastUser) return;
     if (plan?.toolCalls.length) {
       void sendMessage(lastUser.content, {
@@ -926,17 +1199,19 @@ export function useAiSidebarChat() {
     } else {
       void sendMessage(lastUser.content);
     }
-  }, [messages, sendMessage]);
+  }, [sendMessage]);
 
   // Expose setInput for the parent to clear on new session
   const clearMessages = useCallback(() => {
     setMessages([]);
     setError(null);
+    setErrorCode(null);
     setMissingConfig(false);
     setEditingIndex(null);
     setEditingText("");
     setSessionUsage(emptyUsage());
     setPendingPlan(null);
+    setFiles([]);
     pendingPlanRef.current = null;
   }, []);
 
@@ -952,9 +1227,23 @@ export function useAiSidebarChat() {
         openRules: () => setRulesPanelOpen(true),
         openPermissions: () => setPermissionsPanelOpen(true),
         compact: () => {
-          const lastUser = [...messages].reverse().find((m) => m.role === "user");
-          if (lastUser)
-            void sendMessage(`Résume la conversation puis réponds à : ${lastUser.content}`);
+          // P2.6 — /compact RÉEL : tronque l'historique aux 6 derniers messages
+          // (le transcript envoyé au modèle repart de cette base réduite), puis
+          // demande un résumé. Sans troncature, la commande ne pouvait pas
+          // sauver une session qui dépassait la fenêtre de contexte.
+          const current = messagesRef.current;
+          const kept = current.slice(-6);
+          if (kept.length < current.length) {
+            setMessages(kept);
+            messagesRef.current = kept;
+          }
+          const lastUser = [...kept].reverse().find((m) => m.role === "user");
+          void sendMessage(
+            lastUser
+              ? `Historique condensé. Résume l'état de la conversation en 3 points puis réponds à : ${lastUser.content}`
+              : "Historique condensé. Résume l'état de la conversation en 3 points.",
+            { historyOverride: kept },
+          );
         },
         exportSession: () => {
           const blob = new Blob([JSON.stringify(messages, null, 2)], {
@@ -989,39 +1278,47 @@ export function useAiSidebarChat() {
 
   const handleEditConfirm = useCallback(() => {
     if (editingIndex === null || !editingText.trim()) return;
-    const truncated = messages.slice(0, editingIndex);
-    const original = messages[editingIndex];
+    // M9 — lit l'état courant via le ref, jamais la closure périmée.
+    const current = messagesRef.current;
+    const truncated = current.slice(0, editingIndex);
+    const original = current[editingIndex];
     const preservedAttachments =
       original?.role === "user" && original.attachments?.length ? original.attachments : undefined;
+    const preservedFiles =
+      original?.role === "user" && original.files?.length ? original.files : undefined;
     const userMsg: ChatMessage = {
       role: "user",
       content: editingText.trim(),
       // Conserver les attachments du message édité (sinon ils seraient perdus).
       ...(preservedAttachments ? { attachments: preservedAttachments } : {}),
+      ...(preservedFiles ? { files: preservedFiles } : {}),
     };
-    // Appliquer la troncature ici, puis envoyer SANS ré-ajouter le message
-    // utilisateur (sendMessage le ferait avec un `messages` obsolète et
-    // annulerait la troncature). On repasse les attachments préservés pour
-    // que le prompt du modèle soit cohérent avec les chips affichées.
-    setMessages([...truncated, userMsg]);
+    // Appliquer la troncature ici et repasser l'historique exact au sendMessage :
+    // le transcript du modèle correspond alors à ce que l'utilisateur voit.
+    const nextHistory = [...truncated, userMsg];
+    setMessages(nextHistory);
     void sendMessage(editingText.trim(), {
       skipUserMessage: true,
       attachmentsOverride: preservedAttachments,
+      historyOverride: nextHistory,
     });
-  }, [editingIndex, editingText, messages, sendMessage]);
+  }, [editingIndex, editingText, sendMessage]);
 
   const handleRetry = useCallback(() => {
-    const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+    const current = messagesRef.current;
+    const lastUserIdx = [...current].reverse().findIndex((m) => m.role === "user");
     if (lastUserIdx === -1) return;
-    const idx = messages.length - 1 - lastUserIdx;
-    const lastUser = messages[idx];
+    const idx = current.length - 1 - lastUserIdx;
+    const lastUser = current[idx];
     // Truncate everything after the last user message (failed assistant bubble).
-    setMessages(messages.slice(0, idx + 1));
+    const nextHistory = current.slice(0, idx + 1);
+    setMessages(nextHistory);
     void sendMessage(lastUser.content, {
       skipUserMessage: true,
       attachmentsOverride: lastUser.attachments,
+      historyOverride: nextHistory,
     });
-  }, [messages, sendMessage]);
+  }, [sendMessage]);
 
   const handleCopy = useCallback(async (content: string, index: number) => {
     try {
@@ -1036,6 +1333,7 @@ export function useAiSidebarChat() {
   const handleNewMessages = useCallback((newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     setError(null);
+    setErrorCode(null);
     setEditingIndex(null);
     setEditingText("");
   }, []);
@@ -1045,6 +1343,7 @@ export function useAiSidebarChat() {
     messages,
     isLoading,
     error,
+    errorCode,
     missingConfig,
     editingIndex,
     editingText,
@@ -1063,11 +1362,17 @@ export function useAiSidebarChat() {
     attachments,
     setAttachments,
     attachContext,
+    files,
+    attachFiles,
+    removeFile,
     sessionUsage,
     modelUsed,
     abortRef,
     stopStreaming,
     confirmAction,
+    confirmBusy,
+    batchConfirm,
+    setBatchConfirm,
     gatedExecute,
     runSlashCommand,
     rulesPanelOpen,
@@ -1079,6 +1384,7 @@ export function useAiSidebarChat() {
     inputRef,
     setNewSessionHandler,
     scrollToBottom,
+    forceScrollToBottom,
     // Actions
     setError,
     setIsLoading,

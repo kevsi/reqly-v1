@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, UserRound, Copy, Check, RotateCcw, SquarePen, Gauge } from "lucide-react";
+import { Bot, UserRound, Copy, Check, RotateCcw, SquarePen, Gauge, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,7 +10,8 @@ import {
   toAssistantSteps,
 } from "@/src/ai/components/assistant-steps-renderer";
 import { ProgressiveMarkdown } from "@/src/ai/components/progressive-markdown";
-import type { ChatMessage } from "@/src/ai/components/ai-sidebar-types";
+import type { ChatMessage, Artifact } from "@/src/ai/components/ai-sidebar-types";
+import { AiArtifactCard } from "@/src/ai/components/ai-artifacts";
 import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
 import { formatTokens } from "@/src/ai/agent/usage";
 
@@ -26,10 +27,14 @@ interface AiChatMessageProps {
   onEditCancel: () => void;
   onEditConfirm: () => void;
   onEditingTextChange: (text: string) => void;
-  onConfirm?: (stepId: string, confirmed: boolean) => void;
+  onConfirm?: (stepId: string, confirmed: boolean, all?: boolean) => void;
   /** Appelé quand le texte affiché évolue pendant la révélation progressive (auto-scroll). */
   onTypingUpdate?: () => void;
   onExecuteRequest?: (request: ParsedCodeRequest) => void;
+  /** Ouverture d'un artefact dans le panneau dédié. */
+  onArtifactOpen?: (artifact: Artifact) => void;
+  /** Une action confirmée s'exécute (loader sur les boutons de confirmation). */
+  confirmBusy?: boolean;
 }
 
 export function AiChatMessage({
@@ -47,6 +52,8 @@ export function AiChatMessage({
   onConfirm,
   onTypingUpdate,
   onExecuteRequest,
+  onArtifactOpen,
+  confirmBusy,
 }: AiChatMessageProps) {
   const { t } = useTranslation();
   const isAssistant = message.role === "assistant";
@@ -82,11 +89,12 @@ export function AiChatMessage({
             mode="timeline"
             onConfirm={onConfirm}
             collapsible
+            confirmBusy={confirmBusy}
           />
         </div>
       )}
 
-      {/* Attachment chips (user only) */}
+      {/* Attachment + fichier chips (user only) */}
       {message.role === "user" && message.attachments && message.attachments.length > 0 && (
         <div className="mb-1.5 flex flex-wrap justify-end gap-1 pr-8">
           {message.attachments.map((a) => (
@@ -95,6 +103,19 @@ export function AiChatMessage({
               className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 backdrop-blur-sm"
             >
               {a.type} → {a.label}
+            </span>
+          ))}
+        </div>
+      )}
+      {message.role === "user" && message.files && message.files.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap justify-end gap-1 pr-8">
+          {message.files.map((f) => (
+            <span
+              key={f.id}
+              className="inline-flex max-w-[220px] items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[10px] text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm"
+            >
+              <FileText className="size-2.5 shrink-0" />
+              <span className="truncate">{f.name}</span>
             </span>
           ))}
         </div>
@@ -110,11 +131,11 @@ export function AiChatMessage({
         {/* Avatar */}
         <div
           className={cn(
-            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ring-1 transition-shadow",
+            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md ring-1 transition-colors",
             isAssistant
               ? isLive
-                ? "bg-primary text-primary-foreground ring-primary/40 shadow-[0_0_14px_-2px] shadow-primary/50"
-                : "bg-gradient-to-br from-primary/25 to-primary/10 text-primary ring-primary/25"
+                ? "bg-primary text-primary-foreground ring-primary/40"
+                : "bg-primary/10 text-primary ring-primary/25"
               : "bg-muted text-muted-foreground ring-border/70",
           )}
           aria-hidden
@@ -137,8 +158,8 @@ export function AiChatMessage({
             className={cn(
               "max-w-[85%] text-sm leading-relaxed",
               message.role === "user"
-                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-primary/85 px-3.5 py-2 text-primary-foreground shadow-[0_4px_14px_-4px] shadow-primary/40"
-                : "rounded-2xl rounded-tl-md border border-border/60 bg-card/90 px-3.5 py-2 text-foreground shadow-[0_1px_3px] shadow-black/[0.03]",
+                ? "rounded-lg rounded-br-sm bg-primary px-3.5 py-2 text-primary-foreground"
+                : "rounded-lg rounded-tl-sm border border-border/60 bg-card px-3.5 py-2 text-foreground",
             )}
           >
             {isAssistant ? (
@@ -172,6 +193,15 @@ export function AiChatMessage({
         )}
       </div>
 
+      {/* Artifact cards — sous la réponse assistant */}
+      {isAssistant && message.artifacts && message.artifacts.length > 0 && onArtifactOpen && (
+        <div className="mt-2 space-y-1.5 pl-8">
+          {message.artifacts.map((artifact) => (
+            <AiArtifactCard key={artifact.id} artifact={artifact} onOpen={onArtifactOpen} />
+          ))}
+        </div>
+      )}
+
       {/* Usage badge (assistant only) */}
       {usageLabel && (
         <div
@@ -191,7 +221,7 @@ export function AiChatMessage({
           "opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100",
         )}
       >
-        <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/90 p-0.5 shadow-sm backdrop-blur-md">
+        <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/90 p-0.5">
           {message.role === "user" ? (
             <Button
               type="button"
@@ -251,7 +281,7 @@ export function AiChatMessage({
               onClick={onEditCancel}
               className="h-auto px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
             >
-              Annuler
+              {t("common.cancel")}
             </Button>
             <Button
               type="button"
@@ -260,7 +290,7 @@ export function AiChatMessage({
               disabled={!editingText.trim()}
               className="h-auto px-3 py-1 text-xs"
             >
-              Envoyer
+              {t("aiChat.send")}
             </Button>
           </div>
         </div>

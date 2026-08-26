@@ -23,7 +23,7 @@ export function AiCodeExecutionCard({
 
   return (
     <div
-      className="mx-3 mb-2 rounded-xl border border-warning/30 bg-warning/5 p-3 shadow-sm"
+      className="mx-3 mb-2 rounded-lg border border-warning/30 bg-warning/5 p-3"
       data-testid="ai-code-execution-card"
     >
       <div className="flex items-start gap-2">

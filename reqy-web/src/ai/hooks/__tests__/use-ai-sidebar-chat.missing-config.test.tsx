@@ -13,6 +13,11 @@ vi.mock("@/src/ai/cloud-engine/llm", () => ({
 let mockedConfigured = false;
 vi.mock("@/lib/ai-config", () => ({
   isAiConfigured: () => mockedConfigured,
+  resolveAiConfig: () => ({
+    provider: "openai",
+    apiKey: "test-key",
+    model: "gpt-4o",
+  }),
 }));
 vi.mock("@/lib/config", () => ({
   loadAIProvider: () => "openai",
@@ -24,6 +29,7 @@ vi.mock("@/lib/config", () => ({
 vi.mock("@/lib/llm-tools", () => ({
   REQLY_TOOLS: [],
   executeAuthorizedToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),
+  getToolTitle: (name: string) => name,
   maskSensitiveObject: (o: unknown) => o,
 }));
 

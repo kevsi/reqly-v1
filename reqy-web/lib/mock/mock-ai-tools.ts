@@ -110,6 +110,7 @@ async function handleReplaceMockDraft(args: Record<string, unknown>): Promise<To
 export const MOCK_AI_TOOLS: ReqlyTool[] = [
   {
     name: "get_mock_draft",
+    title: "Brouillon du Mock Server",
     description:
       "Liste les routes du brouillon du Mock Server (méthode, path, statuts, latence, panne, stateful).",
     parameters: {},
@@ -117,6 +118,7 @@ export const MOCK_AI_TOOLS: ReqlyTool[] = [
   },
   {
     name: "validate_mock_config",
+    title: "Valider la config mock",
     description:
       "Valide une configuration de mock complète contre le schéma du moteur. À appeler avant tout remplacement.",
     parameters: {
@@ -130,6 +132,7 @@ export const MOCK_AI_TOOLS: ReqlyTool[] = [
   },
   {
     name: "replace_mock_draft",
+    title: "Remplacer le brouillon mock",
     description:
       "Remplace le brouillon du Mock Server par la config fournie (validée automatiquement). Nécessite une confirmation.",
     parameters: {

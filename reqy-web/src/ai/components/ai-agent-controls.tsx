@@ -15,6 +15,11 @@ interface Props {
   onOpenRules: () => void;
   onOpenPermissions: () => void;
   sessionUsage?: AgentUsage;
+  /** Modèle utilisé par la génération courante (F8 — traçabilité). */
+  model?: string | null;
+  /** Confirmer en lot : un Confirmer approuve toute la série en attente. */
+  batchConfirm?: boolean;
+  onBatchConfirmChange?: (v: boolean) => void;
 }
 
 /**
@@ -30,6 +35,9 @@ export function AiAgentControls({
   onOpenRules,
   onOpenPermissions,
   sessionUsage,
+  model,
+  batchConfirm = false,
+  onBatchConfirmChange,
 }: Props) {
   const { t } = useTranslation();
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -79,20 +87,37 @@ export function AiAgentControls({
 
         <span
           className={cn(
-            "hidden min-w-0 truncate rounded-md border px-2 py-1 text-[10px] font-medium @min-[24rem]:inline-flex",
+            // F9 — indicateur de sécurité : visible dès la largeur minimale.
+            "inline-flex min-w-0 truncate rounded-md border px-2 py-1 text-[10px] font-medium",
             autoApply
               ? "border-warning/30 bg-warning/10 text-warning"
-              : "border-border/60 bg-muted/40 text-muted-foreground",
+              : batchConfirm
+                ? "border-primary/30 bg-primary/10 text-primary"
+                : "border-border/60 bg-muted/40 text-muted-foreground",
           )}
-          title={autoApply ? t("ai.agent.autoApplyOn") : t("ai.agent.confirmationRequired")}
+          title={t(
+            autoApply
+              ? "ai.agent.autoApplyOn"
+              : batchConfirm
+                ? "ai.agent.batchConfirmDesc"
+                : "ai.agent.confirmationRequired",
+          )}
         >
-          {autoApply ? t("ai.agent.autoApplyOn") : t("ai.agent.confirmationRequired")}
+          {autoApply
+            ? t("ai.agent.autoApplyOn")
+            : batchConfirm
+              ? t("ai.agent.batchConfirmOn")
+              : t("ai.agent.confirmationRequired")}
         </span>
 
         <span className="flex-1" />
         {usageLabel && (
-          <span className="hidden shrink-0 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 @min-[28rem]:inline-flex">
+          <span
+            className="hidden shrink-0 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/80 @min-[22rem]:inline-flex"
+            title={model ?? undefined}
+          >
             {usageLabel}
+            {model ? ` · ${model}` : ""}
           </span>
         )}
         <button
@@ -139,6 +164,31 @@ export function AiAgentControls({
               {autoApply ? t("ai.agent.autoApplyOn") : t("ai.agent.confirmationRequired")}
             </span>
           </button>
+          {onBatchConfirmChange && (
+            <button
+              type="button"
+              onClick={() => onBatchConfirmChange(!batchConfirm)}
+              aria-pressed={batchConfirm}
+              disabled={autoApply}
+              title={
+                autoApply
+                  ? t("ai.agent.batchConfirmMutedByAutoApply")
+                  : t("ai.agent.batchConfirmDesc")
+              }
+              className={cn(
+                "flex h-7 items-center gap-1 rounded-lg border px-2 text-[11px] font-medium transition-colors",
+                autoApply && "cursor-not-allowed opacity-40",
+                !autoApply &&
+                  (batchConfirm
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border/60 text-muted-foreground hover:bg-accent/50 hover:text-foreground"),
+              )}
+              data-testid="ai-batch-confirm-toggle"
+            >
+              <ListChecks className="size-3" />
+              <span>{t("ai.agent.batchConfirm")}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onOpenRules}

@@ -129,6 +129,7 @@ vi.mock("@/src/ai/components/ai-permissions-popover", () => ({
 
 vi.mock("@/lib/ai-config", () => ({
   isAiConfigured: () => true,
+  DEFAULT_MODELS: { openai: "gpt-4o" },
 }));
 
 describe("AiSidebar — bug #6 (focusable controls when closed)", () => {

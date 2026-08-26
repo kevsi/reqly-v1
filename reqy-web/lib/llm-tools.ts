@@ -28,6 +28,8 @@ export interface ToolParameter {
 export interface ToolDefinition {
   /** Nom stable, utilisé par le modèle pour appeler l'outil. */
   name: string;
+  /** Titre affiché dans l'UI (lisible par l'humain). */
+  title: string;
   /** Description humaine et contrainte d'usage. */
   description: string;
   /** Schéma JSON Schema simplifié des paramètres attendus. */
@@ -222,12 +224,9 @@ import { MOCK_AI_TOOLS } from "@/lib/mock/mock-ai-tools";
 import { CAPTURE_AI_TOOLS } from "@/lib/capture/capture-ai-tools";
 import { GIT_AI_TOOLS } from "@/lib/git/git-ai-tools";
 import {
-  loadAIProvider,
-  loadApiKey,
-  loadAiBaseUrl,
-  loadAiModel,
-  loadOllamaConfig,
-} from "@/lib/config";
+  resolveAiConfig,
+} from "@/lib/ai-config";
+import { getSpecialist, SPECIALIST_IDS } from "@/src/ai/agent/agents";
 
 function findCollectionIdByName(name: string): string | undefined {
   const store = requestStore.getState();
@@ -324,9 +323,11 @@ async function handleDelegate(
       error: e instanceof Error ? e.message : typeof e === "string" ? e : "Délégation refusée.",
     };
   }
-  const provider = loadAIProvider();
-  const apiKey = loadApiKey(provider);
-  if (!apiKey) {
+  // Config unifiée (même source que la sidebar/le modal) : fallback modèle
+  // par défaut inclus — sans lui, un provider fraîchement sélectionné sans
+  // modèle sauvegardé envoyait model:undefined au proxy → rejet.
+  const cfg = resolveAiConfig();
+  if (cfg.provider !== "ollama" && !cfg.apiKey) {
     return {
       callId: "",
       name: "delegate",
@@ -334,16 +335,20 @@ async function handleDelegate(
       error: "Configure ton provider IA dans Settings.",
     };
   }
-  const ollama = loadOllamaConfig();
+  // Registre d'agents : si `agent` est fourni et valide, sa persona remplace
+  // le rôle libre. Sinon le rôle libre (ou le défaut) s'applique.
+  const agentArg = typeof args.agent === "string" ? getSpecialist(args.agent.trim()) : undefined;
+  const effectiveRole = agentArg?.system ?? role;
+  const agentLabel = agentArg ? `${agentArg.emoji} ${agentArg.name}` : "Sous-agent";
   try {
     const res = await runSubAgent({
-      provider,
-      apiKey,
-      model: loadAiModel(provider) || undefined,
-      openaiUrl: loadAiBaseUrl(provider) || undefined,
-      host: provider === "ollama" ? ollama.host : undefined,
-      port: provider === "ollama" ? ollama.port : undefined,
-      role,
+      provider: cfg.provider,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      openaiUrl: cfg.openaiUrl,
+      host: cfg.host,
+      port: cfg.port,
+      role: effectiveRole,
       instruction,
       context,
       depth: (options?.depth ?? 0) + 1,
@@ -351,7 +356,7 @@ async function handleDelegate(
     return {
       callId: "",
       name: "delegate",
-      content: `[Sous-agent]\n${res.text.slice(0, 4000)}`,
+      content: `[${agentLabel}]\n${res.text.slice(0, 4000)}`,
       usage: res.usage,
     };
   } catch (e) {
@@ -362,6 +367,150 @@ async function handleDelegate(
       error: e instanceof Error ? e.message : typeof e === "string" ? e : "Le sous-agent a échoué.",
     };
   }
+}
+
+/** Nb max d'agents lancés en parallèle par delegate_team (coût/latence bornés). */
+const MAX_TEAM_SIZE = 4;
+/** Troncature du retour de chaque agent dans la réponse agrégée. */
+const TEAM_RESULT_CHARS = 3000;
+
+interface TeamTask {
+  agentId?: string;
+  instruction: string;
+  context?: string;
+}
+
+function parseTeamTasks(raw: unknown): TeamTask[] | null {
+  if (!Array.isArray(raw)) return null;
+  const tasks: TeamTask[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const instruction = typeof o.instruction === "string" ? o.instruction.trim() : "";
+    if (!instruction) continue;
+    tasks.push({
+      agentId: typeof o.agent === "string" && getSpecialist(o.agent) ? o.agent : undefined,
+      instruction,
+      context: typeof o.context === "string" ? o.context.slice(0, 6000) : undefined,
+    });
+  }
+  return tasks.length > 0 ? tasks.slice(0, MAX_TEAM_SIZE) : null;
+}
+
+/**
+ * Équipe d'agents en PARALLÈLE : exécute simultanément plusieurs sous-agents
+ * du registre (Promise.allSettled — l'échec de l'un n'annule pas les autres)
+ * et agrège leurs réponses section par section. Une seule confirmation pour
+ * toute l'équipe ; profondeur +1 par tâche (garde anti-récursion inchangé).
+ */
+async function handleDelegateTeam(
+  args: Record<string, unknown>,
+  options?: ToolExecutionOptions,
+): Promise<ToolResult> {
+  const tasks = parseTeamTasks(args.tasks);
+  if (!tasks || tasks.length === 0) {
+    return {
+      callId: "",
+      name: "delegate_team",
+      content: "",
+      error:
+        "Aucune tâche valide. Format attendu : tasks:[{agent:\"analyste\"|\"testeur\"|\"securite\"|\"architecte\"|\"optimiseur\", instruction:\"…\", context?}] (1 à 4 tâches).",
+    };
+  }
+  if (tasks.length === 1) {
+    return {
+      callId: "",
+      name: "delegate_team",
+      content: "",
+      error:
+        "Une seule tâche fournie : utilise « Déléguer à un sous-agent » plutôt que l'équipe.",
+    };
+  }
+  try {
+    assertDelegationAllowed(options?.depth ?? 0);
+  } catch (e) {
+    return {
+      callId: "",
+      name: "delegate_team",
+      content: "",
+      error: e instanceof Error ? e.message : "Délégation refusée.",
+    };
+  }
+
+  const cfg = resolveAiConfig();
+  if (cfg.provider !== "ollama" && !cfg.apiKey) {
+    return {
+      callId: "",
+      name: "delegate_team",
+      content: "",
+      error: "Configure ton provider IA dans Settings.",
+    };
+  }
+
+  // Démarrages décalés (~150 ms) : évite le burst simultané que certains
+  // providers saluent d'un 429, tout en conservant l'exécution parallèle.
+  const settled = await Promise.all(
+    tasks.map(async (task, index) => {
+      if (index > 0) await new Promise((r) => setTimeout(r, index * 150));
+      const specialist = task.agentId ? getSpecialist(task.agentId) : undefined;
+      const label = specialist ? `${specialist.emoji} ${specialist.name}` : "Sous-agent";
+      try {
+        const res = await runSubAgent({
+          provider: cfg.provider,
+          apiKey: cfg.apiKey,
+          model: cfg.model,
+          openaiUrl: cfg.openaiUrl,
+          host: cfg.host,
+          port: cfg.port,
+          role: specialist?.system ?? "Tu es un assistant spécialisé Reqly.",
+          instruction: task.instruction,
+          context: task.context ?? "",
+          depth: (options?.depth ?? 0) + 1,
+        });
+        return { label, ok: true as const, text: res.text, usage: res.usage };
+      } catch (e) {
+        return {
+          label,
+          ok: false as const,
+          text: e instanceof Error ? e.message : String(e),
+          usage: { inputTokens: 0, outputTokens: 0 },
+        };
+      }
+    }),
+  );
+
+  const sections = settled.map(
+    (r) => `[${r.label}] ${r.ok ? "" : "⚠️ échec : "}${r.text.slice(0, TEAM_RESULT_CHARS)}`,
+  );
+  const failed = settled.filter((r) => !r.ok).length;
+  const totalUsage = settled.reduce(
+    (acc, r) => ({
+      inputTokens: acc.inputTokens + r.usage.inputTokens,
+      outputTokens: acc.outputTokens + r.usage.outputTokens,
+    }),
+    { inputTokens: 0, outputTokens: 0 },
+  );
+
+  let teamError: string | undefined;
+  if (failed > 0) {
+    const firstErr = (settled.find((r) => !r.ok)?.text ?? "").slice(0, 200);
+    teamError =
+      failed === settled.length
+        ? `Tous les agents ont échoué — ${firstErr}`
+        : `${failed}/${settled.length} agents ont échoué — ${firstErr}`;
+  }
+
+  return {
+    callId: "",
+    name: "delegate_team",
+    content: [
+      `Équipe de ${settled.length} agents exécutée en parallèle${failed ? ` (${failed} échec${failed > 1 ? "s" : ""})` : ""}.`,
+      "",
+      ...sections,
+    ].join("\n"),
+    usage: totalUsage,
+    ...(teamError ? { error: teamError } : {}),
+  };
 }
 
 async function handleCreateCollection(args: Record<string, unknown>): Promise<ToolResult> {
@@ -1665,6 +1814,12 @@ export function getToolByName(name: string): ReqlyTool | undefined {
   return REQLY_TOOLS.find((t) => t.name === name);
 }
 
+/** Titre lisible d'un outil pour l'UI (retombe sur le nom technique). */
+export function getToolTitle(name: string): string {
+  const tool = REQLY_TOOLS.find((t) => t.name === name);
+  return tool?.title ?? name;
+}
+
 async function executeToolCall(
   call: ToolCall,
   options?: ToolExecutionOptions | boolean,
@@ -1849,12 +2004,14 @@ export async function executeAuthorizedToolCall(
 export const REQLY_TOOLS: ReqlyTool[] = [
   {
     name: "list_collections",
+    title: "Lister les collections",
     description: "Liste toutes les collections disponibles dans le workspace actif.",
     parameters: {},
     handler: handleListCollections,
   },
   {
     name: "get_request_context",
+    title: "Contexte de la requête",
     description:
       "Retourne le contexte de la requête actuelle (méthode, URL, status, extrait du body).",
     parameters: {},
@@ -1862,6 +2019,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "create_collection",
+    title: "Créer une collection",
     description:
       "Crée une nouvelle collection dans le workspace actif. Nécessite une confirmation dans l'interface.",
     parameters: {
@@ -1871,6 +2029,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "create_request",
+    title: "Créer une requête",
     description: "Crée une requête dans une collection existante.",
     parameters: {
       collection: { type: "string", description: "Nom de la collection cible.", required: true },
@@ -1886,6 +2045,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "execute_request",
+    title: "Exécuter une requête",
     description:
       "Exécute la requête décrite par method + url (+ headers/body optionnels) et retourne le résultat HTTP.",
     parameters: {
@@ -1898,6 +2058,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "rename_collection",
+    title: "Renommer une collection",
     description: "Renomme une collection existante.",
     parameters: {
       name: { type: "string", description: "Nom actuel de la collection.", required: true },
@@ -1907,6 +2068,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "delete_collection",
+    title: "Supprimer une collection",
     description: "Supprime une collection. Nécessite une confirmation explicite de l'utilisateur.",
     parameters: {
       name: { type: "string", description: "Nom de la collection à supprimer.", required: true },
@@ -1915,6 +2077,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "create_environment",
+    title: "Créer un environnement",
     description: "Crée un nouvel environnement.",
     parameters: {
       name: { type: "string", description: "Nom de l'environnement.", required: true },
@@ -1923,6 +2086,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "update_environment_variable",
+    title: "Modifier une variable d'environnement",
     description:
       "Ajoute ou modifie une variable d'environnement. Les valeurs sensibles sont masquées automatiquement.",
     parameters: {
@@ -1934,12 +2098,18 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "delegate",
+    title: "Déléguer à un sous-agent",
     description:
-      "Délègue une sous-tâche ciblée à un sous-agent avec un rôle dédié, puis retourne son résultat. Utilise pour découper une demande complexe en sous-tâches parallélisables.",
+      "Délègue une sous-tâche ciblée à un agent spécialisé du registre (analyste, testeur, securite, architecte, optimiseur) ou à un rôle libre, puis retourne son résultat. Pour plusieurs perspectives À LA FOIS, préfère delegate_team.",
     parameters: {
+      agent: {
+        type: "string",
+        description: `Identifiant d'agent du registre (${SPECIALIST_IDS.join(", ")}). Remplace role.`,
+        enum: SPECIALIST_IDS,
+      },
       role: {
         type: "string",
-        description: "Persona du sous-agent (ex: analyste API, testeur, expert auth).",
+        description: "Persona libre (si aucun agent du registre ne convient).",
       },
       instruction: {
         type: "string",
@@ -1954,7 +2124,23 @@ export const REQLY_TOOLS: ReqlyTool[] = [
     handler: handleDelegate,
   },
   {
+    name: "delegate_team",
+    title: "Consulter une équipe d'agents (parallèle)",
+    description:
+      "Lance SIMULTANÉMENT 2 à 4 sous-agents du registre sur des tâches différentes et agrège leurs réponses (une seule confirmation pour toute l'équipe). Utilise pour croiser les perspectives : ex. analyste + securite sur une même réponse.",
+    parameters: {
+      tasks: {
+        type: "array",
+        description:
+          'Liste de 2 à 4 objets {agent:"analyste"|"testeur"|"securite"|"architecte"|"optimiseur", instruction:string, context?:string}. Chaque agent tourne en parallèle.',
+        required: true,
+      },
+    },
+    handler: handleDelegateTeam,
+  },
+  {
     name: "run_collection",
+    title: "Exécuter une collection",
     description:
       "Exécute toutes les requêtes d'une collection et retourne un rapport détaillé (statut, temps de réponse, erreurs). Les assertions sont évaluées automatiquement.",
     parameters: {
@@ -1968,6 +2154,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "import_collection",
+    title: "Importer une collection",
     description:
       "Importe une collection depuis un fichier OpenAPI, Bruno ou Postman. Spécifiez le format et le contenu du fichier.",
     parameters: {
@@ -1991,6 +2178,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "search_requests",
+    title: "Rechercher des requêtes",
     description:
       "Recherche sémantique dans les requêtes indexées. Retourne les requêtes les plus pertinentes avec leur score.",
     parameters: {
@@ -2008,6 +2196,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "switch_workspace",
+    title: "Changer de workspace",
     description: "Bascule vers un workspace existant par nom ou identifiant.",
     parameters: {
       name: { type: "string", description: "Nom du workspace." },
@@ -2017,18 +2206,21 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "list_workspaces",
+    title: "Lister les workspaces",
     description: "Liste tous les workspaces disponibles et indique le workspace actif.",
     parameters: {},
     handler: handleListWorkspaces,
   },
   {
     name: "get_current_workspace",
+    title: "Workspace actif",
     description: "Retourne les détails du workspace actif (nom, description, couleur, icône).",
     parameters: {},
     handler: handleGetCurrentWorkspace,
   },
   {
     name: "get_workspace",
+    title: "Détails d'un workspace",
     description:
       "Retourne les détails d'un workspace : nb collections, nb requêtes, dernière activité.",
     parameters: {
@@ -2039,6 +2231,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "search_workspaces",
+    title: "Rechercher des workspaces",
     description: "Recherche des workspaces par nom ou description.",
     parameters: {
       query: { type: "string", description: "Requête de recherche.", required: true },
@@ -2047,6 +2240,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "duplicate_workspace",
+    title: "Dupliquer un workspace",
     description: "Duplique un workspace entier (collections, requêtes, environnements).",
     parameters: {
       name: { type: "string", description: "Nom du workspace à dupliquer." },
@@ -2056,6 +2250,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "archive_workspace",
+    title: "Archiver un workspace",
     description: "Archive un workspace (le masque de la liste active sans le supprimer).",
     parameters: {
       name: { type: "string", description: "Nom du workspace." },
@@ -2065,6 +2260,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "unarchive_workspace",
+    title: "Désarchiver un workspace",
     description: "Désarchive un workspace précédemment archivé.",
     parameters: {
       name: { type: "string", description: "Nom du workspace." },
@@ -2074,6 +2270,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "get_workspace_stats",
+    title: "Statistiques du workspace",
     description:
       "Retourne les statistiques du workspace actif : nb collections, requêtes, taux de succès.",
     parameters: {},
@@ -2081,6 +2278,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "clear_workspace_cache",
+    title: "Vider le cache du workspace",
     description:
       "Vide l'historique et le cache du workspace actif (ne supprime pas les collections).",
     parameters: {},
@@ -2088,6 +2286,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "explain_response",
+    title: "Expliquer la réponse",
     description:
       "Explique un élément de réponse HTTP : décode un JWT, explique un header, ou annote une structure JSON.",
     parameters: {
@@ -2115,6 +2314,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "propose_assertion_fix",
+    title: "Proposer une correction d'assertion",
     description:
       "Propose une correction pour une assertion échouée (statut, temps de réponse, jsonPath). Retourne une suggestion sans modifier l'assertion.",
     parameters: {
@@ -2135,6 +2335,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "export_collection",
+    title: "Exporter une collection",
     description: "Exporte une collection au format OpenAPI 3.0 (JSON).",
     parameters: {
       name: { type: "string", description: "Nom de la collection à exporter.", required: true },
@@ -2143,6 +2344,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "duplicate_collection",
+    title: "Dupliquer une collection",
     description: "Duplique une collection existante (y compris ses requêtes et dossiers).",
     parameters: {
       name: { type: "string", description: "Nom de la collection à dupliquer.", required: true },
@@ -2151,6 +2353,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "delete_request",
+    title: "Supprimer une requête",
     description: "Supprime une requête d'une collection.",
     parameters: {
       collection: { type: "string", description: "Nom de la collection.", required: true },
@@ -2160,6 +2363,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "move_request",
+    title: "Déplacer une requête",
     description: "Déplace une requête d'une collection vers une autre.",
     parameters: {
       source_collection: {
@@ -2178,6 +2382,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   },
   {
     name: "create_folder",
+    title: "Créer un dossier",
     description: "Crée un dossier dans une collection pour organiser les requêtes.",
     parameters: {
       collection: { type: "string", description: "Nom de la collection.", required: true },

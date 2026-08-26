@@ -6,6 +6,7 @@ export interface SlashCommandContext {
   setMode: (mode: AgentMode) => void;
   openRules: () => void;
   openPermissions: () => void;
+  /** Tronque RÉELLEMENT l'historique (garde les N derniers messages). */
   compact: () => void;
   exportSession: () => void;
   /** Ajoute une réponse texte de l'assistant (utilisée par /help). */

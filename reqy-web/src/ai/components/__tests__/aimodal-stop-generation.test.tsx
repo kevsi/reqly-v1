@@ -18,6 +18,11 @@ vi.mock("@/lib/config", () => ({
 }));
 vi.mock("@/lib/ai-config", () => ({
   isAiConfigured: () => true,
+  resolveAiConfig: () => ({
+    provider: "openai",
+    apiKey: "test-key",
+    model: "gpt-test",
+  }),
 }));
 
 import { streamLLM } from "@/src/ai/cloud-engine/llm";

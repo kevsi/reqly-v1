@@ -51,7 +51,7 @@ export function AiRulesPanel({ workspaceId, onClose }: Props) {
           type="button"
           variant="default"
           size="sm"
-          className="h-7 px-3 text-xs shadow-[0_2px_10px_-2px] shadow-primary/40"
+          className="h-7 px-3 text-xs"
           onClick={() => {
             saveRules(workspaceId, content);
             onClose();

@@ -19,6 +19,7 @@ vi.mock("@/lib/config", () => ({
 vi.mock("@/lib/llm-tools", () => ({
   REQLY_TOOLS: [],
   executeAuthorizedToolCall: vi.fn(async () => ({ callId: "c", name: "n", content: "ok" })),
+  getToolTitle: (name: string) => name,
   maskSensitiveObject: (o: unknown) => o,
 }));
 

@@ -54,17 +54,13 @@ import { extractCitations } from "@/src/ai/cloud-engine/citations";
 import { detectLanguage } from "@/src/ai/cloud-engine/language";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { isAiConfigured } from "@/lib/ai-config";
+import { isAiConfigured, resolveAiConfig } from "@/lib/ai-config";
 import {
   loadAIProvider,
-  loadApiKey,
-  loadAiModel,
-  loadAiBaseUrl,
-  loadOllamaConfig,
   saveAIProvider,
   saveApiKey,
 } from "@/lib/config";
-import { REQLY_TOOLS, executeAuthorizedToolCall, maskSensitiveObject } from "@/lib/llm-tools";
+import { REQLY_TOOLS, executeAuthorizedToolCall, getToolTitle, maskSensitiveObject } from "@/lib/llm-tools";
 import type { ToolCall, ToolResult } from "@/lib/llm-tools";
 import {
   AssistantStepsRenderer,
@@ -232,6 +228,12 @@ export function AIModal(props: AIModalProps) {
   /** Flag pour éviter une boucle infinie si le provider ne supporte pas les outils. */
   const retriedWithoutToolsRef = useRef(false);
   const MAX_TOOL_TURNS = 5;
+  // Parité sidebar — stall timeout : un provider muet ne doit pas laisser un
+  // spinner infini (le hook a le même garde-fou).
+  const STALL_TIMEOUT_MS = 45_000;
+  // Parité sidebar — anti-boucle de confirmation : un toolCall déjà approuvé
+  // qui redemanderait une confirmation est bloqué au lieu de re-prompter.
+  const confirmedToolCallIdsRef = useRef<Set<string>>(new Set());
 
   // Inline AI config state (shown when no API key is set)
   const [showConfig, setShowConfig] = useState(false);
@@ -347,8 +349,19 @@ export function AIModal(props: AIModalProps) {
     // l'historique du tour suivant, obligatoire sinon HTTP 400.
     let reasoningThisTurn = "";
 
+    // Stall timeout (parité sidebar) : aucun token pendant 45 s → abort.
+    let lastActivity = Date.now();
+    let didTimeout = false;
+    const stallTimer = setInterval(() => {
+      if (Date.now() - lastActivity > STALL_TIMEOUT_MS) {
+        didTimeout = true;
+        abortRef.current?.abort();
+      }
+    }, 5000);
+
     try {
       for await (const token of stream) {
+        lastActivity = Date.now();
         if (token.type === "text") {
           accRef.current += token.value;
           setLlmOutput(accRef.current);
@@ -360,10 +373,16 @@ export function AIModal(props: AIModalProps) {
         }
       }
     } catch (e) {
+      clearInterval(stallTimer);
       // Interruption volontaire (bouton Stop ou fermeture du modal) : garder
       // le texte partiel affiché, sans erreur ni relance.
       if ((e as { name?: string } | null)?.name === "AbortError") {
-        setLlmLoading(false);
+        if (didTimeout) {
+          setLlmError("Aucune réponse du modèle — connexion interrompue.");
+          setLlmLoading(false);
+        } else {
+          setLlmLoading(false);
+        }
         return;
       }
       // Si l'erreur ressemble à un rejet des tools/function calling et
@@ -390,6 +409,8 @@ export function AIModal(props: AIModalProps) {
       );
       setLlmLoading(false);
       return;
+    } finally {
+      clearInterval(stallTimer);
     }
 
     // Plus d'outils → terminé
@@ -434,7 +455,7 @@ export function AIModal(props: AIModalProps) {
               ? {
                   ...s,
                   status: "awaiting_confirmation" as const,
-                  label: `${tc.name} — confirmation requise`,
+                  label: `${getToolTitle(tc.name)} — confirmation requise`,
                 }
               : s,
           ),
@@ -447,7 +468,7 @@ export function AIModal(props: AIModalProps) {
             ? {
                 ...s,
                 status: result.error ? ("error" as const) : ("done" as const),
-                label: tc.name,
+                label: getToolTitle(tc.name),
               }
             : s,
         ),
@@ -511,6 +532,34 @@ export function AIModal(props: AIModalProps) {
         prev.map((s) => (s.id === stepId ? { ...s, status: "pending" as const } : s)),
       );
 
+      // Anti-boucle (parité sidebar, bug #2) : ce toolCall a déjà été approuvé
+      // et redemande une confirmation → le handler ignore `approval`. On bloque
+      // au lieu de re-prompter indéfiniment.
+      if (confirmed && confirmedToolCallIdsRef.current.has(toolCall.callId)) {
+        const result: ToolResult = {
+          callId: toolCall.callId,
+          name: toolCall.name,
+          content: "",
+          error: "Confirmation non honorée par l'outil — exécution abandonnée.",
+        };
+        results[nextIndex] = result;
+        setSteps((prev) =>
+          prev.map((s) =>
+            s.id === stepId
+              ? {
+                  ...s,
+                  status: "error" as const,
+                  label: `${getToolTitle(toolCall.name)} — confirmation non honorée`,
+                }
+              : s,
+          ),
+        );
+        setLlmError(result.error ?? null);
+        setLlmLoading(false);
+        setPendingConfirmation(null);
+        return;
+      }
+
       try {
         const result = confirmed
           ? await executeAuthorizedToolCall(
@@ -523,6 +572,7 @@ export function AIModal(props: AIModalProps) {
               content: "",
               error: "Action annulée par l'utilisateur",
             } satisfies ToolResult);
+        if (confirmed) confirmedToolCallIdsRef.current.add(toolCall.callId);
 
         results[nextIndex] = result;
         const hasError = !!result.error;
@@ -534,9 +584,9 @@ export function AIModal(props: AIModalProps) {
                   status: hasError ? ("error" as const) : ("done" as const),
                   label: confirmed
                     ? hasError
-                      ? `${toolCall.name} : ${result.error}`
-                      : toolCall.name
-                    : `${toolCall.name} (annulé)`,
+                      ? `${getToolTitle(toolCall.name)} : ${result.error}`
+                      : getToolTitle(toolCall.name)
+                    : `${getToolTitle(toolCall.name)} (annulé)`,
                 }
               : s,
           ),
@@ -555,8 +605,8 @@ export function AIModal(props: AIModalProps) {
                 s.id === turnSteps[i]?.id
                   ? {
                       ...s,
-                      status: "error" as const,
-                      label: `${toolCallsThisTurn[i].name} (annulé)`,
+                       status: "error" as const,
+                       label: `${getToolTitle(toolCallsThisTurn[i].name)} (annulé)`,
                     }
                   : s,
               ),
@@ -577,7 +627,7 @@ export function AIModal(props: AIModalProps) {
                     ? {
                         ...s,
                         status: "awaiting_confirmation" as const,
-                        label: `${nextTc.name} — confirmation requise`,
+                        label: `${getToolTitle(nextTc.name)} — confirmation requise`,
                       }
                     : s,
                 ),
@@ -600,7 +650,7 @@ export function AIModal(props: AIModalProps) {
                   ? {
                       ...s,
                       status: nextResult.error ? ("error" as const) : ("done" as const),
-                      label: nextTc.name,
+                      label: getToolTitle(nextTc.name),
                     }
                   : s,
               ),
@@ -651,18 +701,17 @@ export function AIModal(props: AIModalProps) {
     if (!prompt) return;
 
     // Check AI config — if missing, show config form instead
-    const provider = loadAIProvider();
-    const apiKey = loadApiKey(provider);
     if (!isAiConfigured()) {
-      setConfigProvider(provider);
+      setConfigProvider(loadAIProvider());
       setConfigApiKey("");
       setShowConfig(true);
       return;
     }
 
-    const model = loadAiModel(provider);
-    const openaiUrl = loadAiBaseUrl(provider);
-    const ollamaConfig = loadOllamaConfig();
+    // M2 — config résolue par la source unique partagée (même sémantique que
+    // la sidebar et le runner : base URL limitée à openai/custom/grok, fallback
+    // modèle par défaut, ports Ollama normalisés).
+    const cfg = resolveAiConfig();
 
     // AbortController dédié à cette génération (bouton Stop + fermeture modal).
     const controller = new AbortController();
@@ -693,13 +742,14 @@ export function AIModal(props: AIModalProps) {
     previousTurnsRef.current = [];
     turnCountRef.current = 0;
     retriedWithoutToolsRef.current = false;
+    confirmedToolCallIdsRef.current = new Set();
     baseOptsRef.current = {
-      provider,
-      apiKey: apiKey || "",
-      model: model,
-      openaiUrl: openaiUrl,
-      host: ollamaConfig?.host,
-      port: ollamaConfig?.port,
+      provider: cfg.provider,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      openaiUrl: cfg.openaiUrl,
+      host: cfg.host,
+      port: cfg.port,
       question: userPrompt || prompt,
       ctx,
       diagnostics,

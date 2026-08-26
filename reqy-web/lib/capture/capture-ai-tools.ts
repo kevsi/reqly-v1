@@ -168,6 +168,7 @@ async function handleGenerateMockFromCapture(
 export const CAPTURE_AI_TOOLS: ReqlyTool[] = [
   {
     name: "get_capture_sessions",
+    title: "Sessions capturées",
     description:
       "Liste les requêtes réelles capturées par le proxy Reqly (méthode, URL, statut, extrait du corps).",
     parameters: {
@@ -180,6 +181,7 @@ export const CAPTURE_AI_TOOLS: ReqlyTool[] = [
   },
   {
     name: "generate_mock_from_capture",
+    title: "Générer un mock depuis les captures",
     description:
       "Génère et applique une config de mock à partir du trafic capturé réel. Regroupe par méthode+chemin, paramètre les ids numériques/uuid, déduplique les statuts. Nécessite une confirmation.",
     parameters: {

@@ -3,7 +3,7 @@ import { ListChecks, Check, X, ChevronRight, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { ToolCall } from "@/lib/llm-tools";
-import { maskSensitiveObject } from "@/lib/llm-tools";
+import { getToolTitle, maskSensitiveObject } from "@/lib/llm-tools";
 
 interface Props {
   planText: string;
@@ -17,14 +17,14 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
   const { t } = useTranslation();
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-primary/30 bg-card shadow-[0_8px_24px_-12px] shadow-primary/20"
+      className="overflow-hidden rounded-lg border border-primary/30 bg-card"
       data-testid="ai-plan-panel"
     >
-      <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-primary/10 to-transparent px-3 py-2.5 font-medium text-primary">
-        <span className="flex size-5 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/25">
+      <div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-2.5 font-medium text-primary">
+        <span className="flex size-5 items-center justify-center rounded-md bg-primary/15 text-primary ring-1 ring-primary/25">
           <ListChecks className="size-3.5" />
         </span>
-        Plan proposé
+        {t("ai.plan.title")}
       </div>
 
       <div className="space-y-3 p-3">
@@ -39,16 +39,22 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
               } catch {
                 /* ignore */
               }
+              const title = getToolTitle(tc.name);
               return (
                 <div
                   key={i}
                   className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5 transition-colors hover:border-primary/20"
+                  title={tc.name}
                 >
                   <ChevronRight className="size-3 shrink-0 text-primary/70" />
-                  <code className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                    <span className="font-semibold text-primary">{tc.name}</span>(
-                    {JSON.stringify(maskSensitiveObject(safe))})
-                  </code>
+                  <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+                    {title}
+                  </span>
+                  {Object.keys(safe).length > 0 && (
+                    <code className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
+                      ({JSON.stringify(maskSensitiveObject(safe))})
+                    </code>
+                  )}
                 </div>
               );
             })}
@@ -62,7 +68,7 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
           variant="ghost"
           size="sm"
           onClick={onReject}
-          className="h-7 gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
+          className="h-7 gap-1 px-2.5 text-xs text-muted-foreground hover:text-foreground"
           title={t("ai.plan.cancelTitle")}
         >
           <X className="size-3" />
@@ -74,7 +80,7 @@ export function AiPlanPanel({ planText, toolCalls, onApprove, onReject, isLoadin
           size="sm"
           onClick={onApprove}
           disabled={isLoading}
-          className="h-7 gap-1 rounded-full px-3 text-xs shadow-[0_2px_10px_-2px] shadow-primary/50"
+          className="h-7 gap-1 px-3 text-xs"
           title={t("ai.plan.approve")}
           data-testid="ai-plan-approve"
         >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/src/i18n";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   Clock,
   FolderPlus,
   List,
+  ListChecks,
   FilePlus,
   Zap,
   FileEdit,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getToolTitle } from "@/lib/llm-tools";
 import { AiMarkdown } from "@/src/ai/components/ai-markdown";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -46,8 +48,10 @@ export interface AssistantStepsRendererProps {
   steps: AssistantStep[];
   finalText?: string;
   mode?: StepDisplayMode;
-  onConfirm?: (stepId: string, confirmed: boolean) => void;
+  onConfirm?: (stepId: string, confirmed: boolean, all?: boolean) => void;
   collapsible?: boolean;
+  /** Une action confirmée est en cours d'exécution (loader sur le bouton). */
+  confirmBusy?: boolean;
 }
 
 // ── Grouped step helpers ───────────────────────────────────────────────────
@@ -160,13 +164,23 @@ function ThinkingRow({
       role={hasChildren ? "button" : undefined}
       tabIndex={hasChildren ? 0 : undefined}
       onClick={hasChildren ? onToggle : undefined}
-      onKeyDown={hasChildren ? (e) => e.key === "Enter" && onToggle?.() : undefined}
+      onKeyDown={
+        hasChildren
+          ? (e) => {
+              // C25 — Space aussi (pattern bouton), pas seulement Enter.
+              if (e.key === "Enter" || (e.key === " " && !e.shiftKey)) {
+                e.preventDefault();
+                onToggle?.();
+              }
+            }
+          : undefined
+      }
       className={cn(
-        "flex items-center gap-2.5 rounded-xl border px-3 py-2.5",
+        "flex items-center gap-2.5 rounded-lg border px-3 py-2.5",
         "animate-in slide-in-from-left-2 fade-in duration-300",
         hasChildren && "cursor-pointer select-none hover:bg-accent/20",
         isActive
-          ? "border-primary/20 bg-gradient-to-r from-primary/[0.07] to-transparent shadow-[0_2px_12px_-6px] shadow-primary/20"
+          ? "border-primary/20 bg-primary/[0.05]"
           : "border-border/40 bg-card/30",
       )}
     >
@@ -208,22 +222,36 @@ function ToolRow({
   isLast,
   onConfirm,
   isActiveConfirm = true,
+  confirmBusy = false,
+  showConfirmAll = false,
 }: {
   step: AssistantStep;
   isLast: boolean;
-  onConfirm?: (stepId: string, confirmed: boolean) => void;
+  onConfirm?: (stepId: string, confirmed: boolean, all?: boolean) => void;
   /** Seule l'étape dont c'est le tour affiche les boutons Confirmer/Annuler. */
   isActiveConfirm?: boolean;
+  confirmBusy?: boolean;
+  showConfirmAll?: boolean;
 }) {
   const { t } = useTranslation();
   const parsed = parseToolLabel(step.label);
   const displayLabel = stripTrailingEllipsis(step.label);
   const ToolIcon = (parsed ? (TOOL_ICONS[parsed.name] ?? Wrench) : Wrench) as LucideIcon;
+  const toolTitle = parsed ? getToolTitle(parsed.name) : null;
+  const rowRef = useRef<HTMLDivElement | null>(null);
 
   const isActive = step.status === "pending";
   const isError = step.status === "error";
   const isAwaiting = step.status === "awaiting_confirmation";
   const isDone = step.status === "done";
+
+  // H5 — une confirmation qui attend doit être visible : on amène la rangée
+  // dans le viewport au moment où elle passe en attente (une seule fois).
+  useEffect(() => {
+    if (isAwaiting && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [isAwaiting]);
 
   const badgeCls = cn(
     "mt-1 flex size-6 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors duration-300",
@@ -249,7 +277,13 @@ function ToolRow({
   );
 
   return (
-    <div className="flex items-stretch gap-2 animate-in slide-in-from-left-2 fade-in duration-300">
+    <div
+      ref={rowRef}
+      className={cn(
+        "flex items-stretch gap-2 animate-in slide-in-from-left-2 fade-in duration-300",
+        isAwaiting && "rounded-lg ring-1 ring-warning/40",
+      )}
+    >
       {/* Timeline spine */}
       <div className="flex flex-col items-center">
         <span className={badgeCls}>
@@ -270,22 +304,25 @@ function ToolRow({
       <div className="mb-1.5 min-w-0 flex-1">
         <div
           className={cn(
-            "flex items-start gap-2 rounded-xl border px-3 py-2 shadow-[0_1px_2px] shadow-black/[0.03] transition-colors duration-300",
-            isDone && "border-success/15 bg-success/[0.03]",
-            isError && "border-destructive/20 bg-destructive/[0.03]",
-            isActive && "border-primary/20 bg-primary/[0.04] shadow-primary/10",
-            isAwaiting && "border-warning/20 bg-warning/[0.04]",
-            !isActive && !isError && !isAwaiting && !isDone && "border-border/50 bg-card/40",
+            "flex items-start gap-2 rounded-lg px-3 py-2 transition-colors duration-300",
+            isDone && "bg-success/[0.03]",
+            isError && "bg-destructive/[0.04]",
+            isActive && "bg-primary/[0.05]",
+            isAwaiting && "bg-warning/[0.05]",
           )}
         >
-          <div className="min-w-0 flex-1">
-            {parsed ? (
+          <div className="min-w-0 flex-1" title={parsed?.name}>
+            {parsed && toolTitle ? (
               <>
-                <span className="font-mono text-[13px] font-semibold text-foreground">
+                <span className="text-[13px] font-medium text-foreground">{toolTitle}</span>
+                <p
+                  className="mt-0.5 truncate font-mono text-[10px] leading-relaxed text-muted-foreground/50"
+                  aria-hidden
+                >
                   {parsed.name}
-                </span>
+                </p>
                 {parsed.args && parsed.args !== "{}" && (
-                  <p className="mt-0.5 truncate font-mono text-[10px] leading-relaxed text-muted-foreground/60">
+                  <p className="mt-0.5 truncate font-mono text-[10px] leading-relaxed text-muted-foreground/80">
                     {parsed.args}
                   </p>
                 )}
@@ -294,33 +331,69 @@ function ToolRow({
               <span className="text-sm text-foreground">{displayLabel}</span>
             )}
           </div>
-          <span className={cn(statusCls, "inline-flex items-center gap-1")}>
-            {isActive && <Loader2 className="size-2.5 animate-spin" />}
-            {!isActive && statusLabel}
-          </span>
+          {/* F32 — statut textuel seulement quand il apporte de l'information
+              (en cours, attente, erreur) ; done = icône verte du rail, suffit. */}
+          {!isDone && (
+            <span className={cn(statusCls, "inline-flex items-center gap-1")}>
+              {isActive && <Loader2 className="size-2.5 animate-spin" />}
+              {statusLabel}
+            </span>
+          )}
         </div>
 
         {/* Awaiting confirmation actions — uniquement sur l'étape active,
             sinon chaque outil de la file afficherait ses propres boutons et
-            tous résoudraient le même resolver (le handler ignore le stepId). */}
+            tous résoudraient le même resolver (le handler ignore le stepId).
+            Pendant l'exécution post-confirmation : loader explicite à la place. */}
         {isAwaiting && onConfirm && isActiveConfirm && (
-          <div className="mt-1.5 flex gap-1.5 pl-1">
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => onConfirm(step.id, true)}
-              className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
-            >
-              <Check className="size-3" /> {t("ai.steps.confirm")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onConfirm(step.id, false)}
-              className="h-auto gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3" /> {t("common.cancel")}
-            </Button>
+          <div className="mt-1.5 flex flex-wrap gap-1.5 pl-1">
+            {confirmBusy ? (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                disabled
+                className="h-8 gap-1.5 px-3 text-xs font-medium"
+                data-testid="ai-confirm-busy"
+              >
+                <Loader2 className="size-3.5 animate-spin" />
+                {t("ai.steps.executing")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={() => onConfirm(step.id, true)}
+                  className="h-8 gap-1.5 px-3 text-xs font-medium"
+                >
+                  <Check className="size-3.5" /> {t("ai.steps.confirm")}
+                </Button>
+                {showConfirmAll && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onConfirm(step.id, true, true)}
+                    className="h-8 gap-1.5 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    title={t("ai.steps.confirmAllTitle")}
+                  >
+                    <ListChecks className="size-3.5" />
+                    {t("ai.steps.confirmAll")}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onConfirm(step.id, false)}
+                  className="h-8 gap-1.5 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" /> {t("common.cancel")}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -370,6 +443,7 @@ function statusTone(s: number) {
 
 function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean }) {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
   const exec = parseExecutionDetail(step.detail);
   const isError = step.status === "error";
   const isDone = step.status === "done";
@@ -399,7 +473,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
         {!isLast && <span className="my-1 w-px flex-1 bg-border/40" aria-hidden />}
       </div>
 
-      <div className="mb-1.5 min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-[0_2px_10px_-6px] shadow-black/[0.06]">
+      <div className="mb-1.5 min-w-0 flex-1 overflow-hidden rounded-lg border border-border/60 bg-card/60">
         <button
           type="button"
           onClick={() => exec && setOpen(!open)}
@@ -441,7 +515,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
                   </span>
                 )}
                 {exec.durationMs != null && (
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
                     <Clock className="size-2.5" />
                     {exec.durationMs}ms
                   </span>
@@ -465,13 +539,13 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
             {isDone && (
               <>
                 <Check className="size-2.5" />
-                fait
+                {t("ai.steps.done")}
               </>
             )}
             {isError && (
               <>
                 <X className="size-2.5" />
-                erreur
+                {t("common.error")}
               </>
             )}
           </span>
@@ -480,11 +554,11 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
         {exec && !isError && (
           <div
             className={cn(
-              "overflow-hidden transition-all duration-200",
+              "overflow-hidden transition-[max-height] duration-200",
               open ? "max-h-64" : "max-h-0",
             )}
           >
-            <div className="mx-3 mb-3 flex gap-3">
+            <div className="mx-3 mb-3 flex max-h-56 gap-3 overflow-y-auto">
               <div className="flex flex-col items-center">
                 <span className="w-px flex-1 bg-primary/20" />
                 <span className="my-1 size-1 rounded-full bg-primary/40" />
@@ -497,7 +571,7 @@ function ExecutionCard({ step, isLast }: { step: AssistantStep; isLast: boolean 
                 )}
                 <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary">
                   <ChevronRight className="size-3" />
-                  {open ? "Réduire" : "Voir le détail"}
+                  {open ? t("ai.steps.hideDetail") : t("ai.steps.showDetail")}
                 </span>
               </div>
             </div>
@@ -514,10 +588,14 @@ function StepGroupRow({
   group,
   onConfirm,
   confirmStepId,
+  confirmBusy,
+  showConfirmAll,
 }: {
   group: GroupedStep;
-  onConfirm?: (stepId: string, confirmed: boolean) => void;
+  onConfirm?: (stepId: string, confirmed: boolean, all?: boolean) => void;
   confirmStepId?: string;
+  confirmBusy?: boolean;
+  showConfirmAll?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = group.children.length > 0;
@@ -544,6 +622,8 @@ function StepGroupRow({
                 isLast={isLast}
                 onConfirm={onConfirm}
                 isActiveConfirm={child.id === confirmStepId}
+                confirmBusy={confirmBusy}
+                showConfirmAll={showConfirmAll}
               />
             );
           })}
@@ -561,7 +641,9 @@ export function AssistantStepsRenderer({
   mode = "sequential",
   onConfirm,
   collapsible = false,
+  confirmBusy = false,
 }: AssistantStepsRendererProps) {
+  const { t } = useTranslation();
   const allDone =
     steps.length > 0 && steps.every((s) => s.status === "done" || s.status === "error");
   const [userToggled, setUserToggled] = useState<boolean | null>(null);
@@ -583,21 +665,37 @@ export function AssistantStepsRenderer({
   // elle dont le resolver est en attente, les autres de la file attendent leur
   // tour et ne doivent pas afficher de boutons (ni un état d'échec).
   const firstAwaitingId = steps.find((s) => s.status === "awaiting_confirmation")?.id;
+  // Bouton « Tout confirmer » seulement si plusieurs actions attendent.
+  const awaitingCount = steps.filter((s) => s.status === "awaiting_confirmation").length;
+  const showConfirmAll = awaitingCount > 1;
 
   const canCollapse = collapsible && allDone && steps.length > 0;
   const toolSteps = steps.filter((s) => s.kind !== "thinking");
   const errorCount = steps.filter((s) => s.status === "error").length;
 
-  // Mini badges for collapsed summary: group by tool name
+  // Mini badges for collapsed summary: group by tool title
   const toolCounts = toolSteps.reduce<Record<string, number>>((acc, s) => {
     const parsed = parseToolLabel(s.label);
-    const key = parsed?.name ?? stripTrailingEllipsis(s.label);
+    const key = parsed ? getToolTitle(parsed.name) : stripTrailingEllipsis(s.label);
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
 
   return (
     <div className="space-y-0">
+      {/* C25 — annonce SR de la demande de confirmation (scrollIntoView est
+          purement visuel) ; role=alert pour interrompre poliment le flux. */}
+      {firstAwaitingId &&
+        (() => {
+          const awaiting = steps.find((s) => s.id === firstAwaitingId);
+          if (!awaiting) return null;
+          return (
+            <div role="alert" className="sr-only">
+              {t("ai.steps.waiting")} : {stripTrailingEllipsis(awaiting.label)}
+            </div>
+          );
+        })()}
+
       {/* Collapsed summary */}
       {canCollapse && (
         <button
@@ -613,9 +711,13 @@ export function AssistantStepsRenderer({
             <CheckCircle2 className="size-3.5 text-success" />
           )}
           <span className="font-medium">
-            {toolSteps.length > 0
-              ? `${toolSteps.length} exécution${toolSteps.length > 1 ? "s" : ""} terminée${toolSteps.length > 1 ? "s" : ""}`
-              : "Terminé"}
+            {errorCount > 0
+              ? t("ai.steps.collapsedErrors", { count: errorCount })
+              : toolSteps.length > 1
+                ? t("ai.steps.collapsedMany", { count: toolSteps.length })
+                : toolSteps.length === 1
+                  ? t("ai.steps.collapsedOne")
+                  : t("ai.steps.done")}
           </span>
           {Object.entries(toolCounts)
             .slice(0, 4)
@@ -648,6 +750,8 @@ export function AssistantStepsRenderer({
                   group={group}
                   onConfirm={onConfirm}
                   confirmStepId={firstAwaitingId}
+                  confirmBusy={confirmBusy}
+                  showConfirmAll={showConfirmAll}
                 />
               ))
             : visibleSteps.map((step, i) => {
@@ -662,6 +766,8 @@ export function AssistantStepsRenderer({
                     isLast={isLast}
                     onConfirm={onConfirm}
                     isActiveConfirm={step.id === firstAwaitingId}
+                    confirmBusy={confirmBusy}
+                    showConfirmAll={showConfirmAll}
                   />
                 );
               })}

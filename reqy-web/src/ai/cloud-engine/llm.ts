@@ -16,6 +16,35 @@ import { type ToolDefinition, type ToolCall, type ToolResult, toOpenAITool } fro
 import { proxyAuthHeaders } from "@/lib/proxy-auth";
 import { isTauriAvailable } from "@/lib/tauri";
 import { callAiProxyTauri } from "@/lib/tauri-ai";
+import {
+  ProviderError,
+  classifyProviderError,
+  classifyThrownError,
+} from "@/src/ai/cloud-engine/provider-errors";
+
+/** Course IPC vs signal d'annulation client (desktop). */
+function callWithAbortSignal<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () =>
+      reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+    if (signal.aborted) return onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (v) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(e);
+      },
+    );
+  });
+}
 import { recordAICall } from "@/src/ai/cloud-engine/metrics";
 
 export interface StreamLLMOptions {
@@ -124,19 +153,31 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
   }
 
   if (isTauriAvailable()) {
-    const result = await callAiProxyTauri({
-      provider: opts.provider,
-      apiKey: opts.apiKey,
-      model: opts.model,
-      host: opts.host,
-      port: opts.port,
-      openaiUrl: opts.openaiUrl,
-      system: opts.system ?? SYSTEM_PROMPT,
-      message: userMessage,
-      tools: openAITools,
-      tool_choice: opts.tool_choice,
-      previousTurns: opts.previousTurns,
-    });
+    // Phase 2 — parité desktop : le signal client est respecté (course avec
+    // l'IPC) et les erreurs natives sont classifiées comme côté proxy.
+    let result: Awaited<ReturnType<typeof callAiProxyTauri>>;
+    try {
+      result = await callWithAbortSignal(
+        callAiProxyTauri({
+          provider: opts.provider,
+          apiKey: opts.apiKey,
+          model: opts.model,
+          host: opts.host,
+          port: opts.port,
+          openaiUrl: opts.openaiUrl,
+          system: opts.system ?? SYSTEM_PROMPT,
+          message: userMessage,
+          tools: openAITools,
+          tool_choice: opts.tool_choice,
+          previousTurns: opts.previousTurns,
+        }),
+        opts.signal,
+      );
+    } catch (e) {
+      if ((e as { name?: string } | null)?.name === "AbortError") throw e;
+      const cls = classifyThrownError(e, opts.provider);
+      throw new ProviderError({ ...cls, detail: e instanceof Error ? e.message : String(e) });
+    }
     if (result.content) {
       yield { type: "text", value: result.content };
     }
@@ -189,7 +230,16 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
     } catch {
       /* ignore non-JSON error body */
     }
-    throw new Error(errMsg);
+    // Phase 2 — erreur provider classifiée : message FR actionnable + code
+    // stable consommable par le hook (retry auto, actions banner).
+    const retryAfter = res.headers.get("retry-after");
+    const cls = classifyProviderError({
+      status: res.status,
+      message: errMsg,
+      provider: opts.provider,
+      retryAfterHeader: retryAfter,
+    });
+    throw new ProviderError({ ...cls, detail: errMsg });
   }
 
   const contentType = res.headers.get("content-type") ?? "";
@@ -207,7 +257,9 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      // Normalisation CRLF : un provider émettant \r\n\r\n produirait sinon
+      // aucun séparateur \n\n → buffer infini + spinner jusqu'au timeout.
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
 
       let sep = buffer.indexOf("\n\n");
       while (sep !== -1) {
@@ -220,6 +272,16 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
           if (!payload || payload === "[DONE]") continue;
           try {
             const json = JSON.parse(payload);
+            // Usage (chemin dégradé sans tools) — comptabilisé aussi.
+            if (json?.usage && typeof json.usage === "object") {
+              yield {
+                type: "usage",
+                usage: {
+                  inputTokens: Number(json.usage.prompt_tokens ?? 0),
+                  outputTokens: Number(json.usage.completion_tokens ?? 0),
+                },
+              };
+            }
             const token: unknown = json?.choices?.[0]?.delta?.content;
             if (typeof token === "string" && token.length > 0) {
               yield { type: "text", value: token };
@@ -260,7 +322,8 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      // Normalisation CRLF (même garde que le passthrough).
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
 
       let sep = buffer.indexOf("\n\n");
       while (sep !== -1) {

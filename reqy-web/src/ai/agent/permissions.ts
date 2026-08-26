@@ -14,6 +14,8 @@ const SIDE_EFFECT_TOOLS = new Set([
   "create_environment",
   "update_environment_variable",
   "delegate",
+  // Équipe d'agents en parallèle : coût tokens multiple, régime delegate.
+  "delegate_team",
   "run_collection",
   "import_collection",
   "switch_workspace",
@@ -73,6 +75,7 @@ const HIGH_IMPACT_TOOLS = new Set([
   "import_collection",
   "update_environment_variable",
   "delegate",
+  "delegate_team",
   "switch_workspace",
   "duplicate_workspace",
   "archive_workspace",

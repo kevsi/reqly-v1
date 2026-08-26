@@ -14,6 +14,7 @@ import {
   Link2,
   Cpu,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,10 @@ interface AiProviderModalProps {
   currentBaseUrl: string;
   onSave: (config: { apiKey: string; model: string; baseUrl: string }) => void;
   onDelete?: () => void;
+  /** Ce provider est-il le provider actif ? */
+  isActiveProvider?: boolean;
+  /** Définir ce provider comme actif (sans changer sa config). */
+  onSetActive?: () => void;
 }
 
 export function AiProviderModal({
@@ -53,6 +58,8 @@ export function AiProviderModal({
   currentBaseUrl,
   onSave,
   onDelete,
+  isActiveProvider = false,
+  onSetActive,
 }: AiProviderModalProps) {
   const provider = providerInfo.value;
   const isCustom = provider === "custom";
@@ -464,6 +471,19 @@ export function AiProviderModal({
             </div>
 
             <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center">
+              {onSetActive && !isActiveProvider && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onSetActive}
+                  disabled={!hasApiKey || (isCustom && !baseUrl.trim())}
+                  className="h-10 rounded-xl border-border/70 bg-background px-4"
+                  title={t("settings.ai.setActiveTitle")}
+                >
+                  <Zap className="mr-1.5 size-3.5" />
+                  {t("settings.ai.setActive")}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

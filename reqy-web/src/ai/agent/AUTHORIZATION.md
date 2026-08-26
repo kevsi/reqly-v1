@@ -1,5 +1,14 @@
 # Gates d’autorisation de l’agent IA Reqly
 
+> **⚠️ Mise à jour (audit 2026-08)** : le mécanisme décrit ci-dessous a évolué.
+> Le point d’entrée unique est désormais **`executeAuthorizedToolCall`** (`lib/llm-tools.ts`),
+> qui appelle `authorizeToolCall(name, approvalSource)` (`src/ai/agent/permissions.ts`).
+> Les approbations sont typées `ApprovalSource = "none" | "user" | "plan" | "code" | "autoApply"`.
+> Les outils high-impact exigent toujours une approbation explicite (`user`/`plan`/`code`),
+> jamais `allow` persisté ni `autoApply`. Le circuit legacy (`dispatchAIActions`) route
+> ses actions via `authorizeLegacy` → `authorizeToolCall` (gate partagé, audit `AI_AUTHORIZATION_DECISION`).
+> Toute nouvelle surface IA DOIT passer par `executeAuthorizedToolCall`.
+
 Ce document décrit le chemin réel d’autorisation des actions IA. Il couvre deux circuits distincts : le circuit **agent/tool calling** de la sidebar et le circuit **actions JSON legacy** du cloud-engine. Les deux circuits ne partagent pas exactement les mêmes gates.
 
 ## 1. Circuit agent/tool calling

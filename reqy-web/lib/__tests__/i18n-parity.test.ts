@@ -55,6 +55,10 @@ const ALLOWED_IDENTICAL = new Set([
   "Base URL",
   // template interpolé technique (monitors) — identique FR/EN par nature
   "Base URL — {{name}}",
+  // template interpolé technique (sse stats) — identique FR/EN par nature
+  "{{bytes}}",
+  // termes techniques identiques FR/EN
+  "Console",
   "Reset state",
   "Stateful",
   "Timeout",

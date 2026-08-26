@@ -106,6 +106,7 @@ export async function generateMockConfig(
       tools: [
         {
           name: "validate_mock_config",
+          title: "Valider la config mock",
           description:
             "Soumet la config complète générée. Retourne valid=true ou la liste des problèmes à corriger.",
           parameters: {

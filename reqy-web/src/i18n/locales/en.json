@@ -85,6 +85,8 @@
       "confirmAndEnable": "Confirm and enable",
       "save": "Save",
       "activeProvider": "Active provider:",
+      "setActive": "Set as active",
+      "setActiveTitle": "Use this provider for the AI assistant",
       "configured": "Configured",
       "desktopOnly": "Desktop app required",
       "providers": {
@@ -885,7 +887,15 @@
     "download": "Download",
     "noMedia": "Media playback not available",
     "previewImage": "Preview image {{index}}",
-    "copyHeader": "Copy this header"
+    "copyHeader": "Copy this header",
+    "response.tabTimeline": "Timeline",
+    "response.tabConsole": "Console",
+    "response.timelineEmpty": "Send a request to see the network breakdown",
+    "response.consoleEmpty": "No logs yet — scripts can use console.log()",
+    "tabTimeline": "Timeline",
+    "tabConsole": "Console",
+    "timelineEmpty": "Send a request to see the network breakdown",
+    "consoleEmpty": "No logs yet — scripts can use console.log()"
   },
   "auth": {
     "accordion": "Auth",
@@ -1192,6 +1202,11 @@
     "stopGenerating": "Stop generating",
     "stop": "Stop",
     "send": "Send",
+    "attach": "Attach",
+    "attachTitle": "Attach files",
+    "enterToSend": "Enter to send",
+    "fileTooLarge": "ignored: > {{max}} KB",
+    "fileBinary": "unreadable binary",
     "generatingResponse": "Generating response…",
     "hint": "Enter to send · Shift+Enter for a new line · ⌘I to close"
   },
@@ -1434,7 +1449,14 @@
     "resume": "Resume",
     "eventsPerSec": "{{rate}} ev/s",
     "statsReconnects_one": "{{count}} reconnection",
-    "statsReconnects_other": "{{count}} reconnections"
+    "statsReconnects_other": "{{count}} reconnections",
+    "openStream": "Open SSE stream",
+    "copy": "Copy",
+    "copied": "Copied ✓",
+    "showMore": "Show all",
+    "showLess": "Collapse",
+    "statsBytes": "{{bytes}}",
+    "statsEvents": "{{count}} events"
   },
   "offline": {
     "replayTitle": "Reconnection",
@@ -1956,6 +1978,24 @@
       "executionError": "The request could not be executed: {{error}}",
       "runRequestMessage": "Run {{method}} {{url}}"
     },
+    "artifact": {
+      "title": "Artifact",
+      "previewGenerated": "Generated preview",
+      "codeBlock": "Code block",
+      "tabPreview": "Preview",
+      "tabCode": "Code",
+      "download": "Download",
+      "copyFailed": "Copy failed"
+    },
+    "modelPicker": {
+      "aria": "Choose AI model",
+      "loading": "Model…",
+      "keyMissing": "key missing",
+      "customInvalid": "Invalid identifier (no spaces)",
+      "customItem": "Custom model…",
+      "customPlaceholder": "e.g. gpt-4o-mini-2024-07-18",
+      "manageSettings": "Configure another provider…"
+    },
     "sidebar": {
       "title": "AI Assistant",
       "closePanelAria": "Close the assistant panel",
@@ -1969,8 +2009,13 @@
       "suggestion1": "Run GET /api/users",
       "suggestion2": "Create an 'API Tests' collection",
       "suggestion3": "Import the project from GitHub",
+      "shortcutsHint": "Type / for commands · @ to attach context",
+      "configTitle": "Set up AI access",
+      "configDesc": "Add an API key (or Ollama) in Settings to enable the assistant.",
       "consentNote": "The AI only acts on explicit request",
       "retry": "Retry",
+      "copyError": "Copy error",
+      "actionCompact": "Compact conversation",
       "configBannerTitle": "No AI key configured for this workspace.",
       "configCta": "Set up AI access"
     },
@@ -1987,6 +2032,7 @@
       "placeholder": "Always validate JSON bodies.\nNever run DELETE without confirmation."
     },
     "plan": {
+      "title": "Proposed plan",
       "cancelTitle": "Cancel plan",
       "approve": "Approve & execute",
       "executing": "Executing…"
@@ -2003,6 +2049,10 @@
       "controls": "Controls",
       "autoApplyOn": "Auto-approval",
       "confirmationRequired": "Confirmation required",
+      "batchConfirm": "Batch confirm",
+      "batchConfirmDesc": "One “Confirm” approves the whole pending batch — without enabling permanent auto-approval.",
+      "batchConfirmOn": "Batch confirmation on",
+      "batchConfirmMutedByAutoApply": "Inactive while auto-approval is enabled.",
       "planModeTitle": "Plan mode — the AI proposes a plan before acting",
       "plan": "Plan",
       "actModeTitle": "Act mode — the AI acts directly",
@@ -2019,7 +2069,15 @@
       "executing": "Executing…",
       "done": "Done",
       "inProgress": "In progress",
-      "waiting": "Waiting"
+      "waiting": "Waiting",
+      "collapsedOne": "1 execution completed",
+      "collapsedMany": "{{count}} executions completed",
+      "collapsedErrors": "Completed with {{count}} error(s)",
+      "showDetail": "View detail",
+      "hideDetail": "Collapse",
+      "confirmAll": "Confirm all",
+      "confirmAllTitle": "Also approve every pending action in this batch",
+      "waitingLive": "Confirmation required"
     },
     "modal": {
       "responseHeaders": "Response headers",
@@ -2039,7 +2097,11 @@
       "unhelpfulTitle": "This diagnostic isn't relevant"
     },
     "permissions": {
-      "closeAria": "Close permissions"
+      "closeAria": "Close permissions",
+      "allow": "Always allow",
+      "ask": "Ask",
+      "deny": "Always deny",
+      "default": "Default"
     },
     "hooks": {
       "requestLabel": "HTTP request",
@@ -2048,6 +2110,8 @@
       "confirmRequired": "Confirmation required by the permissions policy.",
       "analysisDone": "Analysis complete",
       "noModelResponse": "No response from the model (timeout).",
+      "retrying": "Retrying in {{seconds}} s…",
+      "interrupted": "response interrupted",
       "planModeCount": "⏸ Plan mode — {{count}} proposed action(s)",
       "missingApiKey": "Missing API key in Settings",
       "configureProvider": "Configure your AI provider in Settings"
