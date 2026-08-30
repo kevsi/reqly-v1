@@ -54,22 +54,19 @@ async function checkTauriPermission(): Promise<boolean> {
 }
 
 /**
- * Fires an OS-level notification, gated by user preferences.
+ * Fires an OS-level notification (desktop uniquement), gated by user preferences.
  *
- * Automatically branches between:
- *  - **Tauri desktop**: uses `@tauri-apps/plugin-notification` (native OS).
- *  - **Browser**: uses the standard `Notification` API.
+ * Desktop: utilise `@tauri-apps/plugin-notification` (natif OS).
+ * Plus de fallback navigateur — `isTauriAvailable()` doit être vrai, sinon no-op.
  *
  * Silently no-ops when:
  *  - running on the server
- *  - the runtime doesn't support notifications
+ *  - not in Tauri
  *  - permission is not granted
  *  - the master toggle `probe_system_push_enabled` is "false"
  *  - a per-event toggle (`probe_push_events[event]`) is false
- *  - (browser only) the document is currently visible — the toast handles it
  *
- * This helper is intentionally safe to call from anywhere — it never throws
- * and returns a resolved Promise.
+ * Safe to call from anywhere — never throws.
  */
 export async function fireSystemNotification(
   opts: SystemNotificationOptions,
@@ -89,34 +86,21 @@ export async function fireSystemNotification(
     }
   }
 
-  try {
-    if (isTauriAvailable()) {
-      const granted = await checkTauriPermission()
-      if (!granted) return
-      const { sendNotification } = await import("@tauri-apps/plugin-notification")
-      sendNotification({
-        title: opts.title,
-        body: opts.body,
-        group: opts.tag ?? opts.event,
-        icon: opts.icon,
-      })
-      return
-    }
+  // Desktop uniquement — pas de fallback navigateur
+  if (!isTauriAvailable()) return
 
-    // Browser path
-    if (typeof Notification === "undefined") return
-    if (Notification.permission !== "granted") return
-    // Avoid duplicating toasts when user is already looking at the tab.
-    // In Tauri the user may be on another native app, so we always fire.
-    if (typeof document !== "undefined" && document.visibilityState === "visible") return
-    new Notification(opts.title, {
+  try {
+    const granted = await checkTauriPermission()
+    if (!granted) return
+    const { sendNotification } = await import("@tauri-apps/plugin-notification")
+    sendNotification({
+      title: opts.title,
       body: opts.body,
-      tag: opts.tag ?? opts.event,
-      icon: opts.icon ?? "/favicon.ico",
+      group: opts.tag ?? opts.event,
+      icon: opts.icon,
     })
   } catch {
-    // Some browsers (Safari, embedded webviews) throw on construction;
-    // never let a notification failure bubble up to the caller.
+    // Ne jamais laisser une notification faire échouer l'appelant
   }
 }
 
