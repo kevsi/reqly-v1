@@ -104,7 +104,7 @@ function applyThemeToDom(theme: Theme): void {
 
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute("content", isDark ? "#0d1117" : "#ffffff");
+    meta.setAttribute("content", isDark ? "#0a0a0b" : "#ffffff");
   }
 }
 

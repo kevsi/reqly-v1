@@ -37,8 +37,8 @@ const themes: {
     value: "dark",
     label: "Dark",
     descriptionKey: "settings.apparence.themeDarkDesc",
-    bg: "#1a1a1a",
-    card: "#262626",
+    bg: "#0A0A0B",
+    card: "#0F0F10",
     accent: "#10b981",
   },
   {

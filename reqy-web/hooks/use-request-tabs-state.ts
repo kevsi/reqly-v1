@@ -18,6 +18,9 @@ import { toast } from "@/hooks/use-toast";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { openRequestMassCloseConfirm } from "@/components/request-mass-close-dialog";
 
+export type RequestViewLayout = "horizontal" | "vertical";
+export const STORAGE_KEY_REQUEST_LAYOUT = "reqly_request_layout";
+
 export interface TabContextMenu {
   tabId: string;
   x: number;
@@ -60,6 +63,35 @@ export function useRequestTabsState() {
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [, setIsRequestCollapsed] = useState(false);
   const [, setIsResponseCollapsed] = useState(false);
+
+  // ── Layout (Bruno-style) ─────────────────────────────────────────────
+  // Persisted via persistence layer (IndexedDB + localStorage fallback).
+  // Hydration-safe: start horizontal (SSR fallback) then hydrate from storage.
+  const [requestViewLayout, setRequestViewLayout] = useState<RequestViewLayout>("horizontal");
+  const [layoutHydrated, setLayoutHydrated] = useState(false);
+
+  // Hydrate once after mount to avoid SSR mismatch when stored === "vertical".
+  useEffect(() => {
+    try {
+      const stored = persistence.getItem<string>(STORAGE_KEY_REQUEST_LAYOUT);
+      if (stored === "vertical" || stored === "horizontal") {
+        setRequestViewLayout(stored);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLayoutHydrated(true);
+    }
+  }, []);
+
+  const toggleRequestViewLayout = useCallback(() => {
+    setRequestViewLayout((prev) => (prev === "horizontal" ? "vertical" : "horizontal"));
+  }, []);
+
+  useEffect(() => {
+    if (!layoutHydrated) return;
+    void persistence.setItem(STORAGE_KEY_REQUEST_LAYOUT, requestViewLayout);
+  }, [requestViewLayout, layoutHydrated]);
 
   const isLoading = loadingCount > 0;
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
@@ -350,6 +382,9 @@ export function useRequestTabsState() {
     scrollTabs,
     setIsRequestCollapsed,
     setIsResponseCollapsed,
+    requestViewLayout,
+    setRequestViewLayout,
+    toggleRequestViewLayout,
     updateTab,
     addNewTab,
     forceCloseTab,

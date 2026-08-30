@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import {
   Copy,
   ArrowDownUp,
@@ -85,9 +86,10 @@ function CopyButton({ value, label }: { value: string; label?: string }) {
         try {
           await navigator.clipboard.writeText(value);
           setCopied(true);
+          toast({ title: "Copié" });
           setTimeout(() => setCopied(false), 1500);
         } catch {
-          /* clipboard refused */
+          toast({ title: "Échec copie", variant: "destructive" });
         }
       }}
       disabled={!value}

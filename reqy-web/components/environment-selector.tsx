@@ -5,6 +5,7 @@ import { Check, ChevronsUpDown, Eye, EyeOff, Plus, Settings2, Trash2 } from "luc
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useRequestStore, type EnvironmentVariable } from "@/hooks/use-request-store";
+import { toast } from "@/hooks/use-toast";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ export function EnvironmentSelector() {
       color: "slate",
       variables: [{ key: "BASE_URL", value: "http://localhost:3000", enabled: true }],
     });
+    toast({ title: "Environnement créé" });
     setEditingEnvId(newId);
     setIsManageOpen(true);
   };
@@ -108,7 +110,10 @@ export function EnvironmentSelector() {
           {environments.map((env) => (
             <DropdownMenuItem
               key={env.id}
-              onClick={() => setActiveEnvironment(env.id)}
+              onClick={() => {
+                setActiveEnvironment(env.id);
+                toast({ title: `Environnement ${env.name}` });
+              }}
               className="flex items-center gap-2"
             >
               <div
@@ -232,7 +237,10 @@ function ManageEnvironmentsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[82vh] p-0 gap-0 flex overflow-hidden">
+      <DialogContent
+        style={{ maxWidth: "min(1400px, calc(100vw - 2rem))" }}
+        className="h-[86vh] p-0 gap-0 flex overflow-hidden"
+      >
         <DialogTitle className="sr-only">{t("env.manage")}</DialogTitle>
         {/* Left Sidebar */}
         <div className="w-1/3 border-r bg-muted/20 flex flex-col">

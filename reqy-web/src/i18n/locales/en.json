@@ -462,7 +462,9 @@
       "saveAll": "Save All",
       "savedCount": "Saved {{count}} tab(s)",
       "allSaved": "All tabs are already saved",
-      "detachedWarning": "{{count}} tab(s) not attached to a collection"
+      "detachedWarning": "{{count}} tab(s) not attached to a collection",
+      "layoutSideBySide": "Side-by-side view",
+      "layoutStacked": "Stacked view"
     },
     "description": "Execute an entire collection and verify every assertion in one pass.",
     "selectCollection": "Select a collection…",

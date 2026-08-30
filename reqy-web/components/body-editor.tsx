@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Trash2, Code } from "lucide-react";
+import { Plus, Trash2, Code, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -137,6 +137,7 @@ export function BodyEditor({
     <AccordionItem value="body" className="border border-border rounded-lg px-4 ">
       <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
         <span className="flex items-center gap-2">
+          <FileText className="size-3.5" />
           {t("body.accordion")}
           <span className="text-[10px] font-mono font-normal text-muted-foreground/70">
             — {bodyTypeLabels[bodyType]}

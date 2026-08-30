@@ -16,6 +16,7 @@ import {
   Radio,
   Boxes,
   Activity,
+  LogIn,
 } from "lucide-react";
 import { AppIcon } from "@/components/app-icon";
 import { ToolsSection } from "@/components/sidebar/tools-section";
@@ -26,6 +27,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
+import { useSessionStore } from "@/lib/session-store";
 
 const NAV_ITEMS = [
   {
@@ -109,6 +111,7 @@ export function ApiSidebar({
   const { t } = useTranslation();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const isMobile = useIsMobile(768);
+  const isAuthenticated = useSessionStore((s) => s.status === "authenticated");
   const drawerRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   // Sur mobile, le drawer est TOUJOURS en pleine largeur avec les libellés,
@@ -291,6 +294,43 @@ export function ApiSidebar({
           )}
         </button>
       </div>
+
+      {/* Se connecter — ancêtre de la sidebar, en bas (affiché tant que déconnecté) */}
+      {!isAuthenticated && (
+        <div className={cn("border-t border-sidebar-border py-2", expanded ? "px-3" : "px-2")}>
+          <div
+            className={cn(
+              "group/nav-item relative flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
+              expanded ? "gap-3 px-3" : "justify-center",
+              "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            )}
+          >
+            {!expanded ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/login" onClick={handleNavClick} className="flex items-center justify-center">
+                    <LogIn
+                      aria-hidden="true"
+                      className="size-[18px] shrink-0 text-muted-foreground group-hover/nav-item:text-foreground"
+                    />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {t("account.signIn")}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link href="/login" onClick={handleNavClick} className="flex w-full items-center gap-3">
+                <LogIn
+                  aria-hidden="true"
+                  className="size-[18px] shrink-0 text-muted-foreground group-hover/nav-item:text-foreground"
+                />
+                <span className="truncate">{t("account.signIn")}</span>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Collapse toggle button — desktop only (mobile uses the drawer) */}
       <button

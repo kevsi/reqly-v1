@@ -82,7 +82,7 @@ export function Toaster() {
               right: 0,
             }}
             className={cn(
-              'gpu flex w-full max-w-xs items-start gap-3 overflow-hidden rounded-lg border p-3.5 pr-3 shadow-xl',
+              'gpu flex w-full max-w-xs items-center gap-3 overflow-hidden rounded-lg border p-3.5 pr-3 shadow-xl h-[72px] min-h-[72px]',
               t.variant === 'destructive'
                 ? 'border-destructive bg-destructive text-destructive-foreground'
                 : 'border bg-background text-foreground',
@@ -106,9 +106,9 @@ export function Toaster() {
             )} />
           </div>
 
-          <div className="flex-1 min-w-0">
-            {t.title && <div className="text-sm font-semibold leading-snug">{t.title}</div>}
-            {t.description && <div className="mt-1 text-xs leading-relaxed opacity-80">{t.description}</div>}
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            {t.title && <div className="text-sm font-semibold leading-snug line-clamp-1 truncate">{t.title}</div>}
+            {t.description && <div className="mt-0.5 text-xs leading-relaxed opacity-80 line-clamp-2 break-words">{t.description}</div>}
           </div>
           {t.action && (
             <button

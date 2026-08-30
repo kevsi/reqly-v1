@@ -72,13 +72,7 @@ const SECTION_KEYS: SectionKey[] = [
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const {
-    systemNotificationPermission,
-    requestSystemNotificationPermission,
-    aiAutoApply,
-    setAiAutoApply,
-  } = useRequestStore();
-  const [showAiConfirm, setShowAiConfirm] = useState(false);
+  const { systemNotificationPermission, requestSystemNotificationPermission } = useRequestStore();
   const [provider, setProvider] = useState<AIProvider>(() =>
     typeof window !== "undefined" ? loadAIProvider() : "openai",
   );
@@ -100,19 +94,6 @@ export default function SettingsPage() {
   const [ollamaModel, setOllamaModel] = useState(() =>
     typeof window !== "undefined" ? loadOllamaConfig().model || "llama2" : "llama2",
   );
-  const [simpleMode, setSimpleMode] = useState(() =>
-    typeof window !== "undefined"
-      ? persistence.getItem<boolean>("reqly_simple_mode") === true
-      : false,
-  );
-  const handleSimpleModeChange = (val: boolean) => {
-    setSimpleMode(val);
-    try {
-      void persistence.setItem("reqly_simple_mode", val);
-    } catch {
-      /* ignore */
-    }
-  };
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [_githubStatus, setGithubStatus] = useState<
     "loading" | "connected" | "disconnected" | "error"
@@ -400,8 +381,6 @@ export default function SettingsPage() {
               ollamaHost={ollamaHost}
               ollamaPort={ollamaPort}
               ollamaModel={ollamaModel}
-              aiAutoApply={aiAutoApply}
-              showAiConfirm={showAiConfirm}
               aiProviders={AI_PROVIDERS}
               onProviderChange={handleProviderChange}
               onSaveConfig={handleSaveAIConfig}
@@ -411,10 +390,6 @@ export default function SettingsPage() {
               setOllamaHost={setOllamaHost}
               setOllamaPort={setOllamaPort}
               setOllamaModel={setOllamaModel}
-              setAiAutoApply={setAiAutoApply}
-              setShowAiConfirm={setShowAiConfirm}
-              simpleMode={simpleMode}
-              setSimpleMode={handleSimpleModeChange}
             />
           ) : null}
           {activeSection === "notifications" ? (

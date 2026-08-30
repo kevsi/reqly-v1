@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
+import { toast } from "@/hooks/use-toast";
 
 function formatTimestamp(ts: number): string {
   const d = new Date(ts);
@@ -224,10 +225,12 @@ export function SSEPanel() {
       maxEvents,
       eventFilter: eventFilter.trim() || undefined,
     });
+    toast({ title: "SSE connecté" });
   }, [url, headers, authType, authToken, maxEvents, eventFilter, connect]);
 
   const handleDisconnect = useCallback(() => {
     disconnect();
+    toast({ title: "SSE déconnecté" });
   }, [disconnect]);
 
   const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> =

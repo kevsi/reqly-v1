@@ -261,7 +261,6 @@ export default function DashboardPage() {
         sub: t("dashboard.errorsSub", { count: errorCount }),
         trend: "up",
         icon: Activity,
-        accent: "from-success/15 to-transparent",
         iconColor: "text-success",
         iconBg: "bg-success/10",
       },
@@ -276,7 +275,6 @@ export default function DashboardPage() {
               : t("dashboard.slow"),
         trend: avgResponseTime < 1000 ? "up" : "down",
         icon: Clock,
-        accent: "from-violet-500/15 to-transparent",
         iconColor: "text-violet-500",
         iconBg: "bg-violet-500/10",
       },
@@ -286,7 +284,6 @@ export default function DashboardPage() {
         sub: t("dashboard.successfulSub", { count: successfulRequests }),
         trend: successRate >= 90 ? "up" : "down",
         icon: CheckCircle2,
-        accent: "from-sky-500/15 to-transparent",
         iconColor: "text-sky-500",
         iconBg: "bg-sky-500/10",
       },
@@ -296,7 +293,6 @@ export default function DashboardPage() {
         sub: t("dashboard.uniqueUrls"),
         trend: "up",
         icon: Globe,
-        accent: "from-warning/15 to-transparent",
         iconColor: "text-warning",
         iconBg: "bg-warning/10",
       },
@@ -367,7 +363,7 @@ export default function DashboardPage() {
     <>
       <main className="flex-1 overflow-auto p-6 hide-scrollbar">
         {/* Header */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               {t("dashboard.title")}
@@ -403,7 +399,7 @@ export default function DashboardPage() {
         </div>
 
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center animate-slide-up">
+          <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
               <Activity className="size-10 text-muted-foreground/40" />
             </div>
@@ -413,7 +409,7 @@ export default function DashboardPage() {
             </p>
             <a
               href="/"
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Play className="size-4" />
               {t("dashboard.goToApi")}
@@ -423,34 +419,17 @@ export default function DashboardPage() {
           <div className="space-y-6">
             {/* ── Row 1: Stat cards ── */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {stats.map((stat, idx) => (
-                <Card
-                  key={stat.title}
-                  className="bg-card overflow-hidden relative animate-slide-up"
-                  style={{ animationDelay: `${idx * 40}ms` }}
-                >
-                  {/* accent gradient */}
-                  <div
-                    className={cn(
-                      "absolute inset-x-0 top-0 h-16 bg-gradient-to-b",
-                      stat.accent,
-                      "pointer-events-none",
-                    )}
-                  />
-                  <CardHeader className="flex flex-row items-center justify-between pb-1 relative">
-                    <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {stats.map((stat) => (
+                <Card key={stat.title} className="bg-card overflow-hidden">
+                  <CardHeader className="flex flex-row items-center justify-between pb-1">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
                       {stat.title}
                     </CardTitle>
-                    <div
-                      className={cn(
-                        "flex size-8 items-center justify-center rounded-lg",
-                        stat.iconBg,
-                      )}
-                    >
+                    <div className={cn("flex size-8 items-center justify-center rounded-lg", stat.iconBg)}>
                       <stat.icon className={cn("size-4", stat.iconColor)} />
                     </div>
                   </CardHeader>
-                  <CardContent className="relative">
+                  <CardContent>
                     <div className="text-2xl font-bold text-foreground">{stat.value}</div>
                     <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                       {stat.trend === "up" ? (
@@ -521,9 +500,9 @@ export default function DashboardPage() {
                         <div
                           key={request.endpoint + request.timestamp}
                           className={cn(
-                            "grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center transition-all duration-150 min-w-[500px]",
+                            "grid grid-cols-[80px_1fr_60px_80px_80px] gap-2 px-6 py-3 items-center transition-colors min-w-[500px]",
                             idx % 2 === 0 ? "bg-background" : "bg-muted/10",
-                            "hover:bg-muted/30 hover:shadow-sm hover:-translate-y-[1px] active:translate-y-0",
+                            "hover:bg-muted/30",
                           )}
                         >
                           <span
@@ -643,7 +622,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-3">
                   {/* Healthy */}
-                  <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-success/15 to-transparent p-5">
+                  <div className="relative overflow-hidden rounded-lg border border-border bg-card p-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-3xl font-bold text-foreground">{healthCounts.healthy}</p>
@@ -670,7 +649,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Warning */}
-                  <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-warning/15 to-transparent p-5">
+                  <div className="relative overflow-hidden rounded-lg border border-border bg-card p-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-3xl font-bold text-foreground">{healthCounts.warning}</p>
@@ -696,7 +675,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Critical */}
-                  <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-destructive/15 to-transparent p-5">
+                  <div className="relative overflow-hidden rounded-lg border border-border bg-card p-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-3xl font-bold text-foreground">

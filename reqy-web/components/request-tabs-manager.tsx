@@ -16,8 +16,6 @@ import { useRequestTabsState } from "@/hooks/use-request-tabs-state";
 import { useRequestTabExecution } from "@/hooks/use-request-tab-execution";
 import { useRequestStore, type RequestItem } from "@/hooks/use-request-store";
 import { isTauriAvailable } from "@/lib/tauri";
-import { SimpleRequestBuilder } from "@/components/simple-mode/simple-request-builder";
-import { persistence } from "@/lib/persistence";
 import { cn } from "@/lib/utils";
 import { useShallow } from "zustand/react/shallow";
 import { getMethodPanelClass, getMethodHandleClass } from "@/lib/http-method-colors";
@@ -67,16 +65,6 @@ export function RequestTabsManager() {
   const tabState = useRequestTabsState();
   const updateRequestById = useRequestStore((s) => s.updateRequestById);
 
-  // "Mode simple" (Task 13): when enabled, hide the raw request editor and show
-  // the natural-language guided builder instead. Persisted via the existing
-  // persistence layer (the same store used by Settings).
-  const [simpleMode] = useState(() => {
-    try {
-      return persistence.getItem<boolean>("reqly_simple_mode") === true;
-    } catch {
-      return false;
-    }
-  });
   const execution = useRequestTabExecution(tabState);
 
   // Sur mobile, on empile requête/réponse verticalement au lieu du split horizontal.
@@ -107,6 +95,8 @@ export function RequestTabsManager() {
     responsePanelRef,
     setIsRequestCollapsed,
     setIsResponseCollapsed,
+    requestViewLayout,
+    toggleRequestViewLayout,
     updateTab,
     addNewTab,
     forceCloseTab,
@@ -117,6 +107,10 @@ export function RequestTabsManager() {
     closeAllTabs,
     saveAllTabs,
   } = tabState;
+
+  // Direction effective : mobile force vertical (comme avant), sinon préférence utilisateur.
+  const effectiveDirection = isMobile ? ("vertical" as const) : requestViewLayout;
+  const isStacked = effectiveDirection === "vertical";
 
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
 
@@ -460,6 +454,9 @@ export function RequestTabsManager() {
           onSaveActive={saveActiveTab}
           onOpenHistory={() => setHistoryOpen(true)}
           onRenameTab={renameTab}
+          layout={requestViewLayout}
+          effectiveDirection={effectiveDirection}
+          onToggleLayout={toggleRequestViewLayout}
         />
       </div>
 
@@ -485,20 +482,16 @@ export function RequestTabsManager() {
         </div>
       )}
 
-      {simpleMode ? (
-        <div className="min-h-0 h-full flex-1 overflow-hidden">
-          <SimpleRequestBuilder />
-        </div>
-      ) : (
-        <div
-          className={cn(
-            "min-h-0 h-full flex-1 overflow-hidden transition-colors duration-200",
-            getMethodPanelClass(activeTab.method),
-          )}
-        >
-          <ResizablePanelGroup
-            key={isMobile ? "mobile" : "desktop"}
-            direction={isMobile ? "vertical" : "horizontal"}
+      <div
+        className={cn(
+          "min-h-0 h-full flex-1 overflow-hidden transition-colors duration-200",
+          getMethodPanelClass(activeTab.method),
+        )}
+      >
+        <ResizablePanelGroup
+            key={`${effectiveDirection}-${isMobile ? "mobile" : "desktop"}`}
+            direction={effectiveDirection}
+            autoSaveId={`reqly-req-resp-${effectiveDirection}`}
             className="min-h-0 h-full"
           >
             <ResizablePanel
@@ -512,7 +505,14 @@ export function RequestTabsManager() {
               onExpand={() => setIsRequestCollapsed(false)}
               className="min-w-0 min-h-0 overflow-hidden"
             >
-              <div className="min-h-0 h-full overflow-auto hide-scrollbar border-r border-border max-[916px]:border-r-0 max-[916px]:border-b request-panel-scroll">
+              <div
+                className={cn(
+                  "min-h-0 h-full overflow-auto hide-scrollbar request-panel-scroll",
+                  isStacked
+                    ? "border-b border-border"
+                    : "border-r border-border max-[916px]:border-r-0 max-[916px]:border-b",
+                )}
+              >
                 <ErrorBoundary
                   fallback={
                     <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -703,7 +703,6 @@ export function RequestTabsManager() {
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
-      )}
 
       <CollectionsModal
         open={collectionsDrawerOpen}

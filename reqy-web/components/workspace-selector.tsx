@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { useRequestStore, type Workspace } from "@/hooks/use-request-store";
 import { useShallow } from "zustand/react/shallow";
 import { WORKSPACE_PERSONAL_ID } from "@/hooks/store/types";
+import { toast } from "@/hooks/use-toast";
 
 const workspaceIcons: Record<string, typeof Folder> = {
   folder: Folder,
@@ -134,6 +135,8 @@ export function WorkspaceSelector() {
       // Network error, fall back to local-only creation
       addWorkspace({ name: newName.trim(), description: "", color: "slate", icon: "folder" });
     }
+    const createdName = newName.trim();
+    toast({ title: `Workspace ${createdName}` });
     setNewName("");
     setCreateOpen(false);
     setCreateLoading(false);
@@ -166,6 +169,7 @@ export function WorkspaceSelector() {
     }
     // Local fallback
     updateWorkspace(id, { name });
+    toast({ title: `Workspace ${name}` });
     setRenamingWorkspace(null);
     setNewName("");
     setRenameOpen(false);
@@ -194,6 +198,7 @@ export function WorkspaceSelector() {
         }
       }
       deleteWorkspace(w.id);
+      toast({ title: `Workspace ${w.name} supprimé` });
       setDeletingId(null);
     },
     [deleteWorkspace, fetchWorkspacesFromApi, t],
@@ -244,7 +249,10 @@ export function WorkspaceSelector() {
             return (
               <DropdownMenuItem
                 key={w.id}
-                onClick={() => setActiveWorkspace(w.id)}
+                onClick={() => {
+                  setActiveWorkspace(w.id);
+                  toast({ title: `Workspace ${w.name}` });
+                }}
                 onMouseEnter={() => setHoveredWsId(w.id)}
                 onMouseLeave={() => setHoveredWsId(null)}
                 className={cn(

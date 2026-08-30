@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Text } from "@/components/ui/text";
@@ -114,6 +114,7 @@ export function AuthSection({
     <AccordionItem value="auth" className="border border-border rounded-lg px-4 ">
       <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
         <span className="flex items-center gap-2">
+          <Lock className="size-3.5" />
           {t("auth.accordion")}
           {authType !== "none" && (
             <span className="text-[10px] font-mono font-normal text-muted-foreground/70">

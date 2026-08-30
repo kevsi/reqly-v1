@@ -11,6 +11,8 @@ import {
   AlertCircle,
   Sparkles,
   Loader2,
+  Copy,
+  Download,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -69,6 +71,7 @@ export function HistoryPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<HttpMethod[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 
@@ -104,8 +107,49 @@ export function HistoryPanel({
       if (statusFilter === "error" && s && s < 400) return false;
     }
 
+    // Time filter
+    if (timeFilter !== "all") {
+      const now = Date.now();
+      const cutoff =
+        timeFilter === "today" ? now - 24 * 60 * 60 * 1000 : timeFilter === "week" ? now - 7 * 24 * 60 * 60 * 1000 : now - 30 * 24 * 60 * 60 * 1000;
+      if (item.executedAt < cutoff) return false;
+    }
+
     return true;
   });
+
+  const copyAsCurl = async (item: HistoryItem) => {
+    const headers = Object.entries(item.headers ?? {})
+      .map(([k, v]) => ` -H "${k}: ${v}"`)
+      .join("");
+    const body = item.body ? ` --data-raw '${String(item.body).replace(/'/g, "'\\''")}'` : "";
+    const curl = `curl -X ${item.method} "${item.url}"${headers}${body}`;
+    try {
+      await navigator.clipboard.writeText(curl);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "cURL copié" });
+    } catch {
+      // fallback: download
+      const blob = new Blob([curl], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `curl-${item.id}.sh`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const exportFiltered = () => {
+    const data = JSON.stringify(filteredHistory, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reqly-history-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Pagination
   const PAGE_SIZE = 50;
@@ -146,15 +190,28 @@ export function HistoryPanel({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold text-foreground">{t("history.title")}</h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowClearConfirm(true)}
-          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" />
-          {t("history.clear")}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={exportFiltered}
+            disabled={filteredHistory.length === 0}
+            className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
+            title="Exporter le filtre en JSON"
+          >
+            <Download className="size-3.5" />
+            Export
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowClearConfirm(true)}
+            className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" />
+            {t("history.clear")}
+          </Button>
+        </div>
       </div>
 
       {/* Search + Filters */}
@@ -212,12 +269,35 @@ export function HistoryPanel({
             </button>
           ))}
 
+          <span className="w-px h-4 bg-border mx-1" />
+
+          {/* Time filter chips */}
+          {[
+            { label: "Aujourd'hui", value: "today" as const },
+            { label: "7j", value: "week" as const },
+            { label: "30j", value: "month" as const },
+          ].map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setTimeFilter(timeFilter === f.value ? "all" : f.value)}
+              className={cn(
+                "h-6 rounded px-2 text-[10px] font-medium border transition-colors",
+                timeFilter === f.value
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+
           {/* Clear all filters */}
-          {(methodFilter.length > 0 || statusFilter || searchQuery) && (
+          {(methodFilter.length > 0 || statusFilter || timeFilter !== "all" || searchQuery) && (
             <button
               onClick={() => {
                 setMethodFilter([]);
                 setStatusFilter("");
+                setTimeFilter("all");
                 setSearchQuery("");
               }}
               className="h-6 rounded px-2 text-[10px] font-medium text-muted-foreground hover:text-destructive transition-colors"
@@ -228,8 +308,30 @@ export function HistoryPanel({
         </div>
       </div>
 
-      {/* History List */}
-      <div className="flex-1 overflow-y-auto hide-scrollbar p-2">
+      {/* Mini histogramme chronologie (latence + répartition status) */}
+      {filteredHistory.length > 0 && (
+        <div className="px-3 py-2 border-b border-border/50 bg-muted/5 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-muted-foreground">
+              {filteredHistory.length} requêtes • {filteredHistory.filter((h) => h.responseStatus && h.responseStatus >= 200 && h.responseStatus < 300).length} 2xx •{" "}
+              {filteredHistory.filter((h) => h.responseStatus && h.responseStatus >= 400).length} erreurs
+            </span>
+            <span className="font-mono text-muted-foreground">
+              avg {Math.round(filteredHistory.reduce((a, b) => a + (b.responseTime ?? 0), 0) / Math.max(1, filteredHistory.length))} ms
+            </span>
+          </div>
+          <div className="flex gap-px h-1.5 rounded-full overflow-hidden bg-muted-foreground/10">
+            {filteredHistory.slice(0, 60).map((h) => {
+              const s = h.responseStatus ?? 0;
+              const c = s >= 500 ? "bg-destructive" : s >= 400 ? "bg-warning" : s >= 300 ? "bg-sky-500" : s >= 200 ? "bg-success" : "bg-muted-foreground/30";
+              return <div key={h.id} className={`flex-1 ${c}`} title={`${h.method} ${h.endpoint} — ${s || "-"} ${h.responseTime ?? 0}ms`} />;
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* History List — virtualisé par pagination + content-visibility */}
+      <div className="flex-1 overflow-y-auto hide-scrollbar p-2 [content-visibility:auto]">
         {Object.entries(groupedHistory).map(([date, items]) => (
           <div key={date} className="mb-4">
             <h4 className="mb-2 px-2 text-xs font-medium text-muted-foreground">{date}</h4>
@@ -310,6 +412,15 @@ export function HistoryPanel({
                         )}
                       </Button>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyAsCurl(item)}
+                      className="size-6 p-0"
+                      title="Copier en cURL"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

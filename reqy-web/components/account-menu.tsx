@@ -14,7 +14,12 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-export function AccountMenu() {
+interface AccountMenuProps {
+  /** When false, hides the "Sign in" link shown to unauthenticated users. */
+  showSignInLink?: boolean;
+}
+
+export function AccountMenu({ showSignInLink = true }: AccountMenuProps) {
   const { t } = useTranslation();
   const user = useSessionStore((s) => s.user);
   const status = useSessionStore((s) => s.status);
@@ -22,6 +27,7 @@ export function AccountMenu() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   if (status !== "authenticated" || !user) {
+    if (!showSignInLink) return null;
     return (
       <Link
         href="/login"

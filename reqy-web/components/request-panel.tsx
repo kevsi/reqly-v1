@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useRef, useMemo, useEffect, useState } from "react";
-import { FlaskConical, Code } from "lucide-react";
+import { FlaskConical, Code, Route, ListFilter, Tag } from "lucide-react";
 import type { HttpMethod } from "@/lib/types";
 import type { AutocompleteGroup } from "@/components/ui/autocomplete-input";
 import {
@@ -362,8 +362,9 @@ export function RequestPanel({
           {/* Path Variables - detected from :param patterns in the URL */}
           {hasPathVariables && (
             <AccordionItem value="path-vars" className="border border-border rounded-lg px-4 ">
-              <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+              <AccordionTrigger className="section-trigger">
                 <span className="flex items-center gap-2">
+                  <Route className="size-3.5" />
                   {t("request.pathVariables")}
                 </span>
               </AccordionTrigger>
@@ -384,8 +385,9 @@ export function RequestPanel({
 
           {/* Query Params */}
           <AccordionItem value="query-params" className="border border-border rounded-lg px-4 ">
-            <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+            <AccordionTrigger className="section-trigger">
               <span className="flex items-center gap-2">
+                <ListFilter className="size-3.5" />
                 {t("request.queryParams")}
                 {queryParams.length > 0 && (
                   <span className="text-xs font-mono text-muted-foreground">
@@ -411,13 +413,12 @@ export function RequestPanel({
 
           {/* Headers */}
           <AccordionItem value="headers" className="border border-border rounded-lg px-4 ">
-            <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+            <AccordionTrigger className="section-trigger">
               <span className="flex items-center gap-2">
+                <Tag className="size-3.5" />
                 {t("request.headersLabel")}
                 {headers.length > 0 && (
-                  <span className="text-xs font-mono text-muted-foreground">
-                    {headers.length}
-                  </span>
+                  <span className="text-xs font-mono text-muted-foreground">{headers.length}</span>
                 )}
               </span>
             </AccordionTrigger>
@@ -454,7 +455,7 @@ export function RequestPanel({
 
           {/* Tests */}
           <AccordionItem value="tests" className="border border-border rounded-lg px-4">
-            <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+            <AccordionTrigger className="section-trigger">
               <span className="flex items-center gap-2">
                 <FlaskConical className="size-3.5" />
                 {t("request.tests")}
@@ -483,7 +484,7 @@ export function RequestPanel({
 
           {/* Assertions (test-runner) */}
           <AccordionItem value="assertions-runner" className="border border-border rounded-lg px-4">
-            <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+            <AccordionTrigger className="section-trigger">
               <span className="flex items-center gap-2">
                 <FlaskConical className="size-3.5" />
                 {t("assertion.title")}
@@ -499,7 +500,7 @@ export function RequestPanel({
 
           {/* Scripts */}
           <AccordionItem value="scripts" className="border border-border rounded-lg px-4">
-            <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-wider hover:no-underline [&[data-state=open]>svg]:rotate-180">
+            <AccordionTrigger className="section-trigger">
               <span className="flex items-center gap-2">
                 <Code className="size-3.5" />
                 Scripts

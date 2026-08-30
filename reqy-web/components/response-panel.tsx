@@ -48,7 +48,7 @@ import {
   extractVideoUrls,
   extractImageUrls,
 } from "@/components/response-utils";
-import type { HistoryItem, TestResult } from "@/lib/types";
+import type { HistoryItem, TestResult, ResponseTimings } from "@/lib/types";
 import type { ConsoleEntry } from "@/lib/test-runner/scripts";
 import { getStatusBorderAccentClass } from "@/lib/http-status-colors";
 
@@ -57,15 +57,7 @@ interface ResponsePanelProps {
   responseData?: string | Blob;
   responseStatus?: number;
   responseTime?: number;
-  responseTimings?: {
-    dnsMs?: number;
-    connectMs?: number;
-    tlsMs?: number;
-    ttfbMs?: number;
-    transferMs?: number;
-    totalMs?: number;
-    transport?: "native" | "proxy";
-  };
+  responseTimings?: ResponseTimings;
   responseSize?: string;
   responseHeaders?: Record<string, string>;
   transportError?: TauriErrorPayload | null;
@@ -313,24 +305,12 @@ export function ResponsePanel({
         onDiff={handleOpenDiff}
       />
 
-      <ResponseTimeline
-        timings={{
-          dnsMs: responseTimings?.dnsMs,
-          connectMs: responseTimings?.connectMs,
-          tlsMs: responseTimings?.tlsMs,
-          ttfbMs: responseTimings?.ttfbMs,
-          transferMs: responseTimings?.transferMs,
-          totalMs: responseTime ?? 0,
-          transport: responseTimings?.transport,
-        }}
-      />
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 border-b border-border px-4">
           <TabsList className="h-auto gap-0 bg-transparent p-0 -mb-px flex w-full overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] justify-start [&>button]:shrink-0 [&>button]:scroll-snap-align-start">
             <TabsTrigger
               value="response"
-              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-medium transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabResponse")}
               {hasResponse && (
@@ -341,27 +321,27 @@ export function ResponsePanel({
             </TabsTrigger>
             <TabsTrigger
               value="headers"
-              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-medium transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabHeaders")}
               
             </TabsTrigger>
             <TabsTrigger
               value="cookies"
-              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-medium transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabCookies")}
               
             </TabsTrigger>
             <TabsTrigger
               value="code"
-              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-medium transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabCode")}
             </TabsTrigger>
             <TabsTrigger
               value="tests"
-              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all duration-200 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-xs font-medium transition-colors data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground/80 data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:border-muted-foreground/20"
             >
               {t("response.tabTests")}
               {testResults && testResults.length > 0 && (
@@ -507,17 +487,7 @@ export function ResponsePanel({
         </TabsContent>
         <TabsContent value="timeline" className="m-0 min-h-0 flex-1 animate-fade-in overflow-auto">
           <div className="p-4">
-            <ResponseTimeline
-              timings={{
-                dnsMs: responseTimings?.dnsMs,
-                connectMs: responseTimings?.connectMs,
-                tlsMs: responseTimings?.tlsMs,
-                ttfbMs: responseTimings?.ttfbMs,
-                transferMs: responseTimings?.transferMs,
-                totalMs: responseTime ?? 0,
-                transport: responseTimings?.transport,
-              }}
-            />
+            <ResponseTimeline timings={responseTimings ?? {}} />
             {!responseTime && (
               <p className="text-xs text-muted-foreground italic mt-4">
                 {t("response.timelineEmpty", "Envoyez une requête pour voir le breakdown réseau")}

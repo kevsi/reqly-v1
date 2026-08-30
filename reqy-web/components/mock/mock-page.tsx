@@ -163,12 +163,14 @@ export function MockPage() {
   async function handleConnect(base: string, token: string): Promise<boolean> {
     const ok = await admin.handleConnect(base, token);
     if (ok && store.config) setAppliedSnapshot(configSnapshot(store.config));
+    toast({ title: ok ? "Mock connecté" : "Échec connexion", variant: ok ? "default" : "destructive" });
     return ok;
   }
 
   async function handleApply(): Promise<void> {
     const ok = await admin.handleApply();
     if (ok && store.config) setAppliedSnapshot(configSnapshot(store.config));
+    toast({ title: ok ? "Mock appliqué" : "Échec apply", variant: ok ? "default" : "destructive" });
   }
 
   const routes = store.routes;

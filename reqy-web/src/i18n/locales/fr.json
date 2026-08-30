@@ -462,7 +462,9 @@
       "saveAll": "Tout enregistrer",
       "savedCount": "{{count}} onglet(s) sauvegardé(s)",
       "allSaved": "Tous les onglets sont déjà sauvegardés",
-      "detachedWarning": "{{count}} onglet(s) non rattaché(s) à une collection"
+      "detachedWarning": "{{count}} onglet(s) non rattaché(s) à une collection",
+      "layoutSideBySide": "Vue côte à côte",
+      "layoutStacked": "Vue empilée"
     },
     "description": "Exécutez une collection entière et vérifiez chaque assertion en une seule passe.",
     "selectCollection": "Sélectionner une collection…",

@@ -194,7 +194,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
           <VariablesPanel />
         </span>
         <ThemeSwitcher />
-        <AccountMenu />
+        <AccountMenu showSignInLink={false} />
 
         {/* AI Sidebar Toggle */}
         <AiSidebarToggle />

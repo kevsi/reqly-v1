@@ -53,6 +53,9 @@ export interface RequestTabBarProps {
   onSaveActive: () => void;
   onOpenHistory: () => void;
   onRenameTab?: (tabId: string, name: string) => void;
+  layout?: "horizontal" | "vertical";
+  effectiveDirection?: "horizontal" | "vertical";
+  onToggleLayout?: () => void;
 }
 
 export function RequestTabBar({
@@ -79,6 +82,8 @@ export function RequestTabBar({
   onSaveActive,
   onOpenHistory,
   onRenameTab,
+  layout = "horizontal",
+  onToggleLayout,
 }: RequestTabBarProps) {
   const { t } = useTranslation();
   const hasActiveTab = tabs.some((t) => t.id === activeTabId);
@@ -109,7 +114,7 @@ export function RequestTabBar({
           <button
             type="button"
             onClick={() => onScroll("left")}
-            className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
+            className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors"
             title={t("runner.tabs.scrollLeft")}
           >
             <ChevronLeft className="size-3.5" />
@@ -161,7 +166,7 @@ export function RequestTabBar({
               }}
               data-tab-id={tab.id}
               className={cn(
-                "group relative flex shrink-0 cursor-pointer items-center gap-2.5 rounded-t-md px-5 py-3 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                "group relative flex shrink-0 cursor-pointer items-center gap-2.5 rounded-t-md px-5 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 activeTabId === tab.id
                   ? "bg-background text-foreground"
                   : "text-muted-foreground/60 hover:bg-muted/20 hover:text-foreground/80",
@@ -205,7 +210,7 @@ export function RequestTabBar({
                 type="button"
                 onClick={(e) => onCloseTab(tab.id, e)}
                 className={cn(
-                  "ml-0.5 flex size-7 shrink-0 items-center justify-center rounded transition-all duration-150 hover:bg-muted-foreground/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 hover:scale-110",
+                  "ml-0.5 flex size-7 shrink-0 items-center justify-center rounded transition-colors hover:bg-muted-foreground/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100",
                   activeTabId === tab.id ? "opacity-30" : "opacity-0",
                 )}
                 data-testid="tabbar-close-tab"
@@ -220,12 +225,13 @@ export function RequestTabBar({
           <button
             type="button"
             onClick={() => onScroll("right")}
-            className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-all duration-150"
+            className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors"
             title={t("runner.tabs.scrollRight")}
           >
             <ChevronRight className="size-3.5" />
           </button>
         )}
+
         {/* Quick actions for the ACTIVE tab — moved here from request-active-toolbar */}
         <div className="flex shrink-0 items-center gap-0.5 border-l border-border/30 px-1.5">
           <Button
@@ -279,7 +285,7 @@ export function RequestTabBar({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-7 text-muted-foreground/40 hover:text-foreground transition-all duration-200"
+                className="size-7 text-muted-foreground/40 hover:text-foreground transition-colors"
                 title={t("runner.tabs.allTabs")}
               >
                 <List className="size-3.5" />
@@ -307,7 +313,7 @@ export function RequestTabBar({
             variant="ghost"
             size="icon"
             onClick={onAddTab}
-            className="size-7 text-muted-foreground/50 hover:text-foreground transition-all duration-200"
+            className="size-7 text-muted-foreground/50 hover:text-foreground transition-colors"
             title={t("runner.tabs.newTab")}
             data-testid="tabbar-add-tab"
           >

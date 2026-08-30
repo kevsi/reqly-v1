@@ -19,6 +19,15 @@ export interface Toast {
 }
 
 const TOAST_REMOVE_DELAY = 6000;
+// Desktop uniquement — uniforme pour toutes les toasts
+const TOAST_DURATION = 4000;
+const TOAST_TITLE_MAX = 48;
+const TOAST_DESCRIPTION_MAX = 80;
+
+function truncateText(node: React.ReactNode, max: number): React.ReactNode {
+  if (typeof node === "string" && node.length > max) return node.slice(0, max - 1) + "…";
+  return node;
+}
 
 const _actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -116,16 +125,22 @@ function toast({ ...props }: Omit<Toast, "id">) {
     return { id, dismiss };
   }
 
+  const uniformToast: Toast = {
+    ...props,
+    id,
+    duration: TOAST_DURATION,
+    title: truncateText(props.title, TOAST_TITLE_MAX),
+    description: truncateText(props.description, TOAST_DESCRIPTION_MAX),
+  };
+
   dispatch({
     type: "ADD_TOAST",
-    toast: { ...props, id, duration: props.duration ?? 5000 },
+    toast: uniformToast,
   });
 
-  if (props.duration !== Infinity) {
-    setTimeout(() => {
-      dispatch({ type: "DISMISS_TOAST", toastId: id });
-    }, props.duration ?? 5000);
-  }
+  setTimeout(() => {
+    dispatch({ type: "DISMISS_TOAST", toastId: id });
+  }, TOAST_DURATION);
 
   return { id, dismiss };
 }
