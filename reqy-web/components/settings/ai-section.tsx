@@ -3,14 +3,6 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Card,
   CardHeader,
@@ -20,7 +12,6 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import type { AIProvider } from "@/lib/types";
-import { persistence } from "@/lib/persistence";
 import {
   saveAIProvider,
   saveApiKey,
@@ -39,18 +30,12 @@ interface AISectionProps {
   apiKey: string;
   aiModel: string;
   aiBaseUrl: string;
-  aiAutoApply: boolean | undefined;
-  showAiConfirm: boolean;
   aiProviders: Array<{ value: AIProvider; label: string }>;
   onProviderChange: (value: AIProvider) => void;
   onSaveConfig: () => void;
   setApiKey: (val: string) => void;
   setAiModel: (val: string) => void;
   setAiBaseUrl: (val: string) => void;
-  setAiAutoApply: (val: boolean) => void;
-  setShowAiConfirm: (val: boolean) => void;
-  simpleMode?: boolean;
-  setSimpleMode?: (val: boolean) => void;
   // Legacy props kept for backward compatibility
   ollamaHost?: string;
   ollamaPort?: string;
@@ -65,18 +50,12 @@ export default function AISection({
   apiKey,
   aiModel: _aiModel,
   aiBaseUrl: _aiBaseUrl,
-  aiAutoApply,
-  showAiConfirm,
   aiProviders,
   onProviderChange,
   onSaveConfig,
   setApiKey,
   setAiModel,
   setAiBaseUrl,
-  setAiAutoApply,
-  setShowAiConfirm,
-  simpleMode,
-  setSimpleMode,
 }: AISectionProps) {
   // --- Modal state ---
   const [modalOpen, setModalOpen] = useState(false);
@@ -198,70 +177,6 @@ export default function AISection({
               ))}
             </div>
           </div>
-
-          {/* Auto-apply toggle */}
-          <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">{t("settings.ai.autoApply")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.ai.autoApplyDesc")}</p>
-            </div>
-            <Switch
-              checked={!!aiAutoApply}
-              onCheckedChange={(v) => {
-                const want = Boolean(v);
-                if (want) {
-                  try {
-                    const confirmed =
-                      persistence.getItem<string>("probe_ai_autorun_confirmed") === "true";
-                    if (!confirmed) {
-                      setShowAiConfirm(true);
-                      return;
-                    }
-                  } catch {
-                    /* ignore */
-                  }
-                }
-                setAiAutoApply(want);
-              }}
-            />
-          </div>
-
-          {/* Mode simple toggle */}
-          <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">{t("settings.ai.simpleMode")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.ai.simpleModeDesc")}</p>
-            </div>
-            <Switch checked={!!simpleMode} onCheckedChange={(v) => setSimpleMode?.(Boolean(v))} />
-          </div>
-
-          {/* Auto-apply confirmation dialog */}
-          <Dialog open={showAiConfirm} onOpenChange={setShowAiConfirm}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("settings.ai.confirmTitle")}</DialogTitle>
-                <DialogDescription>{t("settings.ai.confirmDesc")}</DialogDescription>
-              </DialogHeader>
-              <div className="mt-4 flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setShowAiConfirm(false)}>
-                  {t("common.cancel")}
-                </Button>
-                <Button
-                  onClick={() => {
-                    try {
-                      void persistence.setItem("probe_ai_autorun_confirmed", "true");
-                    } catch {
-                      /* ignore */
-                    }
-                    setAiAutoApply(true);
-                    setShowAiConfirm(false);
-                  }}
-                >
-                  {t("settings.ai.confirmAndEnable")}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </CardContent>
 
         <CardFooter className="border-t pt-5">

@@ -12,6 +12,10 @@ export const UNSAFE_OBJECT_KEYS: ReadonlySet<string> = new Set([
   "__proto__",
   "constructor",
   "prototype",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
 ]);
 
 /** `true` si une clé pourrait polluer le prototype (input non fiable). */
