@@ -1,3 +1,5 @@
+import type { ResponseTimings } from "@/lib/types";
+
 /** A single cookie returned from a Set-Cookie response header. */
 export interface TauriCookie {
   name: string;
@@ -18,6 +20,7 @@ export interface TauriFetchResponse {
   durationMs: number;
   encoding: string;
   cookies: TauriCookie[];
+  timings: ResponseTimings;
 }
 
 export interface TauriErrorPayload {
@@ -100,6 +103,7 @@ interface RawTauriFetchResponse {
     sameSite: string;
     expires: string | null;
   }>;
+  timings: ResponseTimings;
 }
 
 declare global {
@@ -170,6 +174,7 @@ export async function invokeTauriFetch(
       sameSite: c.sameSite,
       expires: c.expires ?? null,
     })),
+    timings: result.timings,
   };
 }
 

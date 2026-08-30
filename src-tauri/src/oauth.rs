@@ -780,7 +780,7 @@ mod tests {
     fn mock_token_url(server: &Server) -> String {
         match server.server_addr() {
             ListenAddr::IP(addr) => format!("http://127.0.0.1:{}/token", addr.port()),
-            ListenAddr::Unix(_) => panic!("mock OAuth server must listen on TCP"),
+            _ => panic!("mock OAuth server must listen on TCP"),
         }
     }
 

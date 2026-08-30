@@ -11,9 +11,11 @@
 //! as base64 in `body` with `encoding: "base64"`. Text responses are decoded
 //! as UTF-8 with HTML entities unescaped.
 
-use std::time::Instant;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose, Engine as _};
+use futures_util::stream;
 use serde::Serialize;
 use tauri;
 #[cfg(feature = "ts-export")]
@@ -36,6 +38,22 @@ pub struct TauriCookie {
     pub expires: Option<String>,
 }
 
+#[derive(Serialize, Default, Clone)]
+#[cfg_attr(feature = "ts-export", derive(TS))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-export", ts(export, rename_all = "camelCase"))]
+pub struct RequestTimings {
+    pub dns_ms: u64,
+    pub connect_ms: u64,
+    pub tls_ms: u64,
+    pub ttfb_ms: u64,
+    pub transfer_ms: u64,
+    pub upload_ms: u64,
+    pub request_bytes: u64,
+    pub response_bytes: u64,
+    pub connection_reused: bool,
+}
+
 #[derive(Serialize)]
 #[cfg_attr(feature = "ts-export", derive(TS))]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +65,7 @@ pub struct TauriFetchResponse {
     pub duration_ms: u64,
     pub encoding: String,
     pub cookies: Vec<TauriCookie>,
+    pub timings: RequestTimings,
 }
 
 #[derive(Clone)]
@@ -151,6 +170,63 @@ fn is_binary_content_type(content_type: &str) -> bool {
 // The hosted web proxy (/api/proxy) DOES enforce SSRF protection for
 // users who route through the cloud — see reqy-web/app/api/proxy/route.ts.
 
+// ── Timing instrumentation ──────────────────────────────────────────────
+// reqwest n'expose pas les phases réseau (DNS/TCP/TLS) ni l'instant où le
+// body est entièrement envoyé. On mesure :
+//   - DNS/TCP/TLS : probe concurrente (tokio net + tokio-rustls) sur une
+//     connexion séparée, en parallèle de la vraie requête (comme le proxy web).
+//   - Upload : body enveloppé dans un stream à un élément qui enregistre
+//     l'instant où reqwest le consomme (≈ fin d'envoi).
+//   - TTFB : `send()` ne résout qu'à l'arrivée des headers → instantané.
+//   - Transfer : durée de lecture du corps de réponse.
+
+/// Probe DNS + TCP (+ TLS si HTTPS) sur une connexion jetable, en ms.
+async fn probe_connection(host: String, port: u16, https: bool) -> (u64, u64, u64) {
+    let dns_start = Instant::now();
+    let addr = tokio::net::lookup_host((host.as_str(), port))
+        .await
+        .ok()
+        .and_then(|mut it| it.next());
+    let dns_ms = dns_start.elapsed().as_millis() as u64;
+    let Some(addr) = addr else {
+        return (dns_ms, 0, 0);
+    };
+
+    let tcp_start = Instant::now();
+    let socket = match tokio::net::TcpStream::connect(addr).await {
+        Ok(s) => s,
+        Err(_) => return (dns_ms, tcp_start.elapsed().as_millis() as u64, 0),
+    };
+    let tcp_ms = tcp_start.elapsed().as_millis() as u64;
+
+    if !https {
+        return (dns_ms, tcp_ms, 0);
+    }
+
+    let tls_start = Instant::now();
+    let ok = probe_tls(host, socket).await;
+    let tls_ms = tls_start.elapsed().as_millis() as u64;
+    if ok.is_none() {
+        return (dns_ms, tcp_ms, 0);
+    }
+    (dns_ms, tcp_ms, tls_ms)
+}
+
+/// Handshake TLS (tokio-rustls) sur une socket TCP déjà connectée.
+async fn probe_tls(host: String, socket: tokio::net::TcpStream) -> Option<()> {
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in rustls_native_certs::load_native_certs().certs {
+        let _ = roots.add(cert);
+    }
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+    let name = rustls::pki_types::ServerName::try_from(host).ok()?;
+    let _ = connector.connect(name, socket).await.ok()?;
+    Some(())
+}
+
 #[tauri::command]
 pub async fn fetch_proxy(
     method: String,
@@ -182,6 +258,16 @@ pub async fn fetch_proxy(
     }
 
     let start = Instant::now();
+    let host = parsed_url.host_str().unwrap_or_default().to_string();
+    let port = parsed_url.port_or_known_default().unwrap_or(80);
+    let is_https = parsed_url.scheme() == "https";
+
+    // Probe DNS + TCP + TLS en parallèle de la requête (comme le proxy web).
+    let probe = tokio::spawn(probe_connection(host, port, is_https));
+
+    // Track upload time via once-stream.
+    let upload_done = Arc::new(Mutex::new(None::<Duration>));
+    let request_bytes = body.as_ref().map(|b| b.len() as u64).unwrap_or(0);
 
     // Prevent SSL bypass via accept_invalid_certs in release builds.
     let mut accept_invalid_certs = accept_invalid_certs;
@@ -232,11 +318,31 @@ pub async fn fetch_proxy(
         request = request.header("Content-Type", "application/json");
     }
 
-    if let Some(body) = body {
-        request = request.body(body);
+    // Wrap body in a once-stream to measure upload time (reqwest consomme
+    // le flux quand il est prêt à envoyer le body).
+    if let Some(b) = body {
+        let body_bytes = b.into_bytes();
+        let upload_start = Instant::now();
+        let done = Arc::clone(&upload_done);
+        let stream = stream::once(async move {
+            let mut guard = done.lock().unwrap();
+            if guard.is_none() {
+                *guard = Some(upload_start.elapsed());
+            }
+            drop(guard);
+            Ok::<_, reqwest::Error>(bytes::Bytes::from(body_bytes))
+        });
+        request = request.body(reqwest::Body::wrap_stream(stream));
     }
 
     let response = request.send().await?;
+    let ttfb_ms = start.elapsed().as_millis() as u64;
+    let upload_ms = upload_done
+        .lock()
+        .unwrap()
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
     let status = response.status().as_u16();
     let header_pairs: Vec<(String, String)> = response
         .headers()
@@ -275,20 +381,24 @@ pub async fn fetch_proxy(
         })
         .unwrap_or_default();
 
-    let (body_str, encoding) = if is_binary_content_type(&content_type) {
+    let transfer_start = Instant::now();
+    let (body_str, encoding, response_bytes) = if is_binary_content_type(&content_type) {
         let bytes = response
             .bytes()
             .await
             .map_err(AppError::from)?;
+        let len = bytes.len() as u64;
         (
             general_purpose::STANDARD.encode(&bytes),
             "base64".to_string(),
+            len,
         )
     } else {
         let text = response
             .text()
             .await
             .map_err(AppError::from)?;
+        let len = text.len() as u64;
         // HTML entity decoding is only meaningful for HTML documents. Applying
         // it to JSON/XML/text corrupts legitimate data (e.g. `&#123;` inside a
         // JSON string becomes `{`).
@@ -297,10 +407,26 @@ pub async fn fetch_proxy(
         } else {
             text
         };
-        (decoded, "utf8".to_string())
+        (decoded, "utf8".to_string(), len)
     };
+    let transfer_ms = transfer_start.elapsed().as_millis() as u64;
 
     let duration_ms = start.elapsed().as_millis() as u64;
+
+    let (dns_ms, connect_ms, tls_ms) = probe.await.unwrap_or((0, 0, 0));
+    let connection_reused = dns_ms + connect_ms < 5;
+
+    let timings = RequestTimings {
+        dns_ms,
+        connect_ms,
+        tls_ms,
+        ttfb_ms,
+        transfer_ms,
+        upload_ms,
+        request_bytes,
+        response_bytes,
+        connection_reused,
+    };
 
     Ok(TauriFetchResponse {
         status,
@@ -309,6 +435,7 @@ pub async fn fetch_proxy(
         duration_ms,
         encoding,
         cookies,
+        timings,
     })
 }
 

@@ -17,6 +17,7 @@ import { captureRequest, captureResponse, recordCapturedRequest } from "@/lib/ca
 import { requireCaptureUserId, CaptureAuthError } from "@/lib/capture-auth";
 import { isPublicWebDeployment } from "@/lib/environment";
 import net, { isIP } from "node:net";
+import tls from "node:tls";
 import { Agent } from "undici";
 
 /**
@@ -226,7 +227,17 @@ export async function POST(request: NextRequest) {
   let pinnedDispatcher: Agent | undefined;
 
   // ── Timing metrics ────────────────────────────────────────────────────
-  const timings = { dnsMs: 0, connectMs: 0, ttfbMs: 0 };
+  const timings = {
+    dnsMs: 0,
+    connectMs: 0,
+    tlsMs: 0,
+    ttfbMs: 0,
+    transferMs: 0,
+    uploadMs: 0,
+    requestBytes: 0,
+    responseBytes: 0,
+    connectionReused: false,
+  };
 
   try {
     const rateKey = getRateLimitKey(request);
@@ -360,39 +371,96 @@ export async function POST(request: NextRequest) {
     const customTimeoutMs = parseInt(request.headers.get("x-proxy-timeout") || "30000", 10);
     const finalTimeoutMs = Math.min(Math.max(customTimeoutMs, 1000), 60000);
 
+    // Track request body size for upload metrics
+    timings.requestBytes = bodyToSend ? new TextEncoder().encode(bodyToSend).length : 0;
+
+    // ── Upload timing (phase "Request sent") ──────────────────────────────
+    // undici/fetch n'expose pas directement le temps d'écriture du body : on
+    // enveloppe celui-ci dans un ReadableStream et on mesure le moment où
+    // undici le consomme (≈ fin d'envoi). Content-Length est posé
+    // explicitement pour que undici garde une sémantique identique au body
+    // string (pas de Transfer-Encoding: chunked).
+    let uploadMs = 0;
+    const buildBodyStream = (bodyStr: string): ReadableStream<Uint8Array> => {
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(bodyStr);
+      const uploadStart = Date.now();
+      let measured = false;
+      const mark = () => {
+        if (measured) return;
+        measured = true;
+        uploadMs = Math.max(0, Date.now() - uploadStart);
+      };
+      return new ReadableStream({
+        pull(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+          mark();
+        },
+        cancel() {
+          mark();
+        },
+      });
+    };
+    const toBody = (b: string | undefined) =>
+      b !== undefined ? buildBodyStream(b) : undefined;
+    if (
+      bodyToSend !== undefined &&
+      !Object.keys(finalHeaders).some((key) => key.toLowerCase() === "content-length")
+    ) {
+      finalHeaders["Content-Length"] = String(timings.requestBytes);
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), finalTimeoutMs);
 
-    // ── TCP connect probe ───────────────────────────────────────────────
-    // Open a throwaway socket to the target host/port in parallel with the
-    // fetch so we can surface a real connectMs without adding latency. The
-    // probe resolves as soon as TCP connect completes (TLS handshake is part
-    // of ttfbMs, not connectMs). On error we fall back to 0.
+    // ── TCP + TLS connect probe ──────────────────────────────────────────
+    // Open a throwaway socket to measure TCP connect time, then optionally
+    // measure TLS handshake time for HTTPS targets. Both run in parallel
+    // with the fetch so we don't add latency.
     const connectHost = new URL(targetUrl).hostname;
     const connectPort = parsedUrl!.port
       ? Number(parsedUrl!.port)
       : parsedUrl!.protocol === "https:"
         ? 443
         : 80;
-    const connectProbe = new Promise<number>((resolve) => {
+    const isHttps = parsedUrl!.protocol === "https:";
+
+    const connectProbe = new Promise<{ tcpMs: number; tlsMs: number }>((resolve) => {
       const probeStart = Date.now();
       const socket = net.connect({ host: connectHost, port: connectPort });
-      const done = (ms: number) => {
-        try {
-          socket.destroy();
-        } catch {
-          /* noop */
+
+      const onConnect = () => {
+        const tcpMs = Math.max(0, Date.now() - probeStart);
+        if (!isHttps) {
+          try { socket.destroy(); } catch { /* noop */ }
+          resolve({ tcpMs, tlsMs: 0 });
+          return;
         }
-        resolve(ms);
+        // TLS handshake on the connected socket
+        const tlsStart = Date.now();
+        const tlsSocket = tls.connect({ socket, servername: connectHost }, () => {
+          const tlsMs = Math.max(0, Date.now() - tlsStart);
+          try { tlsSocket.destroy(); } catch { /* noop */ }
+          resolve({ tcpMs, tlsMs });
+        });
+        tlsSocket.once("error", () => {
+          try { tlsSocket.destroy(); } catch { /* noop */ }
+          resolve({ tcpMs, tlsMs: 0 });
+        });
       };
-      socket.once("connect", () => done(Math.max(0, Date.now() - probeStart)));
-      socket.once("error", () => done(0));
+
+      socket.once("connect", onConnect);
+      socket.once("error", () => {
+        try { socket.destroy(); } catch { /* noop */ }
+        resolve({ tcpMs: 0, tlsMs: 0 });
+      });
     });
     const startTime = Date.now();
     let response = await fetch(targetUrl, {
       method,
       headers: finalHeaders,
-      body: bodyToSend,
+      body: toBody(bodyToSend),
       signal: controller.signal,
       ...(pinnedDispatcher ? { dispatcher: pinnedDispatcher } : {}),
       // SSRF hardening: do NOT follow redirects automatically. An attacker
@@ -483,7 +551,7 @@ export async function POST(request: NextRequest) {
       response = await fetch(targetUrl, {
         method: nextMethod,
         headers: finalHeaders,
-        body: nextBody,
+        body: toBody(nextBody),
         signal: controller.signal,
         ...(pinnedDispatcher ? { dispatcher: pinnedDispatcher } : {}),
         redirect: "manual",
@@ -511,8 +579,14 @@ export async function POST(request: NextRequest) {
       if (target.error) return redirectErrorResponse(target.error);
     }
 
-    // Real TCP connect time (probe ran concurrently with the fetch above).
-    timings.connectMs = await connectProbe;
+    // Real TCP + TLS connect time (probe ran concurrently with the fetch above).
+    const probeResult = await connectProbe;
+    timings.connectMs = probeResult.tcpMs;
+    timings.tlsMs = probeResult.tlsMs;
+
+    // Connection reuse heuristic: if DNS + TCP are near-zero, the Agent
+    // likely reused an existing connection from its pool.
+    timings.connectionReused = timings.dnsMs + timings.connectMs < 5;
 
     // TTFB approximation: time from request start until response headers
     // were received. fetch resolves when headers arrive, which for non-
@@ -547,6 +621,7 @@ export async function POST(request: NextRequest) {
     // Stream the response body and cancel as soon as the cap is reached,
     // so we don't waste memory buffering a multi-GB payload just to throw
     // 99% of it away. See `lib/security/streaming.ts` for the unit tests.
+    const transferStart = Date.now();
     const reader = response.body?.getReader();
     if (!reader) {
       body = "";
@@ -557,6 +632,7 @@ export async function POST(request: NextRequest) {
         size: bytesRead,
         truncated,
       } = await readWithCap(reader, MAX_RESPONSE_BODY_SIZE);
+      timings.transferMs = Math.max(0, Date.now() - transferStart);
       size = bytesRead;
       if (isBinary) {
         body = buf.toString("base64");
@@ -570,6 +646,9 @@ export async function POST(request: NextRequest) {
         responseHeaders["x-proxy-truncated"] = "1";
       }
     }
+
+    timings.responseBytes = size;
+    timings.uploadMs = uploadMs;
 
     const successPayload: Record<string, unknown> = {
       status: response.status,
