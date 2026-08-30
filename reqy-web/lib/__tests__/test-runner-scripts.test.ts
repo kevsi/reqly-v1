@@ -135,4 +135,17 @@ describe("runScript", () => {
     const fail = await runScript("pm.expect(5).to.equal(6)", baseCtx, { phase: "post" });
     expect(fail.error).toBeDefined();
   });
+
+  it("aliases pm.response.code/status/statusCode (regression #response-code)", async () => {
+    const ctx: RunnerContext = { ...baseCtx, environment: { ...baseCtx.environment } };
+    const response = { statusCode: 200, responseTimeMs: 123, body: '{"ok":true}', headers: { "content-type": "application/json" } };
+    const outCode = await runScript("pm.response.code", ctx, { phase: "post", response });
+    expect(outCode.result).toBe(200);
+    const outStatus = await runScript("pm.response.status", ctx, { phase: "post", response });
+    expect(outStatus.result).toBe(200);
+    const outStatusCode = await runScript("pm.response.statusCode", ctx, { phase: "post", response });
+    expect(outStatusCode.result).toBe(200);
+    const outExpect = await runScript("pm.expect(pm.response.code).to.equal(200)", ctx, { phase: "post", response });
+    expect(outExpect.error).toBeUndefined();
+  });
 });

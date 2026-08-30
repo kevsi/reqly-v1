@@ -65,6 +65,24 @@ import {
   runCollection as runCollectionEngine,
   type RunnerOptions,
 } from "@/lib/test-runner/runner";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+  DragOverlay,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { createRunnerExecutor, runRequestsConcurrent } from "@/lib/test-runner/executor";
 import { loadJsonDataset, loadCsvDataset } from "@/lib/test-runner/data-driven";
 import {
@@ -420,6 +438,134 @@ function RequestResultItem({
   );
 }
 
+function SortableRunnerRow({
+  req,
+  isChecked,
+  isRunning,
+  indexLabel,
+  onToggle,
+  onCheckedChange,
+}: {
+  req: RequestItem;
+  isChecked: boolean;
+  isRunning: boolean;
+  indexLabel?: string;
+  onToggle: () => void;
+  onCheckedChange: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: req.id,
+    disabled: isRunning,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const methodClass = (methodText as Record<string, string>)[req.method] ?? "text-muted-foreground";
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={() => !isRunning && onToggle()}
+      className={cn(
+        "flex items-center gap-2.5 p-2 rounded-md border text-xs transition-colors cursor-pointer select-none",
+        isChecked ? "bg-card border-border hover:bg-muted/40" : "bg-muted/10 border-transparent opacity-60 hover:opacity-100",
+        isDragging && "opacity-50 z-10 shadow-lg ring-1 ring-primary/20",
+      )}
+    >
+      {indexLabel != null && (
+        <span className="font-mono text-[11px] text-muted-foreground w-4 text-right shrink-0">{indexLabel}</span>
+      )}
+      <button
+        type="button"
+        className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-muted-foreground/60 hover:bg-muted/30 cursor-grab active:cursor-grabbing disabled:opacity-30"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reordonner ${req.name}`}
+        onClick={(e) => e.stopPropagation()}
+        disabled={isRunning}
+      >
+        <GripVertical className="size-3.5" />
+      </button>
+      <input
+        type="checkbox"
+        checked={isChecked}
+        onChange={onCheckedChange}
+        onClick={(e) => e.stopPropagation()}
+        disabled={isRunning}
+        aria-label={req.name}
+        className="rounded border-border text-primary focus:ring-primary size-3.5 shrink-0"
+      />
+      <span className={cn("font-mono text-[11px] font-bold shrink-0 w-12", methodClass)}>{req.method}</span>
+      <span className="font-medium text-foreground truncate flex-1 min-w-0">{req.name}</span>
+      {req.runnerAssertions && req.runnerAssertions.length > 0 && (
+        <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono shrink-0">
+          {req.runnerAssertions.length} assert
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+function SortableFolderRunnerRow({
+  req,
+  isChecked,
+  isRunning,
+  onToggle,
+  onCheckedChange,
+}: {
+  req: RequestItem;
+  isChecked: boolean;
+  isRunning: boolean;
+  onToggle: () => void;
+  onCheckedChange: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: req.id,
+    disabled: isRunning,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const methodClass = (methodText as Record<string, string>)[req.method] ?? "text-muted-foreground";
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={() => !isRunning && onToggle()}
+      className={cn(
+        "flex items-center gap-2 p-1.5 rounded border text-xs transition-colors cursor-pointer select-none",
+        isChecked ? "bg-card border-border hover:bg-muted/40" : "bg-muted/10 border-transparent opacity-60 hover:opacity-100",
+        isDragging && "opacity-50 z-10 shadow-lg ring-1 ring-primary/20",
+      )}
+    >
+      <button
+        type="button"
+        className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-muted-foreground/60 hover:bg-muted/30 cursor-grab active:cursor-grabbing disabled:opacity-30"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reordonner ${req.name}`}
+        onClick={(e) => e.stopPropagation()}
+        disabled={isRunning}
+      >
+        <GripVertical className="size-3" />
+      </button>
+      <input
+        type="checkbox"
+        checked={isChecked}
+        onChange={onCheckedChange}
+        onClick={(e) => e.stopPropagation()}
+        disabled={isRunning}
+        aria-label={req.name}
+        className="rounded border-border text-primary size-3 shrink-0"
+      />
+      <span className={cn("font-mono text-[10px] font-bold shrink-0 w-10", methodClass)}>{req.method}</span>
+      <span className="font-medium text-foreground truncate flex-1 min-w-0">{req.name}</span>
+    </div>
+  );
+}
+
 export default function RunnerPage() {
   const { t } = useTranslation();
   const {
@@ -448,10 +594,13 @@ export default function RunnerPage() {
     }
   }, [effectiveSelectedId, selectedId]);
 
-  // Feature 1: Ordered requests sequence (supports HTML5 Drag & Drop)
+  // Feature 1: Ordered requests sequence (dnd-kit, inspiré de collections-panel)
   const [orderedRequests, setOrderedRequests] = useState<RequestItem[]>([]);
-  const [draggedRequestId, setDraggedRequestId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   // Sync ordered requests when collection changes
   useEffect(() => {
@@ -650,53 +799,22 @@ export default function RunnerPage() {
   const selectedCount = selectedRequestIds.size;
   const canRun = !!selected && selectedCount > 0 && !isRunning;
 
-  // HTML5 Drag & Drop handlers for sequence reordering
-  const handleDragStart = (requestId: string, event: React.DragEvent) => {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", requestId);
-    event.dataTransfer.setData("application/x-reqly-request-id", requestId);
-    event.dataTransfer.dropEffect = "move";
-    setDraggedRequestId(requestId);
-    setDropTargetId(null);
-  };
+  // dnd-kit handlers (aligné sur collections-panel / use-request-dnd)
+  const handleDndStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-
-    const draggedId =
-      e.dataTransfer.getData("application/x-reqly-request-id") ||
-      e.dataTransfer.getData("text/plain");
-    if (!draggedId || draggedId === targetId) {
-      setDropTargetId(null);
-      return;
-    }
-
-    setDropTargetId(targetId);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const draggedId =
-      e.dataTransfer.getData("application/x-reqly-request-id") ||
-      e.dataTransfer.getData("text/plain");
-    if (!draggedId || !targetId || draggedId === targetId) {
-      setDraggedRequestId(null);
-      setDropTargetId(null);
-      return;
-    }
-
-    setOrderedRequests((prev) => moveItemById(prev, draggedId, targetId));
-    setDraggedRequestId(null);
-    setDropTargetId(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedRequestId(null);
-    setDropTargetId(null);
-  };
+  const handleDndEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragId(null);
+      if (!over || active.id === over.id) return;
+      const fromId = String(active.id);
+      const toId = String(over.id);
+      setOrderedRequests((prev) => moveItemById(prev, fromId, toId));
+    },
+    [],
+  );
 
   const toggleRequestSelection = (id: string) => {
     setSelectedRequestIds((prev) => {
@@ -1337,7 +1455,17 @@ export default function RunnerPage() {
             </CardHeader>
 
             <CardContent className="max-h-[620px] space-y-1 overflow-y-auto bg-muted/10 p-3 hide-scrollbar">
-              {orderedRequests.length === 0 ? (
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDndStart}
+                onDragEnd={handleDndEnd}
+              >
+                <SortableContext
+                  items={orderedRequests.map((r) => r.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {orderedRequests.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted-foreground">
                   {t("runner.noRequests")}
                 </div>
@@ -1395,55 +1523,16 @@ export default function RunnerPage() {
 
                         {isFolderExpanded && (
                           <div className="p-1 pl-4 space-y-1">
-                            {requestsInFolder.map((req) => {
-                              const isChecked = selectedRequestIds.has(req.id);
-                              const methodClass = methodText[req.method] ?? "text-muted-foreground";
-
-                              return (
-                                <div
-                                  key={req.id}
-                                  draggable={!isRunning}
-                                  onDragStart={(e) => handleDragStart(req.id, e)}
-                                  onDragOver={(e) => handleDragOver(e, req.id)}
-                                  onDrop={(e) => handleDrop(e, req.id)}
-                                  onDragEnd={handleDragEnd}
-                                  onClick={() => !isRunning && toggleRequestSelection(req.id)}
-                                  className={cn(
-                                    "flex items-center gap-2 p-1.5 rounded border text-xs transition-colors cursor-pointer select-none",
-                                    isChecked
-                                      ? "bg-card border-border hover:bg-muted/40"
-                                      : "bg-muted/10 border-transparent opacity-60 hover:opacity-100",
-                                    draggedRequestId === req.id &&
-                                      "opacity-40 border-primary border-dashed",
-                                    dropTargetId === req.id &&
-                                      "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20",
-                                  )}
-                                  data-drop-target={dropTargetId === req.id}
-                                >
-                                  <GripVertical className="size-3 text-muted-foreground/40 shrink-0 cursor-grab" />
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => toggleRequestSelection(req.id)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    disabled={isRunning}
-                                    aria-label={req.name}
-                                    className="rounded border-border text-primary size-3 shrink-0"
-                                  />
-                                  <span
-                                    className={cn(
-                                      "font-mono text-[10px] font-bold shrink-0 w-10",
-                                      methodClass,
-                                    )}
-                                  >
-                                    {req.method}
-                                  </span>
-                                  <span className="font-medium text-foreground truncate flex-1 min-w-0">
-                                    {req.name}
-                                  </span>
-                                </div>
-                              );
-                            })}
+                            {requestsInFolder.map((req) => (
+                              <SortableFolderRunnerRow
+                                key={req.id}
+                                req={req}
+                                isChecked={selectedRequestIds.has(req.id)}
+                                isRunning={isRunning}
+                                onToggle={() => toggleRequestSelection(req.id)}
+                                onCheckedChange={() => toggleRequestSelection(req.id)}
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
@@ -1458,72 +1547,42 @@ export default function RunnerPage() {
                       )
                       .map((req) => {
                         const globalIdx = orderedRequests.findIndex((r) => r.id === req.id);
-                        const isChecked = selectedRequestIds.has(req.id);
-                        const methodClass = methodText[req.method] ?? "text-muted-foreground";
-
                         return (
-                          <div
+                          <SortableRunnerRow
                             key={req.id}
-                            draggable={!isRunning}
-                            onDragStart={(e) => handleDragStart(req.id, e)}
-                            onDragOver={(e) => handleDragOver(e, req.id)}
-                            onDrop={(e) => handleDrop(e, req.id)}
-                            onDragEnd={handleDragEnd}
-                            onClick={() => !isRunning && toggleRequestSelection(req.id)}
-                            className={cn(
-                              "flex items-center gap-2.5 p-2 rounded-md border text-xs transition-colors cursor-pointer select-none",
-                              isChecked
-                                ? "bg-card border-border hover:bg-muted/40"
-                                : "bg-muted/10 border-transparent opacity-60 hover:opacity-100",
-                              draggedRequestId === req.id &&
-                                "opacity-40 border-primary border-dashed",
-                              dropTargetId === req.id &&
-                                "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20",
-                            )}
-                            data-drop-target={dropTargetId === req.id}
-                          >
-                            <span className="font-mono text-[11px] text-muted-foreground w-4 text-right shrink-0">
-                              {globalIdx + 1}
-                            </span>
-                            <GripVertical className="size-3.5 text-muted-foreground/40 shrink-0 cursor-grab" />
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleRequestSelection(req.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              disabled={isRunning}
-                              aria-label={req.name}
-                              className="rounded border-border text-primary focus:ring-primary size-3.5 shrink-0"
-                            />
-                            <span
-                              className={cn(
-                                "font-mono text-[11px] font-bold shrink-0 w-12",
-                                methodClass,
-                              )}
-                            >
-                              {req.method}
-                            </span>
-                            <span className="font-medium text-foreground truncate flex-1 min-w-0">
-                              {req.name}
-                            </span>
-                            {req.runnerAssertions && req.runnerAssertions.length > 0 && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] py-0 px-1 font-mono shrink-0"
-                              >
-                                {req.runnerAssertions.length} assert
-                              </Badge>
-                            )}
-                          </div>
+                            req={req}
+                            isChecked={selectedRequestIds.has(req.id)}
+                            isRunning={isRunning}
+                            indexLabel={String(globalIdx + 1)}
+                            onToggle={() => toggleRequestSelection(req.id)}
+                            onCheckedChange={() => toggleRequestSelection(req.id)}
+                          />
                         );
                       })}
                   </div>
                 </>
               )}
+                </SortableContext>
+                <DragOverlay dropAnimation={null}>
+                  {activeDragId
+                    ? (() => {
+                        const activeReq = orderedRequests.find((r) => r.id === activeDragId);
+                        if (!activeReq) return null;
+                        return (
+                          <div className="flex items-center gap-2.5 p-2 rounded-md border bg-card shadow-lg max-w-[320px] text-xs">
+                            <GripVertical className="size-3.5 text-muted-foreground/40" />
+                            <span className="font-mono text-[11px] font-bold w-12">{activeReq.method}</span>
+                            <span className="truncate">{activeReq.name}</span>
+                          </div>
+                        );
+                      })()
+                    : null}
+                </DragOverlay>
+              </DndContext>
             </CardContent>
           </Card>
 
-          {/* Right Column: Configuration & Settings */}
+           {/* Right Column: Configuration & Settings */}
           <div className="space-y-4 lg:col-span-5 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 scrollbar-discreet">
             {/* Feature 3: Run Type Selection & Performance Concurrency */}
             <Card className="shadow-sm border-border">

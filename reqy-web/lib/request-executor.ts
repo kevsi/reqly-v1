@@ -432,8 +432,9 @@ export const executeRequest = async (
   let responseHeaders: Record<string, string> = {};
   let responseStatus: number | undefined;
   let responseSize: string;
-  let responseTime: number | undefined;
+   let responseTime: number | undefined;
   let proxyTimings: Partial<ResponseTimings> | undefined;
+  let transport: "native" | "proxy" = "native";
   let responseCookies: TauriCookie[] = [];
   let transportError: TauriErrorPayload | null = null;
 
@@ -471,6 +472,7 @@ export const executeRequest = async (
       responseHeaders = result.headers;
       responseTime = result.durationMs;
       responseCookies = result.cookies ?? [];
+      proxyTimings = result.timings;
 
       if (result.encoding === "base64") {
         const contentType =
@@ -518,6 +520,7 @@ export const executeRequest = async (
 
       const proxyResult = await parseJsonSafe(proxyResponse);
       proxyTimings = proxyResult.timings;
+      transport = "proxy";
       responseStatus = proxyResult.status ?? proxyResponse.status ?? 0;
       responseHeaders = proxyResult.headers || {};
       responseCookies = proxyResult.cookies ?? [];
@@ -635,18 +638,26 @@ export const executeRequest = async (
     connectMs: proxyTimings?.connectMs,
     tlsMs: proxyTimings?.tlsMs,
     ttfbMs: proxyTimings?.ttfbMs,
-    transferMs: proxyTimings?.transferMs,
-    totalMs: responseTime ?? 0,
-    transport: proxyTimings ? "proxy" : "native",
-    uploadMs: proxyTimings?.uploadMs,
+     transferMs: proxyTimings?.transferMs,
+     totalMs: responseTime ?? 0,
+     transport,
+     uploadMs: proxyTimings?.uploadMs,
     requestBytes: proxyTimings?.requestBytes,
     responseBytes: proxyTimings?.responseBytes,
     connectionReused: proxyTimings?.connectionReused,
   };
 
   let testResults: TestResult[] | undefined;
-  const runnerAssertions = context.tab.runnerAssertions;
-  if (runnerAssertions && runnerAssertions.length > 0) {
+  const runnerAssertions = context.tab.runnerAssertions ?? [];
+  const legacyAssertions = (context.tab.assertions ?? []) as import("@/lib/types").RequestTestAssertion[];
+  // Merge legacy (Tests) + runner (Assertions) pour l'affichage "Send" solo.
+  // Les Tests legacy sont convertis via legacyToRunnerAssertion afin de réutiliser le moteur unique.
+  const { legacyToRunnerAssertion } = await import("@/lib/test-runner/migration");
+  const convertedLegacy = legacyAssertions
+    .map((a) => legacyToRunnerAssertion(a as unknown as import("@/lib/test-runner/migration").LegacyRequestTestAssertion))
+    .filter((a): a is import("@/lib/test-runner/types").Assertion => a !== null);
+  const allAssertions = [...convertedLegacy, ...runnerAssertions] as import("@/lib/test-runner/types").Assertion[];
+  if (allAssertions.length > 0) {
     let parsedBody: unknown = responseBody ?? "";
     if (typeof responseBody === "string") {
       try {
@@ -661,7 +672,7 @@ export const executeRequest = async (
       body: parsedBody,
       headers: responseHeaders ?? {},
     };
-    testResults = toTestResults(evaluateAssertions(runnerAssertions, evalResponse));
+    testResults = toTestResults(evaluateAssertions(allAssertions, evalResponse));
   }
 
   return {

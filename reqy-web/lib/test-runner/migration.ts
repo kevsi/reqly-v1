@@ -12,15 +12,21 @@ export function legacyToRunnerAssertion(legacy: LegacyRequestTestAssertion): Ass
   if (legacy.enabled === false) return null;
   switch (legacy.type) {
     case "status": {
-      const val = Number(legacy.expected ?? legacy.target ?? 200);
-      return { type: "status", expected: isNaN(val) ? 200 : val };
+      // TestAssertionPanel crée {target:"200", expected:""} → expected vide ne doit pas donner 0
+      const raw = (legacy.expected?.trim() ? legacy.expected : legacy.target)?.trim() ?? "200";
+      // Supporte "200" ou expressions type ">=200" (on extrait le premier nombre)
+      const num = Number(raw);
+      const fallback = Number.parseInt(raw.match(/\d+/)?.[0] ?? "200", 10);
+      const val = Number.isFinite(num) && raw.trim() !== "" ? num : fallback;
+      return { type: "status", expected: Number.isFinite(val) ? val : 200 };
     }
     case "bodyContains": {
+      const val = (legacy.expected?.trim() ? legacy.expected : legacy.target) ?? "";
       return {
         type: "jsonPath",
         path: "$",
         operator: "contains",
-        value: legacy.expected ?? legacy.target ?? "",
+        value: val,
       };
     }
     case "headerExists": {

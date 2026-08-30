@@ -69,6 +69,45 @@ function createPmApi(ctx: RunnerContext, response?: RequestResponse) {
       ctx.iterationData[k] = v;
     },
   };
+  // Compat layer: Postman-like `pm.response.code/status` + Reqly `statusCode`
+  // Les scripts existants utilisent `pm.response.code` (placeholder = pm.expect(pm.response.code).to.equal(200))
+  // alors que RequestResponse expose `statusCode`. On aliase tout.
+  let pmResponse: Record<string, unknown> | undefined;
+  if (response) {
+    const bodyStr = typeof response.body === "string" ? response.body : JSON.stringify(response.body ?? "");
+    const statusCode = (response as RequestResponse).statusCode ?? 0;
+    const base: Record<string, unknown> = {
+      statusCode,
+      code: statusCode,
+      status: statusCode,
+      responseTime: response.responseTimeMs,
+      responseTimeMs: response.responseTimeMs,
+      headers: response.headers,
+      body: bodyStr,
+      data: response.body,
+      json: response.body,
+    };
+    // Proxy headers en lower-case helper
+    pmResponse = new Proxy(base, {
+      get(target, prop: string) {
+        if (prop in target) return target[prop as keyof typeof target];
+        if (typeof prop === "string") {
+          const lower = prop.toLowerCase();
+          if (lower in target) return target[lower as keyof typeof target];
+          // header lookup shortcut: pm.response.headers['content-type']
+          if (target.headers && typeof target.headers === "object") {
+            const h = (target.headers as Record<string, string>)[prop];
+            if (h !== undefined) return h;
+            const found = Object.entries(target.headers as Record<string, string>).find(
+              ([k]) => k.toLowerCase() === lower,
+            );
+            if (found) return found[1];
+          }
+        }
+        return undefined;
+      },
+    });
+  }
   return {
     environment,
     variables,
@@ -86,7 +125,7 @@ function createPmApi(ctx: RunnerContext, response?: RequestResponse) {
         },
       },
     }),
-    response,
+    response: pmResponse ?? response,
   };
 }
 
@@ -171,14 +210,29 @@ export async function runScript(
   try {
     if (vm) {
       // Node.js / Tauri backend: use the hardened vm sandbox
-      const wrapped = `(function() { return (${code}); })()`;
-      const script = new vm.Script(wrapped);
-      const vmContext = vm.createContext(sandbox, {
-        codeGeneration: { strings: false, wasm: false },
-        microtaskMode: "afterEvaluate",
-      });
-      const result = script.runInContext(vmContext, { timeout: options.timeoutMs ?? 3000 });
-      return { result, consoleLines, consoleEntries };
+      // On tente d'abord en mode expression (retourne valeur pour les tests unitaires comme pm.environment.get(...))
+      // puis fallback en mode statements (multi-instructions comme pm.expect(...); pm.environment.set(...))
+      const isStatementLike = code.includes(";") || code.includes("\n");
+      const candidates = isStatementLike
+        ? [`(function(){ ${code} })()`, `(function(){ return (${code}) })()`]
+        : [`(function(){ return (${code}) })()`, `(function(){ ${code} })()`];
+      let lastError: unknown;
+      for (const wrapped of candidates) {
+        try {
+          const script = new vm.Script(wrapped);
+          const vmContext = vm.createContext(sandbox, {
+            codeGeneration: { strings: false, wasm: false },
+            microtaskMode: "afterEvaluate",
+          });
+          const result = script.runInContext(vmContext, { timeout: options.timeoutMs ?? 3000 });
+          return { result, consoleLines, consoleEntries };
+        } catch (e) {
+          lastError = e;
+          if (e instanceof SyntaxError || (e as Error).message?.includes("SyntaxError")) continue;
+          throw e;
+        }
+      }
+      throw lastError;
     }
 
     // Browser / Tauri webview fallback: use Function constructor.

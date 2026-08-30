@@ -270,8 +270,19 @@ async function runOne(
     }
   }
 
-  // Assertions
-  const assertions = (req.runnerAssertions ?? []) as Assertion[];
+  // Assertions — merge Tests legacy (3) + Assertions runner (5) pour que le Runner évalue tout
+  const runnerAssertions = (req.runnerAssertions ?? []) as Assertion[];
+  const legacyAssertions = (req as unknown as { assertions?: import("@/lib/types").RequestTestAssertion[] }).assertions ?? [];
+  const { legacyToRunnerAssertion } = await import("./migration");
+  const convertedLegacy = legacyAssertions
+    .map((a) => legacyToRunnerAssertion(a as unknown as import("./migration").LegacyRequestTestAssertion))
+    .filter((a): a is Assertion => a !== null);
+  const assertions = [...convertedLegacy, ...runnerAssertions] as Assertion[];
+  if (assertions.length === 0) {
+    result.status = "pass";
+    result.assertionResults = [];
+    return result;
+  }
   result.assertionResults = evaluateAssertions(assertions, response);
   result.status = result.assertionResults.every((r) => r.passed) ? "pass" : "fail";
   return result;

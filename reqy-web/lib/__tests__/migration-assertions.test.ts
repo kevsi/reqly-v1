@@ -26,6 +26,11 @@ describe("legacyToRunnerAssertion", () => {
     const res = legacyToRunnerAssertion({ type: "status", target: "200", enabled: false });
     expect(res).toBeNull();
   });
+
+  it("handles empty expected for status (regression #status-0)", () => {
+    const res = legacyToRunnerAssertion({ type: "status", target: "200", expected: "" } as unknown as Record<string, unknown> as Parameters<typeof legacyToRunnerAssertion>[0]);
+    expect(res).toEqual({ type: "status", expected: 200 });
+  });
 });
 
 describe("migrateItemAssertions", () => {
