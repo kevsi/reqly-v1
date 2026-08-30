@@ -36,10 +36,16 @@ reqy-mcp/dist/
 **/test-results/
 playwright-report/
 *.tsbuildinfo
+.turbo/
+reqy-web-standalone.tar.gz
+ruvector.db
+reqy-web/test-results.txt
+claude-chat-interface.zip
 
 # ── Agent/tooling working directories ──────────────────────────
 .kilo/
 .claude/
+.claude-flow/
 .kimchi/
 .imgtool-tmp/
 autoresearch/
