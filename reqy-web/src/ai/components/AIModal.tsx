@@ -208,6 +208,31 @@ export function AIModal(props: AIModalProps) {
   }, [props.open]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Réinitialiser l'état IA à chaque ouverture du modal (évite d'afficher une
+  // erreur ou une réponse de la session précédente).
+  useEffect(() => {
+    if (!props.open) return;
+    setLlmOutput("");
+    setLlmError(null);
+    setLlmLoading(false);
+    setSteps([]);
+    setPendingConfirmation(null);
+    setShowConfig(false);
+    setUserPrompt("");
+    setGenerationSeconds(0);
+    setCopied(false);
+    setConfigProvider("openai");
+    setConfigApiKey("");
+    abortRef.current?.abort();
+    abortRef.current = null;
+    accRef.current = "";
+    previousTurnsRef.current = [];
+    turnCountRef.current = 0;
+    baseOptsRef.current = null;
+    retriedWithoutToolsRef.current = false;
+    confirmedToolCallIdsRef.current = new Set();
+  }, [props.open]);
+
   const handleStopGeneration = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -395,6 +420,7 @@ export function AIModal(props: AIModalProps) {
         retriedWithoutToolsRef.current = true;
         baseOptsRef.current = { ...baseOptsRef.current, tools: undefined, tool_choice: undefined };
         // Reset output pour ce nouvel essai
+        accRef.current = "";
         setLlmOutput("");
         setLlmError(null);
         runOneTurn(); // retry sans tools

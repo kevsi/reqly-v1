@@ -129,4 +129,50 @@ describe("AIModal — génération interrompable (R17)", () => {
 
     await waitFor(() => expect(capturedSignal?.aborted).toBe(true));
   });
+
+  it("récouvrir le modal efface l'erreur de la session précédente", async () => {
+    // Le stream échoue immédiatement → llmError affiché.
+    vi.mocked(streamLLM).mockImplementation(() => {
+      throw new Error("Proxy error 500");
+    });
+
+    const { rerender } = render(
+      <AIModal
+        open
+        onOpenChange={() => {}}
+        method="GET"
+        url="https://example.test/api"
+        responseStatus={200}
+        responseBody='{"ok":true}'
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("ai-tab-assistant"));
+    fireEvent.click(screen.getByTestId("ai-run-llm"));
+    await screen.findByText(/Proxy error 500/);
+
+    // Fermer puis rouvrir : l'erreur ne doit plus s'afficher.
+    rerender(
+      <AIModal
+        open={false}
+        onOpenChange={() => {}}
+        method="GET"
+        url="https://example.test/api"
+        responseStatus={200}
+        responseBody='{"ok":true}'
+      />,
+    );
+    rerender(
+      <AIModal
+        open
+        onOpenChange={() => {}}
+        method="GET"
+        url="https://example.test/api"
+        responseStatus={200}
+        responseBody='{"ok":true}'
+      />,
+    );
+
+    expect(screen.queryByText(/Proxy error 500/)).toBeNull();
+  });
 });
