@@ -167,6 +167,8 @@ function FolderDropZone({
   onConfirmDelete,
   onFolderMoveUp,
   onFolderMoveDown,
+  onAddFolder,
+  depth = 0,
   t,
 }: {
   collectionId: string;
@@ -180,6 +182,8 @@ function FolderDropZone({
   onConfirmDelete: (label: string, onConfirm: () => void) => void;
   onFolderMoveUp?: (folderId: string) => void;
   onFolderMoveDown?: (folderId: string) => void;
+  onAddFolder?: (collectionId: string, name: string, parentId: string | null) => string;
+  depth?: number;
   t: TFunction<"translation">;
 }) {
   const { setNodeRef: folderDropRef, isOver } = useDroppable({
@@ -187,6 +191,8 @@ function FolderDropZone({
     data: { type: "folder" as const, collectionId, folderId: folder.id },
   });
   const [renameOpen, setRenameOpen] = useState(false);
+  const [createSubOpen, setCreateSubOpen] = useState(false);
+  const indentPx = 28 + depth * 16;
   return (
     <div
       ref={folderDropRef}
@@ -195,8 +201,9 @@ function FolderDropZone({
     >
       {/* ── Folder header ── */}
       <div
+        style={{ paddingLeft: `${indentPx}px` }}
         className={cn(
-          "flex items-center gap-2 pl-11 pr-4 py-2 mt-1 rounded-md transition-all duration-150",
+          "flex items-center gap-2 pr-4 py-2 mt-1 rounded-md transition-all duration-150",
           "bg-muted/[0.06] border border-border/20 hover:bg-muted/[0.12] hover:border-border/30",
           isExpanded && "bg-muted/[0.12] border-border/30",
           isOver && "bg-primary/[0.10] border-primary/30",
@@ -227,6 +234,19 @@ function FolderDropZone({
 
         {/* Folder actions */}
         <div className="ml-auto flex items-center gap-1">
+          {onAddFolder && (
+            <button
+              type="button"
+              title={t("collections.row.addSubfolder", { defaultValue: "Ajouter un sous-dossier" })}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCreateSubOpen(true);
+              }}
+              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+            >
+              <Plus className="size-3" />
+            </button>
+          )}
           {onRenameFolder && (
             <button
               type="button"
@@ -288,8 +308,11 @@ function FolderDropZone({
       {/* ── Folder content (expanded) ── */}
       {isExpanded && (
         <div className="relative pr-1 py-1 space-y-0.5">
-          {/* Left border indicator — aligned with nested request padding (depth 1) */}
-          <div className="absolute left-0 top-0 bottom-0 w-0.5 ml-11 rounded-r bg-border/20" />
+          {/* Left border indicator — aligned with nested request padding */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 rounded-r bg-border/20"
+            style={{ left: `${indentPx}px` }}
+          />
           {children}
         </div>
       )}
@@ -302,6 +325,16 @@ function FolderDropZone({
         onSubmit={(name) => {
           onRenameFolder?.(collectionId, folder.id, name);
           setRenameOpen(false);
+        }}
+      />
+      <FolderNameModal
+        open={createSubOpen}
+        title={t("collections.row.addSubfolder", { defaultValue: "Nouveau sous-dossier" })}
+        initialValue=""
+        onClose={() => setCreateSubOpen(false)}
+        onSubmit={(name) => {
+          onAddFolder?.(collectionId, name, folder.id);
+          setCreateSubOpen(false);
         }}
       />
     </div>
@@ -369,17 +402,23 @@ export function CollectionRow({
   const requestIds = collection.requests.map((r) => requestId(r.id));
 
   const renderRequestsByFolder = useCallback(() => {
-    const folders = collection.folders ?? [];
-    const folderMap = new Map<string | null, RequestItem[]>();
-    for (const req of collection.requests) {
+    const folders = [...(collection.folders ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const sortedRequests = [...collection.requests].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const folderMap = new Map<string, RequestItem[]>();
+    for (const req of sortedRequests) {
       const key = req.folderId ?? "__root__";
       if (!folderMap.has(key)) folderMap.set(key, []);
       folderMap.get(key)!.push(req);
     }
+    const childrenMap = new Map<string | null, CollectionFolder[]>();
+    for (const f of folders) {
+      const parent = f.parentId ?? null;
+      if (!childrenMap.has(parent)) childrenMap.set(parent, []);
+      childrenMap.get(parent)!.push(f);
+    }
     const rootReqs = folderMap.get("__root__") ?? [];
     const result: React.ReactNode[] = [];
 
-    // Root-level requests first (with light visual distinction)
     if (rootReqs.length > 0) {
       result.push(
         <div key="__root__-section" className="space-y-0.5">
@@ -399,11 +438,11 @@ export function CollectionRow({
       );
     }
 
-    // Folder sections
-    for (const folder of folders) {
+    const renderFolder = (folder: CollectionFolder, depth: number): React.ReactNode => {
       const folderReqs = folderMap.get(folder.id) ?? [];
       const isFolderExpanded = expandedFolderIds.has(folder.id);
-      result.push(
+      const childFolders = childrenMap.get(folder.id) ?? [];
+      return (
         <FolderDropZone
           key={`fld-${folder.id}`}
           collectionId={collection.id}
@@ -416,6 +455,8 @@ export function CollectionRow({
           onConfirmDelete={onConfirmDelete}
           onFolderMoveUp={onFolderMoveUp}
           onFolderMoveDown={onFolderMoveDown}
+          onAddFolder={onAddFolder}
+          depth={depth}
           t={t}
         >
           {folderReqs.map((req) => (
@@ -427,11 +468,17 @@ export function CollectionRow({
               onSelect={() => onSelectRequest(req)}
               onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined}
               onRemove={() => setPendingRemoveRequest(req)}
-              depth={1}
+              depth={depth + 1}
             />
           ))}
-        </FolderDropZone>,
+          {childFolders.map((child) => renderFolder(child, depth + 1))}
+        </FolderDropZone>
       );
+    };
+
+    const rootFolders = childrenMap.get(null) ?? [];
+    for (const folder of rootFolders) {
+      result.push(renderFolder(folder, 0));
     }
 
     return result;
@@ -445,6 +492,7 @@ export function CollectionRow({
     onRenameFolder,
     onFolderMoveUp,
     onFolderMoveDown,
+    onAddFolder,
     expandedFolderIds,
     toggleFolderExpand,
     t,
@@ -597,7 +645,7 @@ export function CollectionRow({
       </div>
 
       {/* ── Expanded requests (grouped by folder if folders exist) ── */}
-      {isExpanded && collection.requests.length > 0 && (
+      {isExpanded && (collection.requests.length > 0 || (collection.folders && collection.folders.length > 0)) && (
         <div className="border-t border-border/20">
           <SortableContext items={requestIds} strategy={verticalListSortingStrategy}>
             {collection.folders && collection.folders.length > 0
@@ -611,7 +659,7 @@ export function CollectionRow({
                     onSelect={() => onSelectRequest(req)}
                     onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined}
                     onRemove={() => setPendingRemoveRequest(req)}
-                    depth={1}
+                    depth={0}
                   />
                 ))}
           </SortableContext>
