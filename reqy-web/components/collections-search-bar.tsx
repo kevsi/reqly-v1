@@ -25,8 +25,8 @@ interface SearchFilterBarProps {
   onToggleFilters: () => void;
   methodFilter: Set<HttpMethod>;
   onToggleMethodFilter: (method: HttpMethod) => void;
-  sortBy: "name" | "updated" | "requests";
-  onSortChange: (sort: "name" | "updated" | "requests") => void;
+  sortBy: "name" | "updated" | "requests" | "manual";
+  onSortChange: (sort: "name" | "updated" | "requests" | "manual") => void;
   semanticSearchEnabled: boolean;
   onToggleSemanticSearch: (enabled: boolean) => void;
 }
@@ -142,6 +142,7 @@ export function SearchFilterBar({
               <option value="name">{t("collections.searchBar.sortName")}</option>
               <option value="updated">{t("collections.searchBar.sortRecent")}</option>
               <option value="requests">{t("collections.searchBar.sortRequests")}</option>
+              <option value="manual">{t("collections.searchBar.sortManual", { defaultValue: "Manuel" })}</option>
             </select>
           </div>
         </div>

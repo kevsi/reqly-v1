@@ -115,6 +115,13 @@ function FolderNameModal({
 }) {
   const [name, setName] = useState(initialValue);
   const { t } = useTranslation();
+  // Reset input when modal opens (fixes stale value on second open)
+  React.useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setName(initialValue);
+    }
+  }, [open, initialValue]);
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm">

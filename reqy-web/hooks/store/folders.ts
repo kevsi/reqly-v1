@@ -10,24 +10,31 @@ const t = (key: string) => i18n.t(key);
 
 export function createFoldersMutations(commit: CommitFn) {
   const addFolder = (collectionId: string, name: string, parentId: string | null = null) => {
-    const newFolder: CollectionFolder = {
-      id: `folder-${crypto.randomUUID()}`,
-      name,
-      parentId,
-      collectionId,
-      order: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    commit((prev) => ({
-      ...prev,
-      collections: prev.collections.map((c) =>
-        c.id === collectionId
-          ? { ...c, folders: [...(c.folders ?? []), newFolder], updatedAt: Date.now() }
-          : c,
-      ),
-    }));
-    return newFolder.id;
+    let newId = "";
+    commit((prev) => {
+      const col = prev.collections.find((c) => c.id === collectionId);
+      const siblings = (col?.folders ?? []).filter((f) => (f.parentId ?? null) === (parentId ?? null));
+      const maxOrder = siblings.length > 0 ? Math.max(...siblings.map((f) => f.order ?? 0)) : 0;
+      const newFolder: CollectionFolder = {
+        id: `folder-${crypto.randomUUID()}`,
+        name,
+        parentId,
+        collectionId,
+        order: maxOrder + 1000,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      newId = newFolder.id;
+      return {
+        ...prev,
+        collections: prev.collections.map((c) =>
+          c.id === collectionId
+            ? { ...c, folders: [...(c.folders ?? []), newFolder], updatedAt: Date.now() }
+            : c,
+        ),
+      };
+    });
+    return newId;
   };
 
   const renameFolder = (collectionId: string, folderId: string, name: string) => {

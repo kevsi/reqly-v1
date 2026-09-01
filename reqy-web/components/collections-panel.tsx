@@ -141,7 +141,7 @@ export function CollectionsPanel({
   const [renameValue, setRenameValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<Set<HttpMethod>>(new Set());
-  const [sortBy, setSortBy] = useState<"name" | "updated" | "requests">("name");
+  const [sortBy, setSortBy] = useState<"name" | "updated" | "requests" | "manual">("name");
   const [showFilters, setShowFilters] = useState(false);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(false);
   const [_indexing, setIndexing] = useState(false);
@@ -751,6 +751,7 @@ export function CollectionsPanel({
 
   const sortedCollections = useMemo(() => {
     const list = [...collections];
+    if (sortBy === "manual") return list;
     if (sortBy === "name") {
       list.sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortBy === "updated") {
@@ -813,18 +814,46 @@ export function CollectionsPanel({
   }, [sortedCollections, searchQuery, searchLower, methodFilter, semanticResults, collections]);
 
   // ── Déplacement des collections (menu Monter/Descendre) ──
+  // Fix: Monter/Descendre opère sur l'ordre réel du store (collections), pas sur
+  // filteredCollections trié alphabétiquement. Sinon le tri "name" annule le move
+  // au rendu suivant et l'utilisateur ne voit aucun changement.
   const moveCollection = useCallback(
     (id: string, dir: -1 | 1) => {
       if (!onReorderCollections) return;
-      const ids = filteredCollections.map((c) => c.id);
+      // Si une recherche filtre la liste, on ne peut pas déplacer relativement
+      // à l'ordre complet — on déplace dans l'ordre du store.
+      const ids = collections.map((c) => c.id);
       const idx = ids.indexOf(id);
       const target = idx + dir;
       if (idx < 0 || target < 0 || target >= ids.length) return;
       ids.splice(idx, 1);
       ids.splice(target, 0, id);
       onReorderCollections(ids);
+      // Basculer en tri manuel pour que le nouvel ordre reste visible
+      // (le tri "name"/"updated"/"requests" écraserait le déplacement)
+      setSortBy("manual");
     },
-    [filteredCollections, onReorderCollections],
+    [collections, onReorderCollections],
+  );
+
+  // Wrapper: ajouter un dossier auto-déploie la collection pour que le dossier soit visible
+  const handleAddFolder = useCallback(
+    (collectionId: string, name: string, parentId: string | null) => {
+      const newId = onAddFolder?.(collectionId, name, parentId) ?? "";
+      setExpandedCollections((prev) => {
+        if (prev.has(collectionId)) return prev;
+        const next = new Set(prev);
+        next.add(collectionId);
+        try {
+          localStorage.setItem("collections-expanded", JSON.stringify([...next]));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+      return newId;
+    },
+    [onAddFolder],
   );
 
   // ── Déplacement des dossiers (menu Monter/Descendre, par niveau) ──
@@ -972,7 +1001,7 @@ export function CollectionsPanel({
                 onDeleteCollection={onDeleteCollection}
                 onRemoveRequest={onRemoveRequestFromCollection}
                 onMoveRequestToFolder={onMoveRequestToFolder}
-                onAddFolder={onAddFolder}
+                onAddFolder={handleAddFolder}
                 onRenameFolder={onRenameFolder}
                 onDeleteFolder={onDeleteFolder}
                 onMoveFolder={onMoveFolder}
