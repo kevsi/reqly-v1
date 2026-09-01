@@ -219,7 +219,8 @@ export async function POST(req: NextRequest) {
       case "openai": {
         if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 400 });
         const safeBase = await assertSafeBaseUrl(baseUrl || "https://api.openai.com/v1");
-        result = await fetchOpenAICompatible(safeBase, apiKey);
+        const dispatcher = await createPinnedDispatcher(safeBase);
+        result = await fetchOpenAICompatible(safeBase, apiKey, dispatcher);
         break;
       }
 

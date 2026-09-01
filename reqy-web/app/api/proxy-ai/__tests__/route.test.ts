@@ -126,11 +126,11 @@ describe("POST /api/proxy-ai dispatcher", () => {
     expect(body.content).toBe("Hello from custom");
   });
 
-  it("returns 403 for invalid ollama host", async () => {
+  it("returns 403 for invalid ollama host (private IP, not loopback)", async () => {
     const res = await POST(
       makeRequest({
         provider: "ollama",
-        host: "localhost",
+        host: "10.0.0.1",
         message: "Hi",
       }),
     );

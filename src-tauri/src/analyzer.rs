@@ -28,22 +28,29 @@ fn resolve_script_path(app: &AppHandle) -> Result<String, AppError> {
     let candidates: Vec<std::path::PathBuf> = if cfg!(debug_assertions) {
         let cwd = std::env::current_dir().map_err(|e| AppError::Internal(e.to_string()))?;
         vec![
-            cwd.join("analyser-api").join(CLI_REL[0]).join(CLI_REL[1]).join(CLI_REL[2]).join(CLI_REL[3]),
-            cwd.join("..").join("analyser-api").join(CLI_REL[0]).join(CLI_REL[1]).join(CLI_REL[2]).join(CLI_REL[3]),
-        ]
-    } else {
-        let resource_dir = app
-            .path()
-            .resource_dir()
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        vec![
-            resource_dir
+            cwd.join("analyser-api")
+                .join(CLI_REL[0])
+                .join(CLI_REL[1])
+                .join(CLI_REL[2])
+                .join(CLI_REL[3]),
+            cwd.join("..")
                 .join("analyser-api")
                 .join(CLI_REL[0])
                 .join(CLI_REL[1])
                 .join(CLI_REL[2])
                 .join(CLI_REL[3]),
         ]
+    } else {
+        let resource_dir = app
+            .path()
+            .resource_dir()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        vec![resource_dir
+            .join("analyser-api")
+            .join(CLI_REL[0])
+            .join(CLI_REL[1])
+            .join(CLI_REL[2])
+            .join(CLI_REL[3])]
     };
 
     for p in &candidates {

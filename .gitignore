@@ -59,6 +59,8 @@ featurres.txt
 settings_tiny.jpg
 RECOVERY_STEPS.md
 "debug auth/"
+# Database schema dump — kept out of VCS, regenerated from sync-server.
+schema-complet.sql
 
 # ── Generated SDK output (produced by the SDK generator) ──────────
 general-typescript-fetch/

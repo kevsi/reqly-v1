@@ -7,7 +7,7 @@ import {
 
 const COOKIE_KEY = "postman_api_key";
 const COOKIE_USER = "postman_user";
-const DURATION_S = 30 * 24 * 60 * 60;
+const DURATION_S = 60 * 60;
 
 function cookieOpts() {
   return {

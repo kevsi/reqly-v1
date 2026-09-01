@@ -176,12 +176,13 @@ export default function LoginPage() {
                   const run = async () => {
                     try {
                       const { invoke } = await import("@tauri-apps/api/core");
-                      const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || "";
                       const syncUrl =
                         process.env.NEXT_PUBLIC_SYNC_URL || "https://reqly.duckdns.org";
-                      // Start local loopback server and get the GitHub auth URL
+                      // Start local loopback server and get the GitHub auth URL.
+                      // The public client_id is resolved from the process
+                      // environment on the Rust side (never crosses the IPC
+                      // boundary).
                       const authUrl = await invoke<string>("start_github_oauth_server", {
-                        clientId,
                         syncServerUrl: syncUrl,
                       });
                       // Open the auth URL in the system browser

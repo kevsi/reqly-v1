@@ -16,8 +16,8 @@
 //! is loaded as a non-overriding fallback so the desktop flow reuses the same
 //! OAuth app as the legacy Next.js web routes.
 
-use std::sync::OnceLock;
 use crate::error::{AppError, NetworkErrorKind};
+use std::sync::OnceLock;
 
 use reqwest::Client;
 use serde::Deserialize;
@@ -237,10 +237,13 @@ pub(crate) async fn poll_device_token(
         .await?;
 
     let status = response.status();
-    let payload: TokenResponse = response
-        .json()
-        .await
-        .map_err(|e| AppError::network(NetworkErrorKind::MalformedResponse, format!("Invalid token response (status {status})"), e.to_string()))?;
+    let payload: TokenResponse = response.json().await.map_err(|e| {
+        AppError::network(
+            NetworkErrorKind::MalformedResponse,
+            format!("Invalid token response (status {status})"),
+            e.to_string(),
+        )
+    })?;
 
     if let Some(access_token) = payload.access_token {
         return Ok(Some(access_token));
@@ -252,7 +255,11 @@ pub(crate) async fn poll_device_token(
         // Provider wants us to slow down polling.
         Some("slow_down") => {
             let slow = interval.saturating_add(5).max(interval);
-            Err(AppError::network(NetworkErrorKind::Unknown, format!("slow_down:{slow}"), "".to_string()))
+            Err(AppError::network(
+                NetworkErrorKind::Unknown,
+                format!("slow_down:{slow}"),
+                "".to_string(),
+            ))
         }
         Some("access_denied") => Err(AppError::network(
             NetworkErrorKind::Unknown,
@@ -330,16 +337,22 @@ use tauri::{AppHandle, Emitter};
 
 /// Start a temporary local HTTP server on a random port that listens for the
 /// GitHub OAuth callback. Returns the authorization URL to open in the browser.
+///
+/// The public `client_id` is resolved from the process environment (same
+/// mechanism as the device flow) and never crosses the IPC boundary as an
+/// argument from the renderer.
 #[tauri::command]
 pub async fn start_github_oauth_server(
     app: AppHandle,
-    client_id: String,
     sync_server_url: String,
 ) -> Result<String, String> {
     const OAUTH_PORT: u16 = 18234;
-    let listener =
-        TcpListener::bind(format!("127.0.0.1:{OAUTH_PORT}"))
-            .map_err(|e| format!("Failed to bind loopback on port {OAUTH_PORT}: {e}. Is another instance running?"))?;
+    let client_id = OAuthProvider::Github
+        .client_id()
+        .map_err(|e| e.to_string())?;
+    let listener = TcpListener::bind(format!("127.0.0.1:{OAUTH_PORT}")).map_err(|e| {
+        format!("Failed to bind loopback on port {OAUTH_PORT}: {e}. Is another instance running?")
+    })?;
     log::info!("[oauth-loopback] Listening on port {OAUTH_PORT}");
 
     let redirect_uri = format!("http://127.0.0.1:{OAUTH_PORT}/callback");
@@ -413,21 +426,23 @@ pub async fn start_github_oauth_server(
                             .filter_map(|pair| {
                                 let mut parts = pair.splitn(2, '=');
                                 let key = parts.next()?.to_string();
-                                let value =
-                                    urlencoding::decode(parts.next().unwrap_or(""))
-                                        .unwrap_or_default()
-                                        .to_string();
+                                let value = urlencoding::decode(parts.next().unwrap_or(""))
+                                    .unwrap_or_default()
+                                    .to_string();
                                 Some((key, value))
                             })
                             .collect();
 
                         let code = params.get("code").cloned().unwrap_or_default();
-                        let received_state =
-                            params.get("state").cloned().unwrap_or_default();
+                        let received_state = params.get("state").cloned().unwrap_or_default();
                         let error = params.get("error").cloned().unwrap_or_default();
 
                         if !error.is_empty() {
-                            send_response(&mut stream, 200, &error_page_html(&format!("GitHub a répondu : {error}")));
+                            send_response(
+                                &mut stream,
+                                200,
+                                &error_page_html(&format!("GitHub a répondu : {error}")),
+                            );
                             let _ = tx.send(format!("error:{error}"));
                             handled = true;
                         } else if !code.is_empty() {
@@ -464,7 +479,9 @@ pub async fn start_github_oauth_server(
                             send_response(
                                 &mut stream,
                                 200,
-                                &error_page_html("Aucun code d'autorisation n'a été reçu de GitHub."),
+                                &error_page_html(
+                                    "Aucun code d'autorisation n'a été reçu de GitHub.",
+                                ),
                             );
                             let _ = tx.send("error:no_code".to_string());
                             handled = true;
@@ -579,7 +596,13 @@ const LOOPBACK_PAGE_CSS: &str = r#"
   @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 "#;
 
-fn page_shell(title: &str, badge_class: &str, icon_svg: &str, heading: &str, desc_html: &str) -> String {
+fn page_shell(
+    title: &str,
+    badge_class: &str,
+    icon_svg: &str,
+    heading: &str,
+    desc_html: &str,
+) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html lang="fr">
@@ -663,9 +686,12 @@ fn exchange_code_for_session(
     redirect_uri: &str,
     code_verifier: &str,
 ) -> Result<String, String> {
+    // TLS validation is ON (no `danger_accept_invalid_certs`): the sync-server
+    // and GitHub endpoints are reached over verified HTTPS. Self-signed sync
+    // servers in local dev must use a trusted certificate instead of disabling
+    // verification.
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| format!("HTTP client: {e}"))?;
 
@@ -687,7 +713,10 @@ fn exchange_code_for_session(
         .map_err(|e| format!("github-exchange: {e}"))?;
 
     if !resp.status().is_success() {
-        return Err(format!("github-exchange: {}", resp.text().unwrap_or_default()));
+        return Err(format!(
+            "github-exchange: {}",
+            resp.text().unwrap_or_default()
+        ));
     }
     let data: serde_json::Value = resp.json().map_err(|e| format!("parse exchange: {e}"))?;
     let access_token = data["access_token"]
@@ -704,9 +733,7 @@ fn exchange_code_for_session(
         .map_err(|e| format!("GitHub user: {e}"))?;
     let github_user: serde_json::Value =
         user_resp.json().map_err(|e| format!("parse user: {e}"))?;
-    let github_id = github_user["id"]
-        .as_i64()
-        .ok_or("No GitHub id")?;
+    let github_id = github_user["id"].as_i64().ok_or("No GitHub id")?;
     let login = github_user["login"].as_str().unwrap_or("unknown");
 
     // Get email (might be private)
@@ -719,14 +746,17 @@ fn exchange_code_for_session(
             .header("User-Agent", "reqly-desktop")
             .send()
             .map_err(|e| format!("GitHub emails: {e}"))?;
-        let emails: Vec<serde_json::Value> =
-            emails_resp.json().map_err(|e| format!("parse emails: {e}"))?;
+        let emails: Vec<serde_json::Value> = emails_resp
+            .json()
+            .map_err(|e| format!("parse emails: {e}"))?;
         email = emails
             .iter()
-            .find(|e| {
-                e["primary"].as_bool() == Some(true) && e["verified"].as_bool() == Some(true)
+            .find(|e| e["primary"].as_bool() == Some(true) && e["verified"].as_bool() == Some(true))
+            .or_else(|| {
+                emails
+                    .iter()
+                    .find(|e| e["verified"].as_bool() == Some(true))
             })
-            .or_else(|| emails.iter().find(|e| e["verified"].as_bool() == Some(true)))
             .and_then(|e| e["email"].as_str())
             .map(String::from);
     }
@@ -734,10 +764,7 @@ fn exchange_code_for_session(
     let name = github_user["name"].as_str().unwrap_or(login);
 
     // Login via sync-server
-    let login_url = format!(
-        "{}/api/auth/oauth-login",
-        sync_url.trim_end_matches('/')
-    );
+    let login_url = format!("{}/api/auth/oauth-login", sync_url.trim_end_matches('/'));
     let login_resp = client
         .post(&login_url)
         .json(&serde_json::json!({

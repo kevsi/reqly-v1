@@ -1,7 +1,7 @@
 import { decryptCookieValue, encryptCookieValue } from "@/lib/crypto/cookie-cipher";
 
 const COOKIE_KEY = "jina_api_key";
-const DURATION_S = 30 * 24 * 60 * 60;
+const DURATION_S = 60 * 60;
 
 function cookieOpts() {
   return {

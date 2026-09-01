@@ -77,7 +77,11 @@ pub enum AppError {
 }
 
 impl AppError {
-    pub fn network(kind: NetworkErrorKind, message: impl Into<String>, detail: impl Into<String>) -> Self {
+    pub fn network(
+        kind: NetworkErrorKind,
+        message: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
         Self::Network {
             kind,
             message: message.into(),
@@ -313,7 +317,12 @@ mod tests {
     #[test]
     fn classifies_schannel_invalid_token_as_tls_handshake() {
         assert_eq!(
-            classify_network_signals(true, false, false, "os error -2146893048 SEC_E_INVALID_TOKEN"),
+            classify_network_signals(
+                true,
+                false,
+                false,
+                "os error -2146893048 SEC_E_INVALID_TOKEN"
+            ),
             NetworkErrorKind::TlsHandshakeFailed
         );
     }

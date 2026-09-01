@@ -123,24 +123,29 @@ describe("assertSafeBaseUrl", () => {
 });
 
 describe("isOllamaHostAllowed", () => {
-  it("rejects localhost", async () => {
-    await expect(isOllamaHostAllowed("localhost")).resolves.toBe(false);
+  it("allows localhost (Ollama is an explicit local service)", async () => {
+    await expect(isOllamaHostAllowed("localhost")).resolves.toBe(true);
+  });
+
+  it("allows 127.0.0.1", async () => {
+    await expect(isOllamaHostAllowed("127.0.0.1")).resolves.toBe(true);
+  });
+
+  it("allows 0.0.0.0", async () => {
+    await expect(isOllamaHostAllowed("0.0.0.0")).resolves.toBe(true);
+  });
+
+  it("allows ::1", async () => {
+    await expect(isOllamaHostAllowed("::1")).resolves.toBe(true);
+  });
+
+  it("is case-insensitive (allows localhost variants)", async () => {
+    await expect(isOllamaHostAllowed("LOCALHOST")).resolves.toBe(true);
+    await expect(isOllamaHostAllowed("LocalHost")).resolves.toBe(true);
   });
 
   it("rejects hostnames that resolve to private ranges via DNS rebinding", async () => {
     await expect(isOllamaHostAllowed("internal.example.test")).resolves.toBe(false);
-  });
-
-  it("rejects 127.0.0.1", async () => {
-    await expect(isOllamaHostAllowed("127.0.0.1")).resolves.toBe(false);
-  });
-
-  it("rejects 0.0.0.0", async () => {
-    await expect(isOllamaHostAllowed("0.0.0.0")).resolves.toBe(false);
-  });
-
-  it("rejects ::1", async () => {
-    await expect(isOllamaHostAllowed("::1")).resolves.toBe(false);
   });
 
   it("rejects blocked private IPs (10.x.x.x)", async () => {
@@ -162,11 +167,6 @@ describe("isOllamaHostAllowed", () => {
 
   it("allows hostnames", async () => {
     await expect(isOllamaHostAllowed("ollama.example.com")).resolves.toBe(true);
-  });
-
-  it("is case-insensitive", async () => {
-    await expect(isOllamaHostAllowed("LOCALHOST")).resolves.toBe(false);
-    await expect(isOllamaHostAllowed("LocalHost")).resolves.toBe(false);
   });
 });
 

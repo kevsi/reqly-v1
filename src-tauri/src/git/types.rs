@@ -29,9 +29,9 @@ pub struct GitSignature {
 #[cfg_attr(feature = "ts-export", ts(export, rename_all = "camelCase"))]
 pub struct FileStatus {
     pub filepath: String,
-    pub head: u8,    // 0=absent, 1=present
-    pub workdir: u8, // 0=absent, 1=unchanged, 2=modified
-    pub staged: u8,  // 0=absent, 1=unchanged, 2=modified, 3=added
+    pub head: u8,         // 0=absent, 1=present
+    pub workdir: u8,      // 0=absent, 1=unchanged, 2=modified
+    pub staged: u8,       // 0=absent, 1=unchanged, 2=modified, 3=added
     pub conflicted: bool, // index avec entrées non fusionnées (conflit)
 }
 
@@ -105,4 +105,3 @@ pub struct GitStashEntry {
     pub message: String,
     pub oid: String,
 }
-

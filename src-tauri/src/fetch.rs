@@ -383,10 +383,7 @@ pub async fn fetch_proxy(
 
     let transfer_start = Instant::now();
     let (body_str, encoding, response_bytes) = if is_binary_content_type(&content_type) {
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(AppError::from)?;
+        let bytes = response.bytes().await.map_err(AppError::from)?;
         let len = bytes.len() as u64;
         (
             general_purpose::STANDARD.encode(&bytes),
@@ -394,10 +391,7 @@ pub async fn fetch_proxy(
             len,
         )
     } else {
-        let text = response
-            .text()
-            .await
-            .map_err(AppError::from)?;
+        let text = response.text().await.map_err(AppError::from)?;
         let len = text.len() as u64;
         // HTML entity decoding is only meaningful for HTML documents. Applying
         // it to JSON/XML/text corrupts legitimate data (e.g. `&#123;` inside a

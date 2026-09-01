@@ -64,13 +64,13 @@ fn strip_verbatim_prefix(p: &std::path::Path) -> std::path::PathBuf {
 /// or junction on a not-yet-existing parent directory make `fs::write`
 /// follow a target outside the allowlist. Rebuilding from the RESOLVED
 /// ancestor ensures the real destination is what gets compared.
-fn resolved_allowlist_candidate(
-    p: &std::path::Path,
-) -> Result<std::path::PathBuf, AppError> {
+fn resolved_allowlist_candidate(p: &std::path::Path) -> Result<std::path::PathBuf, AppError> {
     let mut ancestor = p.to_path_buf();
     loop {
         if let Ok(canon) = std::fs::canonicalize(&ancestor) {
-            let remaining = p.strip_prefix(&ancestor).unwrap_or(std::path::Path::new(""));
+            let remaining = p
+                .strip_prefix(&ancestor)
+                .unwrap_or(std::path::Path::new(""));
             return Ok(strip_verbatim_prefix(&canon).join(remaining));
         }
         if !ancestor.pop() || ancestor.as_os_str().is_empty() {
@@ -195,17 +195,19 @@ pub fn open_external(url: String) -> Result<(), AppError> {
         )));
     }
 
-    open::that(&url).map_err(|e| AppError::network(
-        NetworkErrorKind::Unknown,
-        "Impossible dâ€™ouvrir le lien externe.",
-        e.to_string(),
-    ))
+    open::that(&url).map_err(|e| {
+        AppError::network(
+            NetworkErrorKind::Unknown,
+            "Impossible dâ€™ouvrir le lien externe.",
+            e.to_string(),
+        )
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{contains_parent_dir, is_under_allowed_base, is_under_allowed_roots};
     use super::validate_export;
+    use super::{contains_parent_dir, is_under_allowed_base, is_under_allowed_roots};
     use std::path::Path;
 
     // ── export_json validation ───────────────────────────────────
@@ -300,8 +302,8 @@ mod tests {
     #[test]
     fn nonexistent_nested_path_under_documents_is_accepted() {
         let home_var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-        let documents = std::path::PathBuf::from(std::env::var(home_var).unwrap())
-            .join("Documents");
+        let documents =
+            std::path::PathBuf::from(std::env::var(home_var).unwrap()).join("Documents");
         if !documents.is_dir() {
             return; // environment without a Documents directory — skip
         }
@@ -328,16 +330,14 @@ mod tests {
 
         assert!(!is_under_allowed_roots(&outside, &[root.clone()]).unwrap());
         // Sanity: a nested non-existent path under the root is accepted.
-        assert!(
-            is_under_allowed_roots(&root.join("nested").join("out.json"), &[root]).unwrap()
-        );
+        assert!(is_under_allowed_roots(&root.join("nested").join("out.json"), &[root]).unwrap());
     }
 
     #[cfg(unix)]
     #[test]
     fn symlink_parent_escape_is_resolved_outside_allowlist() {
-        use std::os::unix::fs::symlink;
         use super::{normalized_root, resolved_allowlist_candidate};
+        use std::os::unix::fs::symlink;
 
         let tmp = tempfile::TempDir::new().unwrap();
         let sandbox = tmp.path().join("sandbox");
@@ -366,8 +366,6 @@ mod tests {
             "symlinked parent must not smuggle the target under the root"
         );
         // Control: a plain (non-symlinked) nested path stays allowed.
-        assert!(
-            is_under_allowed_roots(&sandbox.join("plain").join("ok.txt"), &[sandbox]).unwrap()
-        );
+        assert!(is_under_allowed_roots(&sandbox.join("plain").join("ok.txt"), &[sandbox]).unwrap());
     }
 }

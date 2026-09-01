@@ -36,6 +36,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Security audit
+        run: pnpm audit --audit-level=high
       - name: Typecheck
         run: pnpm typecheck
 
@@ -55,6 +57,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Security audit
+        run: pnpm audit --audit-level=high
       - name: Lint
         run: pnpm lint
 

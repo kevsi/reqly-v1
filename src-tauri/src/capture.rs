@@ -118,9 +118,7 @@ async fn block_metadata_targets(url: &reqwest::Url) -> Result<(), AppError> {
     };
 
     if addrs.into_iter().any(is_blocked_metadata_ip) {
-        return Err(AppError::InvalidInput(
-            "metadata endpoint blocked".into(),
-        ));
+        return Err(AppError::InvalidInput("metadata endpoint blocked".into()));
     }
     Ok(())
 }
@@ -341,7 +339,7 @@ async fn forward_request_async(
         request = request.body(reqwest::Body::from(b.to_string()));
     }
 
-let response = request.send().await?;
+    let response = request.send().await?;
     let status = response.status().as_u16();
     let resp_headers: Vec<(String, String)> = response
         .headers()
@@ -357,17 +355,12 @@ let response = request.send().await?;
             return Err(AppError::network(
                 NetworkErrorKind::MalformedResponse,
                 "La réponse du serveur est trop volumineuse.",
-                format!(
-                    "Response body too large: {cl} bytes (max: {MAX_RESPONSE_SIZE} bytes)"
-                ),
+                format!("Response body too large: {cl} bytes (max: {MAX_RESPONSE_SIZE} bytes)"),
             ));
         }
     }
 
-    let response_body = response
-        .bytes()
-        .await
-        .map_err(AppError::from)?;
+    let response_body = response.bytes().await.map_err(AppError::from)?;
     if response_body.len() > MAX_RESPONSE_SIZE {
         return Err(AppError::network(
             NetworkErrorKind::MalformedResponse,
@@ -397,7 +390,6 @@ fn start_proxy_server(
             format!("Le port {} est déjà utilisé ou bloqué par une autre application. Choisissez un autre port (ex: 8888 ou 9090).", port),
             format!("Failed to bind port {}: {}", port, e),
         ))?;
-
 
     let shutdown_flag = Arc::new(AtomicBool::new(false));
     let flag_for_server = shutdown_flag.clone();
@@ -762,9 +754,7 @@ pub fn delete_captured_session(
         let before = guard.captured.len();
         guard.captured.retain(|c| c.id != id);
         if guard.captured.len() == before {
-            return Err(AppError::NotFound(
-                "Captured session not found".into(),
-            ));
+            return Err(AppError::NotFound("Captured session not found".into()));
         }
     }
     write_captures_from_state(&state)
@@ -891,7 +881,9 @@ mod tests {
 
     #[test]
     fn ipv4_mapped_metadata_form_is_blocked() {
-        assert!(is_blocked_metadata_ip("::ffff:169.254.169.254".parse().unwrap()));
+        assert!(is_blocked_metadata_ip(
+            "::ffff:169.254.169.254".parse().unwrap()
+        ));
     }
 
     #[test]

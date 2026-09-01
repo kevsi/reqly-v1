@@ -2,7 +2,10 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use git2::{Cred, DiffOptions, FetchOptions, PushOptions, RemoteCallbacks, Repository, Signature, StatusOptions};
+use git2::{
+    Cred, DiffOptions, FetchOptions, PushOptions, RemoteCallbacks, Repository, Signature,
+    StatusOptions,
+};
 use tauri::State;
 
 use crate::error::{AppError, NetworkErrorKind};
@@ -143,7 +146,10 @@ fn is_reserved_git_host(url: &reqwest::Url) -> bool {
 /// auto-hébergés sur le réseau local.
 fn validate_remote_url(url: &str) -> Result<(), AppError> {
     validate_url_scheme(url)?;
-    if std::env::var("ALLOW_PRIVATE_GIT_HOSTS").map(|v| v == "true").unwrap_or(false) {
+    if std::env::var("ALLOW_PRIVATE_GIT_HOSTS")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+    {
         return Ok(());
     }
     if let Ok(parsed) = reqwest::Url::parse(url.trim()) {
@@ -202,7 +208,6 @@ fn is_system_directory(path: &Path) -> bool {
 }
 
 /// Check if a path is contained within a base directory.
-#[cfg(test)]
 fn is_within_base(path: &Path, base: &Path) -> bool {
     let canonical_path = match std::fs::canonicalize(path) {
         Ok(p) => p,
@@ -220,6 +225,20 @@ fn is_valid_git_repo(path: &Path) -> bool {
     Repository::open(path).is_ok()
 }
 
+fn validate_workspace_containment(path: &Path, state: &State<'_, GitRepoState>) -> Result<(), AppError> {
+    if let Some(base) = state.get_workspace_dir()? {
+        // Only enforce when the base exists on disk and the path can be canonicalized.
+        if base.exists() && path.exists() && !is_within_base(path, &base) {
+            return Err(AppError::InvalidInput(format!(
+                "Path '{}' is outside the allowed workspace directory '{}'.",
+                path.display(),
+                base.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn git_init(path: String, state: State<'_, GitRepoState>) -> Result<(), AppError> {
     let repo_path = PathBuf::from(&path);
@@ -230,6 +249,7 @@ pub async fn git_init(path: String, state: State<'_, GitRepoState>) -> Result<()
             path
         )));
     }
+    validate_workspace_containment(&repo_path, &state)?;
 
     Repository::init(&repo_path)
         .map_err(|e| AppError::Internal(format!("git init failed: {}", e)))?;
@@ -247,6 +267,7 @@ pub async fn git_open(path: String, state: State<'_, GitRepoState>) -> Result<()
             path
         )));
     }
+    validate_workspace_containment(&repo_path, &state)?;
 
     // Validate by trying to open
     Repository::open(&repo_path)
@@ -794,7 +815,9 @@ pub async fn git_push(
     push_options.remote_callbacks(callbacks);
     remote_obj
         .push(&[&refspec], Some(&mut push_options))
-        .map_err(|e| remote_op_error("L'envoi vers le dépôt distant a échoué", e, had_credentials))?;
+        .map_err(|e| {
+            remote_op_error("L'envoi vers le dépôt distant a échoué", e, had_credentials)
+        })?;
     Ok(())
 }
 
@@ -811,9 +834,13 @@ pub async fn git_ls_remote(
     remote
         .connect(git2::Direction::Fetch)
         .map_err(|e| remote_op_error("La connexion au dépôt distant a échoué", e, false))?;
-    let refs = remote
-        .list()
-        .map_err(|e| remote_op_error("La lecture des références du dépôt distant a échoué", e, false))?;
+    let refs = remote.list().map_err(|e| {
+        remote_op_error(
+            "La lecture des références du dépôt distant a échoué",
+            e,
+            false,
+        )
+    })?;
     let mut branches: Vec<String> = Vec::new();
     for head in refs.iter() {
         let name = head.name();
@@ -851,7 +878,13 @@ pub async fn git_push_force(
     push_options.remote_callbacks(callbacks);
     remote_obj
         .push(&[&refspec], Some(&mut push_options))
-        .map_err(|e| remote_op_error("Le push forcé vers le dépôt distant a échoué", e, had_credentials))?;
+        .map_err(|e| {
+            remote_op_error(
+                "Le push forcé vers le dépôt distant a échoué",
+                e,
+                had_credentials,
+            )
+        })?;
     Ok(())
 }
 
@@ -913,7 +946,9 @@ fn remote_op_error(action: &str, e: git2::Error, had_credentials: bool) -> AppEr
         AppError::network(
             NetworkErrorKind::Unknown,
             format!("{action}."),
-            format!("Vérifiez votre connexion internet et l'URL du remote.\nDétail technique : {e}"),
+            format!(
+                "Vérifiez votre connexion internet et l'URL du remote.\nDétail technique : {e}"
+            ),
         )
     }
 }
@@ -938,7 +973,13 @@ pub async fn git_fetch(
     fetch_options.remote_callbacks(callbacks);
     remote_obj
         .fetch(&[&refspec], Some(&mut fetch_options), None)
-        .map_err(|e| remote_op_error("La récupération depuis le dépôt distant a échoué", e, had_credentials))?;
+        .map_err(|e| {
+            remote_op_error(
+                "La récupération depuis le dépôt distant a échoué",
+                e,
+                had_credentials,
+            )
+        })?;
     Ok(())
 }
 
@@ -965,7 +1006,13 @@ pub async fn git_pull(
     fetch_options.remote_callbacks(callbacks);
     remote_obj
         .fetch(&[&refspec], Some(&mut fetch_options), None)
-        .map_err(|e| remote_op_error("La récupération depuis le dépôt distant a échoué", e, had_credentials))?;
+        .map_err(|e| {
+            remote_op_error(
+                "La récupération depuis le dépôt distant a échoué",
+                e,
+                had_credentials,
+            )
+        })?;
 
     // Fast-forward merge: trouver le remote tracking branch et merger dans HEAD
     let remote_ref_name = format!("refs/remotes/{remote}/{branch_name}");
@@ -975,9 +1022,13 @@ pub async fn git_pull(
             // Certains dépôts n'actualisent pas la référence de suivi après un
             // fetch libgit2. Recréer cette référence depuis la liste du remote
             // permet au pull de fonctionner même si origin/<branche> manque.
-            remote_obj
-                .connect(git2::Direction::Fetch)
-                .map_err(|e| remote_op_error("La connexion à la branche distante a échoué", e, had_credentials))?;
+            remote_obj.connect(git2::Direction::Fetch).map_err(|e| {
+                remote_op_error(
+                    "La connexion à la branche distante a échoué",
+                    e,
+                    had_credentials,
+                )
+            })?;
             let remote_head = remote_obj
                 .list()
                 .map_err(|e| remote_op_error("La lecture de la branche distante a échoué", e, had_credentials))?
@@ -990,7 +1041,9 @@ pub async fn git_pull(
                 true,
                 "Update remote tracking branch",
             )
-            .map_err(|e| AppError::Internal(format!("Unable to update remote tracking branch: {e}")))?
+            .map_err(|e| {
+                AppError::Internal(format!("Unable to update remote tracking branch: {e}"))
+            })?
         }
     };
     let remote_oid = remote_branch
@@ -1337,21 +1390,33 @@ mod path_validation_tests {
             "198.18.0.1",
             "192.0.2.1",
         ] {
-            assert!(is_private_ip(ip.parse().unwrap()), "{} should be private", ip);
+            assert!(
+                is_private_ip(ip.parse().unwrap()),
+                "{} should be private",
+                ip
+            );
         }
     }
 
     #[test]
     fn public_ipv4_is_allowed() {
         for ip in ["8.8.8.8", "1.1.1.1", "140.82.112.3", "172.32.0.1"] {
-            assert!(!is_private_ip(ip.parse().unwrap()), "{} should be public", ip);
+            assert!(
+                !is_private_ip(ip.parse().unwrap()),
+                "{} should be public",
+                ip
+            );
         }
     }
 
     #[test]
     fn private_ipv6_ranges_are_detected() {
         for ip in ["::1", "fc00::1", "fe80::1", "::ffff:10.0.0.1", "::"] {
-            assert!(is_private_ip(ip.parse().unwrap()), "{} should be private", ip);
+            assert!(
+                is_private_ip(ip.parse().unwrap()),
+                "{} should be private",
+                ip
+            );
         }
     }
 
@@ -1386,10 +1451,28 @@ mod path_validation_tests {
     fn ref_names_are_validated() {
         use super::{validate_ref_name, validate_remote_name};
         for ok in ["origin", "upstream-2", "feature/valid_x", "v1.2.3", "a"] {
-            assert!(validate_ref_name(ok, "test").is_ok(), "{} should be valid", ok);
+            assert!(
+                validate_ref_name(ok, "test").is_ok(),
+                "{} should be valid",
+                ok
+            );
         }
-        for bad in ["", "a b", "origin;rm -rf /", "x\"y", "x'y", "..", "@", "a\tb", "a\\b"] {
-            assert!(validate_ref_name(bad, "test").is_err(), "{} should be rejected", bad);
+        for bad in [
+            "",
+            "a b",
+            "origin;rm -rf /",
+            "x\"y",
+            "x'y",
+            "..",
+            "@",
+            "a\tb",
+            "a\\b",
+        ] {
+            assert!(
+                validate_ref_name(bad, "test").is_err(),
+                "{} should be rejected",
+                bad
+            );
         }
         // Remotes : pas de slash
         assert!(validate_remote_name("origin").is_ok());

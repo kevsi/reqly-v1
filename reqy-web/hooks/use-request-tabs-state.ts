@@ -66,32 +66,30 @@ export function useRequestTabsState() {
 
   // ── Layout (Bruno-style) ─────────────────────────────────────────────
   // Persisted via persistence layer (IndexedDB + localStorage fallback).
-  // Hydration-safe: start horizontal (SSR fallback) then hydrate from storage.
-  const [requestViewLayout, setRequestViewLayout] = useState<RequestViewLayout>("horizontal");
-  const [layoutHydrated, setLayoutHydrated] = useState(false);
-
-  // Hydrate once after mount to avoid SSR mismatch when stored === "vertical".
-  useEffect(() => {
+  // The lazy initializer reads the stored value once so the very first render
+  // is already correct — no post-mount setState from an external source
+  // (which would trip the set-state-in-effect rule). On the server,
+  // localStorage is unavailable so it falls back to "horizontal", matching the
+  // SSR output.
+  const [requestViewLayout, setRequestViewLayout] = useState<RequestViewLayout>(() => {
     try {
       const stored = persistence.getItem<string>(STORAGE_KEY_REQUEST_LAYOUT);
-      if (stored === "vertical" || stored === "horizontal") {
-        setRequestViewLayout(stored);
-      }
+      if (stored === "vertical" || stored === "horizontal") return stored;
     } catch {
       // ignore
-    } finally {
-      setLayoutHydrated(true);
     }
-  }, []);
-
+    return "horizontal";
+});
   const toggleRequestViewLayout = useCallback(() => {
     setRequestViewLayout((prev) => (prev === "horizontal" ? "vertical" : "horizontal"));
   }, []);
 
+  // Persist layout changes to storage. Runs once after mount (idempotent: it
+  // writes back the value already present in the cache) and on every genuine
+  // user-driven change.
   useEffect(() => {
-    if (!layoutHydrated) return;
     void persistence.setItem(STORAGE_KEY_REQUEST_LAYOUT, requestViewLayout);
-  }, [requestViewLayout, layoutHydrated]);
+  }, [requestViewLayout]);
 
   const isLoading = loadingCount > 0;
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];

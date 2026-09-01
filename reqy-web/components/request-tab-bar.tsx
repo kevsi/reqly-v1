@@ -212,8 +212,8 @@ export function RequestTabBar({
                 type="button"
                 onClick={(e) => onCloseTab(tab.id, e)}
                 className={cn(
-                  "ml-0.5 flex size-7 shrink-0 items-center justify-center rounded transition-colors hover:bg-muted-foreground/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100",
-                  activeTabId === tab.id ? "opacity-30" : "opacity-0",
+                  "ml-0.5 flex size-7 shrink-0 items-center justify-center rounded transition-colors hover:bg-muted-foreground/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 md:group-hover:opacity-100",
+                  activeTabId === tab.id ? "opacity-60 md:opacity-30" : "opacity-60 md:opacity-0",
                 )}
                 data-testid="tabbar-close-tab"
                 aria-label={t("runner.tabs.close")}

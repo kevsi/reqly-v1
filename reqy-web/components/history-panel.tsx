@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Clock,
   Trash2,
@@ -83,40 +83,49 @@ export function HistoryPanel({
     );
   };
 
-  const filteredHistory = history.filter((item) => {
-    // Text search
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch =
-        item.name.toLowerCase().includes(q) ||
-        item.endpoint.toLowerCase().includes(q) ||
-        item.method.toLowerCase().includes(q) ||
-        String(item.responseStatus || "").includes(q);
-      if (!matchesSearch) return false;
-    }
+   const [now] = useState(() => Date.now());
 
-    // Method filter
-    if (methodFilter.length > 0 && !methodFilter.includes(item.method)) return false;
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      // Text search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchesSearch =
+          item.name.toLowerCase().includes(q) ||
+          item.endpoint.toLowerCase().includes(q) ||
+          item.method.toLowerCase().includes(q) ||
+          String(item.responseStatus || "").includes(q);
+        if (!matchesSearch) return false;
+      }
 
-    // Status filter
-    if (statusFilter) {
-      const s = item.responseStatus;
-      if (statusFilter === "2xx" && (!s || s < 200 || s >= 300)) return false;
-      if (statusFilter === "4xx" && (!s || s < 400 || s >= 500)) return false;
-      if (statusFilter === "5xx" && (!s || s < 500)) return false;
-      if (statusFilter === "error" && s && s < 400) return false;
-    }
+      // Method filter
+      if (methodFilter.length > 0 && !methodFilter.includes(item.method)) return false;
 
-    // Time filter
-    if (timeFilter !== "all") {
-      const now = Date.now();
-      const cutoff =
-        timeFilter === "today" ? now - 24 * 60 * 60 * 1000 : timeFilter === "week" ? now - 7 * 24 * 60 * 60 * 1000 : now - 30 * 24 * 60 * 60 * 1000;
-      if (item.executedAt < cutoff) return false;
-    }
+      // Status filter
+      if (statusFilter) {
+        const s = item.responseStatus;
+        if (statusFilter === "2xx" && (!s || s < 200 || s >= 300)) return false;
+        if (statusFilter === "4xx" && (!s || s < 400 || s >= 500)) return false;
+        if (statusFilter === "5xx" && (!s || s >= 500)) return false;
+        if (statusFilter === "error" && s && s < 400) return false;
+      }
 
-    return true;
-  });
+      // Time filter — cutoff derived from `now` (captured once at mount via the
+      // useState lazy initializer; Date.now() is impure and must not run during
+      // render, else React Strict Mode's double-render yields inconsistent cutoffs).
+      if (timeFilter !== "all") {
+        const cutoff =
+          timeFilter === "today"
+            ? now - 24 * 60 * 60 * 1000
+            : timeFilter === "week"
+            ? now - 7 * 24 * 60 * 60 * 1000
+            : now - 30 * 24 * 60 * 60 * 1000;
+        if (item.executedAt < cutoff) return false;
+      }
+
+      return true;
+    });
+  }, [history, searchQuery, methodFilter, statusFilter, timeFilter, now]);
 
   const copyAsCurl = async (item: HistoryItem) => {
     const headers = Object.entries(item.headers ?? {})

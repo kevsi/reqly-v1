@@ -16,9 +16,8 @@ mod store;
 mod ts_bindings;
 
 use crate::capture::{
-    clear_captured_sessions, delete_captured_session, get_captured_session,
-    list_captured_sessions, set_bandwidth_limit, start_capture_proxy, stop_capture_proxy,
-    ManagedCaptureProxyState,
+    clear_captured_sessions, delete_captured_session, get_captured_session, list_captured_sessions,
+    set_bandwidth_limit, start_capture_proxy, stop_capture_proxy, ManagedCaptureProxyState,
 };
 use crate::fetch::{fetch_proxy, SharedClient};
 use crate::open::{export_json, open_external, save_file};

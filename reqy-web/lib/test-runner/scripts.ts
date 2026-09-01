@@ -235,15 +235,15 @@ export async function runScript(
       throw lastError;
     }
 
-    // Browser / Tauri webview fallback: use Function constructor.
-    // Less secure (no sandboxing, no timeout) but functional for local use.
-    const fnArgs = Object.keys(sandbox);
-    const fnValues = Object.values(sandbox);
-    // Execute code directly (statements or expression) — no return wrapper
-    // to avoid syntax errors with statements like console.log("x");
-    const fn = new Function(...fnArgs, `"use strict"; ${code}`);
-    const result = fn(...fnValues);
-    return { result, consoleLines, consoleEntries };
+    // Browser / Tauri webview fallback: execution is explicitly disabled.
+    // The hardened vm sandbox is only available in Node/Tauri runtimes; falling
+    // back to Function would be insecure (no timeout, no codeGeneration guard).
+    return {
+      error:
+        "Exécution de scripts désactivée dans le navigateur : utilisez l'application desktop Tauri pour exécuter les scripts pre/post.",
+      consoleLines,
+      consoleEntries,
+    };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err), consoleLines, consoleEntries };
   }
