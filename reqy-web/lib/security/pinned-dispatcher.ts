@@ -4,9 +4,18 @@ import { isBlockedIp } from "./ssrf";
 import { resolveCached } from "./dns-cache";
 
 /** Resolve a public URL and pin future sockets to the validated address. */
-export async function createPinnedDispatcher(rawUrl: string): Promise<Agent | undefined> {
+export async function createPinnedDispatcher(
+  rawUrl: string,
+  options?: { allowLocal?: boolean },
+): Promise<Agent | undefined> {
   const parsed = new URL(rawUrl);
   if (process.env.NODE_ENV === "development" || process.env.ALLOW_LOCAL_HOSTS === "true") {
+    return undefined;
+  }
+  const allowLocal = options?.allowLocal === true;
+  const localLiteral =
+    parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1";
+  if (allowLocal && localLiteral) {
     return undefined;
   }
   const address = isIP(parsed.hostname) ? parsed.hostname : await resolveCached(parsed.hostname);

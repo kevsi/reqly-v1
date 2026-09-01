@@ -29,19 +29,35 @@ beforeEach(() => {
 });
 
 describe("handleOllama", () => {
-  it("rejects localhost host", async () => {
+  it("allows localhost (Ollama est un service local explicite)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: "ok" } }],
+        }),
+    } as Response);
+    vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock);
     const res = await handleOllama({ ...validBody, host: "localhost" }, {});
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.code).toBe("SSRF_BLOCKED");
+    expect(res.status).toBe(200);
   });
 
-  it("rejects 127.0.0.1 host", async () => {
+  it("allows 127.0.0.1 (usage local légitime d'Ollama)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: "ok" } }],
+        }),
+    } as Response);
+    vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock);
     const res = await handleOllama({ ...validBody, host: "127.0.0.1" }, {});
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
-  it("rejects blocked private IPs", async () => {
+  it("rejects blocked private IPs (SSRF)", async () => {
     const res = await handleOllama({ ...validBody, host: "10.0.0.1" }, {});
     expect(res.status).toBe(403);
   });
@@ -62,10 +78,18 @@ describe("handleOllama", () => {
     expect(body.content).toBe("Hello from Ollama!");
   });
 
-  it("defaults host to 127.0.0.1 when not specified (but SSRF blocks it)", async () => {
-    // The default host 127.0.0.1 is blocked by SSRF protection
+  it("defaults host to 127.0.0.1 when not specified (Ollama local)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: "ok" } }],
+        }),
+    } as Response);
+    vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock);
     const res = await handleOllama({ ...validBody, host: undefined, port: undefined }, {});
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it("uses default port from OLLAMA_PORT env when port not specified", async () => {

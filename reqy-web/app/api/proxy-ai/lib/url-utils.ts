@@ -62,7 +62,14 @@ export async function getCustomUrl(body: Record<string, unknown>): Promise<strin
 export async function isOllamaHostAllowed(host: string): Promise<boolean> {
   const lower = host.toLowerCase().trim();
   if (!lower) return false;
-  if (isHostnameBlocked(lower)) return false;
+
+  // Ollama est un service local explicite : l'utilisateur choisit délibérément
+  // ce provider. localhost/127.0.0.1/::1 sont autorisés (usage normal).
+  // Les autres IP privées sont bloquées (SSRF).
+  if (lower === "localhost" || lower === "127.0.0.1" || lower === "0.0.0.0" || lower === "::1") {
+    return true;
+  }
+
   if (isIP(lower) && isBlockedIp(lower)) return false;
 
   const resolved = await resolveHostIfNeeded(lower);

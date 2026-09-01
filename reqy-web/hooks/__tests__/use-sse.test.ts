@@ -2,6 +2,9 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSSE } from "@/hooks/use-sse";
 
+vi.mock("@/lib/tauri", () => ({ isTauriAvailable: vi.fn() }));
+import { isTauriAvailable } from "@/lib/tauri";
+
 function createMockReadableStream(chunks: string[]) {
   const encoder = new TextEncoder();
   let index = 0;
@@ -49,6 +52,10 @@ describe("useSSE hook", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.restoreAllMocks();
+    // Desktop (Tauri) : connexion directe — les tests de parsing ci-dessous
+    // vérifient l'URL cible non routée. Le routage web via /api/proxy-sse est
+    // couvert par un test dédié (voir "routes via the web SSE proxy").
+    vi.mocked(isTauriAvailable).mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -479,6 +486,30 @@ describe("useSSE hook", () => {
     expect(result.current.events).toEqual([]);
     expect(result.current.totalBytes).toBe(0);
     expect(result.current.eventsPerSec).toBe(0);
+
+    act(() => {
+      result.current.disconnect();
+    });
+  });
+
+  it("routes the stream through the web SSE proxy when not in Tauri", async () => {
+    // Web build : /api/proxy-sse applique les protections SSRF/rate-limit.
+    vi.mocked(isTauriAvailable).mockReturnValue(false);
+    const fetchSpy = vi.fn().mockResolvedValue(mockResponse(["data: proxied\n\n"]));
+    globalThis.fetch = fetchSpy;
+
+    const { result } = renderHook(() => useSSE());
+
+    await act(async () => {
+      result.current.connect({ url: "https://api.example.com/events" });
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/proxy-sse?url=" + encodeURIComponent("https://api.example.com/events"),
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.current.events).toHaveLength(1);
+    expect(result.current.events[0].data).toBe("proxied");
 
     act(() => {
       result.current.disconnect();

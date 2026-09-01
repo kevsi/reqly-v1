@@ -1,7 +1,26 @@
+import { isBlockedIp, isIP } from "@/lib/security/ssrf";
+
 /**
  * Messages d'erreur GraphQL conviviaux (français, actionnables).
  * Le détail technique est conservé en fin de message pour le diagnostic.
  */
+
+/**
+ * Validation d'hôte côté client (les WebSockets se connectent directement, pas
+ * via /api/proxy) : on bloque les IP littérales privées/réservées et les
+ * hostnames locaux. Les domaines publics sont autorisés (le DNS est résolu par
+ * le navigateur). Complément défensif — la vraie protection SSRF reste sur le
+ * serveur pour le trafic HTTP routé via le proxy.
+ */
+function isBlockedSubscriptionHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (lower === "localhost") return true;
+  if (lower.endsWith(".local") || lower.endsWith(".internal") || lower.endsWith(".lan")) {
+    return true;
+  }
+  if (isIP(lower) !== 0) return isBlockedIp(lower);
+  return false;
+}
 
 export function friendlyGraphQLError(status: number, detail?: string): string {
   const d = detail && detail !== "Invalid proxy response" ? ` (${detail})` : "";
@@ -50,6 +69,17 @@ export function validateSubscriptionEndpoint(
       ok: false,
       error:
         "L'URL doit commencer par http://, https://, ws:// ou wss:// (les subscriptions utilisent WebSocket).",
+    };
+  }
+
+  // Les subscriptions WebSocket se connectent directement (pas via /api/proxy) :
+  // on bloque donc les hôtes privés/réservés côté client, faute de protection
+  // SSRF serveur sur ce canal (même posture que le proxy pour le trafic HTTP).
+  if (isBlockedSubscriptionHost(parsed.hostname)) {
+    return {
+      ok: false,
+      error:
+        "Les subscriptions vers des hôtes privés ou locaux ne sont pas autorisées (localhost, IP privées, *.local…).",
     };
   }
 

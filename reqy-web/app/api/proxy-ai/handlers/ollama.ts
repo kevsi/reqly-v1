@@ -54,7 +54,7 @@ export async function handleOllama(
   }
 
   const ollamaUrl = `http://${host}:${ollamaPort}/v1/chat/completions`;
-  const dispatcher = await createPinnedDispatcher(ollamaUrl);
+  const dispatcher = await createPinnedDispatcher(ollamaUrl, { allowLocal: true });
   const res = await fetch(ollamaUrl, {
     method: "POST",
     headers: {

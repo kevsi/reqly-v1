@@ -49,8 +49,16 @@ describe("validateSubscriptionEndpoint", () => {
   });
 
   it("accepte ws:// et wss:// tels quels", () => {
-    expect(validateSubscriptionEndpoint("ws://localhost:4000/graphql").ok).toBe(true);
+    expect(validateSubscriptionEndpoint("ws://api.example.com/graphql").ok).toBe(true);
     expect(validateSubscriptionEndpoint("wss://api.example.com/graphql").ok).toBe(true);
+  });
+
+  it("bloque les hôtes privés (localhost, IP privées, *.local)", () => {
+    expect(validateSubscriptionEndpoint("ws://localhost:4000/graphql").ok).toBe(false);
+    expect(validateSubscriptionEndpoint("wss://192.168.1.1/graphql").ok).toBe(false);
+    expect(validateSubscriptionEndpoint("wss://10.0.0.5/graphql").ok).toBe(false);
+    expect(validateSubscriptionEndpoint("wss://myhost.local/graphql").ok).toBe(false);
+    expect(validateSubscriptionEndpoint("wss://169.254.169.254/graphql").ok).toBe(false);
   });
 
   it("rejette les schémas inconnus", () => {

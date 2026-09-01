@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { KeyValuePair } from "@/components/key-value-editor";
+import { isTauriAvailable } from "@/lib/tauri";
 
 export interface SSEEvent {
   id: string;
@@ -37,6 +38,18 @@ const DEFAULT_MAX_EVENTS = 500;
 const MAX_EVENTS_CAP = 5000;
 const DEFAULT_RETRY_MS = 1000;
 const MAX_RETRY_MS = 30_000;
+
+/**
+ * Route le flux SSE via le proxy serveur (`/api/proxy-sse`) côté web afin
+ * d'appliquer les protections SSRF/rate-limit/CORS du backend — comme pour
+ * les requêtes REST qui passent par `/api/proxy`. Sur desktop (Tauri), il n'y
+ * a pas de serveur Next : connexion directe (client natif, pas de contrainte
+ * CORS).
+ */
+function resolveSSEStreamUrl(target: string): string {
+  if (isTauriAvailable()) return target;
+  return `/api/proxy-sse?url=${encodeURIComponent(target)}`;
+}
 
 function buildFetchHeaders(headers?: KeyValuePair[], auth?: SSEAuthConfig): Record<string, string> {
   const result: Record<string, string> = {};
@@ -375,11 +388,14 @@ export function useSSE() {
 
         // Build URL with lastEventId for reconnection if available
         const lastEventId = lastEventIdsRef.current.get(url);
-        const connectUrl = lastEventId
+        const targetUrl = lastEventId
           ? url + (url.includes("?") ? "&" : "?") + `lastEventId=${encodeURIComponent(lastEventId)}`
           : url;
 
-        createSSEStream(connectUrl, {
+        // Web : passer par le proxy SSE (SSRF/rate-limit/CORS). Desktop : direct.
+        const streamUrl = resolveSSEStreamUrl(targetUrl);
+
+        createSSEStream(streamUrl, {
           headers: fetchHeaders,
           method,
           body,
