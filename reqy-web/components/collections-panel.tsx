@@ -814,26 +814,24 @@ export function CollectionsPanel({
   }, [sortedCollections, searchQuery, searchLower, methodFilter, semanticResults, collections]);
 
   // ── Déplacement des collections (menu Monter/Descendre) ──
-  // Fix: Monter/Descendre opère sur l'ordre réel du store (collections), pas sur
-  // filteredCollections trié alphabétiquement. Sinon le tri "name" annule le move
-  // au rendu suivant et l'utilisateur ne voit aucun changement.
+  // Fix: opère sur l'ordre visible (filteredCollections) pour que le déplacement
+  // corresponde à ce que l'utilisateur voit, puis persiste cet ordre et bascule
+  // en tri manuel pour qu'il reste visible.
   const moveCollection = useCallback(
     (id: string, dir: -1 | 1) => {
       if (!onReorderCollections) return;
-      // Si une recherche filtre la liste, on ne peut pas déplacer relativement
-      // à l'ordre complet — on déplace dans l'ordre du store.
-      const ids = collections.map((c) => c.id);
-      const idx = ids.indexOf(id);
+      const visibleIds = filteredCollections.map((c) => c.id);
+      const idx = visibleIds.indexOf(id);
       const target = idx + dir;
-      if (idx < 0 || target < 0 || target >= ids.length) return;
-      ids.splice(idx, 1);
-      ids.splice(target, 0, id);
-      onReorderCollections(ids);
-      // Basculer en tri manuel pour que le nouvel ordre reste visible
-      // (le tri "name"/"updated"/"requests" écraserait le déplacement)
+      if (idx < 0 || target < 0 || target >= visibleIds.length) return;
+      visibleIds.splice(idx, 1);
+      visibleIds.splice(target, 0, id);
+      // Si une recherche filtre, conserver les collections masquées à la fin
+      const hiddenIds = collections.map((c) => c.id).filter((cid) => !visibleIds.includes(cid));
+      onReorderCollections([...visibleIds, ...hiddenIds]);
       setSortBy("manual");
     },
-    [collections, onReorderCollections],
+    [collections, filteredCollections, onReorderCollections],
   );
 
   // Wrapper: ajouter un dossier auto-déploie la collection pour que le dossier soit visible
