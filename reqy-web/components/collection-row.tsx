@@ -48,16 +48,13 @@ import { collectionDropId, requestId, folderDropId } from "@/hooks/use-request-d
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
-/** Clé i18n locale (absente des fichiers de locale ; fallback FR inline). */
 const ROW_KEYS = {
   newBadge: "collections.panel.newBadge",
 } as const;
 
 interface CollectionRowProps {
   collection: Collection;
-  /** R11 — ring de mise en évidence temporaire après import. */
   isHighlighted?: boolean;
-  /** R11 — badge « Nouveau » affiché ~10 s après un import. */
   showNewBadge?: boolean;
   isExpanded: boolean;
   isSelected: boolean;
@@ -85,17 +82,14 @@ interface CollectionRowProps {
     requestId: string,
     folderId: string | null,
   ) => void;
-  // Folder CRUD operations
   onAddFolder?: (collectionId: string, name: string, parentId: string | null) => string;
   onRenameFolder?: (collectionId: string, folderId: string, name: string) => void;
   onDeleteFolder?: (collectionId: string, folderId: string) => void;
   onMoveFolder?: (collectionId: string, folderId: string, newParentId: string | null) => void;
-  // Réordonner les collections (montée/descente depuis le menu)
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
-  // Réordonner les dossiers d'un même niveau (via le panneau)
   onFolderMoveUp?: (folderId: string) => void;
   onFolderMoveDown?: (folderId: string) => void;
 }
@@ -115,7 +109,6 @@ function FolderNameModal({
 }) {
   const [name, setName] = useState(initialValue);
   const { t } = useTranslation();
-  // Reset input when modal opens (fixes stale value on second open)
   React.useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -155,6 +148,7 @@ function FolderNameModal({
   );
 }
 
+// ── Explorer minimal : pas de carte, pas de fond muted, juste indentation ──
 function FolderDropZone({
   collectionId,
   folder,
@@ -192,48 +186,38 @@ function FolderDropZone({
   });
   const [renameOpen, setRenameOpen] = useState(false);
   const [createSubOpen, setCreateSubOpen] = useState(false);
-  const indentPx = 28 + depth * 16;
+  const indentPx = 8 + depth * 16;
   return (
     <div
       ref={folderDropRef}
       data-testid={`folder-drop-${folder.name}`}
-      className={cn("relative rounded-sm transition-colors", isOver && "bg-primary/[0.08]")}
+      className={cn(isOver && "bg-primary/5")}
     >
-      {/* ── Folder header ── */}
       <div
         style={{ paddingLeft: `${indentPx}px` }}
         className={cn(
-          "flex items-center gap-2 pr-4 py-2 mt-1 rounded-md transition-all duration-150",
-          "bg-muted/[0.06] border border-border/20 hover:bg-muted/[0.12] hover:border-border/30",
-          isExpanded && "bg-muted/[0.12] border-border/30",
-          isOver && "bg-primary/[0.10] border-primary/30",
+          "group flex items-center gap-1.5 py-1 pr-2 text-sm hover:bg-muted/50",
+          isOver && "bg-primary/10",
         )}
       >
         <button
           onClick={() => onToggleExpand(folder.id)}
-          className="shrink-0 p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+          className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/60 hover:text-foreground"
           aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
         >
-          {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </button>
-
-        <span className="shrink-0 text-primary/60">
-          {isExpanded ? <FolderOpen className="size-4" /> : <Folder className="size-4" />}
+        <span className="shrink-0 text-muted-foreground/60">
+          {isExpanded ? <FolderOpen className="size-3.5" /> : <Folder className="size-3.5" />}
         </span>
-
         <span
-          className="flex-1 min-w-0 text-sm font-medium text-foreground/80 truncate cursor-pointer"
+          className="flex-1 min-w-0 truncate text-[13px] text-foreground/80 cursor-pointer"
           onClick={() => onToggleExpand(folder.id)}
         >
           {folder.name}
         </span>
-
-        <span className="shrink-0 text-xs font-mono text-muted-foreground/50 bg-muted/30 px-1.5 py-0.5 rounded">
-          {folderReqCount}
-        </span>
-
-        {/* Folder actions */}
-        <div className="ml-auto flex items-center gap-1">
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{folderReqCount}</span>
+        <div className="ml-auto flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
           {onAddFolder && (
             <button
               type="button"
@@ -242,7 +226,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 setCreateSubOpen(true);
               }}
-              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/50 hover:text-foreground"
             >
               <Plus className="size-3" />
             </button>
@@ -255,7 +239,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 setRenameOpen(true);
               }}
-              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/50 hover:text-foreground"
             >
               <Edit2 className="size-3" />
             </button>
@@ -268,7 +252,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 onFolderMoveUp(folder.id);
               }}
-              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/50 hover:text-foreground"
             >
               <ArrowUp className="size-3" />
             </button>
@@ -281,7 +265,7 @@ function FolderDropZone({
                 e.stopPropagation();
                 onFolderMoveDown(folder.id);
               }}
-              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent/60 transition-all"
+              className="size-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/50 hover:text-foreground"
             >
               <ArrowDown className="size-3" />
             </button>
@@ -297,26 +281,20 @@ function FolderDropZone({
                   () => onDeleteFolder(collectionId, folder.id),
                 );
               }}
-              className="size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all"
+              className="size-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/50 hover:text-destructive"
             >
               <Trash2 className="size-3" />
             </button>
           )}
         </div>
       </div>
-
-      {/* ── Folder content (expanded) ── */}
       {isExpanded && (
-        <div className="relative pr-1 py-1 space-y-0.5">
-          {/* Left border indicator — aligned with nested request padding */}
-          <div
-            className="absolute top-0 bottom-0 w-0.5 rounded-r bg-border/20"
-            style={{ left: `${indentPx}px` }}
-          />
-          {children}
+        <div className="space-y-0">
+          <div style={{ marginLeft: `${indentPx + 12}px` }} className="border-l border-border/30 pl-1 space-y-0">
+            {children}
+          </div>
         </div>
       )}
-
       <FolderNameModal
         open={renameOpen}
         title={t("collections.row.renameFolder")}
@@ -378,8 +356,6 @@ export function CollectionRow({
   onFolderMoveDown,
 }: CollectionRowProps) {
   const { t } = useTranslation();
-
-  // ── Track expanded folders ──
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
   const toggleFolderExpand = useCallback((folderId: string) => {
     setExpandedFolderIds((prev) => {
@@ -389,18 +365,13 @@ export function CollectionRow({
       return next;
     });
   }, []);
-
-  // ── Droppable for cross-collection moves ──
   const { setNodeRef: dropRef, isOver } = useDroppable({
     id: collectionDropId(collection.id),
     data: { type: "collection" as const, collectionId: collection.id },
   });
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [pendingRemoveRequest, setPendingRemoveRequest] = useState<RequestItem | null>(null);
-
-  // ── Sortable request IDs ──
   const requestIds = collection.requests.map((r) => requestId(r.id));
-
   const renderRequestsByFolder = useCallback(() => {
     const folders = [...(collection.folders ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const sortedRequests = [...collection.requests].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -418,10 +389,9 @@ export function CollectionRow({
     }
     const rootReqs = folderMap.get("__root__") ?? [];
     const result: React.ReactNode[] = [];
-
     if (rootReqs.length > 0) {
       result.push(
-        <div key="__root__-section" className="space-y-0.5">
+        <div key="__root__-section" className="space-y-0">
           {rootReqs.map((req) => (
             <DraggableRequestRow
               key={req.id}
@@ -437,7 +407,6 @@ export function CollectionRow({
         </div>,
       );
     }
-
     const renderFolder = (folder: CollectionFolder, depth: number): React.ReactNode => {
       const folderReqs = folderMap.get(folder.id) ?? [];
       const isFolderExpanded = expandedFolderIds.has(folder.id);
@@ -475,12 +444,10 @@ export function CollectionRow({
         </FolderDropZone>
       );
     };
-
     const rootFolders = childrenMap.get(null) ?? [];
     for (const folder of rootFolders) {
       result.push(renderFolder(folder, 0));
     }
-
     return result;
   }, [
     collection,
@@ -497,202 +464,64 @@ export function CollectionRow({
     toggleFolderExpand,
     t,
   ]);
-
   return (
     <div
       ref={dropRef}
       data-testid="collection-row"
       data-collection-id={collection.id}
-      className={cn(
-        "relative rounded-md transition-shadow duration-300",
-        isHighlighted && "ring-2 ring-primary ring-offset-0",
-        isOver && "bg-primary/[0.04]",
-        isOver &&
-          "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r before:bg-primary/60",
-      )}
+      className={cn(isHighlighted && "ring-1 ring-primary", isOver && "bg-primary/5")}
     >
-      {/* ── Collection header ── */}
-      <div className={cn("flex items-center gap-3 px-3 py-2.5", isSelected && "bg-primary/[0.03]")}>
+      <div className={cn("group flex items-center gap-2 px-2 py-1.5 hover:bg-muted/40", isSelected && "bg-primary/5")}>
         <button
           onClick={() => onToggleSelect(collection.id)}
-          className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground/60"
+          className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground"
         >
-          {isSelected ? (
-            <CheckSquare className="size-3.5 text-primary" />
-          ) : (
-            <Square className="size-3.5" />
-          )}
+          {isSelected ? <CheckSquare className="size-3.5 text-primary" /> : <Square className="size-3.5" />}
         </button>
-        <button
-          onClick={() => onToggleExpand(collection.id)}
-          className="shrink-0 text-muted-foreground/50"
-        >
-          {isExpanded ? (
-            <ChevronDown className="size-3.5" />
-          ) : (
-            <ChevronRight className="size-3.5" />
-          )}
+        <button onClick={() => onToggleExpand(collection.id)} className="shrink-0 text-muted-foreground/50">
+          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </button>
-        <span
-          className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded",
-            collectionColors[safeColor(collection.color)],
-          )}
-        >
-          {collectionIcons[collection.icon] ?? <Package className="size-2.5 text-white" />}
+        <span className={cn("flex size-5 shrink-0 items-center justify-center rounded text-white text-xs", collectionColors[safeColor(collection.color)])}>
+          {collectionIcons[collection.icon] ?? <Package className="size-3 text-white" />}
         </span>
         {editingCollectionId === collection.id ? (
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Input
-              value={renameValue}
-              onChange={(e) => onRenameChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  onRenameConfirm(collection.id);
-                }
-                if (e.key === "Escape") onRenameCancel();
-              }}
-              autoFocus
-              className="h-7 text-sm w-48"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRenameConfirm(collection.id)}
-              className="h-7 px-2 text-xs font-medium text-primary"
-            >
-              OK
-            </Button>
+            <Input value={renameValue} onChange={(e) => onRenameChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onRenameConfirm(collection.id); if (e.key === "Escape") onRenameCancel(); }} autoFocus className="h-7 text-sm w-48" />
+            <Button variant="ghost" size="sm" onClick={() => onRenameConfirm(collection.id)} className="h-7 px-2 text-xs font-medium text-primary">OK</Button>
           </div>
         ) : (
-          <span
-            className="flex-1 min-w-0 truncate text-sm font-medium text-foreground/90 cursor-pointer"
-            onClick={() => onToggleExpand(collection.id)}
-          >
-            {collection.name}
-          </span>
+          <span className="flex-1 min-w-0 truncate text-sm font-medium cursor-pointer" onClick={() => onToggleExpand(collection.id)}>{collection.name}</span>
         )}
-        <Badge
-          variant="outline"
-          className="shrink-0 text-[10px] px-1.5 py-0 h-4 font-mono text-muted-foreground/60 border-muted-foreground/20"
-        >
-          {collection.requests.length}
-        </Badge>
-        {showNewBadge && (
-          <Badge
-            variant="default"
-            className="shrink-0 text-[10px] px-1.5 py-0 h-4 font-medium bg-primary/15 text-primary border-primary/30"
-          >
-            {t(ROW_KEYS.newBadge, { defaultValue: "Nouveau" })}
-          </Badge>
-        )}
-        <div className="flex items-center gap-0.5">
+        <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 h-4 font-mono text-muted-foreground/50 border-border/40">{collection.requests.length}</Badge>
+        {showNewBadge && <Badge variant="default" className="shrink-0 text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20">{t(ROW_KEYS.newBadge, { defaultValue: "Nouveau" })}</Badge>}
+        <div className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="size-6 flex items-center justify-center rounded text-muted-foreground/30 hover:text-foreground hover:bg-accent">
-                <MoreHorizontal className="size-3.5" />
-              </button>
+              <button className="size-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/40 hover:text-foreground"><MoreHorizontal className="size-3.5" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => onAddRequest(collection.id)}>
-                <Plus className="mr-2 size-3.5" /> {t("collections.row.addRequest")}
-              </DropdownMenuItem>
-              {onAddFolder && (
-                <DropdownMenuItem onClick={() => setCreateFolderOpen(true)}>
-                  <Folder className="mr-2 size-3.5" /> {t("collections.row.addFolder")}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => onRenameStart(collection.id, collection.name)}>
-                <Edit2 className="mr-2 size-3.5" /> {t("collections.row.rename")}
-              </DropdownMenuItem>
-              {onMoveUp && (
-                <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-                  <ArrowUp className="mr-2 size-3.5" /> {t("collections.row.moveUp")}
-                </DropdownMenuItem>
-              )}
-              {onMoveDown && (
-                <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-                  <ArrowDown className="mr-2 size-3.5" /> {t("collections.row.moveDown")}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => onExportCollection(collection)}>
-                <Download className="mr-2 size-3.5" /> {t("collections.row.export")}
-              </DropdownMenuItem>
-              {onDuplicateCollection && (
-                <DropdownMenuItem onClick={() => onDuplicateCollection(collection.id)}>
-                  <Copy className="mr-2 size-3.5" /> {t("collections.row.duplicate")}
-                </DropdownMenuItem>
-              )}
-              {onRunCollection && (
-                <DropdownMenuItem onClick={() => onRunCollection(collection)}>
-                  <Play className="mr-2 size-3.5" /> {t("collections.row.runAll")}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onClick={() =>
-                  onConfirmDelete(
-                    t("collections.row.deleteCollection", { name: collection.name }),
-                    () => onDeleteCollection(collection.id),
-                  )
-                }
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 size-3.5" /> {t("collections.row.delete")}
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddRequest(collection.id)}><Plus className="mr-2 size-3.5" /> {t("collections.row.addRequest")}</DropdownMenuItem>
+              {onAddFolder && <DropdownMenuItem onClick={() => setCreateFolderOpen(true)}><Folder className="mr-2 size-3.5" /> {t("collections.row.addFolder")}</DropdownMenuItem>}
+              <DropdownMenuItem onClick={() => onRenameStart(collection.id, collection.name)}><Edit2 className="mr-2 size-3.5" /> {t("collections.row.rename")}</DropdownMenuItem>
+              {onMoveUp && <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}><ArrowUp className="mr-2 size-3.5" /> {t("collections.row.moveUp")}</DropdownMenuItem>}
+              {onMoveDown && <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}><ArrowDown className="mr-2 size-3.5" /> {t("collections.row.moveDown")}</DropdownMenuItem>}
+              <DropdownMenuItem onClick={() => onExportCollection(collection)}><Download className="mr-2 size-3.5" /> {t("collections.row.export")}</DropdownMenuItem>
+              {onDuplicateCollection && <DropdownMenuItem onClick={() => onDuplicateCollection(collection.id)}><Copy className="mr-2 size-3.5" /> {t("collections.row.duplicate")}</DropdownMenuItem>}
+              {onRunCollection && <DropdownMenuItem onClick={() => onRunCollection(collection)}><Play className="mr-2 size-3.5" /> {t("collections.row.runAll")}</DropdownMenuItem>}
+              <DropdownMenuItem onClick={() => onConfirmDelete(t("collections.row.deleteCollection", { name: collection.name }), () => onDeleteCollection(collection.id))} className="text-destructive"><Trash2 className="mr-2 size-3.5" /> {t("collections.row.delete")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
-
-      {/* ── Expanded requests (grouped by folder if folders exist) ── */}
       {isExpanded && (collection.requests.length > 0 || (collection.folders && collection.folders.length > 0)) && (
-        <div className="border-t border-border/20">
+        <div className="border-t border-border/10">
           <SortableContext items={requestIds} strategy={verticalListSortingStrategy}>
-            {collection.folders && collection.folders.length > 0
-              ? renderRequestsByFolder()
-              : collection.requests.map((req) => (
-                  <DraggableRequestRow
-                    key={req.id}
-                    request={req}
-                    collectionId={collection.id}
-                    isSelected={selectedRequestIds.has(`${collection.id}::${req.id}`)}
-                    onSelect={() => onSelectRequest(req)}
-                    onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined}
-                    onRemove={() => setPendingRemoveRequest(req)}
-                    depth={0}
-                  />
-                ))}
+            {collection.folders && collection.folders.length > 0 ? renderRequestsByFolder() : collection.requests.map((req) => <DraggableRequestRow key={req.id} request={req} collectionId={collection.id} isSelected={selectedRequestIds.has(`${collection.id}::${req.id}`)} onSelect={() => onSelectRequest(req)} onSend={onSelectAndSendRequest ? () => onSelectAndSendRequest(req) : undefined} onRemove={() => setPendingRemoveRequest(req)} depth={0} />)}
           </SortableContext>
         </div>
       )}
-
-      <ConfirmDialog
-        open={!!pendingRemoveRequest}
-        onOpenChange={(open) => {
-          if (!open) setPendingRemoveRequest(null);
-        }}
-        title={t("collections.removeRequestTitle")}
-        description={t("collections.removeRequestDescription", {
-          name: pendingRemoveRequest?.name,
-        })}
-        confirmLabel={t("common.delete")}
-        cancelLabel={t("common.cancel")}
-        onConfirm={() => {
-          if (pendingRemoveRequest) onRemoveRequest(collection.id, pendingRemoveRequest.id);
-          setPendingRemoveRequest(null);
-        }}
-      />
-
-      <FolderNameModal
-        open={createFolderOpen}
-        title={t("collections.row.addFolder")}
-        initialValue=""
-        onClose={() => setCreateFolderOpen(false)}
-        onSubmit={(name) => {
-          onAddFolder?.(collection.id, name, null);
-          setCreateFolderOpen(false);
-        }}
-      />
+      <ConfirmDialog open={!!pendingRemoveRequest} onOpenChange={(open) => { if (!open) setPendingRemoveRequest(null); }} title={t("collections.removeRequestTitle")} description={t("collections.removeRequestDescription", { name: pendingRemoveRequest?.name })} confirmLabel={t("common.delete")} cancelLabel={t("common.cancel")} onConfirm={() => { if (pendingRemoveRequest) onRemoveRequest(collection.id, pendingRemoveRequest.id); setPendingRemoveRequest(null); }} />
+      <FolderNameModal open={createFolderOpen} title={t("collections.row.addFolder")} initialValue="" onClose={() => setCreateFolderOpen(false)} onSubmit={(name) => { onAddFolder?.(collection.id, name, null); setCreateFolderOpen(false); }} />
     </div>
   );
 }
