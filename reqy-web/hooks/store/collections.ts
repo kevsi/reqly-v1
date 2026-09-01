@@ -206,6 +206,10 @@ export function createCollectionsMutations(commit: CommitFn) {
 
       const movedRequest: RequestItem = {
         ...request,
+        // Les folderId sont locaux à chaque collection : un dossier source
+        // n'existe pas dans la cible → la requête deviendrait invisible dans
+        // renderRequestsByFolder. Elle atterrit à la racine de la cible.
+        folderId: null,
         order,
         updatedAt: now,
       };

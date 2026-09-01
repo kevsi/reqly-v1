@@ -132,9 +132,7 @@ export function RequestTabsManager() {
     loadAndSendRequest,
     runCollection,
     handleBatchRunRequest,
-    handleAnalyzeRequest,
-    handleGenerateTests,
-    handleGenerateFollowUp,
+     handleGenerateFollowUp,
     createNewRequestInCollection,
     saveModalOpen,
     setSaveModalOpen,
@@ -634,10 +632,8 @@ export function RequestTabsManager() {
                       onRun={sendRequest}
                       onRetry={sendRequest}
                       onRunAndSave={sendAndSave}
-                      onRunAndDownload={sendAndDownload}
-                      onAnalyze={handleAnalyzeRequest}
-                      onGenerateTests={handleGenerateTests}
-                      onPatchRequest={(patch) => {
+       onRunAndDownload={sendAndDownload}
+                       onPatchRequest={(patch) => {
                         const tabPatch: Record<string, unknown> = {};
                         if (patch.method !== undefined) tabPatch.method = patch.method;
                         if (patch.url !== undefined) {
@@ -658,8 +654,6 @@ export function RequestTabsManager() {
                         if (patch.authType !== undefined) tabPatch.authType = patch.authType;
                         updateTab(activeTab.id, tabPatch as Parameters<typeof updateTab>[1]);
                       }}
-                      aiSummary={aiEngine.lastSummary ?? undefined}
-                      aiError={aiEngine.error ?? undefined}
                       proposeAskAI={correctionAskAI}
                       onApplyCorrection={handleApplyCorrection}
                       method={activeTab.method}

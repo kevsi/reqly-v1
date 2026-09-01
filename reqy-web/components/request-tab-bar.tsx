@@ -7,11 +7,13 @@ import {
   ChevronRight,
   CheckCircle,
   Clock,
+  Columns2,
   Copy,
   Folder,
   List,
   Pencil,
   Plus,
+  Rows2,
   Save,
   X,
 } from "lucide-react";
@@ -278,6 +280,22 @@ export function RequestTabBar({
           >
             <Clock className="size-3.5" />
           </Button>
+          {onToggleLayout && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleLayout}
+              className="size-7 text-muted-foreground/60 hover:text-foreground"
+              title={
+                layout === "vertical"
+                  ? t("runner.tabs.layoutSideBySide")
+                  : t("runner.tabs.layoutStacked")
+              }
+              data-testid="tabbar-toggle-layout"
+            >
+              {layout === "vertical" ? <Columns2 className="size-3.5" /> : <Rows2 className="size-3.5" />}
+            </Button>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 pr-2">
           <DropdownMenu>

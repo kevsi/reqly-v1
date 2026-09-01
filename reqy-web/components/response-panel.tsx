@@ -67,11 +67,7 @@ interface ResponsePanelProps {
   onRetry?: () => Promise<void>;
   onRunAndSave?: () => Promise<void>;
   onRunAndDownload?: () => Promise<void>;
-  onAnalyze?: () => Promise<void>;
-  onGenerateTests?: () => Promise<void>;
   onPatchRequest?: (patch: Partial<RequestPayload>) => void;
-  aiSummary?: string;
-  aiError?: string;
   aiIsLoading?: boolean;
   method?: string;
   url?: string;

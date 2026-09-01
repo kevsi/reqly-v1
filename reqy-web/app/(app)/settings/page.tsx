@@ -2,18 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { proxyAuthHeaders } from "@/lib/proxy-auth";
 
 import { useRequestStore } from "@/hooks/use-request-store";
 import { persistence } from "@/lib/persistence";
@@ -95,24 +83,6 @@ export default function SettingsPage() {
     typeof window !== "undefined" ? loadOllamaConfig().model || "llama2" : "llama2",
   );
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [_githubStatus, setGithubStatus] = useState<
-    "loading" | "connected" | "disconnected" | "error"
-  >("loading");
-  const [_githubUser, setGithubUser] = useState<{
-    login: string;
-    name?: string;
-    avatar_url?: string;
-  } | null>(null);
-  const [_postmanStatus, setPostmanStatus] = useState<
-    "loading" | "connected" | "disconnected" | "error"
-  >("loading");
-  const [_postmanUser, setPostmanUser] = useState<{
-    id: string;
-    name?: string;
-    email?: string;
-  } | null>(null);
-  const [_githubConnecting, setGithubConnecting] = useState(false);
-  const [githubConnectDialogOpen, setGithubConnectDialogOpen] = useState(false);
 
   // Lire les erreurs d'auth GitHub OAuth depuis l'URL (après redirection callback)
   useEffect(() => {
@@ -238,65 +208,6 @@ export default function SettingsPage() {
     setSaveStatus(t("settings.configSavedFor", { provider: provider.toUpperCase() }));
   }, [provider, apiKey, aiBaseUrl, aiModel, ollamaHost, ollamaPort, ollamaModel, t]);
 
-  // GitHub handlers
-  const fetchGithubStatus = useCallback(async () => {
-    try {
-      const response = await fetch("/api/github-auth/status");
-      if (!response.ok) throw new Error("Échec");
-      const data = await response.json();
-      if (data.connected) {
-        setGithubStatus("connected");
-        setGithubUser(data.user || null);
-        setGithubConnecting(false);
-        setGithubConnectDialogOpen(false);
-      } else {
-        setGithubStatus("disconnected");
-        setGithubUser(null);
-      }
-    } catch {
-      setGithubStatus("error");
-      setGithubUser(null);
-    }
-  }, []);
-
-  const fetchPostmanStatus = useCallback(async () => {
-    try {
-      const response = await fetch("/api/postman-auth/status", {
-        headers: { ...proxyAuthHeaders() },
-      });
-      if (!response.ok) throw new Error("Échec");
-      const data = await response.json();
-      if (data.connected) {
-        setPostmanStatus("connected");
-        setPostmanUser(data.user || null);
-      } else {
-        setPostmanStatus("disconnected");
-        setPostmanUser(null);
-      }
-    } catch {
-      setPostmanStatus("error");
-      setPostmanUser(null);
-    }
-  }, []);
-
-  // Initial status fetch
-  useEffect(() => {
-    const statusTimeout = window.setTimeout(() => {
-      void Promise.all([fetchGithubStatus(), fetchPostmanStatus()]);
-    }, 0);
-    return () => window.clearTimeout(statusTimeout);
-  }, [fetchGithubStatus, fetchPostmanStatus]);
-
-  useEffect(() => {
-    const onFocus = () => {
-      fetchGithubStatus();
-      fetchPostmanStatus();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [fetchGithubStatus, fetchPostmanStatus]);
-
-  // Postman handlers
   // Notification handlers
   const togglePushEnabled = useCallback(async () => {
     const next = !pushEnabled;
@@ -411,30 +322,6 @@ export default function SettingsPage() {
           {activeSection === "modules" ? <ModulesSection /> : null}
         </SettingsLayout>
       </div>
-
-      <Dialog
-        open={githubConnectDialogOpen}
-        onOpenChange={(open) => {
-          setGithubConnectDialogOpen(open);
-          if (!open) setGithubConnecting(false);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("settings.github.title")}</DialogTitle>
-            <DialogDescription>{t("settings.github.description")}</DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 flex items-center gap-3 text-sm text-foreground">
-            <Loader2 className="size-5 animate-spin text-primary" />
-            <p>{t("settings.github.waiting")}</p>
-          </div>
-          <div className="mt-6 flex justify-end">
-            <Button variant="secondary" onClick={() => setGithubConnectDialogOpen(false)}>
-              {t("settings.github.done")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

@@ -118,18 +118,6 @@ export function useRequestAiEngine(
 
   const aiEngine = useAIEngine(aiTabHandlers);
 
-  const handleAnalyzeRequest = useCallback(async () => {
-    syncActiveTabToAiStore();
-    const ctx = aiEngine.buildContext();
-    await aiEngine.analyzeAfterRequest(ctx);
-  }, [aiEngine, syncActiveTabToAiStore]);
-
-  const handleGenerateTests = useCallback(async () => {
-    syncActiveTabToAiStore();
-    const ctx = aiEngine.buildContext();
-    await aiEngine.generateTests(ctx);
-  }, [aiEngine, syncActiveTabToAiStore]);
-
   const handleGenerateFollowUp = useCallback(
     async (item: HistoryItem) => {
       const payload = buildAiProxyPayload("", "");
@@ -195,11 +183,9 @@ export function useRequestAiEngine(
     [activeTab, updateTab, buildTabFromRequest, setHistoryOpen, setGeneratingFollowUpId],
   );
 
-  return {
-    syncActiveTabToAiStore,
-    aiEngine,
-    handleAnalyzeRequest,
-    handleGenerateTests,
-    handleGenerateFollowUp,
-  };
+   return {
+     syncActiveTabToAiStore,
+     aiEngine,
+     handleGenerateFollowUp,
+   };
 }

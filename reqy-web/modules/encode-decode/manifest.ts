@@ -10,4 +10,5 @@ export const encodeDecodeManifest: ModuleManifest = {
   kind: "feature",
   nav: [{ label: "Encodeur", href: "/encode-decode/", icon: "Binary" }],
   routes: [{ path: "/encode-decode/", type: "page" }],
+  bundled: true,
 };

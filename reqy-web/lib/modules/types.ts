@@ -49,4 +49,10 @@ export interface ModuleManifest {
   routes?: ModuleRouteContribution[];
   /** i18n namespace key for the module's translations. */
   i18nNamespace?: string;
+  /**
+   * Bundled (shipped with the app) modules are enabled by default on first
+   * launch, so they are reachable without a manual Settings → Modules step.
+   * Marketplace / user-installed modules omit this.
+   */
+  bundled?: boolean;
 }

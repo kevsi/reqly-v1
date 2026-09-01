@@ -209,8 +209,14 @@ export default function DashboardPage() {
   const [isSlowEndpointsOpen, setIsSlowEndpointsOpen] = useState(false);
   const [isRecentRequestsOpen, setIsRecentRequestsOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  // Captured once on mount (React purity rule: no impure calls during render).
-  const [now] = useState(() => Date.now());
+  // Live `now` — updates every 60s so relative timestamps and time-range
+  // filtering stay fresh without requiring a page reload.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // R29 — relecture des tokens du thème après montage (fallbacks = hex actuels,
   // zéro mismatch SSR/hydration). Lecture planifiée hors du corps d'effet.
@@ -300,7 +306,20 @@ export default function DashboardPage() {
   }, [filteredHistory, t]);
 
   const requestsByDay = useMemo(() => {
-    const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 30;
+    let days: number;
+    if (timeRange === "7d") days = 7;
+    else if (timeRange === "30d") days = 30;
+    else {
+      const spanDays = filteredHistory.length
+        ? Math.max(
+            ...filteredHistory.map((h) => {
+              const ts = h.executedAt || h.createdAt || 0;
+              return Math.ceil((now - ts) / (24 * 60 * 60 * 1000));
+            }),
+          )
+        : 30;
+      days = Math.max(30, spanDays);
+    }
     const buckets = buildDayBuckets(days);
     const indexByKey = Object.fromEntries(buckets.map((bucket, index) => [bucket.key, index]));
     filteredHistory.forEach((item) => {
@@ -323,7 +342,7 @@ export default function DashboardPage() {
       errorRate: bucket.count ? +((bucket.errors / bucket.count) * 100).toFixed(1) : 0,
       avgTime: bucket.count ? Math.round(bucket.avgTime / bucket.count) : 0,
     }));
-  }, [filteredHistory, timeRange]);
+  }, [filteredHistory, timeRange, now]);
 
   const topSlowEndpoints = useMemo(
     () => buildTopSlowEndpoints(filteredHistory, t),

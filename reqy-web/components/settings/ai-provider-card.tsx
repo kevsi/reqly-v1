@@ -93,9 +93,6 @@ export const PROVIDER_INFOS: ProviderInfo[] = [
     brandIcon: OllamaIcon,
     fallbackIcon: Server,
     gradient: "from-orange-500/20 to-orange-600/10",
-    // Web proxy blocks localhost (SSRF guard): Ollama only works from the
-    // desktop app that reaches http://127.0.0.1:11434 directly.
-    desktopOnlyHint: true,
   },
   {
     value: "opencode-zen",

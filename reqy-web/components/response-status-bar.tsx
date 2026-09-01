@@ -32,8 +32,6 @@ interface ResponseStatusBarProps {
   onRun?: () => Promise<void>;
   onRunAndSave?: () => Promise<void>;
   onRunAndDownload?: () => Promise<void>;
-  onAnalyze?: () => Promise<void>;
-  onGenerateTests?: () => Promise<void>;
   onExport?: () => void;
   onDiff?: () => void;
 }

@@ -30,7 +30,14 @@ function load(): ModuleInstallState {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ModuleInstallState) : {};
+    if (raw) return JSON.parse(raw) as ModuleInstallState;
+    // Premier lancement : activer les modules fournis (bundled) par défaut
+    // afin qu'ils soient accessibles sans passage par Settings → Modules.
+    const defaults: ModuleInstallState = {};
+    for (const m of getAvailableModules()) {
+      if (m.bundled ?? true) defaults[m.id] = true;
+    }
+    return defaults;
   } catch {
     return {};
   }

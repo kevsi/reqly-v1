@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, X, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { buildClientSchema, type GraphQLSchema } from "graphql";
 interface SchemaDocPanelProps {
   schema: unknown;
   onClose: () => void;
@@ -21,9 +22,16 @@ export function SchemaDocPanel({ schema, onClose }: SchemaDocPanelProps) {
     if (!schema) return null;
     // Check if it's a GraphQLSchema instance
     if (typeof schema === "object" && "getTypeMap" in (schema as Record<string, unknown>)) {
-      return schema as import("graphql").GraphQLSchema;
+      return schema as GraphQLSchema;
     }
-    return null;
+    // Raw introspection object (or { data: { __schema } } wrapper) →
+    // build a client schema so the panel can render the docs.
+    try {
+      const introspection = (schema as { data?: unknown }).data ?? schema;
+      return buildClientSchema(introspection as Parameters<typeof buildClientSchema>[0]);
+    } catch {
+      return null;
+    }
   }, [schema]);
 
   const typeMap = useMemo(

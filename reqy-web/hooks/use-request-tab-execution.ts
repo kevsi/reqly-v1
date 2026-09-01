@@ -57,7 +57,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
   const { buildTabFromRequest, executeRequestWrapper, sendSpecificRequest, cancelRequest } =
     useRequestExecutionCore(state);
 
-  const { aiEngine, handleAnalyzeRequest, handleGenerateTests, handleGenerateFollowUp } =
+  const { aiEngine, handleGenerateFollowUp } =
     useRequestAiEngine(state, buildTabFromRequest);
 
   const { runCollectionBackground, runCollection, handleBatchRunRequest } =
@@ -200,20 +200,6 @@ export function useRequestTabExecution(state: RequestTabsState) {
     flashSavedIndicator,
     t,
   ]);
-
-  const exportActiveRequest = useCallback(async () => {
-    if (!activeTab) return;
-    await useRequestStore.getState().exportActiveRequest({
-      method: activeTab.method,
-      url: activeTab.url,
-      requestHeaders: activeTab.headers,
-      body: activeTab.body,
-      bodyType: activeTab.bodyType,
-      authType: activeTab.authType,
-      authToken: activeTab.authToken,
-      assertions: activeTab.assertions,
-    });
-  }, [activeTab]);
 
   const createNewRequestInCollection = useCallback(
     (collectionId: string) => {
@@ -495,14 +481,11 @@ export function useRequestTabExecution(state: RequestTabsState) {
     loadAndSendRequest,
     cancelRequest,
     runCollection,
-    handleBatchRunRequest,
-    handleAnalyzeRequest,
-    handleGenerateTests,
-    handleGenerateFollowUp,
-    exportActiveRequest,
-    createNewRequestInCollection,
-    saveModalOpen,
-    setSaveModalOpen,
+     handleBatchRunRequest,
+     handleGenerateFollowUp,
+     createNewRequestInCollection,
+     saveModalOpen,
+     setSaveModalOpen,
     saveModalName,
     setSaveModalName,
     saveModalCollectionId,
