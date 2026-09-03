@@ -66,8 +66,10 @@ jobs:
                 --command-id "$cid" \
                 --instance-id "$INSTANCE_ID" \
                 --query "[Status, StandardOutputContent]" --output text 2>/dev/null || true)
-              local st="${line%% *}"
-              local out="${line#* }"
+              # --output text sépare les champs par tabulation.
+              local st out
+              st="${line%%	*}"
+              out="${line#*	}"
               case "$st" in
                 Success) echo "$out"; return 0 ;;
                 Failed|Cancelled|TimedOut) echo "$out" >&2; return 1 ;;
