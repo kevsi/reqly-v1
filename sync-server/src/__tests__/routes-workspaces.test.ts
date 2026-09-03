@@ -196,6 +196,33 @@ describe("routes/workspaces", () => {
       expect(body.expiresAt).toBeGreaterThan(Date.now());
     });
 
+    it("logs only a fingerprint in activity_log, never the raw invitation token", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces/${WS}/invitations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { token: string };
+
+      const entry = db
+        .prepare(
+          "SELECT entity_id FROM activity_log WHERE action = 'invitation.created' ORDER BY id DESC LIMIT 1",
+        )
+        .get() as { entity_id: string } | undefined;
+      expect(entry).toBeDefined();
+      // The raw token must never appear in the activity feed (viewers can read it).
+      expect(entry!.entity_id).not.toBe(body.token);
+      expect(entry!.entity_id).not.toContain(body.token);
+      // Only the short fingerprint is logged: `inv-…` + last 8 chars of the token.
+      expect(entry!.entity_id).toBe(`inv-…${body.token.slice(-8)}`);
+    });
+
     it("rejects non-owners with 403", async () => {
       // Make USER_B an editor
       db.prepare(

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { createHmac } from "node:crypto";
 import { createWsTicket, verifyWsTicket } from "../ws-ticket";
 
 const ORIGINAL_SECRET = process.env.AUTH_SIGNING_SECRET;
@@ -52,5 +53,18 @@ describe("createWsTicket / verifyWsTicket", () => {
     // on vérifie juste que le chemin ne crashe pas avec une version inconnue.
     const ticket = createWsTicket("user-1", 999, "ws-1");
     expect(() => verifyWsTicket(ticket)).not.toThrow();
+  });
+
+  it("rejects a ticket forged with the raw AUTH_SIGNING_SECRET (domain-separated key)", () => {
+    // The ticket HMAC uses a key DERIVED from AUTH_SIGNING_SECRET, never the
+    // raw secret. A ticket signed the old way (raw secret) must not validate —
+    // session tokens and WS tickets live in separate signing domains.
+    const secret = process.env.AUTH_SIGNING_SECRET!;
+    const payload = { uid: "user-1", ver: 0, exp: Date.now() + 30_000, wid: "ws-1" };
+    const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+    const rawSig = createHmac("sha256", secret).update(encoded).digest("base64url");
+    expect(verifyWsTicket(`t.${encoded}.${rawSig}`)).toBeNull();
+    // Sanity: the legitimately created ticket still validates.
+    expect(verifyWsTicket(createWsTicket("user-1", 0, "ws-1"))).not.toBeNull();
   });
 });

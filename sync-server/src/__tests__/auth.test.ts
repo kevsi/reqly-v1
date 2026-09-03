@@ -254,6 +254,29 @@ describe("auth — requireAuth middleware", () => {
     });
   });
 
+  it("returns 401 for a legacy token without `ver` (cannot be revoked ⇒ rejected)", async () => {
+    const db = (await import("../db.js")).default;
+    db.prepare("INSERT OR IGNORE INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+      "u-legacy",
+      "legacy@example.com",
+      "Legacy",
+      1,
+    );
+    const cookie = makeCookie({
+      email: "legacy@example.com",
+      name: "Legacy",
+      provider: "github",
+      userId: "u-legacy",
+      expires: Date.now() + 60_000,
+      // ver intentionally omitted — pre-migration token, unrevocable
+    });
+    const c = makeContext(`auth_session=${cookie}`);
+    const next = vi.fn();
+    await requireAuth(c as any, next as any);
+    expect(c.json).toHaveBeenCalledWith({ error: "Unauthorized" }, 401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   describe("escapeRegex", () => {
     it("passes through alphanumeric strings unchanged", () => {
       expect(escapeRegex("auth_session")).toBe("auth_session");

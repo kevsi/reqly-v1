@@ -263,10 +263,26 @@ db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);`);
 
 // Migration (audit): invitation tokens were historically logged verbatim in
 // activity_log.entity_id, which is readable by every member (including
-// viewers) via GET /api/workspaces/:id/activity. Redact them once at boot.
-db.exec(
-  `UPDATE activity_log SET entity_id = '[redacted]'
-   WHERE action = 'invitation.created' AND entity_id LIKE 'inv-%';`,
-);
+// viewers) via GET /api/workspaces/:id/activity. Redact them at boot.
+// The current code logs a short fingerprint (`inv-…<8 hex>`) instead — it
+// starts with `inv-` too, so it MUST be excluded from the redaction, or every
+// restart would wipe the legitimate entries. Guarded by a COUNT so the UPDATE
+// only runs while legacy rows actually remain.
+const legacyInvitationTokens = db
+  .prepare(
+    `SELECT COUNT(*) AS n FROM activity_log
+     WHERE action = 'invitation.created'
+       AND entity_id LIKE 'inv-%'
+       AND entity_id NOT LIKE 'inv-…%'`,
+  )
+  .get() as { n: number };
+if (legacyInvitationTokens.n > 0) {
+  db.exec(
+    `UPDATE activity_log SET entity_id = '[redacted]'
+     WHERE action = 'invitation.created'
+       AND entity_id LIKE 'inv-%'
+       AND entity_id NOT LIKE 'inv-…%';`,
+  );
+}
 
 export default db;

@@ -204,6 +204,61 @@ describe("routes/sync", () => {
       expect(res.status).toBeGreaterThanOrEqual(400);
     });
 
+    it("returns 413 when pushing more than MAX_CHANGES_PER_PUSH (500) changes", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const changes = Array.from({ length: 501 }, (_, i) => ({
+        entityType: "collection",
+        id: `col-many-${i}`,
+        data: { id: `col-many-${i}`, name: "X", requests: [] },
+        updatedAt: Date.now(),
+        updatedBy: USER_A,
+      }));
+      const res = await app.request(`/sync/push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({ workspaceId: WS, changes }),
+      });
+      expect(res.status).toBe(413);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("Too many changes");
+      // Nothing must have been persisted.
+      expect(
+        db.prepare("SELECT COUNT(*) AS n FROM collections WHERE id LIKE 'col-many-%'").get(),
+      ).toEqual({ n: 0 });
+    });
+
+    it("returns 413 when a single change exceeds the 512 KB data cap", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/sync/push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({
+          workspaceId: WS,
+          changes: [
+            {
+              entityType: "collection",
+              id: "col-huge",
+              data: { id: "col-huge", name: "X", requests: [], blob: "a".repeat(600 * 1024) },
+              updatedAt: Date.now(),
+              updatedBy: USER_A,
+            },
+          ],
+        }),
+      });
+      expect(res.status).toBe(413);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("too large");
+      expect(db.prepare("SELECT 1 FROM collections WHERE id = ?").get("col-huge")).toBeUndefined();
+    });
+
     it("broadcasts a change event to the workspace when changes are accepted", async () => {
       const mock = makeMockBroadcast();
       try {
