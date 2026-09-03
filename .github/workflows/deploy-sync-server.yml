@@ -83,13 +83,16 @@ jobs:
             for i in $(seq 1 60); do
               sleep 5
               local st
-              st=$(aws ssm list-command-invocations --command-id "$cid" --query "CommandInvocations[0].Status" --output text)
+              st=$(aws ssm list-command-invocations --command-id "$cid" \
+                --query "CommandInvocations[0].Status" --output text)
+              # None/Pending/InProgress: l'invocation n'est pas encore
+              # enregistrée ou pas terminée — on continue d'attendre.
               case "$st" in
                 Success) return 0 ;;
                 Failed|Cancelled|TimedOut) return 1 ;;
               esac
             done
-            echo "SSM command timed out after 5 min" >&2
+            echo "SSM command timed out after 5 min (last status: $st)" >&2
             return 1
           }
 
