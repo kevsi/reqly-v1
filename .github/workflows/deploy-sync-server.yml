@@ -35,29 +35,6 @@ jobs:
           role-session-name: reqly-deploy
           role-duration-seconds: 900
 
-      - name: Diagnose OIDC failure (claims + STS error)
-        if: failure()
-        shell: bash
-        run: |
-          set -x
-          # Claims du token OIDC émis pour CE run
-          REQ_URL="${ACTIONS_ID_TOKEN_REQUEST_URL}"
-          REQ_TOKEN="${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
-          if [ -z "$REQ_URL" ]; then echo "PAS d'URL OIDC — permissions id-token manquantes?"; fi
-          RESP=$(curl -sS -H "Authorization: bearer ${REQ_TOKEN}" "${REQ_URL}&audience=sts.amazonaws.com" || true)
-          JWT=$(echo "$RESP" | jq -r '.value // empty')
-          if [ -n "$JWT" ]; then
-            echo "=== Claims sub/aud/iss ==="
-            echo "$JWT" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{sub, aud, iss}'
-            echo "=== Appel STS brut (erreur complète) ==="
-            aws sts assume-role-with-web-identity \
-              --role-arn "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" \
-              --role-session-name diag \
-              --web-identity-token "$JWT" 2>&1 | tail -5
-          else
-            echo "Token OIDC indisponible: $RESP"
-          fi
-
       - name: Deploy via SSM (git pull + rebuild + restart + health)
         env:
           INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
