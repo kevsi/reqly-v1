@@ -3,7 +3,10 @@ name: Deploy sync-server
 # Déploiement du sync-server EC2 (cf. sync-server/FONCTIONNEMENT.md §14).
 # - auto : à chaque push sur main qui touche sync-server/ ou ce workflow
 # - manuel : onglet Actions → "Deploy sync-server" → Run workflow
-# Le runner GitHub effectue le SSH (le réseau de dev bloque le port 22 sortant).
+#
+# SSM : le runner envoie les commandes via AWS Systems Manager (sortant 443)
+# — aucun port entrant requis. Secrets requis : AWS_DEPLOY_ROLE_ARN (OIDC
+# GitHub → rôle reqly-gh-deploy, eu-north-1) et EC2_INSTANCE_ID.
 
 on:
   push:
@@ -13,6 +16,10 @@ on:
       - ".github/workflows/deploy-sync-server.yml"
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -20,24 +27,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy over SSH (git pull + rebuild + restart + health)
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - name: Deploy via SSM (git pull + rebuild + restart + health)
         env:
-          HOST: 51.21.110.147
-          USER: ubuntu
-          # Clé privée injectée via le secret GitHub EC2_SSH_KEY (jamais commitée).
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
         shell: bash
         run: |
-          install -m 600 /dev/null key.pem
-          printf '%s\n' "$SSH_KEY" > key.pem
-          SSH="ssh -i key.pem -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 $USER@$HOST"
+          set -euo pipefail
 
-          $SSH 'export PATH=/home/ubuntu/.nvm/versions/node/v24.18.1/bin:$PATH;
-                cd /home/ubuntu/reqly-v1 &&
-                git pull --ff-only &&
-                git log -1 --oneline &&
-                bash ~/rebuild-restart.sh'
+          run_ssm() {
+            local doc="$1"
+            aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --comment "reqly deploy" \
+              --parameters commands="bash -lc '$doc'" \
+              --query "Command.CommandId" --output text
+          }
+
+          wait_ssm() {
+            local cid="$1"
+            for i in $(seq 1 60); do
+              sleep 5
+              local st
+              st=$(aws ssm list-command-invocations --command-id "$cid" --query "CommandInvocations[0].Status" --output text)
+              case "$st" in
+                Success) return 0 ;;
+                Failed|Cancelled|TimedOut) return 1 ;;
+              esac
+            done
+            echo "SSM command timed out after 5 min" >&2
+            return 1
+          }
+
+          DEPLOY_CMD='export PATH=/home/ubuntu/.nvm/versions/node/v24.18.1/bin:$PATH;
+                      cd /home/ubuntu/reqly-v1 &&
+                      git pull --ff-only &&
+                      git log -1 --oneline &&
+                      bash ~/rebuild-restart.sh'
+
+          CID=$(run_ssm "$DEPLOY_CMD")
+          wait_ssm "$CID" || exit 1
+          aws ssm list-command-invocations --command-id "$CID" --query "CommandInvocations[0].CommandPlugins[0].Output" --output text | tail -40
 
           echo "--- health check ---"
-          $SSH 'curl -sS --max-time 10 http://localhost:4000/health; echo;
-                systemctl is-active reqly-sync'
+          HEALTH_CMD='curl -sS --max-time 10 http://localhost:4000/health; echo; systemctl is-active reqly-sync'
+          CID=$(run_ssm "$HEALTH_CMD")
+          wait_ssm "$CID" || exit 1
+          aws ssm list-command-invocations --command-id "$CID" --query "CommandInvocations[0].CommandPlugins[0].Output" --output text
