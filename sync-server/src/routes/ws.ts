@@ -80,7 +80,8 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
         cookieHeader.match(new RegExp(`${escapeRegex(COOKIE_NAME)}=([^;]+)`))?.[1] ??
         (req.headers.authorization?.startsWith("Bearer ")
           ? req.headers.authorization.slice(7).trim()
-          : protocolToken);
+          : protocolToken) ??
+        null;
       try {
         session = parseSessionCookie(rawSessionToken ?? undefined) as { userId: string; ver?: number };
       } catch {
