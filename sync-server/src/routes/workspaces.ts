@@ -5,6 +5,7 @@ import db from "../db.js";
 import { requireAuth, type AuthContext } from "../auth.js";
 import { safeParseJson } from "../validation.js";
 import { logActivity, getActivity } from "../activity.js";
+import { TtlMap } from "../ttl-map.js";
 
 const workspaces = new Hono<{ Variables: { auth: AuthContext } }>();
 workspaces.use("*", requireAuth);
@@ -102,9 +103,9 @@ const InviteSchema = z.object({
 
 // Anti-spam (spec §6): cap invitations created per user per rolling hour.
 // In-memory is fine on this single-instance server (same pattern as the auth
-// routes' resendCooldowns).
+// routes' cooldowns). TtlMap so entries of inactive users are swept away.
 const INVITE_MAX_PER_HOUR = 10;
-const inviteTimestamps = new Map<string, number[]>();
+const inviteTimestamps = new TtlMap<number[]>(2 * 3_600_000);
 
 workspaces.post("/:id/invitations", async (c) => {
   const auth = c.get("auth") as AuthContext;
@@ -325,7 +326,10 @@ workspaces.delete("/:id", (c) => {
     // `foreign_keys = ON` (see db.ts), so deleting the workspace first would
     // raise a constraint error whenever it still holds collections — and would
     // otherwise leave orphaned rows. Order: folders → environments →
-    // collections → memberships → invitations → workspace.
+    // collections → memberships → invitations → activity → workspace.
+    // (activity_log also references the workspace: without purging it, any
+    // workspace that ever logged an event — i.e. every real one — could not be
+    // deleted and the route returned 500.)
     db.prepare(
       `DELETE FROM folders WHERE collection_id IN (SELECT id FROM collections WHERE workspace_id = ?)`,
     ).run(id);
@@ -333,6 +337,7 @@ workspaces.delete("/:id", (c) => {
     db.prepare(`DELETE FROM collections WHERE workspace_id = ?`).run(id);
     db.prepare(`DELETE FROM memberships WHERE workspace_id = ?`).run(id);
     db.prepare(`DELETE FROM invitations WHERE workspace_id = ?`).run(id);
+    db.prepare(`DELETE FROM activity_log WHERE workspace_id = ?`).run(id);
     db.prepare(`DELETE FROM workspaces WHERE id = ?`).run(id);
   });
   tx();

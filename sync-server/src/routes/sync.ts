@@ -22,9 +22,19 @@ const PushSchema = z.object({
       entityType: z.enum(["collection", "environment", "folder"]),
       id: z.string(),
       data: z.record(z.any()),
-      updatedAt: z.number(),
+      // SECURITY: `updatedAt` drives the LWW conflict rule — an unbounded
+      // client clock (z.number() accepts Infinity and 1e15) could freeze an
+      // entity forever: every later legitimate push would lose the comparison.
+      // Cap it at "now + 60 s" of clock skew, evaluated per request.
+      updatedAt: z
+        .number()
+        .int()
+        .min(0)
+        .refine((v) => v <= Date.now() + 60_000, {
+          message: "updatedAt must be a valid timestamp (max 60s in the future)",
+        }),
       updatedBy: z.string(),
-      baseVersion: z.number().optional(),
+      baseVersion: z.number().int().min(0).optional(),
       deleted: z.boolean().optional(),
     }),
   ),

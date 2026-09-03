@@ -114,16 +114,28 @@ async function ensureInit() {
 
 /**
  * Generate a cryptographically random numeric code of the given length.
+ * Rejection sampling (bytes >= 250 discarded): a plain `% 10` would bias
+ * digits 0-5 over 6-9 (256 % 10 = 6).
  */
 export function generateVerificationCode(length = 6): string {
-  // Use randomBytes to avoid modulo bias with a simple rejection loop
   const digits: number[] = [];
-  const bytes = randomBytes(length * 2);
-  for (let i = 0; digits.length < length && i < bytes.length; i++) {
-    const d = bytes[i] % 10;
-    digits.push(d);
+  while (digits.length < length) {
+    const bytes = randomBytes((length - digits.length) * 2);
+    for (let i = 0; i < bytes.length && digits.length < length; i++) {
+      if (bytes[i] < 250) digits.push(bytes[i] % 10);
+    }
   }
   return digits.join("");
+}
+
+/** Escape user-controlled text before interpolating into email HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
@@ -168,7 +180,7 @@ export async function sendWelcomeEmail(email: string, name?: string): Promise<vo
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
       <h1 style="font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #111;">
-        ${name ? `Bonjour ${name},` : "Bienvenue sur Reqly !"}
+        ${name ? `Bonjour ${escapeHtml(name)},` : "Bienvenue sur Reqly !"}
       </h1>
       <p style="font-size: 14px; line-height: 1.6; color: #555; margin-bottom: 16px;">
         Votre compte est maintenant vérifié. Vous pouvez commencer à utiliser

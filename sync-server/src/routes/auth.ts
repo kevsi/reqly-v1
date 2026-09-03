@@ -8,6 +8,7 @@ import { requireAuth, createSessionToken, type AuthContext } from "../auth.js";
 import { createWsTicket } from "../ws-ticket.js";
 import { safeParseJson } from "../validation.js";
 import { clientIp } from "../rate-limiter.js";
+import { TtlMap } from "../ttl-map.js";
 import {
   generateVerificationCode,
   sendVerificationCode,
@@ -24,7 +25,9 @@ const COOKIE_NAME = "auth_session";
 // Brute-force guard for the 6-digit verification code (10^6 space — guesses
 // are cheap, so a per-code attempt cap is required). In-memory is fine here:
 // this server is single-instance by design. Keyed by the stored (hashed) code
-// value so each issuance starts with a fresh counter.
+// value so each issuance starts with a fresh counter. TTLs are deliberately
+// longer than the 15-min code lifetime: an evicted entry can only reset the
+// counter of an already-dead code.
 const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60_000;
 // Same per-code attempt cap applies to password-reset codes; the code is
@@ -36,12 +39,15 @@ const MAX_RESET_ATTEMPTS = 5;
 // it survives restarts and applies across clients). Counters reset on success.
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
-const codeAttempts = new Map<string, number>();
-const resendCooldowns = new Map<string, number>();
-const resetAttempts = new Map<string, number>();
+// TtlMap (not raw Map): these were unbounded — `forgotCooldowns` is keyed by
+// IP, so every visiting IP added a permanent entry (memory DoS on a service
+// capped at 300 MB).
+const codeAttempts = new TtlMap<number>(30 * 60_000);
+const resendCooldowns = new TtlMap<number>(10 * 60_000);
+const resetAttempts = new TtlMap<number>(30 * 60_000);
 // Per-IP cooldown on /forgot-password: the endpoint always answers success, so
 // without a cap it doubles as a free email-bombing relay (fire-and-forget send).
-const forgotCooldowns = new Map<string, number>();
+const forgotCooldowns = new TtlMap<number>(10 * 60_000);
 
 /**
  * Verification and reset codes are persisted as HMAC-SHA256 digests keyed by
@@ -300,7 +306,6 @@ auth.post("/verify", async (c) => {
     return c.json(
       {
         error: "Trop de tentatives. Ce code a été annulé — demandez-en un nouveau.",
-        attemptsRemaining: 0,
       },
       429,
     );
@@ -312,17 +317,9 @@ auth.post("/verify", async (c) => {
   const storedBuf = Buffer.from(user.verification_code);
   if (codeBuf.length !== storedBuf.length || !timingSafeEqual(codeBuf, storedBuf)) {
     codeAttempts.set(user.verification_code, attempts + 1);
-    const remaining = Math.max(MAX_VERIFY_ATTEMPTS - (attempts + 1), 0);
-    return c.json(
-      {
-        error:
-          remaining > 1
-            ? `Code de vérification incorrect. Il vous reste ${remaining} tentatives avant invalidation du code.`
-            : "Code de vérification incorrect. Dernière tentative avant invalidation du code.",
-        attemptsRemaining: remaining,
-      },
-      400,
-    );
+    // SECURITY: never disclose attemptsRemaining — it confirms account
+    // existence and paces brute-force attempts (same rule as /verify-reset-code).
+    return c.json({ error: "Code de vérification incorrect." }, 400);
   }
 
   // Mark verified
@@ -533,29 +530,19 @@ auth.post("/reset-password", async (c) => {
       {
         error:
           "Trop de tentatives. Ce code a été annulé — demandez un nouveau code de réinitialisation.",
-        attemptsRemaining: 0,
         codeInvalidated: true,
       },
       429,
     );
   }
 
-  // Timing-safe comparison of hashed codes.
+  // Timing-safe comparison of hashed codes. SECURITY: no attemptsRemaining in
+  // the response — same guessing-oracle rule as /verify-reset-code.
   const submittedBuf = Buffer.from(hashCode(code));
   const storedBuf = Buffer.from(resetRow.code);
   if (submittedBuf.length !== storedBuf.length || !timingSafeEqual(submittedBuf, storedBuf)) {
     resetAttempts.set(resetRow.id, attempts + 1);
-    const remaining = Math.max(MAX_RESET_ATTEMPTS - (attempts + 1), 0);
-    return c.json(
-      {
-        error:
-          remaining > 1
-            ? `Code de réinitialisation incorrect. Il vous reste ${remaining} tentatives avant invalidation du code.`
-            : "Code de réinitialisation incorrect. Dernière tentative avant invalidation du code.",
-        attemptsRemaining: remaining,
-      },
-      400,
-    );
+    return c.json({ error: "Code de réinitialisation incorrect." }, 400);
   }
   resetAttempts.delete(resetRow.id);
 
@@ -817,10 +804,15 @@ auth.post("/login", async (c) => {
     return c.json({ error: "Trop de tentatives. Réessayez plus tard." }, 429);
   }
 
-  const passwordOk =
-    !!user &&
-    !!user.password_hash &&
-    (await verifyPassword(parsed.data.password, user.password_hash));
+  // Equalize timing between "unknown email" and "wrong password": without the
+  // dummy derivation, a missing user skips the ~100 ms scrypt work and the
+  // response latency confirms whether the email is registered.
+  let passwordOk = false;
+  if (user?.password_hash) {
+    passwordOk = await verifyPassword(parsed.data.password, user.password_hash);
+  } else {
+    await scryptAsync(parsed.data.password, "reqly-timing-equalizer", 64);
+  }
 
   // Generic failure: never reveal whether the email exists or the password was wrong.
   if (!passwordOk || !user) {

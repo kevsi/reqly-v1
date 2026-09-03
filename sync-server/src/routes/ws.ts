@@ -57,12 +57,14 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
     //     session n'est jamais exposé dans l'en-tête de handshake.
     //  2. Repli : cookie auth_session, header Authorization: Bearer, ou
     //     token de session en subprotocol (clients plus anciens).
-    // Le handshake ne lit que userId/ver/exp : une session issue d'un ticket
-    // ne porte pas les champs email/name/provider du token complet.
-    let session:
-      | ReturnType<typeof parseSessionCookie>
-      | { userId: string; ver?: number; exp?: number }
-      | null = null;
+    // Le handshake ne lit que userId/ver : une session issue d'un ticket ne
+    // porte pas les champs email/name/provider du token complet.
+    // `rawSessionToken` garde le token cookie/bearer pour que le recheck
+    // périodique puisse re-valider sa propre expiration (`expires`) — le `exp`
+    // du ticket, lui, est éphémère (30 s) et NE DOIT PAS être propagé à la
+    // session, sous peine de tuer la connexion WS une minute après son ouverture.
+    let session: { userId: string; ver?: number } | null = null;
+    let rawSessionToken: string | null = null;
     let ticketPayload: WsTicketPayload | null = null;
     if (protocolToken && protocolToken.startsWith("t.")) {
       ticketPayload = verifyWsTicket(protocolToken);
@@ -70,21 +72,17 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
         ticketPayload = null; // ticket lié à un autre workspace
       }
       if (ticketPayload) {
-        session = {
-          userId: ticketPayload.uid,
-          ver: ticketPayload.ver ?? 0,
-          exp: ticketPayload.exp,
-        };
+        session = { userId: ticketPayload.uid as string, ver: ticketPayload.ver ?? 0 };
       }
     }
     if (!session) {
-      const rawToken =
+      rawSessionToken =
         cookieHeader.match(new RegExp(`${escapeRegex(COOKIE_NAME)}=([^;]+)`))?.[1] ??
         (req.headers.authorization?.startsWith("Bearer ")
           ? req.headers.authorization.slice(7).trim()
           : protocolToken);
       try {
-        session = parseSessionCookie(rawToken);
+        session = parseSessionCookie(rawSessionToken ?? undefined) as { userId: string; ver?: number };
       } catch {
         // AUTH_SIGNING_SECRET missing in a misconfigured deploy — don't crash
         // the upgrade event, just reject the connection.
@@ -128,22 +126,35 @@ export function handleWsUpgradeFactory(allowedOrigins: string[] | "*") {
         wsConn.ping();
       }, PING_INTERVAL_MS);
 
-      // Periodic session re-verification: re-validate the token against
-      // its embedded expiry every 60s.  The token string captured at upgrade
-      // time is stored and re-checked because parseSessionCookie validates
-      // expiry.  If the session token has expired, terminate the connection.
-      // (Ticket-auth : on ne re-vérifie que la révocation — le ticket est
-      // éphémère, la session, elle, reste valide.)
+      // Periodic session re-verification (60 s):
+      //  - cookie/bearer sessions: re-parse the original token so its own
+      //    `expires` is enforced (a WS must not outlive its session token);
+      //  - ticket sessions: the ticket is ephemeral by design — only the
+      //    revocation and the membership are re-checked, never the ticket TTL;
+      //  - membership: a member removed mid-connection stops receiving
+      //    workspace broadcasts at the next tick.
       const sessionRecheck = setInterval(() => {
         if (wsConn.readyState !== WebSocket.OPEN) {
           clearInterval(sessionRecheck);
           return;
         }
-        const expired = session?.exp != null && session.exp < Date.now();
+        let expired = false;
+        if (rawSessionToken) {
+          try {
+            expired = parseSessionCookie(rawSessionToken) === null;
+          } catch {
+            expired = true;
+          }
+        }
         const revoked = !session?.userId || isSessionRevoked(session.userId, session.ver);
-        if (expired || revoked) {
+        const left = !session?.userId || !isMember(workspaceId, session.userId);
+        if (expired || revoked || left) {
           clearInterval(sessionRecheck);
-          wsConn.send(JSON.stringify({ type: "error", payload: "Session expired" }));
+          try {
+            wsConn.send(JSON.stringify({ type: "error", payload: "Session expired" }));
+          } catch {
+            // socket may already be closing
+          }
           wsConn.close(4001, "Session expired");
         }
       }, 60_000);

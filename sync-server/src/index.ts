@@ -117,6 +117,10 @@ app.use("/api/sync/*", rateLimitMiddleware(syncLimiter));
 // DB/push exhaustion by anyone who learns a slug.
 app.use("/api/hooks/*", rateLimitMiddleware(hookLimiter));
 
+// Authenticated hooklet surface (endpoints, events, replay, devices, test
+// push) — same budget as the rest of the authenticated API.
+app.use("/api/hooklet/*", rateLimitMiddleware(apiLimiter));
+
 app.route("/api/workspaces", workspaces);
 app.route("/api/memberships", memberships);
 app.route("/api/auth", auth);

@@ -5,6 +5,7 @@ import db from "../db.js";
 import { requireAuth, type AuthContext } from "../auth.js";
 import { safeParseJson } from "../validation.js";
 import { sendPushToUser } from "../push.js";
+import { hashWebhookSecret } from "../secrets.js";
 
 // Hooklet: personal webhook inbox.
 // Protected routes mounted at /api/hooklet (Authorization: Bearer <session>).
@@ -25,16 +26,16 @@ type EndpointRow = {
   created_at: number;
 };
 
-function mapEndpoint(r: EndpointRow, opts: { includeSecret?: boolean } = {}) {
+function mapEndpoint(r: EndpointRow) {
   return {
     id: r.id,
     userId: r.user_id,
     slug: r.slug,
     name: r.name,
-    // SECURITY: the shared secret is only ever returned ONCE, in the response
-    // to its creation. Listing endpoints must not re-expose it (a leaked
-    // session token or XSS would otherwise dump every webhook secret).
-    secret: opts.includeSecret ? r.secret : undefined,
+    // SECURITY: the shared secret is only ever returned in the response to its
+    // creation (see POST /endpoints). Listing endpoints must not re-expose it —
+    // and the DB only stores an HMAC digest anyway.
+    secret: undefined as string | undefined,
     notify: r.notify === 1,
     createdAt: r.created_at,
   };
@@ -135,16 +136,19 @@ hooklet.post("/endpoints", async (c) => {
   }
   const secret = withSecret ? randomSlug() : null;
   const now = Date.now();
+  // SECURITY: only the HMAC of the secret is persisted — a DB dump must not
+  // let an attacker forge webhook events. The plaintext is returned exactly
+  // once, in this creation response.
   const info = db
     .prepare(
       `INSERT INTO hooklet_endpoints (user_id, slug, name, secret, notify, created_at)
        VALUES (?, ?, ?, ?, 1, ?)`,
     )
-    .run(auth.userId, randomSlug(), name, secret, now);
+    .run(auth.userId, randomSlug(), name, secret ? hashWebhookSecret(secret) : null, now);
   const row = db
     .prepare("SELECT * FROM hooklet_endpoints WHERE id = ?")
     .get(info.lastInsertRowid) as EndpointRow;
-  return c.json({ endpoint: mapEndpoint(row, { includeSecret: true }) }, 201);
+  return c.json({ endpoint: { ...mapEndpoint(row), secret: secret ?? undefined } }, 201);
 });
 
 const ToggleNotifySchema = z.object({ notify: z.boolean() });
@@ -290,15 +294,18 @@ hooklet.post("/devices", async (c) => {
   const { expoPushToken, platform, deviceName } = parsed.data;
 
   const existing = db
-    .prepare("SELECT id, platform, device_name FROM hooklet_devices WHERE expo_push_token = ?")
+    .prepare("SELECT id, user_id, platform, device_name FROM hooklet_devices WHERE expo_push_token = ?")
     .get(expoPushToken) as
-    { id: number; platform: string | null; device_name: string | null } | undefined;
+    { id: number; user_id: string; platform: string | null; device_name: string | null } | undefined;
 
   if (existing) {
-    db.prepare(
-      "UPDATE hooklet_devices SET user_id = ?, platform = ?, device_name = ?, last_seen_at = ? WHERE id = ?",
-    ).run(
-      auth.userId,
+    // SECURITY: a push token registered by another account must never be
+    // reassigned — otherwise anyone who learns a token (leaked mobile log,
+    // screenshot) would receive the victim's webhook notifications.
+    if (existing.user_id !== auth.userId) {
+      return c.json({ error: "Ce token de device appartient à un autre compte" }, 403);
+    }
+    db.prepare("UPDATE hooklet_devices SET platform = ?, device_name = ?, last_seen_at = ? WHERE id = ?").run(
       platform ?? existing.platform,
       deviceName ?? existing.device_name,
       Date.now(),

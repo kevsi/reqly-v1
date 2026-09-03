@@ -122,6 +122,17 @@ describe("routes/hooklet — endpoints", () => {
     }
   });
 
+  it("persists only the HMAC digest of the webhook secret", async () => {
+    const app = buildApp();
+    const { endpoint } = await createEndpoint(app, "Secured", true);
+    // The plaintext is returned once at creation; the DB must hold only `hmac:<hex>`.
+    const row = db.prepare("SELECT secret FROM hooklet_endpoints WHERE id = ?").get(endpoint.id) as {
+      secret: string;
+    };
+    expect(row.secret).toMatch(/^hmac:[0-9a-f]{64}$/);
+    expect(row.secret).not.toContain(endpoint.secret);
+  });
+
   it("toggles notify", async () => {
     const app = buildApp();
     const { endpoint } = await createEndpoint(app);
@@ -282,6 +293,35 @@ describe("routes/hooklet — devices", () => {
     expect(unregister.status).toBe(200);
     const after = db.prepare("SELECT COUNT(*) as n FROM hooklet_devices").get() as { n: number };
     expect(after.n).toBe(0);
+  });
+
+  it("refuses to reassign a device token owned by another user", async () => {
+    const app = buildApp();
+    db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+      "thief-user",
+      "thief@example.com",
+      "Thief",
+      Date.now(),
+    );
+    const token = "ExponentPushToken[victim-device]";
+    const first = await app.request("/api/hooklet/devices", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ expoPushToken: token }),
+    });
+    expect(first.status).toBe(201);
+
+    // A leaked token must not let another account steal the notifications.
+    const stolen = await app.request("/api/hooklet/devices", {
+      method: "POST",
+      headers: authHeaders("thief-user"),
+      body: JSON.stringify({ expoPushToken: token }),
+    });
+    expect(stolen.status).toBe(403);
+    const owner = db
+      .prepare("SELECT user_id FROM hooklet_devices WHERE expo_push_token = ?")
+      .get(token) as { user_id: string };
+    expect(owner.user_id).toBe(USER);
   });
 
   it("returns 0 count for /devices/test when no devices", async () => {

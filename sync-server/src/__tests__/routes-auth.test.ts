@@ -156,7 +156,7 @@ describe("routes/auth — verify (no bypass)", () => {
     expect(body.token).toContain(".");
   });
 
-  it("reports remaining attempts when a verification code is wrong", async () => {
+  it("does not disclose the attempt counter on a wrong verification code", async () => {
     const app = buildApp();
     await app.request("/api/auth/signup", SIGNUP("remain@example.com", "supersecret"));
     const res = await app.request("/api/auth/verify", {
@@ -166,8 +166,10 @@ describe("routes/auth — verify (no bypass)", () => {
     });
     expect(res.status).toBe(400);
     const body = (await res.json()) as { attemptsRemaining?: number; error: string };
-    expect(body.attemptsRemaining).toBe(4);
-    expect(body.error).toMatch(/tentatives/i);
+    // Audit P3: attemptsRemaining was a guessing oracle (paced brute-force and
+    // confirmed account existence). The cap still applies, it is just not told.
+    expect(body.attemptsRemaining).toBeUndefined();
+    expect(body.error).toBe("Code de vérification incorrect.");
   });
 });
 
@@ -338,12 +340,12 @@ describe("routes/auth — audit M4: codes are stored hashed, never plaintext", (
 });
 
 describe("routes/auth — audit H2: reset-code brute-force guard", () => {
-  it("reports remaining attempts on each wrong submission", async () => {
+  it("enforces the attempt cap without disclosing the counter", async () => {
     const app = buildApp();
     await signupAndVerify(app, "attempts@example.com", "supersecret");
     const code = await requestReset(app, "attempts@example.com");
 
-    // First wrong guess: 4 attempts should remain before invalidation.
+    // First wrong guess: rejected, but the remaining budget is NOT revealed.
     const first = await app.request("/api/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -355,31 +357,20 @@ describe("routes/auth — audit H2: reset-code brute-force guard", () => {
     });
     expect(first.status).toBe(400);
     const firstBody = (await first.json()) as { attemptsRemaining?: number };
-    expect(firstBody.attemptsRemaining).toBe(4);
+    expect(firstBody.attemptsRemaining).toBeUndefined();
 
-    // Burn the rest — the last one must announce zero remaining.
-    for (let i = 0; i < 3; i++) {
+    // Burn the rest of the budget (MAX_RESET_ATTEMPTS = 5).
+    for (let i = 1; i < 5; i++) {
       await app.request("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "attempts@example.com",
-          code: "000001",
+          code: `00000${i}`,
           newPassword: "newsecret123",
         }),
       });
     }
-    const lastWrong = await app.request("/api/auth/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "attempts@example.com",
-        code: "000002",
-        newPassword: "newsecret123",
-      }),
-    });
-    const lastBody = (await lastWrong.json()) as { attemptsRemaining?: number };
-    expect(lastBody.attemptsRemaining).toBe(0);
 
     // Code is now voided: even the CORRECT code is rejected with guidance.
     const res = await app.request("/api/auth/reset-password", {
@@ -559,7 +550,8 @@ describe("routes/auth — two-step reset (/verify-reset-code)", () => {
     });
     expect(fifth.status).toBe(400);
     const fifthBody = (await fifth.json()) as { attemptsRemaining?: number };
-    expect(fifthBody.attemptsRemaining).toBe(0);
+    // Counter is enforced but never disclosed (audit P3 oracle fix).
+    expect(fifthBody.attemptsRemaining).toBeUndefined();
 
     // Correct code is now voided on BOTH endpoints.
     const voidedCheck = await app.request("/api/auth/verify-reset-code", {

@@ -302,6 +302,27 @@ describe("routes/workspaces", () => {
       expect(db.prepare("SELECT 1 FROM folders WHERE id = ?").get("fol-1")).toBeUndefined();
     });
 
+    it("deletes a workspace that has activity_log entries (FK cascade)", async () => {
+      // Regression (audit P1): activity_log references the workspace; without
+      // purging it, any workspace that ever logged an event could not be
+      // deleted (FOREIGN KEY constraint failed → 500).
+      db.prepare(
+        "INSERT INTO activity_log (workspace_id, actor_id, action, created_at) VALUES (?, ?, ?, ?)",
+      ).run(WS, USER_A, "resource.created", Date.now());
+
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/workspaces/${WS}`, {
+        method: "DELETE",
+        headers: { cookie: `auth_session=${cookie}` },
+      });
+      expect(res.status).toBe(200);
+      expect(db.prepare("SELECT 1 FROM workspaces WHERE id = ?").get(WS)).toBeUndefined();
+      expect(
+        db.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE workspace_id = ?").get(WS),
+      ).toEqual({ n: 0 });
+    });
+
     it("rejects non-owner with 403", async () => {
       db.prepare(
         "INSERT INTO memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, ?, ?)",

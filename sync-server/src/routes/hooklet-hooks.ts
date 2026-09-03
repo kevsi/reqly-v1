@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
-import { timingSafeEqual } from "node:crypto";
 import db from "../db.js";
 import { sendPushToUser } from "../push.js";
+import { verifyWebhookSecret } from "../secrets.js";
+import { clientIp } from "../rate-limiter.js";
 
 // Cap the number of stored events per endpoint so an attacker who learns a
 // slug (or a firehose of events) cannot grow the single SQLite DB unboundedly.
@@ -33,18 +34,14 @@ async function handle(c: Context, slug: string) {
     return c.json({ error: "Endpoint not found" }, 404);
   }
 
-  // Optional shared-secret check (constant-time compare).
+  // Optional shared-secret check. The stored value is an HMAC digest; the
+  // candidate is hashed and compared in constant time.
   // SECURITY: the secret is ONLY accepted via the `x-webhook-secret` header.
   // A query-string fallback (`?secret=…`) was removed — URLs are logged by
   // proxies/load-balancers, which would leak the credential.
   if (endpoint.secret) {
     const provided = c.req.header("x-webhook-secret");
-    if (!provided || provided.length !== endpoint.secret.length) {
-      return c.json({ error: "Invalid secret" }, 401);
-    }
-    const a = Buffer.from(provided);
-    const b = Buffer.from(endpoint.secret);
-    if (!timingSafeEqual(a, b)) {
+    if (!provided || !verifyWebhookSecret(provided, endpoint.secret)) {
       return c.json({ error: "Invalid secret" }, 401);
     }
   }
@@ -83,8 +80,10 @@ async function handle(c: Context, slug: string) {
     headersObj[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? "[redacted]" : value;
   });
 
-  const sourceIp =
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? null;
+  // SECURITY: resolve the client IP through the shared helper so XFF headers
+  // are only trusted behind TRUSTED_PROXY (raw XFF here was sender-forgeable
+  // and poisoned the stored source_ip).
+  const sourceIp = clientIp(c);
 
   const info = db
     .prepare(

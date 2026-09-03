@@ -259,6 +259,32 @@ describe("routes/sync", () => {
       expect(db.prepare("SELECT 1 FROM collections WHERE id = ?").get("col-huge")).toBeUndefined();
     });
 
+    it("returns 400 when a change carries a far-future updatedAt (LWW poisoning)", async () => {
+      const app = buildApp();
+      const cookie = makeSessionCookie(USER_A);
+      const res = await app.request(`/sync/push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: `auth_session=${cookie}`,
+        },
+        body: JSON.stringify({
+          workspaceId: WS,
+          changes: [
+            {
+              entityType: "collection",
+              id: "col-future",
+              data: { id: "col-future", name: "X", requests: [] },
+              updatedAt: 1e15, // year 33658 — would freeze the entity forever
+              updatedBy: USER_A,
+            },
+          ],
+        }),
+      });
+      expect(res.status).toBe(400);
+      expect(db.prepare("SELECT 1 FROM collections WHERE id = ?").get("col-future")).toBeUndefined();
+    });
+
     it("broadcasts a change event to the workspace when changes are accepted", async () => {
       const mock = makeMockBroadcast();
       try {

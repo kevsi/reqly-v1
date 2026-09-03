@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
+import { hashWebhookSecret } from "./secrets.js";
 
 const DB_PATH =
   process.env.REQLY_DB_PATH === ":memory:"
@@ -284,5 +285,27 @@ if (legacyInvitationTokens.n > 0) {
        AND entity_id NOT LIKE 'inv-…%';`,
   );
 }
+
+// Migration (audit): webhook endpoint secrets were historically stored in
+// plaintext — a DB dump let an attacker forge events on every user's public
+// hook URL. Hash them in place; idempotent because hashed values carry the
+// `hmac:` prefix. Done in JS since the HMAC key never lives in SQL.
+const plainWebhookSecrets = db
+  .prepare(`SELECT id, secret FROM hooklet_endpoints WHERE secret IS NOT NULL AND secret NOT LIKE 'hmac:%'`)
+  .all() as Array<{ id: number; secret: string }>;
+if (plainWebhookSecrets.length > 0) {
+  const update = db.prepare("UPDATE hooklet_endpoints SET secret = ? WHERE id = ?");
+  for (const row of plainWebhookSecrets) update.run(hashWebhookSecret(row.secret), row.id);
+}
+
+// Hygiene (audit): dead rows that no query ever reads again. Expired reset
+// codes stay useful for 7 days past expiry (debugging), consumed/expired
+// invitations for 30 days. `activity_log` retention is a product decision
+// (plan-dependent, see FONCTIONNEMENT.md §19) and is intentionally NOT purged
+// here.
+db.prepare("DELETE FROM password_resets WHERE expires_at < ?").run(Date.now() - 7 * 24 * 3600_000);
+db.prepare("DELETE FROM invitations WHERE used = 1 OR expires_at < ?").run(
+  Date.now() - 30 * 24 * 3600_000,
+);
 
 export default db;
