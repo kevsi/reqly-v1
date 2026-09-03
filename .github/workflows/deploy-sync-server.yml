@@ -82,7 +82,7 @@ jobs:
             cd /home/ubuntu/reqly-v1
             git pull --ff-only
             git log -1 --oneline
-            bash ~/rebuild-restart.sh'
+            bash /home/ubuntu/rebuild-restart.sh'
 
           echo "--- deploy ---"
           CID=$(run_ssm "$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w0)")
