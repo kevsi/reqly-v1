@@ -199,14 +199,20 @@ utiliser `.backup` de sqlite3 à chaud).
 
 ## 14. Déploiement AWS (production actuelle)
 
+> **Mise à jour 03/09/2026 :** le port **22 est fermé** (supprimé du security
+> group). Le déploiement passe par **AWS Systems Manager (SSM)** — voir §14bis.
+> L'accès shell opérateur se fait via **Session Manager** (console EC2 →
+> « Se connecter »), sans SSH ni port ouvert.
+
 | Élément | Valeur |
 |---|---|
-| EC2 | Ubuntu 26.04, 1 Go RAM, IP publique `51.21.110.147` (ssh clé `reqly.pem`, user `ubuntu`) |
+| EC2 | `i-08a9f24c0003d6c24` (eu-north-1), Ubuntu 26.04, 1 Go RAM, IP publique `51.21.110.147` |
 | Repo déployé | `/home/ubuntu/reqly-v1` (= GitHub `kevsi/reqly-v1`, branche `main`) |
 | Service | `reqly-sync.service` (systemd, user dédié `reqly-sync`, drop-in hardening + `MemoryMax=300M`) |
 | Binaire | `node dist/index.js`, node nvm v24.18.1, WorkingDirectory `~/reqly-v1/sync-server`, `NODE_ENV=production` |
 | Reverse proxy | **Caddy** 80/443, `reqly.duckdns.org` → `127.0.0.1:4000` (+ `/monitor/api/*` → 4010). Le bloc `:4000` fait `header_up X-Forwarded-For {remote_host}` (XFF écrasé, non falsifiable) |
-| Pare-feu | UFW actif : **22, 80, 443 uniquement** (le 4000 est fermé en public depuis le 24/08) |
+| Pare-feu | Security group : **80, 443 uniquement** (22 fermé depuis le 03/09 ; 4000 fermé depuis le 24/08). UFW : 22 en LIMIT (inerte, SG fermé), 80/443 |
+| IAM instance | Rôle `reqly-ssm-role` (AmazonSSMManagedInstanceCore) — agent SSM enregistré |
 | Rate-limit IP | `TRUSTED_PROXY=true` dans `.env` depuis le 24/08 — les quotas sont bien **par client**, pas partagés |
 | Sauvegardes | 1) Local : cron quotidien 03:15 UTC (`/usr/local/bin/reqly-db-backup.sh`) → `/data/backups/*.db.gz`, `quick_check`, rotation 7 j, log `/var/log/reqly-backup.log`. 2) **Off-site continu** : service `litestream` → bucket R2 `reqly-litestream` (config `/etc/litestream.yml`, chmod 600). Restaurer : `sudo litestream restore -o /tmp/restored.db /data/reqly-sync.db` |
 | Santé | `GET /health` → `{"status":"ok","db":true}` (503 si la DB ne répond plus) |
@@ -217,17 +223,46 @@ Scripts présents dans `$HOME` du serveur :
 
 - `pull-deploy.sh` — `git pull --ff-only` + comparaison stash (historique)
 - `rebuild-restart.sh` — `pnpm install --frozen-lockfile` + `pnpm build` +
-  `systemctl restart reqly-sync` (**penser à exporter le PATH nvm**, cf. §15)
+  `systemctl restart reqly-sync` (**penser à exporter le PATH nvm**, cf. §15 ;
+  chemin absolu requis en SSM qui exécute en root : `bash /home/ubuntu/rebuild-restart.sh`)
 
-Flux de déploiement standard : push local → GitHub → sur le serveur
-`git pull --ff-only` puis `bash ~/rebuild-restart.sh` → vérifier `/health`.
-
-⚠️ Depuis le 24/08, prod = Git exactement (`main` à `709a305` partout). Ne plus jamais
-éditer les fichiers directement sur le serveur — c'est ce qui avait créé la dérive
-corrigée lors de l'audit.
+⚠️ Depuis le 24/08, prod = Git exactement. Ne plus jamais éditer les fichiers
+directement sur le serveur — c'est ce qui avait créé la dérive corrigée lors de
+l'audit. Le déploiement passe désormais **exclusivement** par le workflow CI (§14bis).
 
 Autres services sur la machine : `reqly-monitor.service` (agent + API :4010, plafonné
 `MemoryMax=160M`, `NODE_OPTIONS=--max-old-space-size=112`) et `caddy.service`.
+
+## 14bis. Déploiement automatisé (SSM, depuis le 03/09/2026)
+
+**Chaîne** : push `main` (chemins `sync-server/**` ou le workflow) → GitHub
+Actions → OIDC GitHub (`token.actions.githubusercontent.com`, aud
+`sts.amazonaws.com`) → assume rôle `reqly-gh-deploy` (confiance verrouillée
+`repo:kevsi@138512935/reqly-v1@1319170499:*` — **nouveau format sub GitHub avec
+IDs**, l'ancien `repo:kevsi/reqly-v1:*` est gardé en parallèle) →
+`aws ssm send-command` (AWS-RunShellScript, script en base64, sortie via
+`get-command-invocation`) → agent SSM (sortant 443) → `git pull` +
+`rebuild-restart.sh` + health check.
+
+- Workflow : `.github/workflows/deploy-sync-server.yml` (auto sur push + `workflow_dispatch`)
+- Secrets GitHub : `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID`
+- Politique IAM : `reqly-gh-deploy-ssm` (SendCommand sur l'instance + document
+  public `arn:aws:ssm:eu-north-1::document/AWS-RunShellScript`, GetCommandInvocation)
+- Déclenchement manuel : onglet Actions → « Deploy sync-server » → Run workflow
+
+**Pièges SSM appris le 03/09** (tous corrigés, gardés en mémoire) :
+1. `git safe.directory` : SSM exécute en root → `git config --system --add
+   safe.directory /home/ubuntu/reqly-v1` (fait sur le serveur)
+2. `~` = `/root` en SSM → toujours des chemins absolus vers `/home/ubuntu/…`
+3. Le `sub` du token GitHub inclut désormais les IDs (`repo:kevsi@138512935/…`)
+   — la relation de confiance doit accepter ce format
+4. `aws ssm --parameters` : passer un `file://params.json` (le CLI ne parse pas
+   les commandes inline avec quotes)
+5. `--output text` sépare les champs par **tabulation**
+
+**Rollback SSH** si SSM casse : ré-ajouter la règle SSH 22 au security group,
+restaurer l'ancien workflow (historique git), la clé `reqly-new.pem` reste
+dans le secret GitHub `EC2_SSH_KEY`. Guide complet : `docs/GUIDE_SSM_DEPLOY.md`.
 
 ## 15. Pièges connus (notes de session)
 
