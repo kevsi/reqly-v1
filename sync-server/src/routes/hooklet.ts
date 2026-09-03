@@ -25,13 +25,16 @@ type EndpointRow = {
   created_at: number;
 };
 
-function mapEndpoint(r: EndpointRow) {
+function mapEndpoint(r: EndpointRow, opts: { includeSecret?: boolean } = {}) {
   return {
     id: r.id,
     userId: r.user_id,
     slug: r.slug,
     name: r.name,
-    secret: r.secret,
+    // SECURITY: the shared secret is only ever returned ONCE, in the response
+    // to its creation. Listing endpoints must not re-expose it (a leaked
+    // session token or XSS would otherwise dump every webhook secret).
+    secret: opts.includeSecret ? r.secret : undefined,
     notify: r.notify === 1,
     createdAt: r.created_at,
   };
@@ -113,7 +116,7 @@ hooklet.get("/endpoints", (c) => {
   const rows = db
     .prepare("SELECT * FROM hooklet_endpoints WHERE user_id = ? ORDER BY created_at DESC")
     .all(auth.userId) as EndpointRow[];
-  return c.json({ endpoints: rows.map(mapEndpoint) });
+  return c.json({ endpoints: rows.map((r) => mapEndpoint(r)) });
 });
 
 const CreateEndpointSchema = z.object({
@@ -141,7 +144,7 @@ hooklet.post("/endpoints", async (c) => {
   const row = db
     .prepare("SELECT * FROM hooklet_endpoints WHERE id = ?")
     .get(info.lastInsertRowid) as EndpointRow;
-  return c.json({ endpoint: mapEndpoint(row) }, 201);
+  return c.json({ endpoint: mapEndpoint(row, { includeSecret: true }) }, 201);
 });
 
 const ToggleNotifySchema = z.object({ notify: z.boolean() });

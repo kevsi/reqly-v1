@@ -86,7 +86,6 @@ export class InMemoryRateLimiter {
  *   - API:    120 req / 60 s
  *   - Auth:    20 req / 60 s  (login/register)
  *   - Sync:    60 req / 60 s  (poll/push — bursty but bounded)
- *   - Sync:    60 req / 60 s  (poll/push — bursty but bounded)
  *   - WS:      10 conn / 60 s (WebSocket upgrade)
  *   - Hook:   100 req / 60 s  (public webhook ingest — must be bounded)
  *

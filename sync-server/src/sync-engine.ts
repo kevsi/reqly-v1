@@ -238,14 +238,25 @@ export function pushChanges(
 
       // Tenant isolation: an entity that already lives in another workspace
       // can never be mutated through this one, even if its raw id is known.
-      if (existing && change.entityType !== "folder" && existing.scopeId !== workspaceId) {
-        conflicts.push({
-          entityType: change.entityType,
-          id: change.id,
-          serverVersion: existing.version,
-          serverUpdatedAt: existing.updatedAt,
-        });
-        continue;
+      // For folders the scope is the parent collection, so the check is "does
+      // the folder's CURRENT collection belong to this workspace" (moving a
+      // folder between two collections of the same workspace stays allowed).
+      if (existing) {
+        const isForeign =
+          change.entityType === "folder"
+            ? !db
+                .prepare(`SELECT 1 FROM collections WHERE id = ? AND workspace_id = ?`)
+                .get(existing.scopeId, workspaceId)
+            : existing.scopeId !== workspaceId;
+        if (isForeign) {
+          conflicts.push({
+            entityType: change.entityType,
+            id: change.id,
+            serverVersion: existing.version,
+            serverUpdatedAt: existing.updatedAt,
+          });
+          continue;
+        }
       }
 
       // Optimistic concurrency: when the client sends a baseVersion it must

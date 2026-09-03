@@ -98,11 +98,15 @@ export interface AuthContext {
 
 /**
  * Session revocation check. Tokens embed `ver` (the user's token_version at
- * issuance); it is bumped on logout, so older tokens fail this check. Legacy
- * tokens without `ver` are grandfathered (they are replaced on next login).
+ * issuance); it is bumped on logout, so older tokens fail this check.
+ *
+ * SECURITY: tokens WITHOUT `ver` (pre-migration legacy tokens) are rejected —
+ * they could never be revoked (logout/password-reset/ban would leave them
+ * valid for their full 7-day TTL). Users simply log in again to get a
+ * versioned token.
  */
 export function isSessionRevoked(userId: string, ver?: number): boolean {
-  if (ver === undefined) return false;
+  if (ver === undefined) return true;
   const row = db.prepare("SELECT token_version FROM users WHERE id = ?").get(userId) as
     { token_version: number } | undefined;
   return !row || ver !== row.token_version;

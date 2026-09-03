@@ -142,7 +142,10 @@ workspaces.post("/:id/invitations", async (c) => {
   db.prepare(
     `INSERT INTO invitations (token, workspace_id, role, created_at, expires_at, used, created_by) VALUES (?, ?, ?, ?, ?, 0, ?)`,
   ).run(token, id, role, now, expiresAt, auth.userId);
-  logActivity(id, auth.userId, "invitation.created", "invitation", token);
+  // SECURITY: never log the raw token — activity_log is readable by all
+  // members (including viewers), so a full token there would let a viewer
+  // consume someone else's invitation. Only a fingerprint is logged.
+  logActivity(id, auth.userId, "invitation.created", "invitation", `inv-…${token.slice(-8)}`);
   return c.json({ token, expiresAt, role });
 });
 

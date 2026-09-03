@@ -1,12 +1,13 @@
 import { Hono, type Context } from "hono";
 import { setCookie, deleteCookie } from "hono/cookie";
 import { z } from "zod";
-import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
+import { randomBytes, scrypt, timingSafeEqual, createHmac } from "node:crypto";
 import { promisify } from "node:util";
 import db from "../db.js";
 import { requireAuth, createSessionToken, type AuthContext } from "../auth.js";
 import { createWsTicket } from "../ws-ticket.js";
 import { safeParseJson } from "../validation.js";
+import { clientIp } from "../rate-limiter.js";
 import {
   generateVerificationCode,
   sendVerificationCode,
@@ -38,13 +39,19 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 const codeAttempts = new Map<string, number>();
 const resendCooldowns = new Map<string, number>();
 const resetAttempts = new Map<string, number>();
+// Per-IP cooldown on /forgot-password: the endpoint always answers success, so
+// without a cap it doubles as a free email-bombing relay (fire-and-forget send).
+const forgotCooldowns = new Map<string, number>();
 
 /**
- * Verification and reset codes are persisted as SHA-256 hashes instead of
- * plaintext. Comparisons stay timing-safe (fixed-length hex).
+ * Verification and reset codes are persisted as HMAC-SHA256 digests keyed by
+ * AUTH_SIGNING_SECRET instead of plaintext. A bare SHA-256 of a 6-digit code
+ * is trivially reversible with a 10^6-entry rainbow table if the DB leaks;
+ * the keyed HMAC is not. Comparisons stay timing-safe (fixed-length hex).
  */
 function hashCode(code: string): string {
-  return createHash("sha256").update(code, "utf8").digest("hex");
+  const secret = process.env.AUTH_SIGNING_SECRET || "dev-insecure";
+  return createHmac("sha256", secret).update(`reqly:code:${code}`, "utf8").digest("hex");
 }
 
 /** Test-only: exposes freshly issued plaintext codes when running under vitest
@@ -54,6 +61,9 @@ export const _testCodes = new Map<string, string>();
 function recordTestCode(kind: "verify" | "reset", email: string, plain: string) {
   if (process.env.VITEST) _testCodes.set(`${kind}:${email}`, plain);
 }
+
+/** Test-only: cooldown maps so beforeEach can reset rate-limit state. */
+export const _testCooldowns = { resend: resendCooldowns, forgot: forgotCooldowns };
 
 function invalidateCode(userId: string, code: string | null) {
   if (code) codeAttempts.delete(code);
@@ -270,7 +280,9 @@ auth.post("/verify", async (c) => {
 
   const user = getUserByEmail(email);
   if (!user) {
-    return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
+    // Anti-enumeration: answer exactly like an account with no active code —
+    // a 404 here would confirm whether an email is registered.
+    return c.json({ error: "Aucun code de vérification actif. Demandez-en un nouveau." }, 400);
   }
 
   if (!user.verification_code || !user.verification_code_expires_at) {
@@ -334,19 +346,18 @@ auth.post("/resend-code", async (c) => {
   if (!parsed.success) return parsed.response;
   const email = parsed.data.email.toLowerCase();
 
-  const user = getUserByEmail(email);
-  if (!user) {
-    return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
-  }
-
-  if (user.verified) {
-    return c.json({ error: "Ce compte est déjà vérifié." }, 400);
-  }
-
-  // Throttle resends per email (also covers the login-triggered resend).
+  // Throttle BEFORE any account lookup, keyed by the submitted email only, so
+  // the 429 cannot be used to distinguish existing from unknown accounts.
   const lastResend = resendCooldowns.get(email) ?? 0;
   if (Date.now() - lastResend < RESEND_COOLDOWN_MS) {
     return c.json({ error: "Attendez une minute avant de demander un nouveau code." }, 429);
+  }
+
+  const user = getUserByEmail(email);
+  if (!user || user.verified) {
+    // Anti-enumeration: unknown emails AND already-verified accounts get the
+    // same success-shaped answer (no email is sent, nothing is revealed).
+    return c.json({ message: "Un nouveau code de vérification vous a été envoyé par email." });
   }
 
   // Generate a new code (invalidates old one)
@@ -373,6 +384,14 @@ auth.post("/forgot-password", async (c) => {
   if (!parsed.success) return parsed.response;
   const email = parsed.data.email.toLowerCase();
 
+  // Per-IP cooldown: without it, the fire-and-forget email send makes this
+  // endpoint an email-bombing relay even though it leaks no information.
+  const ip = clientIp(c);
+  const lastForgot = forgotCooldowns.get(ip) ?? 0;
+  if (Date.now() - lastForgot < RESEND_COOLDOWN_MS) {
+    return c.json({ error: "Attendez une minute avant de demander un nouveau code." }, 429);
+  }
+
   const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as
     { id: string } | undefined;
 
@@ -383,6 +402,7 @@ auth.post("/forgot-password", async (c) => {
     });
   }
 
+  forgotCooldowns.set(ip, Date.now());
   // Generate and store reset code
   const code = generateVerificationCode();
   const resetId = crypto.randomUUID();
@@ -423,7 +443,9 @@ auth.post("/verify-reset-code", async (c) => {
   const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as
     { id: string } | undefined;
   if (!user) {
-    return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
+    // Anti-enumeration: same answer as "no active reset code" — a distinct 404
+    // would confirm the email is registered.
+    return c.json({ error: "Aucun code de réinitialisation actif. Demandez-en un nouveau." }, 400);
   }
 
   const resetRow = db
@@ -449,7 +471,6 @@ auth.post("/verify-reset-code", async (c) => {
       {
         error:
           "Trop de tentatives. Ce code a été annulé — demandez un nouveau code de réinitialisation.",
-        attemptsRemaining: 0,
         codeInvalidated: true,
       },
       429,
@@ -460,17 +481,10 @@ auth.post("/verify-reset-code", async (c) => {
   const storedBuf = Buffer.from(resetRow.code);
   if (submittedBuf.length !== storedBuf.length || !timingSafeEqual(submittedBuf, storedBuf)) {
     resetAttempts.set(resetRow.id, attempts + 1);
-    const remaining = Math.max(MAX_RESET_ATTEMPTS - (attempts + 1), 0);
-    return c.json(
-      {
-        error:
-          remaining > 1
-            ? `Code incorrect. Il vous reste ${remaining} tentatives avant invalidation du code.`
-            : "Code incorrect. Dernière tentative avant invalidation du code.",
-        attemptsRemaining: remaining,
-      },
-      400,
-    );
+    // SECURITY: never disclose attemptsRemaining here — combined with a
+    // non-consumed code, it turns this endpoint into a guessing oracle that
+    // confirms account existence and paces brute-force attempts.
+    return c.json({ error: "Code incorrect." }, 400);
   }
 
   // Valid — deliberately NOT consumed here; /reset-password performs the
@@ -491,7 +505,8 @@ auth.post("/reset-password", async (c) => {
     { id: string } | undefined;
 
   if (!user) {
-    return c.json({ error: "Aucun compte trouvé avec cet email" }, 404);
+    // Anti-enumeration: same generic answer as "no active reset code".
+    return c.json({ error: "Aucun code de réinitialisation actif. Demandez-en un nouveau." }, 400);
   }
 
   // Find the most recent unused reset code for this user
@@ -702,13 +717,24 @@ const GitHubExchangeSchema = z.object({
 /**
  * Strict allowlist of redirect URIs this endpoint will complete. Any other
  * value is rejected.
+ *
+ * SECURITY: in production the list comes ONLY from the environment — no
+ * hard-coded infrastructure URLs (the previous duckdns.org default leaked the
+ * deployment topology and could silently survive a domain migration). The
+ * hard-coded values remain as dev conveniences outside production.
  */
 function githubRedirectAllowlist(): string[] {
-  return [
-    process.env.GITHUB_OAUTH_REDIRECT_WEB ||
+  const list = [
+    process.env.GITHUB_OAUTH_REDIRECT_WEB,
+    process.env.GITHUB_OAUTH_REDIRECT_DESKTOP,
+  ].filter((v): v is string => Boolean(v));
+  if (process.env.NODE_ENV !== "production") {
+    list.push(
       "https://reqly-app.duckdns.org/api/github-auth/callback",
-    process.env.GITHUB_OAUTH_REDIRECT_DESKTOP || "http://127.0.0.1:18234/callback",
-  ];
+      "http://127.0.0.1:18234/callback",
+    );
+  }
+  return list;
 }
 
 auth.post("/github-exchange", async (c) => {

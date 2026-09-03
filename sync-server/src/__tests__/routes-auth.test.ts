@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
-import authRoute, { _testCodes } from "../routes/auth.js";
+import authRoute, { _testCodes, _testCooldowns } from "../routes/auth.js";
 import db from "../db.js";
 import { parseSessionCookie } from "../auth.js";
 
@@ -62,6 +62,8 @@ beforeEach(() => {
     DELETE FROM users;
   `);
   _testCodes.clear();
+  _testCooldowns.resend.clear();
+  _testCooldowns.forgot.clear();
 });
 
 describe("routes/auth — signup", () => {

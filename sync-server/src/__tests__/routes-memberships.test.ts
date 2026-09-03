@@ -13,6 +13,7 @@ function makeSessionCookie(userId: string): string {
     provider: "github",
     userId,
     expires: Date.now() + 60_000,
+    ver: 0,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
@@ -44,6 +45,13 @@ beforeEach(() => {
     OWNER,
     `${OWNER}@x`,
     "Owner",
+    1,
+  );
+  // The joiner must exist: a session token for an unknown user is rejected.
+  db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+    JOINER,
+    `${JOINER}@x`,
+    "Joiner",
     1,
   );
   db.prepare(

@@ -15,6 +15,7 @@ function makeSessionCookie(userId: string): string {
     provider: "github",
     userId,
     expires: Date.now() + 60_000,
+    ver: 0,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
@@ -101,6 +102,12 @@ describe("routes/sync", () => {
 
     it("returns 403 when the user is not a member of the workspace", async () => {
       const app = buildApp();
+      db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+        "intruder",
+        "intruder@example.com",
+        "Intruder",
+        1,
+      );
       const cookie = makeSessionCookie("intruder");
       const res = await app.request(`/sync/poll?workspaceId=${WS}&since=0`, {
         headers: { cookie: `auth_session=${cookie}` },
@@ -162,6 +169,12 @@ describe("routes/sync", () => {
 
     it("returns 403 when the user is not a member", async () => {
       const app = buildApp();
+      db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+        "intruder",
+        "intruder@example.com",
+        "Intruder",
+        1,
+      );
       const cookie = makeSessionCookie("intruder");
       const res = await app.request(`/sync/push`, {
         method: "POST",

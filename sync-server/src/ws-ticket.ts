@@ -29,6 +29,16 @@ function ticketSecret(): string {
   return s;
 }
 
+/**
+ * Domain-separated signing key: the ticket HMAC uses a key DERIVED from
+ * AUTH_SIGNING_SECRET (HKDF-style via HMAC), never the raw secret. A
+ * compromise or reuse of one domain (session tokens) must not forge tickets
+ * in the other (and vice versa).
+ */
+function ticketKey(): Buffer {
+  return createHmac("sha256", ticketSecret()).update("reqly:ws-ticket:v1").digest();
+}
+
 export function createWsTicket(
   userId: string,
   ver: number | undefined,
@@ -41,7 +51,7 @@ export function createWsTicket(
     wid: workspaceId,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = createHmac("sha256", ticketSecret()).update(encoded).digest("base64url");
+  const signature = createHmac("sha256", ticketKey()).update(encoded).digest("base64url");
   return `t.${encoded}.${signature}`;
 }
 
@@ -51,7 +61,7 @@ export function verifyWsTicket(ticket: string): WsTicketPayload | null {
   const [, payloadBase64, signature] = ticket.split(".");
   if (!payloadBase64 || !signature) return null;
 
-  const expected = createHmac("sha256", ticketSecret()).update(payloadBase64).digest("base64url");
+  const expected = createHmac("sha256", ticketKey()).update(payloadBase64).digest("base64url");
   const a = Buffer.from(signature);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;

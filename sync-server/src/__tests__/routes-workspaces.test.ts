@@ -16,6 +16,7 @@ function makeSessionCookie(
     provider: "github",
     userId,
     expires: Date.now() + 60_000,
+    ver: 0,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
@@ -218,6 +219,12 @@ describe("routes/workspaces", () => {
 
     it("rejects non-members with 403", async () => {
       const app = buildApp();
+      db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+        "intruder",
+        "intruder@example.com",
+        "Intruder",
+        1,
+      );
       const cookie = makeSessionCookie("intruder");
       const res = await app.request(`/workspaces/${WS}/invitations`, {
         method: "POST",

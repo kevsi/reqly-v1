@@ -10,6 +10,7 @@ function makeCookie(
     provider: string;
     userId?: string;
     expires: number;
+    ver?: number;
   },
   secret = process.env.AUTH_SIGNING_SECRET,
 ): string {
@@ -200,12 +201,20 @@ describe("auth — requireAuth middleware", () => {
   });
 
   it("calls next() and stores auth context for a valid session", async () => {
+    const db = (await import("../db.js")).default;
+    db.prepare("INSERT OR IGNORE INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+      "u-42",
+      "user@example.com",
+      "User",
+      1,
+    );
     const cookie = makeCookie({
       email: "user@example.com",
       name: "User",
       provider: "github",
       userId: "u-42",
       expires: Date.now() + 60_000,
+      ver: 0,
     });
     const c = makeContext(`auth_session=${cookie}`);
     const next = vi.fn();
@@ -219,12 +228,20 @@ describe("auth — requireAuth middleware", () => {
   });
 
   it("extracts the cookie value from a header with multiple cookies", async () => {
+    const db = (await import("../db.js")).default;
+    db.prepare("INSERT OR IGNORE INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+      "u-1",
+      "a@x",
+      "A",
+      1,
+    );
     const session = makeCookie({
       email: "a@x",
       name: "A",
       provider: "github",
       userId: "u-1",
       expires: Date.now() + 60_000,
+      ver: 0,
     });
     const c = makeContext(`other=value; auth_session=${session}; theme=dark`);
     const next = vi.fn();

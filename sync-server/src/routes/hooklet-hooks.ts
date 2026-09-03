@@ -34,9 +34,11 @@ async function handle(c: Context, slug: string) {
   }
 
   // Optional shared-secret check (constant-time compare).
+  // SECURITY: the secret is ONLY accepted via the `x-webhook-secret` header.
+  // A query-string fallback (`?secret=…`) was removed — URLs are logged by
+  // proxies/load-balancers, which would leak the credential.
   if (endpoint.secret) {
-    const url = new URL(c.req.url);
-    const provided = c.req.header("x-webhook-secret") ?? url.searchParams.get("secret");
+    const provided = c.req.header("x-webhook-secret");
     if (!provided || provided.length !== endpoint.secret.length) {
       return c.json({ error: "Invalid secret" }, 401);
     }
@@ -64,10 +66,21 @@ async function handle(c: Context, slug: string) {
     body = null;
   }
 
-  // Redact the secret header so it isn't persisted in plaintext.
+  // Redact credentials before persisting: beyond the endpoint secret, senders
+  // commonly include Authorization headers, cookies and API keys. Storing them
+  // in plaintext would make a DB leak a replayable credential dump.
+  const SENSITIVE_HEADERS = new Set([
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "set-cookie",
+    "x-webhook-secret",
+    "x-api-key",
+    "api-key",
+  ]);
   const headersObj: Record<string, string> = {};
   c.req.raw.headers.forEach((value, key) => {
-    headersObj[key] = key.toLowerCase() === "x-webhook-secret" ? "[redacted]" : value;
+    headersObj[key] = SENSITIVE_HEADERS.has(key.toLowerCase()) ? "[redacted]" : value;
   });
 
   const sourceIp =

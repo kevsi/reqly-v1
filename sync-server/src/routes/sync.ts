@@ -30,6 +30,11 @@ const PushSchema = z.object({
   ),
 });
 
+// DoS guards for the push endpoint: without caps, a single client could grow
+// the SQLite DB unboundedly (huge JSON blobs or an endless change list).
+const MAX_CHANGES_PER_PUSH = 500;
+const MAX_CHANGE_DATA_BYTES = 512 * 1024;
+
 sync.get("/poll", (c) => {
   const auth = c.get("auth") as AuthContext;
   const workspaceId = c.req.query("workspaceId");
@@ -71,6 +76,20 @@ sync.post("/push", async (c) => {
   }
   if (!canWrite(body.workspaceId, auth.userId)) {
     return c.json({ error: "Viewers cannot push changes" }, 403);
+  }
+  if (body.changes.length > MAX_CHANGES_PER_PUSH) {
+    return c.json(
+      { error: `Too many changes per push (max ${MAX_CHANGES_PER_PUSH}).` },
+      413,
+    );
+  }
+  for (const change of body.changes) {
+    if (JSON.stringify(change.data).length > MAX_CHANGE_DATA_BYTES) {
+      return c.json(
+        { error: `Change ${change.id} is too large (max ${MAX_CHANGE_DATA_BYTES} bytes).` },
+        413,
+      );
+    }
   }
   const result = pushChanges(body.workspaceId, auth.userId, body.changes as LocalChange[]);
   // Broadcast to all connected clients in this workspace so they can fetch

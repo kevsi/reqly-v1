@@ -141,7 +141,10 @@ const node = serve(
   {
     fetch: app.fetch,
     port,
-    hostname: process.env.HOST ?? "0.0.0.0",
+    // Dev: bind loopback only so the API is not exposed to the LAN by default.
+    // Production keeps 0.0.0.0 (typically behind a reverse proxy / security group).
+    hostname:
+      process.env.HOST ?? (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1"),
   },
   (info) => {
     console.log(`[reqly-sync] listening on http://${info.address}:${info.port}`);

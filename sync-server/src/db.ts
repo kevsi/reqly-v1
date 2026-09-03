@@ -261,4 +261,12 @@ if (!hasUsersEmailIndex) {
 }
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);`);
 
+// Migration (audit): invitation tokens were historically logged verbatim in
+// activity_log.entity_id, which is readable by every member (including
+// viewers) via GET /api/workspaces/:id/activity. Redact them once at boot.
+db.exec(
+  `UPDATE activity_log SET entity_id = '[redacted]'
+   WHERE action = 'invitation.created' AND entity_id LIKE 'inv-%';`,
+);
+
 export default db;

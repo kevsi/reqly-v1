@@ -14,6 +14,7 @@ function makeSessionToken(userId: string): string {
     provider: "password",
     userId,
     expires: Date.now() + 60_000,
+    ver: 0,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
@@ -71,6 +72,12 @@ describe("routes/hooklet — auth", () => {
 
   it("rejects endpoints not owned by the user with 404", async () => {
     const app = buildApp();
+    db.prepare("INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)").run(
+      "other-user",
+      "other-user@example.com",
+      "Other User",
+      Date.now(),
+    );
     const { endpoint } = await createEndpoint(app);
     const res = await app.request(`/api/hooklet/endpoints/${endpoint.id}/notify`, {
       method: "POST",
