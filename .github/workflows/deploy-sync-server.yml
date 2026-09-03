@@ -32,6 +32,10 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: eu-north-1
+          role-session-name: reqly-deploy
+          role-duration-seconds: 900
+        env:
+          AWS_ACTIONS_DEBUG: "true"
 
       - name: Deploy via SSM (git pull + rebuild + restart + health)
         env:
