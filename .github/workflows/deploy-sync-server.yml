@@ -1,0 +1,35 @@
+name: Deploy sync-server
+
+# Déploiement manuel du sync-server EC2 (cf. sync-server/FONCTIONNEMENT.md §14).
+# Déclenchement : onglet Actions → "Deploy sync-server" → Run workflow.
+# Le runner GitHub effectue le SSH (le réseau de dev bloque le port 22 sortant).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy over SSH (git pull + rebuild + restart + health)
+        env:
+          HOST: 51.21.110.147
+          USER: ubuntu
+        shell: bash
+        run: |
+          install -m 600 /dev/null key.pem
+          cp reqly.pem key.pem
+          SSH="ssh -i key.pem -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 $USER@$HOST"
+
+          $SSH 'export PATH=/home/ubuntu/.nvm/versions/node/v24.18.1/bin:$PATH;
+                cd /home/ubuntu/reqly-v1 &&
+                git pull --ff-only &&
+                git log -1 --oneline &&
+                bash ~/rebuild-restart.sh'
+
+          echo "--- health check ---"
+          $SSH 'curl -sS --max-time 10 http://localhost:4000/health; echo;
+                systemctl is-active reqly-sync'
