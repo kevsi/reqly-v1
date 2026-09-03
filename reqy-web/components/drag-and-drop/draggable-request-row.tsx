@@ -38,10 +38,11 @@ export function DraggableRequestRow({
     },
   });
 
+  // Indentation hiérarchique : 0 = à l'intérieur de la collection (wrapper ml-[32px] + border), 1+ = sous-dossier (+14px/niveau) — aligné avec dossiers
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    paddingLeft: `${depth * 16 + 28}px`,
+    paddingLeft: `${6 + depth * 14}px`,
   };
 
   return (
@@ -49,15 +50,15 @@ export function DraggableRequestRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-center gap-2 py-1.5 text-sm transition-all duration-150",
-        "hover:bg-muted/20",
-        isSelected && "bg-primary/[0.03]",
-        isDragging && "z-10 opacity-50",
+        "group/req flex items-center gap-2 py-2 pr-2 text-sm transition-colors border-l-2 border-transparent",
+        "hover:bg-background hover:border-border/50",
+        isSelected && "bg-primary/[0.04] border-l-primary",
+        isDragging && "z-10 opacity-50 bg-card border-border",
       )}
     >
-      {/* Drag handle */}
+      {/* Drag handle — discret, pro */}
       <button
-        className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/20 opacity-0 group-hover:opacity-100 hover:text-muted-foreground/60 hover:bg-muted/30 transition-all duration-150 cursor-grab active:cursor-grabbing focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+        className="shrink-0 size-6 flex items-center justify-center rounded text-muted-foreground/30 opacity-0 group-hover/req:opacity-100 hover:text-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         {...attributes}
         {...listeners}
         tabIndex={0}
@@ -67,59 +68,61 @@ export function DraggableRequestRow({
         <GripVertical className="size-3" />
       </button>
 
-      {/* Method badge */}
+      {/* Method badge — premium 10px */}
       <span
         className={cn(
-          "shrink-0 rounded px-1 py-0.5 text-[10px] font-bold text-white",
+          "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold leading-none tracking-wide text-white border",
           methodBadge[request.method as keyof typeof methodBadge] ?? "bg-muted-foreground/30",
         )}
       >
         {request.method}
       </span>
 
-      {/* Request name */}
-      <button
-        className="flex-1 min-w-0 text-left truncate text-foreground/80 hover:text-foreground"
-        onClick={onSelect}
-      >
-        {request.name}
+      {/* Request name + endpoint */}
+      <button className="flex-1 min-w-0 text-left group-hover/req:text-foreground transition-colors" onClick={onSelect}>
+        <span className="block truncate text-[13px] font-medium leading-none text-foreground/80 group-hover/req:text-foreground">
+          {request.name}
+        </span>
+        {request.endpoint && (
+          <span className="block truncate font-mono text-[11px] leading-none text-muted-foreground/50 mt-1">
+            {request.endpoint}
+          </span>
+        )}
       </button>
 
-      {/* Endpoint hint */}
+      {/* url mono hint desktop */}
       {request.endpoint && (
-        <span className="hidden sm:block shrink-0 text-xs text-muted-foreground/40 font-mono truncate max-w-[160px]">
+        <span className="hidden xl:block shrink-0 max-w-[140px] truncate font-mono text-[11px] text-muted-foreground/30">
           {request.endpoint}
         </span>
       )}
 
-      {/* Send button */}
-      {onSend && (
+      {/* Actions — reveal on hover, premium */}
+      <span className="ml-auto flex items-center gap-0.5 shrink-0 opacity-0 group-hover/req:opacity-100 transition-opacity">
+        {onSend && (
+          <button
+            className="size-6 flex items-center justify-center rounded hover:bg-success/10 text-muted-foreground hover:text-success transition-colors"
+            onClick={onSend}
+            title={t("collections.row.loadAndSend")}
+          >
+            <PlayIcon />
+          </button>
+        )}
         <button
-          className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-success/50 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-success hover:bg-success/10"
-          onClick={onSend}
-          title={t("collections.row.loadAndSend")}
+          className="size-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground/40 hover:text-destructive transition-colors"
+          onClick={onRemove}
+          title={t("collections.row.removeRequest")}
         >
-          <PlayIcon />
+          <TrashIcon />
         </button>
-      )}
-
-      {/* Remove button */}
-      <button
-        className="shrink-0 size-5 p-1 -m-1 flex items-center justify-center rounded text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110 active:scale-95 hover:text-destructive hover:bg-destructive/10"
-        onClick={onRemove}
-        title={t("collections.row.removeRequest")}
-      >
-        <TrashIcon />
-      </button>
+      </span>
     </div>
   );
 }
 
-// ── Small inline icons (avoids extra lucide-react re-exports in this file) ──
-
 function PlayIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="size-2.5" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="size-3" aria-hidden="true">
       <polygon points="6,3 20,12 6,21" />
     </svg>
   );
@@ -131,8 +134,8 @@ function TrashIcon() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
-      className="size-3"
+      strokeWidth={1.75}
+      className="size-3.5"
       aria-hidden="true"
     >
       <polyline points="3 6 5 6 21 6" />

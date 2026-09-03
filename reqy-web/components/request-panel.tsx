@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useMemo, useEffect, useState } from "react";
 import { FlaskConical, Code, Route, ListFilter, Tag } from "lucide-react";

@@ -92,18 +92,25 @@ export default function AISection({
       saveAiBaseUrl(p, config.baseUrl);
     }
 
-    // 2. Si c'est le provider actif, synchronise l'état UI parent.
-    if (p === provider) {
-      setApiKey(config.apiKey);
-      setAiModel(config.model);
-      if (p === "custom" || p === "openai") {
-        setAiBaseUrl(config.baseUrl);
-      }
+    // 2. Définir ce provider comme actif (persistance + état UI)
+    if (p !== provider) {
+      void saveAIProvider(p);
+      onProviderChange(p);
+    }
+    setApiKey(config.apiKey);
+    setAiModel(config.model);
+    if (p === "custom" || p === "openai") {
+      setAiBaseUrl(config.baseUrl);
     }
 
-    // 3. Mark as configured
+    // 3. Mark as configured + notifier les surfaces (sidebar) sans changement de page
     if (config.apiKey) {
       setConfiguredProviders((prev) => new Set(prev).add(p));
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("ai-config-changed"));
+    } catch {
+      /* ignore */
     }
   };
 
@@ -111,6 +118,11 @@ export default function AISection({
   const handleSetActive = (p: AIProvider) => {
     void saveAIProvider(p);
     if (p !== provider) onProviderChange(p);
+    try {
+      window.dispatchEvent(new CustomEvent("ai-config-changed"));
+    } catch {
+      /* ignore */
+    }
     setModalOpen(false);
   };
 

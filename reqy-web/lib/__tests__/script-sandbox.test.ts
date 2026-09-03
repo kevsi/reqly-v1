@@ -148,7 +148,11 @@ describe("Script Sandbox", () => {
       );
 
       expect(results.preResult?.success).toBe(false);
-      expect(results.mainResult).toBeUndefined();
+      // main/post never ran: mainResult is a placeholder marked unsuccessful
+      // with an explicit "skipped" error (the return type no longer lies with
+      // a bogus Required<> cast).
+      expect(results.mainResult.success).toBe(false);
+      expect(results.mainResult.error).toMatch(/skipped/i);
       expect(results.postResult).toBeUndefined();
     });
 

@@ -61,7 +61,7 @@ export function CollectionsModal({
         <DialogHeader className="border-b px-6 py-4 shrink-0">
           <DialogTitle>{t("collections.title")}</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           <CollectionsPanel
             collections={collections}
             onSelectRequest={(request) => {

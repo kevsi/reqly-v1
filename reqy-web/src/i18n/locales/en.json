@@ -344,6 +344,8 @@
       "connectionUrl": "Connection URL",
       "copyUrl": "Copy URL",
       "opencodeConfig": "OpenCode configuration:",
+      "token": "Token:",
+      "copyToken": "Copy token",
       "startError": "Failed to start the MCP server"
     },
     "saveSuccess": "Success",

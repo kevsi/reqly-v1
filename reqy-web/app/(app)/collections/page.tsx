@@ -20,14 +20,15 @@ import { generateOpenApiSpec } from "@/lib/openapi-export";
 import { toast } from "@/hooks/use-toast";
 import type { HttpMethod } from "@/lib/types";
 import { useState, useEffect } from "react";
-import { Loader2, Upload, Download, FileJson, GitFork, Package, ChevronDown } from "lucide-react";
+import { Loader2, Upload, Download, FileJson, GitFork, Package, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function CollectionsPage() {
   // Clés i18n locales (absentes des fichiers de locale ; fallback FR inline).
@@ -72,6 +73,8 @@ export default function CollectionsPage() {
   const [exportingPostman, setExportingPostman] = useState(false);
   const [exportingOpenApi, setExportingOpenApi] = useState(false);
   const [openApiExportOpen, setOpenApiExportOpen] = useState(false);
+  const [importChoiceOpen, setImportChoiceOpen] = useState(false);
+  const [exportChoiceOpen, setExportChoiceOpen] = useState(false);
   // R11 — id de la dernière collection importée, pour scroll + highlight
   const [highlightedCollectionId, setHighlightedCollectionId] = useState<string | null>(null);
 
@@ -466,100 +469,145 @@ export default function CollectionsPage() {
   };
 
   return (
-    <main className="flex-1 overflow-auto">
-      <div className="flex flex-col gap-4 border-b border-border bg-background/80 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="shrink-0">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-6 py-4">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
             {t("collections.title")}
           </h1>
-          <p className="text-sm text-muted-foreground">{t("collections.description")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("collections.description")}</p>
         </div>
-        <div className="flex flex-col items-start gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-              {t("collections.import")}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOpenApiImportOpen(true)}
-              className="border-blue-200/40 text-blue-700 transition-all duration-150 hover:scale-105 hover:bg-blue-50 hover:text-blue-800 hover:shadow-sm active:scale-95 dark:border-blue-800/30 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            >
-              <FileJson className="mr-1.5 size-3.5" />
-              OpenAPI
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setGitlabImportOpen(true)}
-              className="border-orange-200/40 text-orange-700 transition-all duration-150 hover:scale-105 hover:bg-orange-50 hover:text-orange-800 hover:shadow-sm active:scale-95 dark:border-orange-800/30 dark:text-orange-400 dark:hover:bg-orange-950/50"
-            >
-              <GitFork className="mr-1.5 size-3.5" />
-              GitLab
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBrunoImportOpen(true)}
-              className="border-emerald-200/40 text-emerald-700 transition-all duration-150 hover:scale-105 hover:bg-emerald-50 hover:text-emerald-800 hover:shadow-sm active:scale-95 dark:border-emerald-800/30 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
-            >
-              <Upload className="mr-1.5 size-3.5" />
-              Bruno
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-violet-200/40 text-violet-700 transition-all duration-150 hover:scale-105 hover:bg-violet-50 hover:text-violet-800 hover:shadow-sm active:scale-95 data-[state=open]:scale-105 data-[state=open]:bg-violet-50 dark:border-violet-800/30 dark:text-violet-400 dark:hover:bg-violet-950/50"
-                >
-                  <Package className="mr-1.5 size-3.5" />
-                  Postman
-                  <ChevronDown className="ml-1 size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem onClick={() => setPostmanManageOpen(true)}>
-                  <Upload className="mr-2 size-4" />
-                  {t("collections.importFromPostman")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setPostmanExportOpen(true)}
-                  disabled={!postmanConnected || exportingPostman}
-                >
-                  {exportingPostman ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Download className="mr-2 size-4" />
-                  )}
-                  {exportingPostman
-                    ? t("collections.exportingToPostman")
-                    : t("collections.exportToPostman")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-              {t("collections.export")}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOpenApiExportOpen(true)}
-              className="border-blue-200/40 text-blue-700 transition-all duration-150 hover:scale-105 hover:bg-blue-50 hover:text-blue-800 hover:shadow-sm active:scale-95 dark:border-blue-800/30 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            >
-              {exportingOpenApi ? (
-                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-              ) : (
-                <Download className="mr-1.5 size-3.5" />
-              )}
-              {exportingOpenApi ? t("collections.exporting") : "OpenAPI"}
-            </Button>
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => setImportChoiceOpen(true)} className="h-8 gap-1.5 text-xs font-medium">
+            <Upload className="size-3.5" />
+            {t("collections.import", { defaultValue: "Importer" })}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setExportChoiceOpen(true)} className="h-8 gap-1.5 text-xs font-medium">
+            <Download className="size-3.5" />
+            {t("collections.export", { defaultValue: "Exporter" })}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => addCollection({ name: "New Collection", color: "emerald", icon: "package" })}
+            className="h-8 gap-1.5 px-3 text-xs font-medium"
+          >
+            <Plus className="size-3.5" />
+            {t("collections.panel.new", { defaultValue: "Nouvelle Collection" })}
+          </Button>
         </div>
       </div>
+
+      {/* Modal choix import */}
+      <Dialog open={importChoiceOpen} onOpenChange={setImportChoiceOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">{t("collections.import", { defaultValue: "Importer" })}</DialogTitle>
+            <DialogDescription className="text-xs">{t("collections.importChoiceDesc", { defaultValue: "Choisissez le format d'importation" })}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Button
+              variant="outline"
+              className="justify-start gap-2.5 h-11 text-sm"
+              onClick={() => {
+                setImportChoiceOpen(false);
+                setOpenApiImportOpen(true);
+              }}
+            >
+              <FileJson className="size-4 text-blue-600" />
+              <span className="flex flex-col items-start leading-none">
+                <span className="font-medium">OpenAPI</span>
+                <span className="text-[11px] text-muted-foreground">Spec JSON / YAML</span>
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2.5 h-11 text-sm"
+              onClick={() => {
+                setImportChoiceOpen(false);
+                setGitlabImportOpen(true);
+              }}
+            >
+              <GitFork className="size-4 text-orange-600" />
+              <span className="flex flex-col items-start leading-none">
+                <span className="font-medium">GitLab</span>
+                <span className="text-[11px] text-muted-foreground">API collections</span>
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2.5 h-11 text-sm"
+              onClick={() => {
+                setImportChoiceOpen(false);
+                setBrunoImportOpen(true);
+              }}
+            >
+              <Upload className="size-4 text-emerald-600" />
+              <span className="flex flex-col items-start leading-none">
+                <span className="font-medium">Bruno</span>
+                <span className="text-[11px] text-muted-foreground">Dossier Bruno</span>
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2.5 h-11 text-sm"
+              onClick={() => {
+                setImportChoiceOpen(false);
+                setPostmanManageOpen(true);
+              }}
+            >
+              <Package className="size-4 text-violet-600" />
+              <span className="flex flex-col items-start leading-none">
+                <span className="font-medium">Postman</span>
+                <span className="text-[11px] text-muted-foreground">Collection / Workspace</span>
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal choix export */}
+      <Dialog open={exportChoiceOpen} onOpenChange={setExportChoiceOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">{t("collections.export", { defaultValue: "Exporter" })}</DialogTitle>
+            <DialogDescription className="text-xs">{t("collections.exportChoiceDesc", { defaultValue: "Choisissez le format d'exportation" })}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Button
+              variant="outline"
+              className="justify-start gap-2.5 h-11 text-sm"
+              onClick={() => {
+                setExportChoiceOpen(false);
+                setOpenApiExportOpen(true);
+              }}
+            >
+              {exportingOpenApi ? <Loader2 className="size-4 animate-spin" /> : <FileJson className="size-4 text-blue-600" />}
+              <span className="flex flex-col items-start leading-none">
+                <span className="font-medium">OpenAPI</span>
+                <span className="text-[11px] text-muted-foreground">Spec JSON</span>
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2.5 h-11 text-sm"
+              disabled={!postmanConnected || exportingPostman}
+              onClick={() => {
+                setExportChoiceOpen(false);
+                setPostmanExportOpen(true);
+              }}
+            >
+              {exportingPostman ? <Loader2 className="size-4 animate-spin" /> : <Package className="size-4 text-violet-600" />}
+              <span className="flex flex-col items-start leading-none">
+                <span className="font-medium">Postman</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {postmanConnected ? "Vers workspace" : "Non connecté"}
+                </span>
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ImportOpenApiModal
         open={openApiImportOpen}

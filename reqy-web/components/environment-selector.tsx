@@ -96,7 +96,7 @@ export function EnvironmentSelector() {
               )}
             />
             {/* Compacte en conteneur étroit : pastille seule (le point sert d'icône). */}
-            <span className="max-w-[140px] truncate @max-[42rem]:hidden">
+            <span className="hidden @min-[48rem]:inline max-w-[130px] truncate">
               {activeEnv ? activeEnv.name : t("env.noEnvironment")}
             </span>
             <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />

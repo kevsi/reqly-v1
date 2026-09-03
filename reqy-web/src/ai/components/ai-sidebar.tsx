@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /* eslint-disable react-hooks/refs */
 
 import { useEffect, useCallback, useState } from "react";
@@ -58,7 +58,19 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
   const inputState = useAiAgentInput(createDefaultCommands(), chat.runSlashCommand);
   const [activeArtifact, setActiveArtifact] = useState<Artifact | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const configured = isAiConfigured();
+  const [configured, setConfigured] = useState(() => isAiConfigured());
+
+  useEffect(() => {
+    const sync = () => setConfigured(isAiConfigured());
+    window.addEventListener("ai-config-changed", sync);
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      window.removeEventListener("ai-config-changed", sync);
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, []);
 
   // Wire /new slash command to proper session handler
   useEffect(() => {
@@ -104,6 +116,37 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose, activeArtifact, chat, history]);
+
+  // ── Panel switching (exclusif) : ouvrir un overlay ferme proprement les autres
+  type OverlayKind = "rules" | "permissions" | "history" | "artifact";
+
+  const closeOverlaysExcept = useCallback(
+    (except?: OverlayKind) => {
+      if (except !== "artifact") setActiveArtifact(null);
+      if (except !== "rules") chat.setRulesPanelOpen(false);
+      if (except !== "permissions") chat.setPermissionsPanelOpen(false);
+      if (except !== "history") history.setHistoryOpen(false);
+    },
+    [chat, history],
+  );
+
+  const handleToggleRules = useCallback(() => {
+    const willOpen = !chat.rulesPanelOpen;
+    if (willOpen) closeOverlaysExcept("rules");
+    chat.setRulesPanelOpen(willOpen);
+  }, [chat, closeOverlaysExcept]);
+
+  const handleTogglePermissions = useCallback(() => {
+    const willOpen = !chat.permissionsPanelOpen;
+    if (willOpen) closeOverlaysExcept("permissions");
+    chat.setPermissionsPanelOpen(willOpen);
+  }, [chat, closeOverlaysExcept]);
+
+  const handleToggleHistory = useCallback(() => {
+    const willOpen = !history.historyOpen;
+    if (willOpen) closeOverlaysExcept("history");
+    history.setHistoryOpen(willOpen);
+  }, [history, closeOverlaysExcept]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -229,7 +272,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
         )}
 
         {/* ── Header — identity + actions ─────────────────────── */}
-        <div className="relative flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-background/80 px-3 backdrop-blur-sm">
+        <div className="relative flex h-12 shrink-0 items-center justify-between border-b border-border/40 bg-background/50 px-3 backdrop-blur-sm">
           {/* Identity */}
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="relative flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -239,7 +282,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               <span className="block truncate text-sm font-semibold tracking-tight">
                 {t("ai.sidebar.title")}
               </span>
-              {isAiConfigured() ? (
+              {configured ? (
                 <Link
                   href="/settings#ai"
                   className="flex items-center gap-1 truncate text-[10px] text-muted-foreground/70 transition-colors hover:text-foreground"
@@ -276,7 +319,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => history.setHistoryOpen(!history.historyOpen)}
+              onClick={handleToggleHistory}
               className={cn(
                 "size-7 rounded-lg [&_svg]:size-3.5 transition-all",
                 history.historyOpen
@@ -306,8 +349,8 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
           onModeChange={chat.setAgentMode}
           autoApply={chat.autoApply}
           onAutoApplyChange={chat.setAutoApply}
-          onOpenRules={() => chat.setRulesPanelOpen(true)}
-          onOpenPermissions={() => chat.setPermissionsPanelOpen(true)}
+          onOpenRules={handleToggleRules}
+          onOpenPermissions={handleTogglePermissions}
           sessionUsage={chat.sessionUsage}
           model={chat.modelUsed}
           batchConfirm={chat.batchConfirm}
@@ -475,7 +518,7 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
               {/* Chat messages */}
               {chat.messages.map((msg, i) => (
                 <AiChatMessage
-                  key={i}
+                  key={msg.id ?? i}
                   message={msg}
                   index={i}
                   editingIndex={chat.editingIndex}
@@ -506,73 +549,6 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                 />
               )}
 
-              {/* Error banner — P1.4/P2.5 : copie + actions contextuelles */}
-              {chat.error && (
-                <div className="mr-6 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                    <span className="flex-1 select-text break-words">{chat.error}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => void navigator.clipboard.writeText(chat.error ?? "")}
-                      className="size-6 shrink-0 [&_svg]:size-3 text-destructive hover:text-destructive/80"
-                      title={t("ai.sidebar.copyError")}
-                      aria-label={t("ai.sidebar.copyError")}
-                    >
-                      <Copy className="size-3" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={chat.handleRetry}
-                      className="size-6 shrink-0 [&_svg]:size-3 text-destructive hover:text-destructive/80"
-                      title={t("ai.sidebar.retry")}
-                    >
-                      <RotateCcw className="size-3" />
-                    </Button>
-                  </div>
-
-                  {/* Actions contextuelles selon le code d'erreur classifié */}
-                  {(chat.errorCode === "auth_invalid" ||
-                    chat.errorCode === "quota_exceeded" ||
-                    chat.errorCode === "model_not_found") && (
-                    <div className="mt-2 flex gap-1.5">
-                      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-                        <Link href="/settings#ai">{t("ai.sidebar.configCta")}</Link>
-                      </Button>
-                    </div>
-                  )}
-                  {chat.errorCode === "context_too_long" && (
-                    <div className="mt-2 flex gap-1.5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => chat.runSlashCommand("compact", "")}
-                      >
-                        {t("ai.sidebar.actionCompact")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => {
-                          handleNewSession();
-                          setActiveArtifact(null);
-                        }}
-                      >
-                        {t("ai.history.new")}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Missing AI config — guided setup CTA (R19) */}
               {chat.missingConfig && (
                 <div
@@ -597,8 +573,79 @@ export function AiSidebar({ open, onClose }: AiSidebarProps) {
                   </Button>
                 </div>
               )}
+
+              {/* M6 — Sentinel de scroll : cible exacte de scrollIntoView */}
+              <div aria-hidden />
             </div>
           </div>
+
+          {/* M5 — Bannière d'erreur épinglée : toujours visible entre la liste et l'input,
+              même sur une longue conversation. Sortie du flux de messages. */}
+          {chat.error && (
+            <div className="shrink-0 border-t border-destructive/20 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span className="flex-1 select-text break-words">{chat.error}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void navigator.clipboard.writeText(chat.error ?? "")}
+                  className="size-6 shrink-0 [&_svg]:size-3 text-destructive hover:text-destructive/80"
+                  title={t("ai.sidebar.copyError")}
+                  aria-label={t("ai.sidebar.copyError")}
+                >
+                  <Copy className="size-3" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={chat.handleRetry}
+                  className="size-6 shrink-0 [&_svg]:size-3 text-destructive hover:text-destructive/80"
+                  title={t("ai.sidebar.retry")}
+                >
+                  <RotateCcw className="size-3" />
+                </Button>
+              </div>
+
+              {/* Actions contextuelles selon le code d'erreur classifié */}
+              {(chat.errorCode === "auth_invalid" ||
+                chat.errorCode === "quota_exceeded" ||
+                chat.errorCode === "model_not_found") && (
+                <div className="mt-2 flex gap-1.5">
+                  <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+                    <Link href="/settings#ai">{t("ai.sidebar.configCta")}</Link>
+                  </Button>
+                </div>
+              )}
+              {chat.errorCode === "context_too_long" && (
+                <div className="mt-2 flex gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => chat.runSlashCommand("compact", "")}
+                  >
+                    {t("ai.sidebar.actionCompact")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      handleNewSession();
+                      setActiveArtifact(null);
+                    }}
+                  >
+                    {t("ai.history.new")}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {chat.pendingCodeRequest && (
             <AiCodeExecutionCard

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
+import { getRateLimitKey } from "@/app/api/proxy-ai/lib/rate-limit";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
@@ -10,7 +11,11 @@ const CLIENT_SECRET = process.env.GITHUB_OAUTH_CLIENT_SECRET;
 const SYNC_URL = process.env.SYNC_URL || process.env.NEXT_PUBLIC_SYNC_URL;
 
 export async function GET(request: NextRequest) {
-  const rateResult = await rateLimiter.check("github-auth-callback");
+  // SECURITY: key the limiter per client (visitor cookie → IP → anonymous UA),
+  // never with a shared literal — a single "github-auth-callback" bucket let
+  // one client saturate the 30 req/min budget and lock out every other user's
+  // OAuth login (DoS) while providing no per-attacker limiting.
+  const rateResult = await rateLimiter.check(getRateLimitKey(request));
   if (!rateResult.allowed) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }

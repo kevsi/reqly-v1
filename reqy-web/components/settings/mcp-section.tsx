@@ -50,6 +50,7 @@ export default function McpSection() {
   const deleteCollection = store.deleteCollection;
   const [port, setPort] = useState(DEFAULT_MCP_PORT);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [copyTokenSuccess, setCopyTokenSuccess] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +82,13 @@ export default function McpSection() {
     navigator.clipboard.writeText(mcpUrl);
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const handleCopyToken = () => {
+    if (!status.token) return;
+    navigator.clipboard.writeText(status.token);
+    setCopyTokenSuccess(true);
+    setTimeout(() => setCopyTokenSuccess(false), 2000);
   };
 
   const syncingRef = useRef(false);
@@ -310,6 +318,33 @@ export default function McpSection() {
                   )}
                 </Button>
               </div>
+              {/* SECURITY: the sidecar now requires a Bearer token on every
+                  request — show it so the user can configure their MCP client. */}
+              {status.token && (
+                <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border">
+                  <Label className="text-xs text-muted-foreground shrink-0">
+                    {t("settings.mcp.token")}
+                  </Label>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <code className="text-xs font-mono text-foreground truncate select-all">
+                      {status.token}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      onClick={handleCopyToken}
+                      title={t("settings.mcp.copyToken")}
+                    >
+                      {copyTokenSuccess ? (
+                        <Check className="size-3.5 text-success" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -321,8 +356,8 @@ export default function McpSection() {
               <Check className="size-4 text-success mt-0.5 shrink-0" />
               <div className="text-xs text-success space-y-1">
                 <p className="font-medium">{t("settings.mcp.opencodeConfig")}</p>
-                <code className="block bg-success/10 rounded px-2 py-1 text-[11px]">
-                  {`"mcpServers": {\n  "reqly": {\n    "url": "${serverUrl}"\n  }\n}`}
+                <code className="block bg-success/10 rounded px-2 py-1 text-[11px] whitespace-pre">
+                  {`"mcpServers": {\n  "reqly": {\n    "url": "${serverUrl}",\n    "headers": {\n      "Authorization": "Bearer ${status.token ?? "<token>"}"\n    }\n  }\n}`}
                 </code>
               </div>
             </div>

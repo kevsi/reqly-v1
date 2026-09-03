@@ -35,11 +35,9 @@ import { extractTextToolCalls, stripToolCallText } from "@/src/ai/agent/text-too
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
 import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
 import { persistence } from "@/lib/persistence";
-import {
-  MAX_FILE_BYTES,
-  MAX_FILE_TEXT_CHARS,
-  MAX_FILES_COUNT,
-} from "@/src/ai/agent/file-limits";
+import { useAiFileAttachments } from "@/src/ai/hooks/use-ai-file-attachments";
+import { useAiCodeExecution } from "@/src/ai/hooks/use-ai-code-execution";
+import { MAX_FILE_BYTES } from "@/src/ai/agent/file-limits";
 
 /** Décision de confirmation utilisateur : simple ou « toute la série ». */
 interface ConfirmDecision {
@@ -97,21 +95,32 @@ export function useAiSidebarChat() {
   // Copy state
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  // Explicit execution requested from a code block. It is kept separate from
-  // the model confirmation resolver so a user can review the request first.
-  const [pendingCodeRequest, setPendingCodeRequest] = useState<ParsedCodeRequest | null>(null);
-  const [isExecutingCode, setIsExecutingCode] = useState(false);
-
-  // ── Agent state ───────────────────────────────────────────────────────────
+  // Agent mode & plan state
+  const AUTO_APPLY_KEY = "probe_ai_auto_apply";
   const [agentMode, setAgentMode] = useState<AgentMode>("act");
-  const [autoApply, setAutoApply] = useState(false);
+  const [autoApply, setAutoApply] = useState<boolean>(() => {
+    try {
+      return persistence.getItem<boolean>(AUTO_APPLY_KEY) ?? false;
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      void persistence.setItem(AUTO_APPLY_KEY, autoApply);
+    } catch {
+      /* ignore */
+    }
+  }, [autoApply]);
   const [pendingPlan, setPendingPlan] = useState<{
     planText: string;
     toolCalls: ToolCall[];
     reasoningContent?: string;
   } | null>(null);
   const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
-  const [files, setFiles] = useState<FileAttachment[]>([]);
+
+  // Sub-hooks modulaires (fichiers joints et exécution de code)
+  const { files, setFiles, attachFiles, removeFile, clearFiles } = useAiFileAttachments();
   const [sessionUsage, setSessionUsage] = useState<AgentUsage>(emptyUsage());
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [rulesPanelOpen, setRulesPanelOpen] = useState(false);
@@ -213,70 +222,13 @@ export function useAiSidebarChat() {
     [],
   );
 
-  const requestCodeExecution = useCallback((request: ParsedCodeRequest) => {
-    setPendingCodeRequest(request);
-  }, []);
-
-  const cancelCodeExecution = useCallback(() => {
-    if (!isExecutingCode) setPendingCodeRequest(null);
-  }, [isExecutingCode]);
-
-  const confirmCodeExecution = useCallback(async () => {
-    const request = pendingCodeRequest;
-    if (!request || isExecutingCode) return;
-
-    setPendingCodeRequest(null);
-    setIsExecutingCode(true);
-    const callId = `code-${Date.now()}`;
-    const userMessage: ChatMessage = {
-      role: "user",
-      content: i18n.t("ai.code.runRequestMessage", { method: request.method, url: request.url }),
-    };
-    const runningStep: ProcessStep = {
-      type: "execute",
-      label: i18n.t("ai.code.executing"),
-      status: "in_progress",
-    };
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-      { role: "assistant", content: "", steps: [runningStep], phase: "tool_calling" },
-    ]);
-
-    try {
-      const result = await gatedExecute(
-        {
-          callId,
-          name: "execute_request",
-          arguments: JSON.stringify(request),
-        },
-        "code",
-      );
-      const step: ProcessStep = {
-        type: "execute",
-        label: result.error ? i18n.t("ai.code.executionFailed") : i18n.t("ai.code.executionDone"),
-        status: result.error ? "error" : "done",
-        detail: result.error ?? result.content,
-      };
-      setMessages((prev) => {
-        const copy = [...prev];
-        const last = copy[copy.length - 1];
-        if (last?.role === "assistant") {
-          copy[copy.length - 1] = {
-            ...last,
-            content: result.error
-              ? i18n.t("ai.code.executionError", { error: result.error })
-              : result.content,
-            steps: [step],
-            phase: "done",
-          };
-        }
-        return copy;
-      });
-    } finally {
-      setIsExecutingCode(false);
-    }
-  }, [gatedExecute, isExecutingCode, pendingCodeRequest]);
+  const {
+    pendingCodeRequest,
+    isExecutingCode,
+    requestCodeExecution,
+    cancelCodeExecution,
+    confirmCodeExecution,
+  } = useAiCodeExecution({ gatedExecute, setMessages });
 
   const sendMessage = useCallback(
     async (
@@ -316,6 +268,7 @@ export function useAiSidebarChat() {
       const effectiveFiles = options?.filesOverride ?? files;
       if (!options?.planCalls?.length && !options?.skipUserMessage) {
         const userMsg: ChatMessage = {
+          id: `msg-${Date.now()}-u`,
           role: "user",
           content: content.trim(),
           attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
@@ -336,7 +289,7 @@ export function useAiSidebarChat() {
         if (last && last.role === "assistant") return prev;
         return [
           ...prev,
-          { role: "assistant", content: "", steps: [], phase: "awaiting_response" },
+          { id: `msg-${Date.now()}-a`, role: "assistant", content: "", steps: [], phase: "awaiting_response" },
         ];
       });
 
@@ -420,6 +373,8 @@ export function useAiSidebarChat() {
 
         // Get fresh context for prompt building
         const fresh = useRequestStore.getState();
+        const hasActiveRequest = Boolean(fresh.currentRequest?.url);
+        const hasLastResponse = Boolean(fresh.lastResponse);
         const requestCtx = buildRequestContext(
           {
             method: fresh.currentRequest?.method ?? "GET",
@@ -443,6 +398,10 @@ export function useAiSidebarChat() {
             : undefined,
         );
 
+        const noRequestNote = !hasActiveRequest && !hasLastResponse
+          ? "\n⚠ Aucune requête n'est chargée dans l'éditeur. Tu ne peux PAS inventer de résultat de requête. Si l'utilisateur te demande d'exécuter une requête, utilise l'outil `execute_request` avec une URL réelle ou `execute_requests` sur une collection existante. Ne jamais prétendre qu'une requête a été exécutée sans l'avoir fait via un outil."
+          : "";
+
         const rulesFile = loadRules(fresh.activeWorkspaceId ?? "ws-personal");
         const rulesPrompt = buildRulesSystemPrompt(rulesFile);
         const attachmentsPrompt = attachmentsToPrompt(effectiveAttachments);
@@ -458,8 +417,10 @@ export function useAiSidebarChat() {
           autoApply
             ? "Auto-approuver : tu peux exécuter les outils sans redemander, sauf si une permission l'interdit."
             : "Avant toute action destructive, demande une confirmation explicite.",
+          "IMPORTANT — anti-hallucination : ne jamais prétendre qu'une action a été effectuée sans l'avoir réellement exécutée via un outil. Si tu ne sais pas, appelle l'outil approprié (get_request_context, execute_request, etc.). Ne jamais inventer de status code, durée, ou contenu de réponse.",
+          noRequestNote,
           "Réponds en français. Sois concis et actionnable.",
-        ].join("\n\n");
+        ].filter(Boolean).join("\n\n");
 
         // ── Conversation memory: inject prior messages for context ──
         // M9 — historique explicite si fourni (édition/retry), sinon miroir ref.
@@ -467,8 +428,23 @@ export function useAiSidebarChat() {
         if (options?.skipUserMessage || options?.planCalls?.length) {
           priorMessages = priorMessages.slice(0, -1);
         }
+
+        // Filtrer les messages assistant qui contiennent des résumés d'outils
+        // non vérifiés (risque d'hallucination ré-injectée). On ne garde que
+        // les 4 derniers messages pertinents pour garder le contexte léger.
         const transcript = priorMessages
           .slice(-8)
+          .filter((m) => {
+            if (m.role !== "assistant") return true;
+            const text = m.content || "";
+            // Si le message contient "×N" ou "N exécutions terminées" ou "✓" /
+            // "✗" mais qu'aucun tool_result n'est visible dans steps, c'est
+            // probablement un résumé halluciné → on l'exclut du transcript.
+            if (/\d+ exécutions? terminées?/i.test(text)) return false;
+            if (/✓.*→ \d+/i.test(text) && text.includes(" requête")) return false;
+            if (/✓.*→ \d+/i.test(text) && text.includes("créé")) return false;
+            return true;
+          })
           .map((m) => {
             const role = m.role === "user" ? "Utilisateur" : "Assistant";
             const text = (m.content || "").slice(0, 1500);
@@ -512,7 +488,7 @@ export function useAiSidebarChat() {
         // (first addStep). Do NOT push a second one here, or the sidebar
         // shows duplicate "Through…" bubbles that stay stuck.
         let fullText = "";
-        const MAX_TOOL_TURNS = 5;
+        const MAX_TOOL_TURNS = 100;
         let turnCount = 0;
         const previousTurns: Array<{
           assistantToolCalls: Array<{ id: string; name: string; arguments: string }>;
@@ -946,7 +922,7 @@ export function useAiSidebarChat() {
           turnCount++;
 
           if (turnCount >= MAX_TOOL_TURNS) {
-            setError("L'assistant a atteint la limite de 5 tours d'outils.");
+            setError(`L'assistant a atteint la limite de ${MAX_TOOL_TURNS} tours d'outils.`);
             return;
           }
 
@@ -1117,65 +1093,7 @@ export function useAiSidebarChat() {
     setAttachments((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
   }, []);
 
-  // ── Fichiers joints (composer « Joindre ») ───────────────────────────────
-  // Lecture texte côté client, tronquée : le contenu est injecté dans le
-  // prompt au moment de l'envoi et affiché sous forme de chips.
-  // Bornes : voir MAX_FILE_BYTES / MAX_FILE_TEXT_CHARS en tête de module.
-
-  const attachFiles = useCallback(async (incoming: FileList | File[]) => {
-    const list = Array.from(incoming);
-    if (list.length === 0) return;
-
-    /** Décode un buffer en texte en détectant le BOM — file.text() suppose
-     *  toujours UTF-8 : un fichier UTF-16 (Windows/Notepad) donnerait des
-     *  caractères NUL et serait classé binaire à tort. */
-    const decodeBuffer = (buf: ArrayBuffer): string => {
-      const head = new Uint8Array(buf.slice(0, 2));
-      if (head[0] === 0xff && head[1] === 0xfe) {
-        return new TextDecoder("utf-16le").decode(buf.slice(2));
-      }
-      if (head[0] === 0xfe && head[1] === 0xff) {
-        return new TextDecoder("utf-16be").decode(buf.slice(2));
-      }
-      return new TextDecoder("utf-8").decode(buf);
-    };
-
-    const readAsText = async (file: File): Promise<FileAttachment> => {
-      const base: FileAttachment = {
-        id: `file:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: file.name,
-        mime: file.type || "application/octet-stream",
-        size: file.size,
-      };
-      if (file.size > MAX_FILE_BYTES) {
-        return { ...base, unreadableReason: "too_large" };
-      }
-      try {
-        const buf = await file.arrayBuffer();
-        const raw = decodeBuffer(buf);
-        // Heuristique binaire : trop de caractères de contrôle → pas de texte.
-        const sample = raw.slice(0, 2000);
-        let suspicious = 0;
-        for (let i = 0; i < sample.length; i++) {
-          const code = sample.charCodeAt(i);
-          if ((code < 9 || (code > 13 && code < 32)) && code !== 27) suspicious++;
-        }
-        if (sample.length > 0 && suspicious / sample.length >= 0.4) {
-          return { ...base, unreadableReason: "binary" };
-        }
-        return { ...base, text: raw.slice(0, MAX_FILE_TEXT_CHARS) };
-      } catch {
-        return { ...base, unreadableReason: "binary" };
-      }
-    };
-    const parsed = await Promise.all(list.map(readAsText));
-    // P3.9 — plafond du nombre de fichiers : on garde les plus récents.
-    setFiles((prev) => [...prev, ...parsed].slice(-MAX_FILES_COUNT));
-  }, []);
-
-  const removeFile = useCallback((id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
-  }, []);
+  // (note: attachFiles et removeFile sont gérés par le sub-hook useAiFileAttachments)
 
   const rejectPlan = useCallback(() => {
     setPendingPlan(null);
@@ -1306,6 +1224,22 @@ export function useAiSidebarChat() {
 
   const handleRetry = useCallback(() => {
     const current = messagesRef.current;
+    if (errorCode === "context_too_long") {
+      // Auto-compaction intelligente en cas de dépassement de jetons
+      const kept = current.slice(-6);
+      if (kept.length < current.length) {
+        setMessages(kept);
+        messagesRef.current = kept;
+      }
+      const lastUser = [...kept].reverse().find((m) => m.role === "user");
+      void sendMessage(
+        lastUser
+          ? `Historique condensé. Résume l'état de la conversation en 3 points puis réponds à : ${lastUser.content}`
+          : "Historique condensé. Résume l'état de la conversation en 3 points.",
+        { historyOverride: kept },
+      );
+      return;
+    }
     const lastUserIdx = [...current].reverse().findIndex((m) => m.role === "user");
     if (lastUserIdx === -1) return;
     const idx = current.length - 1 - lastUserIdx;
@@ -1318,7 +1252,7 @@ export function useAiSidebarChat() {
       attachmentsOverride: lastUser.attachments,
       historyOverride: nextHistory,
     });
-  }, [sendMessage]);
+  }, [errorCode, sendMessage]);
 
   const handleCopy = useCallback(async (content: string, index: number) => {
     try {

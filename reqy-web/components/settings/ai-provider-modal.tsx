@@ -14,7 +14,6 @@ import {
   Link2,
   Cpu,
   ShieldCheck,
-  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +31,7 @@ import { STATIC_MODELS, ANTHROPIC_NO_FETCH, fetchModelsByProvider } from "@/lib/
 import type { ModelOption } from "@/lib/provider-models";
 import { useTestConnection } from "@/hooks/use-test-connection";
 import { ModelSearchList } from "@/components/settings/model-search-list";
+import { loadRecentModels, saveRecentModel } from "@/lib/config";
 import { useTranslation } from "react-i18next";
 
 interface AiProviderModalProps {
@@ -75,6 +75,7 @@ export function AiProviderModal({
   const [models, setModels] = useState<ModelOption[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsFetched, setModelsFetched] = useState(false);
+  const [recentModelIds, setRecentModelIds] = useState<string[]>([]);
 
   // -- Test connection --
   const { testLoading, testResult, testConnection, clearTestResult } = useTestConnection();
@@ -87,8 +88,11 @@ export function AiProviderModal({
       setApiKey(currentApiKey);
       setBaseUrl(currentBaseUrl);
       setSelectedModel(currentModel);
-      setModels([]);
-      setModelsFetched(false);
+      setRecentModelIds(loadRecentModels(provider));
+      // pré-charger les modèles statiques pour ce provider afin que la liste ne soit pas vide avant fetch
+      const statics = STATIC_MODELS[provider] ?? [];
+      setModels(statics.length ? statics : []);
+      setModelsFetched(statics.length > 0);
       setLoadingModels(false);
       setShowDeleteConfirm(false);
       clearTestResult();
@@ -189,6 +193,7 @@ export function AiProviderModal({
       );
       return;
     }
+    if (selectedModel) void saveRecentModel(provider, selectedModel);
     onSave({
       apiKey,
       model: selectedModel,
@@ -204,7 +209,7 @@ export function AiProviderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "sm:max-w-2xl w-[calc(100vw-2rem)] overflow-hidden p-0 gap-0",
+          "sm:max-w-2xl w-[calc(100vw-2rem)] !overflow-hidden p-0 gap-0 !max-h-[calc(100dvh-2rem)]",
           "border-border/70 bg-background/95 shadow-2xl shadow-black/10 backdrop-blur-xl",
           "[&>button]:top-4 [&>button]:right-4 [&>button]:z-20 [&>button]:rounded-full",
           "[&>button]:p-1.5 [&>button]:bg-background/70 [&>button]:border [&>button]:border-border/60",
@@ -381,7 +386,10 @@ export function AiProviderModal({
             <ModelSearchList
               models={models}
               selectedModelId={selectedModel}
-              onModelSelect={setSelectedModel}
+              onModelSelect={(id) => {
+                setSelectedModel(id);
+                if (id) void saveRecentModel(provider, id);
+              }}
               provider={provider}
               isCustom={isCustom}
               onFetchModels={handleFetchModels}
@@ -389,6 +397,7 @@ export function AiProviderModal({
               modelsFetched={modelsFetched}
               apiKey={apiKey}
               baseUrl={baseUrl}
+              recentModelIds={recentModelIds}
               onAddModel={handleAddModel}
               onRemoveModel={handleRemoveModel}
             />
@@ -471,19 +480,6 @@ export function AiProviderModal({
             </div>
 
             <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center">
-              {onSetActive && !isActiveProvider && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onSetActive}
-                  disabled={!hasApiKey || (isCustom && !baseUrl.trim())}
-                  className="h-10 rounded-xl border-border/70 bg-background px-4"
-                  title={t("settings.ai.setActiveTitle")}
-                >
-                  <Zap className="mr-1.5 size-3.5" />
-                  {t("settings.ai.setActive")}
-                </Button>
-              )}
               <Button
                 variant="outline"
                 size="sm"

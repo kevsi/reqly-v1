@@ -72,7 +72,11 @@ export function AiChatInput({
   onSelectMention,
 }: AiChatInputProps) {
   const { t } = useTranslation();
-  const inputPlaceholder = placeholder ?? t("aiChat.placeholder");
+  const inputPlaceholder =
+    placeholder ??
+    (isLoading
+      ? t("aiChat.generatingPlaceholder", { defaultValue: "Génération en cours..." })
+      : t("aiChat.placeholder"));
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? internalRef;
@@ -193,11 +197,11 @@ export function AiChatInput({
           />
         )}
 
-        {/* Carte composer — style Claude */}
+        {/* Carte composer — style Claude épuré */}
         <div
           className={cn(
-            "rounded-lg border border-border bg-card px-3 pb-2 pt-2",
-            "transition-colors focus-within:border-ring/60",
+            "rounded-xl border border-border/40 bg-card px-3 pb-2 pt-2 shadow-2xs",
+            "transition-colors focus-within:border-ring/50 focus-within:shadow-xs",
           )}
         >
           {/* Chips : contexte (@) + fichiers joints — scrollables si débordement */}

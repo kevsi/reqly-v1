@@ -224,6 +224,8 @@ function ToolRow({
   isActiveConfirm = true,
   confirmBusy = false,
   showConfirmAll = false,
+  awaitingIndex,
+  awaitingTotal,
 }: {
   step: AssistantStep;
   isLast: boolean;
@@ -232,6 +234,10 @@ function ToolRow({
   isActiveConfirm?: boolean;
   confirmBusy?: boolean;
   showConfirmAll?: boolean;
+  /** Index dans la file d'attente (1-based) */
+  awaitingIndex?: number;
+  /** Nombre total d'outils en attente de confirmation */
+  awaitingTotal?: number;
 }) {
   const { t } = useTranslation();
   const parsed = parseToolLabel(step.label);
@@ -346,7 +352,13 @@ function ToolRow({
             tous résoudraient le même resolver (le handler ignore le stepId).
             Pendant l'exécution post-confirmation : loader explicite à la place. */}
         {isAwaiting && onConfirm && isActiveConfirm && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5 pl-1">
+          <div className="mt-1.5 space-y-1 pl-1">
+            {awaitingTotal && awaitingTotal > 1 && (
+              <div className="text-[11px] font-medium text-warning flex items-center gap-1">
+                <span>Action {awaitingIndex ?? 1} / {awaitingTotal}</span>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-1.5">
             {confirmBusy ? (
               <Button
                 type="button"
@@ -394,6 +406,7 @@ function ToolRow({
                 </Button>
               </>
             )}
+            </div>
           </div>
         )}
       </div>
@@ -590,12 +603,14 @@ function StepGroupRow({
   confirmStepId,
   confirmBusy,
   showConfirmAll,
+  awaitingTotal,
 }: {
   group: GroupedStep;
   onConfirm?: (stepId: string, confirmed: boolean, all?: boolean) => void;
   confirmStepId?: string;
   confirmBusy?: boolean;
   showConfirmAll?: boolean;
+  awaitingTotal?: number;
 }) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = group.children.length > 0;
@@ -624,6 +639,8 @@ function StepGroupRow({
                 isActiveConfirm={child.id === confirmStepId}
                 confirmBusy={confirmBusy}
                 showConfirmAll={showConfirmAll}
+                awaitingIndex={1}
+                awaitingTotal={awaitingTotal}
               />
             );
           })}
@@ -752,6 +769,7 @@ export function AssistantStepsRenderer({
                   confirmStepId={firstAwaitingId}
                   confirmBusy={confirmBusy}
                   showConfirmAll={showConfirmAll}
+                  awaitingTotal={awaitingCount}
                 />
               ))
             : visibleSteps.map((step, i) => {
@@ -768,6 +786,8 @@ export function AssistantStepsRenderer({
                     isActiveConfirm={step.id === firstAwaitingId}
                     confirmBusy={confirmBusy}
                     showConfirmAll={showConfirmAll}
+                    awaitingIndex={1}
+                    awaitingTotal={awaitingCount}
                   />
                 );
               })}

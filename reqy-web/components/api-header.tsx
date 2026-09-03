@@ -101,30 +101,27 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
         <WorkspaceSelector />
       </div>
 
-      {/* Search — Ctrl+K palette */}
-      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+      {/* Search — Ctrl+K palette + Environnement + Actions */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink-0">
         <button
           onClick={() => setSearchOpen(true)}
           aria-label={t("header.search")}
           data-testid="command-palette-trigger"
-          className="group/search relative transition-all duration-200 hover:scale-[1.02] min-w-0"
+          className="group/search relative transition-all duration-200 hover:scale-[1.02] shrink min-w-0"
           title={t("header.searchTitle")}
         >
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none transition-colors group-hover/search:text-muted-foreground hidden @min-[40rem]:block" />
-          {/* Largeur pilotée par des container queries (et non lg:) : avec les deux
-              sidebars ouvertes la fenêtre peut rester large alors que le header
-              lui-même est étroit — un breakpoint viewport provoquerait un
-              débordement clippé par overflow-x-hidden. */}
-          <div className="hidden h-9 w-52 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20 @min-[40rem]:flex @min-[46rem]:w-64 @min-[52rem]:w-80">
-            <span className="flex-1 text-left text-muted-foreground/70">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none transition-colors group-hover/search:text-muted-foreground hidden @min-[54rem]:block" />
+          {/* Largeur pilotée par des container queries : s'ouvre uniquement si l'espace est suffisant */}
+          <div className="hidden h-9 w-44 items-center rounded-lg border border-input bg-muted/30 pl-9 pr-3 shrink min-w-0 text-sm text-muted-foreground transition-all duration-200 group-hover/search:border-muted-foreground/30 group-hover/search:bg-muted/50 group-focus-within/search:border-primary/50 group-focus-within/search:ring-1 group-focus-within/search:ring-primary/20 @min-[54rem]:flex @min-[60rem]:w-60 @min-[68rem]:w-72">
+            <span className="flex-1 text-left text-muted-foreground/70 truncate">
               {t("header.searchPlaceholder")}
             </span>
-            <kbd className="hidden @min-[40rem]:inline-flex h-5 select-none items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 font-mono text-[10px] font-medium text-muted-foreground/70">
+            <kbd className="hidden @min-[54rem]:inline-flex h-5 select-none items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 font-mono text-[10px] font-medium text-muted-foreground/70 shrink-0">
               <Command className="size-3" />K
             </kbd>
           </div>
           {/* Icône seule quand le conteneur est étroit (mobile ou sidebar ouverte) */}
-          <span className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground @min-[40rem]:hidden">
+          <span className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground @min-[54rem]:hidden">
             <Search className="size-4" />
           </span>
         </button>
@@ -187,17 +184,18 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
             </CommandGroup>
           </CommandList>
         </CommandDialog>
-        <span className="hidden @min-[36rem]:block">
+        <span className="hidden @min-[32rem]:block shrink-0">
           <EnvironmentSelector />
         </span>
-        <span className="hidden @min-[44rem]:block">
+        <span className="hidden @min-[58rem]:block shrink-0">
           <VariablesPanel />
         </span>
-        <ThemeSwitcher />
-        <AccountMenu showSignInLink={false} />
-
-        {/* AI Sidebar Toggle */}
-        <AiSidebarToggle />
+        <div className="shrink-0 flex items-center gap-1.5">
+          <ThemeSwitcher />
+          <AccountMenu showSignInLink={false} />
+          {/* AI Sidebar Toggle */}
+          <AiSidebarToggle />
+        </div>
 
         <div className="hidden items-center gap-1.5 @min-[26rem]:flex">
           <DropdownMenu>

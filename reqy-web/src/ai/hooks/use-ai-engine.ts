@@ -24,7 +24,8 @@ import {
   loadAiBaseUrl,
   loadAiModel,
 } from "@/lib/config";
-import { useRequestStore } from "@/hooks/use-request-store";
+import { useRequestStore, runAiExecuteRequest } from "@/hooks/use-request-store";
+import type { RequestItem } from "@/hooks/request-types";
 
 export interface AIConfig {
   provider: AIProvider;
@@ -128,14 +129,12 @@ function getHandlers(store: AIRequestStore) {
         ? store.addNotification({ title: "Assistant IA", body: String(message), type: "info" })
         : undefined,
     executeRequest: (request: Partial<CurrentRequest> | CurrentRequest) =>
-      store.executeRequest ? store.executeRequest(request) : undefined,
+      runAiExecuteRequest(request as Partial<RequestItem>),
     runBatch: async (requests: Array<Partial<CurrentRequest>>) => {
       const results: unknown[] = [];
       for (const req of requests) {
-        if (store.executeRequest) {
-          const res = await store.executeRequest(req);
-          results.push(res);
-        }
+        const res = await runAiExecuteRequest(req as Partial<RequestItem>);
+        results.push(res);
       }
       return results;
     },

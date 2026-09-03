@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { executeTestScript, TestScriptDefinition } from "@/lib/script-executor";
 import { createRateLimiter } from "@/lib/rate-limiter";
 import { isPublicWebDeployment } from "@/lib/environment";
+import { getRateLimitKey } from "@/app/api/proxy-ai/lib/rate-limit";
 import { z } from "zod";
 
 // Validation schema
@@ -55,14 +56,6 @@ const ExecuteTestScriptsRequestSchema = z.object({
 type ExecuteTestScriptsRequest = z.infer<typeof ExecuteTestScriptsRequestSchema>;
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 10 });
-
-function getRateLimitKey(request: NextRequest): string {
-  if (process.env.TRUSTED_PROXY === "true") {
-    const forwarded = request.headers.get("x-forwarded-for");
-    return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
-  }
-  return "unknown";
-}
 
 export async function POST(request: NextRequest) {
   try {

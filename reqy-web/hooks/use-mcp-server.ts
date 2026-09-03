@@ -8,6 +8,8 @@ export interface McpServerStatus {
   running: boolean;
   port: number | null;
   pid: number | null;
+  /** Bearer token required by the sidecar's HTTP transport (null when stopped). */
+  token: string | null;
 }
 
 export interface McpServerConfig {
@@ -27,6 +29,7 @@ export function useMcpServer() {
     running: false,
     port: null,
     pid: null,
+    token: null,
   });
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +40,7 @@ export function useMcpServer() {
       const s = await invoke<McpServerStatus>("get_mcp_server_status");
       setStatus(s);
     } catch {
-      setStatus({ running: false, port: null, pid: null });
+      setStatus({ running: false, port: null, pid: null, token: null });
     }
   }, []);
 
@@ -73,7 +76,7 @@ export function useMcpServer() {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke<string>("stop_mcp_server");
-      setStatus({ running: false, port: null, pid: null });
+      setStatus({ running: false, port: null, pid: null, token: null });
       return result;
     } finally {
       setLoading(false);

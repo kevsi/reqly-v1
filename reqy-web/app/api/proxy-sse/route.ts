@@ -168,7 +168,7 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
     // Keep the hostname for TLS/SNI; the dispatcher pins the socket address.
   }
 
-  // ── Forward headers (strip hop-by-hop and CORS collision headers) ────────
+  // ── Forward headers (strip hop-by-hop, CORS collision and credential headers)
   const BLOCKED_HEADERS = new Set([
     "host",
     "connection",
@@ -179,15 +179,29 @@ async function handleSSEProxy(request: NextRequest, method: string): Promise<Res
     "transfer-encoding",
     "origin",
     "referer",
+    // SECURITY: never forward our own origin's cookies to an arbitrary
+    // upstream — the browser attaches them automatically, and they would leak
+    // the reqly session (auth_session, github_token, …) to any target host.
+    // Authorization / x-api-key are still forwarded: the client sets them
+    // deliberately per-request for the target API.
+    "cookie",
   ]);
+  const BLOCKED_HEADER_PREFIXES = [
+    "x-forwarded",
+    "x-real-ip",
+    // Infrastructure/vendor headers that may carry internal routing info.
+    "cf-",
+    "x-vercel-",
+    "x-amz",
+    "x-cloudfront-",
+  ];
 
   const forwardedHeaders: Record<string, string> = {};
   request.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
     if (
       !BLOCKED_HEADERS.has(lower) &&
-      !lower.startsWith("x-forwarded") &&
-      !lower.startsWith("x-real-ip")
+      !BLOCKED_HEADER_PREFIXES.some((p) => lower.startsWith(p))
     ) {
       forwardedHeaders[lower] = value;
     }

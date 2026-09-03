@@ -205,6 +205,11 @@ export default function SettingsPage() {
     setOllamaHost(savedConfig.host || "127.0.0.1");
     setOllamaPort(savedConfig.port?.toString() || "11434");
     setOllamaModel(savedConfig.model || "llama2");
+    try {
+      window.dispatchEvent(new CustomEvent("ai-config-changed"));
+    } catch {
+      /* ignore */
+    }
     setSaveStatus(t("settings.configSavedFor", { provider: provider.toUpperCase() }));
   }, [provider, apiKey, aiBaseUrl, aiModel, ollamaHost, ollamaPort, ollamaModel, t]);
 

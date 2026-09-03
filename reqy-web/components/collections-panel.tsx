@@ -854,6 +854,34 @@ export function CollectionsPanel({
     [onAddFolder],
   );
 
+  // Wrapper: ajouter une requête (dans un dossier ou à la racine) + auto-expand
+  const handleAddRequest = useCallback(
+    (collectionId: string, folderId?: string | null) => {
+      onAddRequestToCollection(collectionId, {
+        name: "New Request",
+        method: "GET",
+        url: "",
+        endpoint: "",
+        headers: {},
+        body: "",
+        queryParams: [],
+        folderId: folderId ?? null,
+      } as NewRequestInput);
+      setExpandedCollections((prev) => {
+        if (prev.has(collectionId)) return prev;
+        const next = new Set(prev);
+        next.add(collectionId);
+        try {
+          localStorage.setItem("collections-expanded", JSON.stringify([...next]));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [onAddRequestToCollection],
+  );
+
   // ── Déplacement des dossiers (menu Monter/Descendre, par niveau) ──
   const moveFolderInCollection = useCallback(
     (collectionId: string, folderId: string, dir: -1 | 1) => {
@@ -875,57 +903,9 @@ export function CollectionsPanel({
   );
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
-            <Layers className="size-3.5 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground tracking-tight leading-none">
-              {t("collections.panel.title")}
-            </h3>
-            <p className="text-[10px] text-muted-foreground/40 leading-none mt-1">
-              {t("collections.panel.total", { count: collections.length })}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-0.5">
-          <input
-            type="file"
-            accept=".json"
-            ref={fileInputRef}
-            onChange={handleImport}
-            className="hidden"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="h-8 sm:h-7 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-            title={t("collections.panel.importJson")}
-          >
-            {importing ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Import className="size-3.5" />
-            )}
-            {importing ? t("collections.panel.importing") : t("collections.panel.import")}
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            data-testid="new-collection-button"
-            onClick={() => onAddCollection()}
-            className="h-7 gap-1.5 px-2.5 text-xs font-medium shadow-xs"
-          >
-            <Plus className="size-3.5" />
-            {t("collections.panel.new")}
-          </Button>
-        </div>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-background">
+      {/* Ligne Collections supprimée — actions déplacées dans le header page */}
+      <input type="file" accept=".json" ref={fileInputRef} onChange={handleImport} className="hidden" />
 
       {/* Search + Filters */}
       <SearchFilterBar
@@ -953,15 +933,15 @@ export function CollectionsPanel({
         onBulkDelete={bulkDelete}
       />
 
-      {/* Collections content with DnD */}
+      {/* Collections content with DnD — premium scroll */}
       <DndContext
         sensors={dndSensors}
         onDragStart={handleDndStart}
         onDragEnd={handleDndEnd}
         collisionDetection={closestCenter}
       >
-        <div data-testid="collection-list" className="flex-1 overflow-y-auto">
-          <div className="divide-y divide-border/40">
+        <div data-testid="collection-list" className="flex-1 min-h-0 overflow-y-auto bg-background">
+          <div className="divide-y divide-border/30">
             {filteredCollections.map((collection, collectionIndex) => (
               <CollectionRow
                 key={collection.id}
@@ -991,7 +971,7 @@ export function CollectionsPanel({
                 }}
                 onRenameChange={setRenameValue}
                 onRenameCancel={() => setEditingCollectionId(null)}
-                onAddRequest={onAddRequestToCollection}
+                onAddRequest={handleAddRequest}
                 onExportCollection={exportCollection}
                 onDuplicateCollection={onDuplicateCollection}
                 onRunCollection={onRunCollection}
@@ -1025,10 +1005,10 @@ export function CollectionsPanel({
           )}
         </div>
 
-        {/* Drag overlay — follows cursor during drag */}
+        {/* Drag overlay — premium ghost */}
         <DragOverlay dropAnimation={null}>
           {activeDragItem ? (
-            <div className="flex items-center gap-2 py-1.5 px-3 bg-background border border-border/60 rounded-md shadow-lg max-w-[300px]">
+            <div className="flex items-center gap-2.5 py-2 px-3 bg-card border border-border rounded-md max-w-[320px]">
               {dragWithModifier && (
                 <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                   {t(PANEL_KEYS.dragDuplicateHint, { defaultValue: "Ctrl = dupliquer" })}

@@ -233,7 +233,7 @@ export function WorkspaceSelector() {
             >
               <IconComponent className="size-3.5 text-white" />
             </div>
-            <span className="max-w-[140px] truncate @max-[26rem]:hidden">
+            <span className="hidden @min-[26rem]:inline max-w-[140px] truncate">
               {activeWorkspace?.name ?? t("workspace.workspace")}
             </span>
           </button>

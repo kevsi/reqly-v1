@@ -252,7 +252,7 @@ export function AIModal(props: AIModalProps) {
   const baseOptsRef = useRef<Omit<StreamLLMOptions, "previousTurns"> | null>(null);
   /** Flag pour éviter une boucle infinie si le provider ne supporte pas les outils. */
   const retriedWithoutToolsRef = useRef(false);
-  const MAX_TOOL_TURNS = 5;
+  const MAX_TOOL_TURNS = 100;
   // Parité sidebar — stall timeout : un provider muet ne doit pas laisser un
   // spinner infini (le hook a le même garde-fou).
   const STALL_TIMEOUT_MS = 45_000;
@@ -356,7 +356,7 @@ export function AIModal(props: AIModalProps) {
     const turnNum = turnCountRef.current;
     if (turnNum >= MAX_TOOL_TURNS) {
       setLlmError(
-        "L'assistant a atteint la limite de 5 tours d'outils. Certaines actions peuvent être incomplètes.",
+        `L'assistant a atteint la limite de ${MAX_TOOL_TURNS} tours d'outils. Certaines actions peuvent être incomplètes.`,
       );
       setLlmLoading(false);
       return;

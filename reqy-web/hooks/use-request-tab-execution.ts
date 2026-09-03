@@ -17,6 +17,7 @@ import { invokeTauriFetch, isTauriAvailable } from "@/lib/tauri";
 import { replayPending, type QueuedRequest } from "@/lib/offline/queue";
 
 import { useRequestStore, type HistoryItem, type RequestItem } from "@/hooks/use-request-store";
+import { registerAiExecuteRequestFn } from "@/hooks/use-request-store";
 import { type RequestTab } from "@/lib/request-executor";
 import {
   createEmptyTab,
@@ -67,6 +68,23 @@ export function useRequestTabExecution(state: RequestTabsState) {
       executeRequestWrapper,
       sendSpecificRequest,
     );
+
+  // Quand l'IA exécute une requête (via llm-tools ou le cloud-engine), on
+  // ouvre un nouvel onglet au lieu d'écraser l'onglet actif. Le callback est
+  // enregistré dans le store ; llm-tools/hooks le rappellent via
+  // runAiExecuteRequest. Sans lui, executeRequest retombe sur l'onglet courant.
+  useEffect(() => {
+    registerAiExecuteRequestFn(async (request) => {
+      const newTab = createEmptyTab({
+        ...buildTabFromRequest(request as RequestItem),
+        hasResponse: false,
+      });
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(newTab.id);
+      return sendSpecificRequest(newTab);
+    });
+    return () => registerAiExecuteRequestFn(null);
+  }, [buildTabFromRequest, setTabs, setActiveTabId, sendSpecificRequest]);
 
   const openRequestInTab = useCallback(
     (request: RequestItem | HistoryItem | PendingCollectionRequest) => {

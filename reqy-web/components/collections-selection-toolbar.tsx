@@ -24,51 +24,55 @@ export function SelectionToolbar({
   const { t } = useTranslation();
   if (selectedCollectionCount === 0 && selectedRequestCount === 0) return null;
 
+  const total = selectedCollectionCount + selectedRequestCount;
+
   return (
-    <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5 shrink-0 bg-gradient-to-r from-primary/8 to-primary/3 border-t-0 shadow-sm">
-      <span className="text-sm font-medium text-foreground/70 flex items-center gap-1.5">
-        <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-          {selectedCollectionCount + selectedRequestCount}
+    <div className="sticky bottom-3 z-20 mx-3 mt-auto flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground tabular-nums">
+          {total}
         </span>
-        {selectedCollectionCount > 0 &&
-          t("collections.selection.selectedCollections", { count: selectedCollectionCount })}
-        {selectedCollectionCount > 0 && selectedRequestCount > 0 && t("collections.selection.plus")}
-        {selectedRequestCount > 0 &&
-          t("collections.selection.selectedRequests", { count: selectedRequestCount })}
-        {t("collections.selection.suffix")}
-      </span>
-      <div className="flex items-center gap-0.5">
+        <span className="text-xs font-medium text-foreground truncate">
+          {selectedCollectionCount > 0 &&
+            t("collections.selection.selectedCollections", { count: selectedCollectionCount })}
+          {selectedCollectionCount > 0 && selectedRequestCount > 0 && (
+            <span className="text-muted-foreground mx-1">·</span>
+          )}
+          {selectedRequestCount > 0 &&
+            t("collections.selection.selectedRequests", { count: selectedRequestCount })}
+          <span className="text-muted-foreground font-normal ml-1.5">
+            {t("collections.selection.suffix")}
+          </span>
+        </span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
         <Button
           variant="ghost"
           size="sm"
           onClick={onClear}
-          className="h-8 px-3 text-xs font-medium text-muted-foreground transition-all duration-150 hover:scale-105 active:scale-95 hover:text-foreground"
+          className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="size-3.5 mr-1.5" />
+          <X className="size-3.5" />
           {t("collections.selection.clear")}
         </Button>
-        <div className="w-px h-4 bg-border/40 mx-0.5" />
+        <span className="w-px h-4 bg-border mx-0.5" />
         <Button
           variant="ghost"
           size="sm"
           onClick={onBulkExport}
           disabled={exporting}
-          className="h-8 px-3 text-xs font-medium text-muted-foreground transition-all duration-150 hover:scale-105 active:scale-95 hover:text-foreground"
+          className="h-7 px-2.5 text-xs font-medium transition-colors"
         >
-          {exporting ? (
-            <Loader2 className="size-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <Download className="size-3.5 mr-1.5" />
-          )}
+          {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
           {t("collections.selection.export")}
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={onBulkDelete}
-          className="h-8 px-3 text-xs font-medium text-destructive transition-all duration-150 hover:scale-105 active:scale-95 hover:text-destructive hover:bg-destructive/10"
+          className="h-7 px-2.5 text-xs font-medium text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
         >
-          <Trash2 className="size-3.5 mr-1.5" />
+          <Trash2 className="size-3.5" />
           {t("collections.selection.delete")}
         </Button>
       </div>

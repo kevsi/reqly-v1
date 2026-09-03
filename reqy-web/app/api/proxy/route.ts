@@ -16,6 +16,7 @@ import { resolveCached } from "@/lib/security/dns-cache";
 import { captureRequest, captureResponse, recordCapturedRequest } from "@/lib/capture-middleware";
 import { requireCaptureUserId, CaptureAuthError } from "@/lib/capture-auth";
 import { isPublicWebDeployment } from "@/lib/environment";
+import { getRateLimitKey as sharedRateLimitKey } from "../proxy-ai/lib/rate-limit";
 import net, { isIP } from "node:net";
 import tls from "node:tls";
 import { Agent } from "undici";
@@ -99,23 +100,14 @@ const rateLimiter: DistributedRateLimiter = (() => {
 })();
 
 // Trust X-Forwarded-For / X-Real-IP only when sitting behind a trusted reverse
-// proxy (Vercel/Fly overwrite these headers authoritatively). When an attacker
-// can set them, bucketing by XFF lets them bypass the limiter by rotating the
-// value — so we fall back to a single shared key instead. Mirrors the clientIp()
-// logic in sync-server/src/rate-limiter.ts.
-const TRUSTED_PROXY = (): boolean => process.env.TRUSTED_PROXY === "true";
-
+// proxy (Vercel/Fly overwrite these headers authoritatively). Rate-limit keying
+// is shared with the other proxy routes via proxy-ai/lib/rate-limit: it prefers
+// the proxy_visitor cookie, then IP headers behind a trusted proxy, and finally
+// an anonymous UA bucket — never the old literal "unknown" key, which lumped
+// every caller into one bucket a single active client could exhaust (DoS of
+// legitimate users via 429).
 function getRateLimitKey(request: NextRequest): string {
-  if (TRUSTED_PROXY()) {
-    const forwarded = request.headers.get("x-forwarded-for");
-    const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "127.0.0.1";
-    return ip;
-  }
-  // No trusted proxy: ignore client-supplied IP headers entirely. This weakens
-  // per-client limiting to a global bucket, but it cannot be bypassed by header
-  // rotation. The proxy route is additionally gated by the visitor/service token
-  // (see proxy.ts), so the impact of a shared rate-limit key is bounded.
-  return "unknown";
+  return sharedRateLimitKey(request);
 }
 
 function validateUrl(rawUrl: string): { valid: boolean; parsed?: URL; error?: string } {
@@ -259,10 +251,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Parse body ───────────────────────────────────────────────────────
+    // ── Parse body (stream-capped) ───────────────────────────────────────
+    // The Content-Length gate above is advisory (chunked bodies lie by
+    // omission), so the actual read is capped too: a huge chunked body is
+    // rejected as soon as MAX_BODY_SIZE bytes are consumed instead of being
+    // buffered entirely in memory.
     let payload: Record<string, unknown>;
     try {
-      payload = await request.json();
+      if (!request.body) {
+        return structuredError("Missing JSON in request body", "INVALID_JSON", 400);
+      }
+      const { body: rawBody, truncated } = await readWithCap(
+        request.body.getReader(),
+        MAX_BODY_SIZE,
+      );
+      if (truncated) {
+        return structuredError(
+          "Request body exceeds the maximum allowed size of 10 MB",
+          "BODY_TOO_LARGE",
+          413,
+        );
+      }
+      payload = JSON.parse(rawBody.toString("utf8"));
     } catch {
       return structuredError("Invalid JSON in request body", "INVALID_JSON", 400);
     }

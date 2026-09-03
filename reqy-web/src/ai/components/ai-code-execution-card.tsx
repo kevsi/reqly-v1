@@ -42,16 +42,6 @@ export function AiCodeExecutionCard({
             })}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isExecuting}
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-          aria-label={t("ai.code.cancel")}
-          title={t("ai.code.cancel")}
-        >
-          <X className="size-3.5" />
-        </button>
       </div>
       <div className="mt-3 flex justify-end gap-1.5">
         <Button

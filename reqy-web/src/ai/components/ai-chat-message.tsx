@@ -1,6 +1,19 @@
 "use client";
 
-import { Bot, UserRound, Copy, Check, RotateCcw, SquarePen, Gauge, FileText } from "lucide-react";
+import { useEffect, useRef } from "react";
+import {
+  Bot,
+  UserRound,
+  Copy,
+  Check,
+  RotateCcw,
+  SquarePen,
+  Gauge,
+  FileText,
+  Folder,
+  Globe,
+  Zap,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,6 +89,15 @@ export function AiChatMessage({
     ? showLiveStatusInBubble || !!message.content
     : !!message.content;
 
+  const editContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editingIndex === index) {
+      editContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [editingIndex, index]);
+
+  const isUnchanged = editingText.trim() === message.content.trim();
+
   return (
     <div className="group relative">
       {/* Process steps timeline (assistant only) — mode "timeline" : toutes les
@@ -97,14 +119,23 @@ export function AiChatMessage({
       {/* Attachment + fichier chips (user only) */}
       {message.role === "user" && message.attachments && message.attachments.length > 0 && (
         <div className="mb-1.5 flex flex-wrap justify-end gap-1 pr-8">
-          {message.attachments.map((a) => (
-            <span
-              key={a.id}
-              className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 backdrop-blur-sm"
-            >
-              {a.type} → {a.label}
-            </span>
-          ))}
+          {message.attachments.map((a) => {
+            const Icon =
+              a.type === "collection"
+                ? Folder
+                : a.type === "environment"
+                  ? Zap
+                  : Globe;
+            return (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 backdrop-blur-sm"
+              >
+                <Icon className="size-2.5" />
+                {a.label}
+              </span>
+            );
+          })}
         </div>
       )}
       {message.role === "user" && message.files && message.files.length > 0 && (
@@ -266,7 +297,7 @@ export function AiChatMessage({
 
       {/* Editing overlay */}
       {editingIndex === index && (
-        <div className="mt-2 space-y-1.5">
+        <div ref={editContainerRef} className="mt-2 space-y-1.5">
           <Textarea
             value={editingText}
             onChange={(e) => onEditingTextChange(e.target.value)}
@@ -287,7 +318,7 @@ export function AiChatMessage({
               type="button"
               variant="default"
               onClick={onEditConfirm}
-              disabled={!editingText.trim()}
+              disabled={!editingText.trim() || isUnchanged}
               className="h-auto px-3 py-1 text-xs"
             >
               {t("aiChat.send")}

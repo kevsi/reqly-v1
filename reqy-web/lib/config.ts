@@ -89,6 +89,30 @@ export async function saveAiModel(provider: AIProvider, model: string) {
   }
 }
 
+const AI_RECENT_MODELS_KEY = "probe_ai_recent_models";
+
+export function loadRecentModels(provider: AIProvider): string[] {
+  try {
+    const raw = persistence.getItem<Record<string, string[]>>(AI_RECENT_MODELS_KEY);
+    if (!raw) return [];
+    return raw[provider] ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveRecentModel(provider: AIProvider, modelId: string) {
+  try {
+    const all = persistence.getItem<Record<string, string[]>>(AI_RECENT_MODELS_KEY) || {};
+    const list = all[provider] ?? [];
+    const next = [modelId, ...list.filter((m) => m !== modelId)].slice(0, 8);
+    all[provider] = next;
+    await persistence.setItem(AI_RECENT_MODELS_KEY, all);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadOllamaConfig(): OllamaConfig {
   try {
     return persistence.getItem<OllamaConfig>(OLLAMA_CONFIG_KEY) || {};

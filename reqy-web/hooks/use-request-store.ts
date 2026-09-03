@@ -19,7 +19,7 @@ export type { Dataset } from "./store/types";
 
 // ── Imports ─────────────────────────────────────────────────────────────
 
-import type { Collection, HttpMethod } from "./request-types";
+import type { Collection, HttpMethod, RequestItem } from "./request-types";
 import type { RequestStore, CollectionFolder } from "./request-types";
 import { create } from "zustand";
 import { toast } from "@/hooks/use-toast";
@@ -92,6 +92,25 @@ type RequestStoreState = RequestStore & {
 
 let storeGen = 0;
 let syncEngine: SyncEngine | null = null;
+
+// ── Pont d'exécution IA → nouvel onglet ─────────────────────────────────
+// Le store ne gère pas les onglets (état React dans use-request-tabs-state).
+// L'éditeur enregistre ici un callback : quand l'IA exécute une requête,
+// chaque exécution s'ouvre dans un nouvel onglet au lieu de remplacer
+// l'onglet actif. Sans callback, on retombe sur executeRequest (comportement
+// historique : exécution dans l'onglet courant).
+
+type AiExecuteRequestFn = (request: Partial<RequestItem>) => Promise<unknown>;
+let aiExecuteRequestFn: AiExecuteRequestFn | null = null;
+
+export function registerAiExecuteRequestFn(fn: AiExecuteRequestFn | null) {
+  aiExecuteRequestFn = fn;
+}
+
+export async function runAiExecuteRequest(request: Partial<RequestItem>): Promise<unknown> {
+  if (aiExecuteRequestFn) return aiExecuteRequestFn(request);
+  return requestStore.getState().executeRequest(request);
+}
 
 // ── Commit helper (used by mutations AND sync) ──────────────────────────
 

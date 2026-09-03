@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, RefreshCw, Search, Plus, Check, X } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Loader2, RefreshCw, Search, Plus, Check, X, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ interface ModelSearchListProps {
   modelsFetched: boolean;
   apiKey: string;
   baseUrl: string;
+  recentModelIds?: string[];
   /** Called when user adds a manual model ID (custom providers only) */
   onAddModel?: (modelId: string) => void;
   /** Called when user removes a manually-added model */
@@ -42,11 +43,13 @@ export function ModelSearchList({
   modelsFetched,
   apiKey,
   baseUrl,
+  recentModelIds = [],
   onAddModel,
   onRemoveModel,
 }: ModelSearchListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [manualModelInput, setManualModelInput] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const { t } = useTranslation();
 
   const filteredModels = models.filter(
@@ -56,6 +59,24 @@ export function ModelSearchList({
   );
 
   const selectedModelObj = models.find((m) => m.id === selectedModelId);
+
+  const recentModels = useMemo(() => {
+    if (!recentModelIds.length) return [];
+    const map = new Map(models.map((m) => [m.id, m] as const));
+    const list: ModelOption[] = [];
+    for (const id of recentModelIds) {
+      const hit = map.get(id);
+      if (hit) list.push(hit);
+      else list.push({ id, label: id });
+      if (list.length >= 5) break;
+    }
+    return list;
+  }, [recentModelIds, models]);
+
+  const hasSearch = searchQuery.trim().length > 0;
+  const INITIAL_LIMIT = 8;
+  const visibleModels = hasSearch || showAll ? filteredModels : filteredModels.slice(0, INITIAL_LIMIT);
+  const hiddenCount = filteredModels.length - visibleModels.length;
 
   const canFetchModels = Boolean(
     !fetchingModels &&
@@ -161,6 +182,33 @@ export function ModelSearchList({
         </div>
       )}
 
+      {/* Récents par provider */}
+      {recentModels.length > 0 && !hasSearch && (
+        <div className="mb-3 rounded-lg border border-border/70 bg-muted/20 p-2">
+          <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <Clock className="size-3" /> Récents — {provider}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {recentModels.map((m) => (
+              <button
+                key={`recent-${m.id}`}
+                type="button"
+                onClick={() => onModelSelect(m.id)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  selectedModelId === m.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background hover:bg-accent",
+                )}
+              >
+                {selectedModelId === m.id && <Check className="size-3" />}
+                <span className="max-w-[14ch] truncate">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Model search list */}
       <div className="rounded-lg border border-border overflow-hidden">
         <Command className="rounded-lg">
@@ -204,53 +252,67 @@ export function ModelSearchList({
             )}
 
             {filteredModels.length > 0 && (
-              <ScrollArea className="h-48">
-                <div className="p-1 space-y-0.5">
-                  {filteredModels.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => onModelSelect(m.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
-                        selectedModelId === m.id
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-foreground hover:bg-accent",
-                      )}
-                    >
-                      <div
+              <>
+                <ScrollArea className={showAll || hasSearch ? "max-h-64" : "h-48"}>
+                  <div className="p-1 space-y-0.5">
+                    {visibleModels.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => onModelSelect(m.id)}
                         className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                          "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
                           selectedModelId === m.id
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-muted-foreground/30",
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-foreground hover:bg-accent",
                         )}
                       >
-                        {selectedModelId === m.id && <Check className="size-3" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate font-medium">{m.label}</div>
-                        {m.id !== m.label && (
-                          <div className="truncate text-xs text-muted-foreground">{m.id}</div>
-                        )}
-                      </div>
-                      {isCustom && onRemoveModel && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveModel(m.id);
-                          }}
-                          className="shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                          title={t("settings.ai.models.remove")}
+                        <div
+                          className={cn(
+                            "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                            selectedModelId === m.id
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-muted-foreground/30",
+                          )}
                         >
-                          <X className="size-3.5" />
-                        </button>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
+                          {selectedModelId === m.id && <Check className="size-3" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate font-medium">{m.label}</div>
+                          {m.id !== m.label && (
+                            <div className="truncate text-xs text-muted-foreground">{m.id}</div>
+                          )}
+                        </div>
+                        {isCustom && onRemoveModel && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveModel(m.id);
+                            }}
+                            className="shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                            title={t("settings.ai.models.remove")}
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+                {hiddenCount > 0 && !hasSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((v) => !v)}
+                    className="flex w-full items-center justify-center gap-1.5 border-t border-border py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                  >
+                    {showAll ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                    {showAll
+                      ? t("settings.ai.models.showLess", { defaultValue: "Voir moins" })
+                      : t("settings.ai.models.showMore", { defaultValue: `Voir plus (+${hiddenCount})`, count: hiddenCount })}
+                  </button>
+                )}
+              </>
             )}
           </CommandList>
         </Command>

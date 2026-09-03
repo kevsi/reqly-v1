@@ -157,16 +157,25 @@ const FORBIDDEN_GLOBALS = [
 /**
  * Build safe sandbox context with restricted APIs
  */
+/** Safe stringify: never throws on circular structures logged by user code. */
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function buildSandboxContext(context: ScriptContext, logs: string[]) {
   const consoleProxy = {
     log: (...args: unknown[]) => {
-      logs.push(args.map((a) => JSON.stringify(a)).join(" "));
+      logs.push(args.map(safeStringify).join(" "));
     },
     error: (...args: unknown[]) => {
-      logs.push(`ERROR: ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+      logs.push(`ERROR: ${args.map(safeStringify).join(" ")}`);
     },
     warn: (...args: unknown[]) => {
-      logs.push(`WARN: ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+      logs.push(`WARN: ${args.map(safeStringify).join(" ")}`);
     },
   };
 
@@ -203,6 +212,11 @@ function buildSandboxContext(context: ScriptContext, logs: string[]) {
 /**
  * Execute multiple scripts sequentially with pre/post script support
  */
+/** Placeholder result used when a script stage is skipped after a failure. */
+function skippedResult(): ScriptResult {
+  return { success: false, error: "Skipped: an earlier script in the sequence failed.", duration: 0, logs: [] };
+}
+
 export async function executeScriptSequence(
   preScript: string | null,
   mainScript: string,
@@ -214,30 +228,27 @@ export async function executeScriptSequence(
   mainResult: ScriptResult;
   postResult?: ScriptResult;
 }> {
-  const results: {
-    preResult?: ScriptResult;
-    mainResult?: ScriptResult;
-    postResult?: ScriptResult;
-  } = {};
-
+  let preResult: ScriptResult | undefined;
   // Execute pre-script if provided
   if (preScript) {
-    results.preResult = await executeScriptInSandbox(preScript, context, timeoutMs);
-    if (!results.preResult.success) {
-      return results as Required<typeof results>; // Stop on pre-script failure
+    preResult = await executeScriptInSandbox(preScript, context, timeoutMs);
+    if (!preResult.success) {
+      // Stop on pre-script failure; main/post never ran.
+      return { preResult, mainResult: skippedResult() };
     }
   }
 
   // Execute main script
-  results.mainResult = await executeScriptInSandbox(mainScript, context, timeoutMs);
-  if (!results.mainResult.success) {
-    return results as Required<typeof results>; // Stop on main script failure
+  const mainResult = await executeScriptInSandbox(mainScript, context, timeoutMs);
+  if (!mainResult.success) {
+    // Stop on main script failure; post never ran.
+    return { mainResult };
   }
 
   // Execute post-script if provided
-  if (postScript) {
-    results.postResult = await executeScriptInSandbox(postScript, context, timeoutMs);
-  }
+  const postResult = postScript
+    ? await executeScriptInSandbox(postScript, context, timeoutMs)
+    : undefined;
 
-  return results as Required<typeof results>;
+  return { preResult, mainResult, postResult };
 }

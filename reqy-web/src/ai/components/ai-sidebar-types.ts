@@ -38,6 +38,8 @@ export interface Artifact {
 export type ChatMessagePhase = "tool_calling" | "awaiting_response" | "streaming" | "done";
 
 export interface ChatMessage {
+  /** Identifiant stable utilisé comme key React (généré à l'envoi si absent). */
+  id?: string;
   role: "user" | "assistant";
   content: string;
   steps?: ProcessStep[];

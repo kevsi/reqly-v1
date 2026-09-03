@@ -195,7 +195,7 @@ export function maskSensitiveObject(obj: Record<string, unknown>): Record<string
 
 // ─── Accès au store Reqly ───────────────────────────────────────────────────
 
-import { requestStore } from "@/hooks/use-request-store";
+import { requestStore, runAiExecuteRequest } from "@/hooks/use-request-store";
 import type { Collection, RequestItem } from "@/hooks/request-types";
 import type { HttpMethod } from "@/lib/types";
 import { requestItemSchema } from "@/lib/import-schemas";
@@ -547,6 +547,7 @@ async function handleCreateRequest(args: Record<string, unknown>): Promise<ToolR
   const method = typeof args.method === "string" ? args.method.trim() : "";
   const url = typeof args.url === "string" ? args.url.trim() : "";
   const requestName = typeof args.name === "string" ? args.name.trim() : "";
+  const folderName = typeof args.folder === "string" ? args.folder.trim() : "";
 
   if (!collectionName) {
     return {
@@ -575,17 +576,48 @@ async function handleCreateRequest(args: Record<string, unknown>): Promise<ToolR
     };
   }
 
+  let folderId: string | undefined;
+  if (folderName) {
+    const store = requestStore.getState();
+    const collection = store.collections.find((c) => c.id === collectionId);
+    const folder = collection?.folders?.find(
+      (f) => f.name.toLowerCase() === folderName.toLowerCase() || f.id === folderName,
+    );
+    if (!folder) {
+      return {
+        callId: "",
+        name: "create_request",
+        content: "",
+        error: `Dossier "${folderName}" introuvable dans "${collectionName}".`,
+      };
+    }
+    folderId = folder.id;
+  }
+
+  const rawBody = typeof args.body === "string" ? args.body : undefined;
+  const rawBodyType =
+    typeof args.body_type === "string"
+      ? args.body_type.trim().toLowerCase()
+      : typeof args.bodyType === "string"
+        ? args.bodyType.trim().toLowerCase()
+        : "raw";
+  const rawHeaders =
+    typeof args.headers === "object" && args.headers !== null && !Array.isArray(args.headers)
+      ? (args.headers as Record<string, string>)
+      : {};
+
   const requestItem: Partial<RequestItem> = {
     name: requestName || `${method} ${url}`,
     method: method as HttpMethod,
     url,
     endpoint: url,
-    headers: {},
-    body: undefined,
-    bodyType: "raw",
+    headers: rawHeaders,
+    body: rawBody,
+    bodyType: rawBodyType as RequestItem["bodyType"],
     authType: "none",
     authToken: "",
     queryParams: [],
+    ...(folderId ? { folderId } : {}),
   };
 
   const newRequestId = requestStore
@@ -595,10 +627,19 @@ async function handleCreateRequest(args: Record<string, unknown>): Promise<ToolR
       requestItem as Omit<RequestItem, "id" | "createdAt" | "updatedAt">,
     );
 
+  // Synchroniser également la requête créée vers l'éditeur actif
+  requestStore.getState().patchRequest({
+    method: method as HttpMethod,
+    url,
+    headers: rawHeaders,
+    body: rawBody,
+    ...(rawBodyType ? { bodyType: rawBodyType } : {}),
+  });
+
   return {
     callId: "",
     name: "create_request",
-    content: `Requête ${method} ${url} créée dans "${collectionName}" (id: ${newRequestId}).`,
+    content: `Requête ${method} ${url} créée dans "${collectionName}"${folderName ? ` > "${folderName}"` : ""} (id: ${newRequestId}).`,
   };
 }
 
@@ -680,7 +721,7 @@ async function handleExecuteRequest(args: Record<string, unknown>): Promise<Tool
   };
 
   try {
-    await requestStore.getState().executeRequest(requestItem);
+    await runAiExecuteRequest(requestItem);
     const store = requestStore.getState();
     const status = store.lastResponse?.status ?? "unknown";
     const duration = store.lastResponse?.durationMs ?? 0;
@@ -707,6 +748,87 @@ async function handleExecuteRequest(args: Record<string, unknown>): Promise<Tool
             : "Erreur lors de l'exécution de la requête.",
     };
   }
+}
+
+async function handleExecuteRequests(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const folderName = typeof args.folder === "string" ? args.folder.trim() : "";
+
+  if (!collectionName) {
+    return { callId: "", name: "execute_requests", content: "", error: "Le champ collection est requis." };
+  }
+
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) {
+    return { callId: "", name: "execute_requests", content: "", error: `Collection "${collectionName}" introuvable.` };
+  }
+
+  const store = requestStore.getState();
+  const collection = store.collections.find((c) => c.id === collectionId);
+  if (!collection) {
+    return { callId: "", name: "execute_requests", content: "", error: `Collection "${collectionName}" introuvable.` };
+  }
+
+  let requests = collection.requests ?? [];
+  if (folderName) {
+    const folder = collection.folders?.find(
+      (f) => f.name.toLowerCase() === folderName.toLowerCase() || f.id === folderName,
+    );
+    if (!folder) return { callId: "", name: "execute_requests", content: "", error: `Dossier "${folderName}" introuvable dans "${collectionName}".` };
+    requests = requests.filter((r) => r.folderId === folder.id);
+  }
+
+  if (requests.length === 0) {
+    return { callId: "", name: "execute_requests", content: `Aucune requête à exécuter dans "${collectionName}"${folderName ? ` > "${folderName}"` : ""}.` };
+  }
+
+  const results: Array<{ name: string; method: string; url: string; status: number | string; duration: number; error?: string }> = [];
+
+  for (const req of requests) {
+    const partial: Partial<RequestItem> = {
+      name: req.name,
+      method: req.method,
+      url: req.url,
+      endpoint: req.url,
+      headers: req.headers ?? {},
+      body: req.body,
+      bodyType: req.bodyType ?? "raw",
+      authType: req.authType ?? "none",
+      authToken: req.authToken ?? "",
+      queryParams: req.queryParams ?? [],
+    };
+    try {
+      await runAiExecuteRequest(partial);
+      const s = requestStore.getState().lastResponse;
+      results.push({
+        name: req.name,
+        method: req.method,
+        url: req.url,
+        status: s?.status ?? "unknown",
+        duration: s?.durationMs ?? 0,
+      });
+    } catch (e) {
+      results.push({
+        name: req.name,
+        method: req.method,
+        url: req.url,
+        status: "error",
+        duration: 0,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  const lines = results.map((r) =>
+    r.error
+      ? `✗ ${r.method} ${r.url} — erreur: ${r.error}`
+      : `✓ ${r.method} ${r.url} → ${r.status} en ${r.duration}ms`,
+  );
+  return {
+    callId: "",
+    name: "execute_requests",
+    content: `${results.length} requête(s) exécutée(s) :\n${lines.join("\n")}`,
+  };
 }
 
 async function handleRenameCollection(args: Record<string, unknown>): Promise<ToolResult> {
@@ -1756,6 +1878,7 @@ async function handleMoveRequest(args: Record<string, unknown>): Promise<ToolRes
 async function handleCreateFolder(args: Record<string, unknown>): Promise<ToolResult> {
   const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
   const folderName = typeof args.name === "string" ? args.name.trim() : "";
+  const parentName = typeof args.parent_folder === "string" ? args.parent_folder.trim() : "";
 
   if (!collectionName || !folderName) {
     return {
@@ -1787,10 +1910,17 @@ async function handleCreateFolder(args: Record<string, unknown>): Promise<ToolRe
     };
   }
 
+  let parentId: string | null = null;
+  if (parentName) {
+    const parent = collection.folders?.find((f) => f.name === parentName || f.id === parentName);
+    if (!parent) return { callId: "", name: "create_folder", content: "", error: `Dossier parent "${parentName}" introuvable dans "${collectionName}".` };
+    parentId = parent.id;
+  }
+
   const newFolder = {
     id: `folder-${crypto.randomUUID()}`,
     name: folderName,
-    parentId: null,
+    parentId,
     collectionId,
     order: (collection.folders?.length ?? 0) * 1000,
     createdAt: Date.now(),
@@ -1804,8 +1934,200 @@ async function handleCreateFolder(args: Record<string, unknown>): Promise<ToolRe
   return {
     callId: "",
     name: "create_folder",
-    content: `Dossier "${folderName}" créé dans "${collectionName}".`,
+    content: parentId ? `Sous-dossier "${folderName}" créé dans "${parentName}" (${collectionName}).` : `Dossier "${folderName}" créé dans "${collectionName}".`,
   };
+}
+
+// ─── Handlers P0 — missing tools ────────────────────────────────────────
+
+async function handleSetRequestBody(args: Record<string, unknown>): Promise<ToolResult> {
+  const rawBody = typeof args.body === "string" ? args.body : undefined;
+  if (rawBody === undefined) {
+    return {
+      callId: "",
+      name: "set_request_body",
+      content: "",
+      error: "Le champ body (string) est requis.",
+    };
+  }
+
+  const bodyType =
+    typeof args.body_type === "string"
+      ? args.body_type.trim().toLowerCase()
+      : typeof args.bodyType === "string"
+        ? args.bodyType.trim().toLowerCase()
+        : undefined;
+
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const requestName = typeof args.request === "string" ? args.request.trim() : "";
+
+  const store = requestStore.getState();
+
+  if (collectionName && requestName) {
+    const collectionId = findCollectionIdByName(collectionName);
+    if (!collectionId) {
+      return {
+        callId: "",
+        name: "set_request_body",
+        content: "",
+        error: `Collection "${collectionName}" introuvable.`,
+      };
+    }
+    const col = store.collections.find((c) => c.id === collectionId);
+    const req = col?.requests.find((r) => r.name === requestName || r.id === requestName);
+    if (!col || !req) {
+      return {
+        callId: "",
+        name: "set_request_body",
+        content: "",
+        error: `Requête "${requestName}" introuvable dans "${collectionName}".`,
+      };
+    }
+
+    const patch: Record<string, unknown> = { body: rawBody };
+    if (bodyType) patch.bodyType = bodyType;
+
+    store.updateRequestInCollection(collectionId, req.id, patch);
+    store.patchRequest({ body: rawBody, ...(bodyType ? { bodyType } : {}) });
+
+    return {
+      callId: "",
+      name: "set_request_body",
+      content: `Corps de la requête "${requestName}" mis à jour avec succès dans "${collectionName}".`,
+    };
+  }
+
+  // Si aucune collection/requête ciblée n'est fournie : injecte directement dans l'éditeur actif !
+  store.patchRequest({
+    body: rawBody,
+    ...(bodyType ? { bodyType } : {}),
+  });
+
+  return {
+    callId: "",
+    name: "set_request_body",
+    content: `Corps de la requête (${bodyType ?? "raw"}) injecté directement dans l'éditeur actif.`,
+  };
+}
+
+async function handleUpdateRequest(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const requestName = typeof args.request === "string" ? args.request.trim() : "";
+  if (!collectionName || !requestName) {
+    return { callId: "", name: "update_request", content: "", error: "Les champs collection et request sont requis." };
+  }
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) return { callId: "", name: "update_request", content: "", error: `Collection "${collectionName}" introuvable.` };
+  const store = requestStore.getState();
+  const col = store.collections.find((c) => c.id === collectionId);
+  const req = col?.requests.find((r) => r.name === requestName);
+  if (!col || !req) return { callId: "", name: "update_request", content: "", error: `Requête "${requestName}" introuvable dans "${collectionName}".` };
+  const patch: Record<string, unknown> = {};
+  if (typeof args.url === "string" && args.url.trim()) patch.url = args.url.trim();
+  if (typeof args.method === "string" && args.method.trim()) patch.method = args.method.trim().toUpperCase();
+  if (typeof args.headers === "object" && args.headers) patch.headers = args.headers;
+  if (typeof args.body === "string") patch.body = args.body;
+  if (typeof args.body_type === "string" && args.body_type.trim()) patch.bodyType = args.body_type.trim().toLowerCase();
+  if (typeof args.name_new === "string" && (args.name_new as string).trim()) patch.name = (args.name_new as string).trim();
+  if (Object.keys(patch).length === 0) return { callId: "", name: "update_request", content: "", error: "Aucun champ à mettre à jour (url, method, headers, body, body_type, name_new)." };
+  store.updateRequestInCollection(collectionId, req.id, patch);
+  // Synchroniser avec l'éditeur actif
+  store.patchRequest(patch);
+  return { callId: "", name: "update_request", content: `Requête "${requestName}" mise à jour (${Object.keys(patch).join(", ")}).` };
+}
+
+async function handleRenameFolder(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const folderName = typeof args.folder === "string" ? args.folder.trim() : "";
+  const newName = typeof args.new_name === "string" ? args.new_name.trim() : "";
+  if (!collectionName || !folderName || !newName) return { callId: "", name: "rename_folder", content: "", error: "Les champs collection, folder et new_name sont requis." };
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) return { callId: "", name: "rename_folder", content: "", error: `Collection "${collectionName}" introuvable.` };
+  const store = requestStore.getState();
+  const col = store.collections.find((c) => c.id === collectionId);
+  const folder = col?.folders?.find((f) => f.name === folderName || f.id === folderName);
+  if (!folder) return { callId: "", name: "rename_folder", content: "", error: `Dossier "${folderName}" introuvable.` };
+  store.updateCollection(collectionId, { folders: (col!.folders ?? []).map((f) => (f.id === folder.id ? { ...f, name: newName, updatedAt: Date.now() } : f)) });
+  return { callId: "", name: "rename_folder", content: `Dossier "${folderName}" renommé en "${newName}".` };
+}
+
+async function handleDeleteFolder(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const folderName = typeof args.folder === "string" ? args.folder.trim() : "";
+  if (!collectionName || !folderName) return { callId: "", name: "delete_folder", content: "", error: "Les champs collection et folder sont requis." };
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) return { callId: "", name: "delete_folder", content: "", error: `Collection "${collectionName}" introuvable.` };
+  const store = requestStore.getState();
+  const col = store.collections.find((c) => c.id === collectionId);
+  const folder = col?.folders?.find((f) => f.name === folderName || f.id === folderName);
+  if (!folder) return { callId: "", name: "delete_folder", content: "", error: `Dossier "${folderName}" introuvable.` };
+  const remainingFolders = (col!.folders ?? []).filter((f) => f.id !== folder.id && f.parentId !== folder.id);
+  const patchedRequests = (col!.requests ?? []).map((r) => (r.folderId === folder.id ? { ...r, folderId: null } : r));
+  store.updateCollection(collectionId, { folders: remainingFolders, requests: patchedRequests });
+  return { callId: "", name: "delete_folder", content: `Dossier "${folderName}" supprimé.` };
+}
+
+async function handleMoveRequestToFolder(args: Record<string, unknown>): Promise<ToolResult> {
+  const collectionName = typeof args.collection === "string" ? args.collection.trim() : "";
+  const requestName = typeof args.request === "string" ? args.request.trim() : "";
+  const folderName = typeof args.folder === "string" ? args.folder.trim() : "";
+  if (!collectionName || !requestName) return { callId: "", name: "move_request_to_folder", content: "", error: "Les champs collection et request sont requis (folder=null pour racine)." };
+  const collectionId = findCollectionIdByName(collectionName);
+  if (!collectionId) return { callId: "", name: "move_request_to_folder", content: "", error: `Collection "${collectionName}" introuvable.` };
+  const store = requestStore.getState();
+  const col = store.collections.find((c) => c.id === collectionId);
+  const req = col?.requests.find((r) => r.name === requestName || r.id === requestName);
+  if (!req) return { callId: "", name: "move_request_to_folder", content: "", error: `Requête "${requestName}" introuvable.` };
+  let folderId: string | null = null;
+  if (folderName) {
+    const folder = col?.folders?.find((f) => f.name === folderName || f.id === folderName);
+    if (!folder) return { callId: "", name: "move_request_to_folder", content: "", error: `Dossier "${folderName}" introuvable.` };
+    folderId = folder.id;
+  }
+  store.updateRequestInCollection(collectionId, req.id, { folderId });
+  return { callId: "", name: "move_request_to_folder", content: folderId ? `Requête "${requestName}" déplacée vers dossier "${folderName}".` : `Requête "${requestName}" déplacée à la racine.` };
+}
+
+async function handleListEnvironments(_args: Record<string, unknown>): Promise<ToolResult> {
+  const envs = requestStore.getState().environments;
+  if (envs.length === 0) return { callId: "", name: "list_environments", content: "Aucun environnement." };
+  const lines = envs.map((e) => `- ${e.name} (${e.variables.length} variables)${e.id === requestStore.getState().activeEnvironmentId ? " [actif]" : ""}`);
+  return { callId: "", name: "list_environments", content: lines.join("\n") };
+}
+
+async function handleGetEnvironment(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  if (!name) return { callId: "", name: "get_environment", content: "", error: "Le champ name est requis." };
+  const env = requestStore.getState().environments.find((e) => e.name === name || e.id === name);
+  if (!env) return { callId: "", name: "get_environment", content: "", error: `Environnement "${name}" introuvable.` };
+  return { callId: "", name: "get_environment", content: JSON.stringify({ name: env.name, variables: env.variables.map((v) => ({ key: v.key, enabled: v.enabled })) }) };
+}
+
+async function handleSetActiveEnvironment(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  if (!name) return { callId: "", name: "set_active_environment", content: "", error: "Le champ name est requis." };
+  const env = requestStore.getState().environments.find((e) => e.name === name || e.id === name);
+  if (!env) return { callId: "", name: "set_active_environment", content: "", error: `Environnement "${name}" introuvable.` };
+  requestStore.getState().setActiveEnvironment(env.id);
+  return { callId: "", name: "set_active_environment", content: `Environnement actif : "${env.name}".` };
+}
+
+async function handleListHistory(args: Record<string, unknown>): Promise<ToolResult> {
+  const limit = typeof args.limit === "number" ? Math.min(Math.max(args.limit, 1), 50) : 10;
+  const history = requestStore.getState().history;
+  if (history.length === 0) return { callId: "", name: "list_history", content: "Aucun historique." };
+  const slice = history.slice(0, limit);
+  const lines = slice.map((h, i) => `${i + 1}. [${h.method}] ${h.url} → ${h.responseStatus ?? "pending"} (${h.responseTime ?? "?"}ms) ${h.executedAt ? new Date(h.executedAt).toLocaleTimeString() : ""}`);
+  return { callId: "", name: "list_history", content: lines.join("\n") };
+}
+
+async function handleGetHistoryEntry(args: Record<string, unknown>): Promise<ToolResult> {
+  const index = typeof args.index === "number" ? args.index : -1;
+  const history = requestStore.getState().history;
+  if (history.length === 0) return { callId: "", name: "get_history_entry", content: "", error: "Historique vide." };
+  const idx = index >= 0 && index < history.length ? index : 0;
+  const entry = history[idx];
+  return { callId: "", name: "get_history_entry", content: JSON.stringify({ method: entry.method, url: entry.url, endpoint: entry.endpoint, responseStatus: entry.responseStatus, responseTime: entry.responseTime, responseSize: entry.responseSize, bodyPreview: typeof entry.responseBody === "string" ? entry.responseBody.slice(0, 2000) : undefined, executedAt: entry.executedAt ? new Date(entry.executedAt).toISOString() : undefined }, null, 2) };
 }
 
 // ─── Helpers globaux ───────────────────────────────────────────────────────
@@ -2030,7 +2352,7 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   {
     name: "create_request",
     title: "Créer une requête",
-    description: "Crée une requête dans une collection existante.",
+    description: "Crée une requête dans une collection avec méthode, URL, headers et body optionnels.",
     parameters: {
       collection: { type: "string", description: "Nom de la collection cible.", required: true },
       method: {
@@ -2040,6 +2362,10 @@ export const REQLY_TOOLS: ReqlyTool[] = [
       },
       url: { type: "string", description: "URL complète de la requête.", required: true },
       name: { type: "string", description: "Nom de la requête (optionnel)." },
+      folder: { type: "string", description: "Nom ou id du dossier cible (optionnel)." },
+      body: { type: "string", description: "Corps (body) initial de la requête (JSON, string, etc.)." },
+      body_type: { type: "string", description: "Type de body (ex: json, raw, form-data, graphql)." },
+      headers: { type: "object", description: "Headers sous forme d'objet clé-valeur." },
     },
     handler: handleCreateRequest,
   },
@@ -2055,6 +2381,16 @@ export const REQLY_TOOLS: ReqlyTool[] = [
       body: { type: "string", description: "Body brut (JSON, form-data, etc.)." },
     },
     handler: handleExecuteRequest,
+  },
+  {
+    name: "execute_requests",
+    title: "Exécuter plusieurs requêtes",
+    description: "Exécute toutes les requêtes d'une collection (ou d'un dossier spécifique). Retourne un résumé de chaque résultat.",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      folder: { type: "string", description: "Nom ou id du dossier (optionnel — sinon toutes les requêtes de la collection)." },
+    },
+    handler: handleExecuteRequests,
   },
   {
     name: "rename_collection",
@@ -2383,12 +2719,109 @@ export const REQLY_TOOLS: ReqlyTool[] = [
   {
     name: "create_folder",
     title: "Créer un dossier",
-    description: "Crée un dossier dans une collection pour organiser les requêtes.",
+    description: "Crée un dossier dans une collection. Si parent_folder est précisé, crée un sous-dossier.",
     parameters: {
       collection: { type: "string", description: "Nom de la collection.", required: true },
       name: { type: "string", description: "Nom du dossier à créer.", required: true },
+      parent_folder: { type: "string", description: "Nom ou id du dossier parent (pour créer un sous-dossier)." },
     },
     handler: handleCreateFolder,
+  },
+  {
+    name: "set_request_body",
+    title: "Définir le corps de la requête",
+    description:
+      "Définit ou remplace le corps (body) de la requête HTTP directement dans l'éditeur actif ou dans une requête ciblée. Prend en charge les formats JSON, raw, form-data, etc.",
+    parameters: {
+      body: { type: "string", description: "Contenu du corps de la requête (JSON, string, etc.).", required: true },
+      body_type: { type: "string", description: "Type de body (ex: json, raw, form-data, graphql)." },
+      collection: { type: "string", description: "Nom de la collection (optionnel — sinon met à jour l'éditeur actif)." },
+      request: { type: "string", description: "Nom de la requête dans la collection (optionnel — sinon met à jour l'éditeur actif)." },
+    },
+    handler: handleSetRequestBody,
+  },
+  {
+    name: "update_request",
+    title: "Mettre à jour une requête",
+    description: "Met à jour url/method/headers/body/nom d'une requête existante et synchronise l'éditeur.",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      request: { type: "string", description: "Nom actuel de la requête.", required: true },
+      url: { type: "string", description: "Nouvelle URL." },
+      method: { type: "string", description: "Nouvelle méthode HTTP." },
+      headers: { type: "object", description: "Headers complets (remplace)." },
+      body: { type: "string", description: "Nouveau body." },
+      body_type: { type: "string", description: "Nouveau type de body (ex: json, raw, form-data, graphql)." },
+      name_new: { type: "string", description: "Nouveau nom." },
+    },
+    handler: handleUpdateRequest,
+  },
+  {
+    name: "rename_folder",
+    title: "Renommer un dossier",
+    description: "Renomme un dossier d'une collection.",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      folder: { type: "string", description: "Nom actuel du dossier.", required: true },
+      new_name: { type: "string", description: "Nouveau nom.", required: true },
+    },
+    handler: handleRenameFolder,
+  },
+  {
+    name: "delete_folder",
+    title: "Supprimer un dossier",
+    description: "Supprime un dossier (requêtes remises à la racine).",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      folder: { type: "string", description: "Nom du dossier.", required: true },
+    },
+    handler: handleDeleteFolder,
+  },
+  {
+    name: "move_request_to_folder",
+    title: "Déplacer requête vers dossier",
+    description: "Déplace une requête vers un dossier (ou racine si folder vide).",
+    parameters: {
+      collection: { type: "string", description: "Nom de la collection.", required: true },
+      request: { type: "string", description: "Nom de la requête.", required: true },
+      folder: { type: "string", description: "Nom du dossier cible (vide=racine)." },
+    },
+    handler: handleMoveRequestToFolder,
+  },
+  {
+    name: "list_environments",
+    title: "Lister les environnements",
+    description: "Liste les environnements et indique l'actif.",
+    parameters: {},
+    handler: handleListEnvironments,
+  },
+  {
+    name: "get_environment",
+    title: "Détails environnement",
+    description: "Détails d'un environnement (variables).",
+    parameters: { name: { type: "string", description: "Nom de l'environnement.", required: true } },
+    handler: handleGetEnvironment,
+  },
+  {
+    name: "set_active_environment",
+    title: "Activer environnement",
+    description: "Définit l'environnement actif.",
+    parameters: { name: { type: "string", description: "Nom de l'environnement.", required: true } },
+    handler: handleSetActiveEnvironment,
+  },
+  {
+    name: "list_history",
+    title: "Historique des requêtes",
+    description: "Liste les dernières exécutions (méthode, url, statut, durée).",
+    parameters: { limit: { type: "number", description: "Nombre d'entrées (defaut 10, max 50)." } },
+    handler: handleListHistory,
+  },
+  {
+    name: "get_history_entry",
+    title: "Détail historique",
+    description: "Détail d'une entrée d'historique par index.",
+    parameters: { index: { type: "number", description: "Index (0=plus ancien)." } },
+    handler: handleGetHistoryEntry,
   },
   // Outils Mock Server (pont brouillon via components/mock/mock-draft-bridge).
   ...MOCK_AI_TOOLS,

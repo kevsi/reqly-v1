@@ -115,6 +115,9 @@ export function AiModelPicker({ className }: { className?: string }) {
     ? t("ai.modelPicker.loading")
     : state.model || (PROVIDER_NAMES[state.provider] ?? state.provider);
 
+  const isCurrentKeyMissing =
+    ready && state.provider !== "ollama" && loadApiKey(state.provider).length === 0;
+
   return (
     <DropdownMenu onOpenChange={(open) => open && refresh()}>
       <DropdownMenuTrigger asChild>
@@ -122,13 +125,23 @@ export function AiModelPicker({ className }: { className?: string }) {
           type="button"
           className={cn(
             "inline-flex min-w-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            isCurrentKeyMissing && "border-warning/50 text-warning/90",
             className,
           )}
-          aria-label={`${t("ai.modelPicker.aria")} : ${currentLabel}`}
-          title={state.model || PROVIDER_NAMES[state.provider]}
+          aria-label={`${t("ai.modelPicker.aria")} : ${currentLabel}${isCurrentKeyMissing ? ` (${t("ai.modelPicker.keyMissing")})` : ""}`}
+          title={
+            isCurrentKeyMissing
+              ? `${state.model || PROVIDER_NAMES[state.provider]} (${t("ai.modelPicker.keyMissing")})`
+              : state.model || PROVIDER_NAMES[state.provider]
+          }
           data-testid="ai-model-picker-trigger"
         >
-          <Cpu className="size-3 shrink-0 text-primary/70" />
+          <span className="relative flex shrink-0">
+            <Cpu className="size-3 text-primary/70" />
+            {isCurrentKeyMissing && (
+              <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-warning" />
+            )}
+          </span>
           <span className="max-w-[120px] truncate">{currentLabel}</span>
           <ChevronDown className="size-3 shrink-0 opacity-60" />
         </button>
