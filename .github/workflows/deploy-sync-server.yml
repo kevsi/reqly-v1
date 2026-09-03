@@ -1,10 +1,16 @@
 name: Deploy sync-server
 
-# Déploiement manuel du sync-server EC2 (cf. sync-server/FONCTIONNEMENT.md §14).
-# Déclenchement : onglet Actions → "Deploy sync-server" → Run workflow.
+# Déploiement du sync-server EC2 (cf. sync-server/FONCTIONNEMENT.md §14).
+# - auto : à chaque push sur main qui touche sync-server/ ou ce workflow
+# - manuel : onglet Actions → "Deploy sync-server" → Run workflow
 # Le runner GitHub effectue le SSH (le réseau de dev bloque le port 22 sortant).
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "sync-server/**"
+      - ".github/workflows/deploy-sync-server.yml"
   workflow_dispatch:
 
 jobs:
