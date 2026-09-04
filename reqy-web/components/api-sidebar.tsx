@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   LayoutDashboard,
   Zap,
-  Sparkles,
   Settings,
   ChevronDown,
   Folder,
@@ -115,7 +114,6 @@ export function ApiSidebar({
   onMobileClose,
 }: ApiSidebarProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
-  const { setAiSidebarOpen } = useAiSidebar();
   const { t } = useTranslation();
   const collapsed = controlledCollapsed ?? internalCollapsed;
   const isMobile = useIsMobile(768);
@@ -277,31 +275,6 @@ export function ApiSidebar({
         </ul>
         <ToolsSection />
       </nav>
-
-      {/* AI Assistant */}
-      <div className={cn("py-2", expanded ? "px-3" : "px-2")}>
-        <button
-          type="button"
-          onClick={() => {
-            setAiSidebarOpen(true);
-            handleNavClick();
-          }}
-          className={cn(
-            "group/ai relative flex w-full items-center rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-primary/15",
-            expanded ? "gap-3" : "justify-center px-2",
-          )}
-        >
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary">
-            <Sparkles aria-hidden="true" className="size-4 text-primary-foreground" />
-          </div>
-          {expanded && (
-            <>
-              <span className="font-medium">{t("sidebar.aiAssist")}</span>
-              <span className="ml-auto flex size-2 rounded-full bg-success" />
-            </>
-          )}
-        </button>
-      </div>
 
       {/* Se connecter — ancêtre de la sidebar, en bas (affiché tant que déconnecté) */}
       {!isAuthenticated && (
