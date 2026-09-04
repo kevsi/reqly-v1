@@ -2620,5 +2620,13 @@
     "bulk": {
       "remove": "Supprimer"
     }
+  },
+  "onboarding": {
+    "title": "Premiers pas",
+    "subtitle": "{done}/{total} accompli — ton espace se construit au fur et à mesure.",
+    "step1": "Envoie ta première requête",
+    "step2": "Ajoute une assertion",
+    "step3": "Sauvegarde dans une collection",
+    "dismiss": "Passer"
   }
 }

@@ -35,6 +35,7 @@ import {
   type IncompleteReason,
 } from "@/src/ai/cloud-engine/actions/propose-correction";
 import { askAIText } from "@/src/ai/ask-ai-text";
+import { QuickStart } from "@/components/onboarding/quick-start";
 import type { TestResult } from "@/lib/types";
 import { formatDataSize } from "@/lib/network/format";
 import { useTranslation } from "react-i18next";
@@ -64,6 +65,8 @@ export function RequestTabsManager() {
   const { t } = useTranslation();
   const tabState = useRequestTabsState();
   const updateRequestById = useRequestStore((s) => s.updateRequestById);
+  const onboardingCompleted = useRequestStore((s) => s.onboardingCompleted === true);
+  const completeOnboarding = useRequestStore((s) => s.completeOnboarding);
 
   const execution = useRequestTabExecution(tabState);
 
@@ -515,6 +518,7 @@ export function RequestTabsManager() {
                     </div>
                   }
                 >
+              {!onboardingCompleted && <QuickStart />}
                   <RequestPanel
                     key={activeTab.id}
                     method={activeTab.method}
