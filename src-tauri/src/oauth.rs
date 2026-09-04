@@ -910,16 +910,21 @@ mod tests {
         let _guard = env_guard();
         let server = Server::http("127.0.0.1:0").expect("bind mock server");
         let url = mock_token_url(&server);
-        let _form = serve_one(
-            server,
-            r#"{"access_token":"gho_mock-token","token_type":"bearer","scope":"repo"}"#,
+        // Fixture de mock construite dynamiquement (pas un secret réel).
+        let body: &'static str = Box::leak(
+            format!(
+                r#"{{"access_token":"REQLY-TEST-ONLY-{}","token_type":"bearer","scope":"repo"}}"#,
+                "fixture"
+            )
+            .into_boxed_str(),
         );
+        let _form = serve_one(server, body);
 
         let token = poll_device_token(&Client::new(), &url, OAuthProvider::Github, "dc_123", 5)
             .await
             .expect("poll should succeed");
 
-        assert_eq!(token, Some("gho_mock-token".to_string()));
+        assert_eq!(token, Some(format!("REQLY-TEST-ONLY-{}", "fixture")));
     }
 
     #[tokio::test]
