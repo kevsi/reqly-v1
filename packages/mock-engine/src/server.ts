@@ -139,12 +139,12 @@ export function createMockServer(
     return Buffer.concat(chunks).toString("utf8");
   }
 
-  function buildResponseBody(
+  async function buildResponseBody(
     route: MockRoute,
     response: NonNullable<ReturnType<typeof selectResponse>>,
     ctx: RequestContext & { rawPath(): string },
     statefulResult: unknown | undefined,
-  ): { body: string; scriptError?: string } {
+  ): Promise<{ body: string; scriptError?: string }> {
     // Stateful routes produce their own payload.
     if (statefulResult !== undefined) {
       return { body: JSON.stringify(statefulResult) };
@@ -161,7 +161,7 @@ export function createMockServer(
 
     if (route.transform) {
       try {
-        const replaced = runTransform(route.transform, {
+        const replaced = await runTransform(route.transform, {
           request: {
             method: ctx.method,
             path: ctx.rawPath(),
@@ -521,7 +521,7 @@ export function createMockServer(
       }
     }
 
-    const built = buildResponseBody(route, response, ctx, statefulResult);
+    const built = await buildResponseBody(route, response, ctx, statefulResult);
 
     const extraHeaders: Record<string, string> = { ...response.headers };
     if (built.scriptError)

@@ -1,220 +1,34 @@
-"use client";
-
 /**
- * Exécution locale (navigateur) des deux fonctions moteur utilisées par la
- * page Mock : génération de données depuis un BodySchema et test d'un script
- * transform. Miroir fidèle de @reqly/mock-engine — le barrel du package importe
- * node:vm / node:http / node:crypto, non bundleable dans un chunk navigateur.
+ * Pont navigateur vers @reqly/mock-engine.
+ *
+ * AVANT (audit 2026-09-04) : ce fichier était un "miroir fidèle" du
+ * générateur du package — deux sources de vérité qui dérivaient. Le package
+ * expose désormais un sous-chemin isomorphe `@reqly/mock-engine/generator`
+ * (sans node:*) utilisé directement ici.
+ *
+ * SECURITY : `runTransformLocal` n'exécute plus aucun JS dans la page —
+ * l'exécution des transforms se fait dans le serveur mock (recli), dans un
+ * process jetable sous --permission.
  */
-
+import { generate, inferFormat } from "@reqly/mock-engine/generator";
 import type { BodySchema } from "@reqly/mock-engine";
 
 type Rng = () => number;
 
-const FIRST_NAMES = [
-  "Alice",
-  "Bruno",
-  "Chloé",
-  "Diego",
-  "Emma",
-  "Farid",
-  "Lucie",
-  "Marco",
-  "Nina",
-  "Oscar",
-];
-const LAST_NAMES = [
-  "Bernard",
-  "Cruz",
-  "Dupont",
-  "Eriksson",
-  "Foster",
-  "Garcia",
-  "Haddad",
-  "Ivanov",
-  "Jones",
-  "Kim",
-];
-const CITIES = ["Lyon", "Berlin", "Madrid", "Lisbonne", "Prague", "Vienne", "Porto", "Anvers"];
-const COUNTRIES = ["France", "Allemagne", "Espagne", "Portugal", "Italie", "Belgique", "Suisse"];
-
-function pick<T>(rng: Rng, arr: readonly T[]): T {
-  return arr[Math.floor(rng() * arr.length)] as T;
-}
-
-function randInt(rng: Rng, min: number, max: number): number {
-  return Math.floor(rng() * (max - min + 1)) + min;
-}
-
-function uuid(rng: Rng): string {
-  const hex = () => Math.floor(rng() * 16).toString(16);
-  const block = (n: number) => Array.from({ length: n }, hex).join("");
-  return `${block(8)}-${block(4)}-4${block(3)}-${pick(rng, ["8", "9", "a", "b"])}${block(3)}-${block(12)}`;
-}
-
-const NAME_HINTS: Array<[RegExp, NonNullable<BodySchema["format"]>]> = [
-  [/e[-_]?mail/i, "email"],
-  [/(uuid|guid)/i, "uuid"],
-  [/phone|tel(_|\b)/i, "phone"],
-  [/(first[_-]?)?name$|^name$/i, "name"],
-  [/first[_-]?name/i, "firstName"],
-  [/last[_-]?name|(surname|lastname)/i, "lastName"],
-  [/city|town/i, "city"],
-  [/country/i, "country"],
-  [/(url|link|href|website)$/i, "url"],
-  [/(slug|handle)$/i, "slug"],
-  [/ip[_-]?(v4|address)?$/i, "ipv4"],
-  [/price|amount|cost/i, "price"],
-  [/date.*(created|updated|at)$|_at$|At$/i, "date-time"],
-  [/(^date$|birth|day\b)/i, "date"],
-];
-
-function inferFormat(fieldName: string): BodySchema["format"] | undefined {
-  for (const [re, fmt] of NAME_HINTS) if (re.test(fieldName)) return fmt;
-  return undefined;
-}
-
-function generateValue(format: NonNullable<BodySchema["format"]>, rng: Rng): string | number {
-  switch (format) {
-    case "email":
-      return `${pick(rng, ["alice", "bruno", "chloe", "diego", "emma"]).toLowerCase()}.${randInt(rng, 1, 999)}@example.com`;
-    case "name":
-      return `${pick(rng, FIRST_NAMES)} ${pick(rng, LAST_NAMES)}`;
-    case "firstName":
-      return pick(rng, FIRST_NAMES);
-    case "lastName":
-      return pick(rng, LAST_NAMES);
-    case "city":
-      return pick(rng, CITIES);
-    case "country":
-      return pick(rng, COUNTRIES);
-    case "phone":
-      return `+33 6 ${String(randInt(rng, 10, 99))} ${String(randInt(rng, 10, 99))} ${String(randInt(rng, 10, 99))} ${String(randInt(rng, 10, 99))}`;
-    case "url":
-      return `https://example.com/${pick(rng, ["api", "docs", "blog", "assets"])}/${randInt(rng, 100, 999)}`;
-    case "uuid":
-      return uuid(rng);
-    case "date": {
-      const d = new Date(Date.now() - randInt(rng, 0, 365) * 86_400_000);
-      return d.toISOString().slice(0, 10);
-    }
-    case "date-time":
-      return new Date(Date.now() - randInt(rng, 0, 30) * 86_400_000).toISOString();
-    case "price":
-      return Number((rng() * 500 + 0.99).toFixed(2));
-    case "ipv4":
-      return `${randInt(rng, 1, 254)}.${randInt(rng, 0, 255)}.${randInt(rng, 0, 255)}.${randInt(rng, 1, 254)}`;
-    case "slug":
-      return `${pick(rng, ["blue", "fast", "tiny", "bold"])}-${pick(rng, ["otter", "falcon", "tiger", "whale"])}-${randInt(rng, 10, 99)}`;
-    default:
-      return String(randInt(rng, 1, 10_000));
-  }
-}
-
-function patternToString(pattern: string, rng: Rng): string {
-  let out = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i];
-    if (ch === "\\" && pattern[i + 1] === "d") {
-      out += String(randInt(rng, 0, 9));
-      i++;
-    } else if (ch === "\\") {
-      out += pattern[++i] ?? "";
-    } else if (/[a-zA-Z]/.test(ch)) {
-      out += ch;
-    } else if (ch === "{") {
-      const close = pattern.indexOf("}", i);
-      if (close > -1) {
-        out += String(randInt(rng, 0, 9)).repeat(
-          Math.min(8, parseInt(pattern.slice(i + 1, close), 10) || 1),
-        );
-        i = close;
-      }
-    } else if (!"^$+*?.()[]|".includes(ch)) {
-      out += ch;
-    }
-  }
-  return out || String(generateValue("slug", rng));
-}
-
 export function generateLocal(schema: BodySchema | undefined, rng: Rng, keyHint?: string): unknown {
   if (!schema || schema.type === "null") return null;
-
-  if (schema.enum && schema.enum.length > 0) return pick(rng, schema.enum);
+  if (schema.enum && schema.enum.length > 0) return schema.enum[Math.floor(rng() * schema.enum.length)];
   if (schema.example !== undefined) return schema.example;
-
-  const type = schema.type ?? "string";
-
-  if (type === "object") {
-    const out: Record<string, unknown> = {};
-    const props = schema.properties ?? {};
-    const required = schema.required ?? Object.keys(props);
-    for (const [key, child] of Object.entries(props)) {
-      if (!required.includes(key) && rng() > 0.7) continue;
-      out[key] = generateLocal(child ?? { type: "string" }, rng, key);
-    }
-    return out;
-  }
-
-  if (type === "array") {
-    const minItems = schema.minItems ?? (schema.items ? 2 : 1);
-    const maxItems = schema.maxItems ?? Math.max(minItems, 4);
-    const count = randInt(rng, minItems, maxItems);
-    return Array.from({ length: count }, () =>
-      generateLocal(schema.items ?? { type: "string" }, rng, keyHint),
-    );
-  }
-
-  if (type === "boolean") return rng() < 0.5;
-
-  if (type === "integer") {
-    const min = schema.min ?? 1;
-    const max = schema.max ?? 10_000;
-    return randInt(rng, Math.ceil(min), Math.floor(max));
-  }
-
-  if (type === "number") {
-    if (schema.format === "price") return generateValue("price", rng);
-    const min = schema.min ?? 0;
-    const max = schema.max ?? 1000;
-    return Number((rng() * (max - min) + min).toFixed(2));
-  }
-
-  const format = schema.format ?? inferFormat(keyHint ?? "");
-  if (schema.pattern) return patternToString(schema.pattern, rng);
-  if (format) return String(generateValue(format, rng));
-
-  const len = schema.max ? randInt(rng, schema.min ?? 1, schema.max) : randInt(rng, 6, 18);
-  const slug = String(generateValue("slug", rng));
-  return slug.slice(0, Math.max(3, len)).replace(/-/g, "");
+  return generate(schema, rng, keyHint);
 }
 
-export interface TransformInput {
-  request: {
-    method: string;
-    path: string;
-    query: Record<string, string>;
-    headers: Record<string, string>;
-  };
-  body: unknown;
-  state: unknown;
+export function inferFormatLocal(keyHint: string): string {
+  return inferFormat(keyHint) ?? 'slug';
 }
 
-/**
- * Exécute un transform utilisateur (`{ request, body, state }` → corps de
- * remplacement).
- *
- * 🔐 SECURITY (audit P1 2026-09-03) : plus de `new Function` dans la page —
- * il exécutait le code dans l'origine de l'app avec accès complet à
- * window/fetch/document.cookie/IndexedDB (où vivent les secrets chiffrés) et
- * sans timeout. Même politique que le moteur canonique
- * (lib/test-runner/scripts.ts) : l'exécution de JS fourni par l'utilisateur
- * est désactivée dans le navigateur. Le test d'un transform doit passer par
- * le serveur mock (recli), qui l'exécute dans son propre process.
- */
-export function runTransformLocal(_code: string, _input: TransformInput): unknown {
+export function runTransformLocal(_code: string, _input: unknown): never {
   throw new Error(
     "L'exécution des transforms JS est désactivée dans le navigateur (sécurité). " +
-      "Testez le transform via le serveur mock (`recli mock start`) — il s'exécute dans un process séparé.",
+      "Testez le transform via le serveur mock (recli mock start) — process jetable.",
   );
 }

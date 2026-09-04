@@ -9,10 +9,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./generator": {
+      "types": "./dist/generator.d.ts",
+      "default": "./dist/generator.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('node:fs').copyFileSync('src/scripts-child.mjs', 'dist/scripts-child.mjs')\"",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest"

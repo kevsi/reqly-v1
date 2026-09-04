@@ -84,7 +84,7 @@ export function createMockServer(initialConfig, options = {}) {
         }
         return Buffer.concat(chunks).toString("utf8");
     }
-    function buildResponseBody(route, response, ctx, statefulResult) {
+    async function buildResponseBody(route, response, ctx, statefulResult) {
         // Stateful routes produce their own payload.
         if (statefulResult !== undefined) {
             return { body: JSON.stringify(statefulResult) };
@@ -101,7 +101,7 @@ export function createMockServer(initialConfig, options = {}) {
         }
         if (route.transform) {
             try {
-                const replaced = runTransform(route.transform, {
+                const replaced = await runTransform(route.transform, {
                     request: {
                         method: ctx.method,
                         path: ctx.rawPath(),
@@ -417,7 +417,7 @@ export function createMockServer(initialConfig, options = {}) {
                     return;
             }
         }
-        const built = buildResponseBody(route, response, ctx, statefulResult);
+        const built = await buildResponseBody(route, response, ctx, statefulResult);
         const extraHeaders = { ...response.headers };
         if (built.scriptError)
             extraHeaders["x-mock-script-error"] = encodeURIComponent(built.scriptError);
