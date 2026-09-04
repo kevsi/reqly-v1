@@ -42,12 +42,19 @@ describe("migrateItemAssertions", () => {
     expect(migrated.runnerAssertions).toEqual([{ type: "status", expected: 201 }]);
   });
 
-  it("does not overwrite runnerAssertions if already present", () => {
+  it("merges legacy into existing runnerAssertions and clears the legacy field (move, not copy)", () => {
     const item = {
       assertions: [{ type: "status", target: "201" }],
       runnerAssertions: [{ type: "status", expected: 200 }],
     };
     const migrated = migrateItemAssertions(item);
-    expect(migrated.runnerAssertions).toEqual([{ type: "status", expected: 200 }]);
+    // Audit 2026-09-03: l'ancienne migration copiait sans effacer — le runner
+    // fusionnait ensuite legacy converti + runner, évaluant les assertions
+    // migrées DEUX FOIS. Le nouveau contrat: fusion + champ legacy vidé.
+    expect(migrated.runnerAssertions).toEqual([
+      { type: "status", expected: 200 },
+      { type: "status", expected: 201 },
+    ]);
+    expect(migrated.assertions).toEqual([]);
   });
 });

@@ -128,7 +128,6 @@ export function useRequestTabExecution(state: RequestTabsState) {
         authType: activeTab.authType,
         authToken: activeTab.authToken,
         queryParams: activeTab.queryParams,
-        assertions: activeTab.assertions,
         runnerAssertions: activeTab.runnerAssertions,
         preRequestScript: activeTab.preRequestScript,
         postResponseScript: activeTab.postResponseScript,
@@ -180,7 +179,6 @@ export function useRequestTabExecution(state: RequestTabsState) {
         authType: activeTab.authType,
         authToken: activeTab.authToken,
         queryParams: activeTab.queryParams,
-        assertions: activeTab.assertions,
         runnerAssertions: activeTab.runnerAssertions,
         preRequestScript: activeTab.preRequestScript,
         postResponseScript: activeTab.postResponseScript,
@@ -229,7 +227,6 @@ export function useRequestTabExecution(state: RequestTabsState) {
         headers: {},
         body: "",
         queryParams: [],
-        assertions: [],
       });
 
       const newTab = createEmptyTab({

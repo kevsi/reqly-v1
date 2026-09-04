@@ -1,7 +1,6 @@
 "use client";
 
 import { CollectionsPanel } from "@/components/collections-panel";
-import { ImportPostmanModal as LegacyImportPostmanModal } from "@/components/import-postman-modal";
 import { PostmanManageModal } from "@/components/postman/manage-modal";
 import { PostmanImportModal } from "@/components/postman/import-modal";
 import { ExportPostmanModal } from "@/components/export-postman-modal";
@@ -14,7 +13,7 @@ import { useRequestStore, type Collection, type RequestItem } from "@/hooks/use-
 
 import { useRouter } from "next/navigation";
 import { setPendingCollectionRequest, type PendingCollectionRequest } from "@/lib/request-bridge";
-import { resolveUniqueCollectionName, requestItemSchema } from "@/lib/import-schemas";
+import { resolveUniqueCollectionName } from "@/lib/import-schemas";
 import { generateOpenApiSpec } from "@/lib/openapi-export";
 
 import { toast } from "@/hooks/use-toast";
@@ -58,7 +57,6 @@ export default function CollectionsPage() {
     moveRequestBetweenCollections,
   } = useRequestStore();
 
-  const [postmanImportOpen, setPostmanImportOpen] = useState(false);
   const [postmanManageOpen, setPostmanManageOpen] = useState(false);
   const [postmanImportPreviewOpen, setPostmanImportPreviewOpen] = useState(false);
   const [selectedPostmanCollection, setSelectedPostmanCollection] = useState<{
@@ -98,82 +96,6 @@ export default function CollectionsPage() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  const handleImportPostmanCollection = (collection: {
-    name: string;
-    description?: string;
-    routes?: unknown[];
-    requests?: Partial<RequestItem>[];
-  }) => {
-    const uniqueName = resolveUniqueCollectionName(
-      collection.name,
-      collections.map((c) => c.name),
-    );
-    const newCollectionId = addCollection({
-      name: uniqueName,
-      color: "emerald",
-      icon: "package",
-      description: collection.description,
-    });
-
-    const source =
-      collection.requests && collection.requests.length > 0
-        ? collection.requests
-        : (collection.routes ?? []);
-
-    let skipped = 0;
-    source.forEach((item) => {
-      const route = item as {
-        method?: string;
-        path?: string;
-        url?: string;
-        name?: string;
-        headers?: Record<string, string>;
-        body?: string;
-        bodyType?: RequestItem["bodyType"];
-        authType?: RequestItem["authType"];
-        authToken?: string;
-        queryParams?: RequestItem["queryParams"];
-      };
-      const method = (route.method || "GET").toUpperCase() as HttpMethod;
-      // Validation Zod : méthode hors enum, champs invalides… sont rejetés
-      // au lieu d'être injectés tels quels dans le store.
-      const parsed = requestItemSchema.safeParse({
-        name: route.name || `${method} ${route.path || route.url || "/"}`,
-        method,
-        url: route.path || route.url || "/",
-        endpoint: route.path || route.url || "/",
-        headers: route.headers || {},
-        body: route.body ?? "",
-        bodyType: route.bodyType,
-        authType: route.authType,
-        authToken: route.authToken,
-        queryParams: route.queryParams || [],
-      });
-      if (!parsed.success) {
-        skipped++;
-        return;
-      }
-      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = parsed.data;
-      addRequestToCollection(newCollectionId, rest);
-    });
-
-    toast({
-      title: t("collections.toast.postmanImported", { name: uniqueName }),
-      description:
-        skipped > 0
-          ? `${t("collections.toast.postmanSkipped", { count: skipped })}${
-              uniqueName !== collection.name
-                ? ` — ${t("collections.toast.postmanRenamed", { old: collection.name })}`
-                : ""
-            }`
-          : uniqueName !== collection.name
-            ? t("collections.toast.postmanRenamed", { old: collection.name })
-            : undefined,
-    });
-
-    // R11 — orienter l'utilisateur vers la collection fraîchement créée
-    setHighlightedCollectionId(newCollectionId);
-  };
 
   const handleExportCollectionsToPostman = async (selectedCollectionIds: string[]) => {
     if (!postmanConnected) {
@@ -272,7 +194,6 @@ export default function CollectionsPage() {
       authToken: request.authToken,
       queryParams: request.queryParams,
       pathParams: request.pathParams,
-      assertions: request.assertions,
       runnerAssertions: request.runnerAssertions,
       preRequestScript: request.preRequestScript,
       postResponseScript: request.postResponseScript,
@@ -298,7 +219,6 @@ export default function CollectionsPage() {
       authToken: request.authToken,
       queryParams: request.queryParams,
       pathParams: request.pathParams,
-      assertions: request.assertions,
       runnerAssertions: request.runnerAssertions,
       preRequestScript: request.preRequestScript,
       postResponseScript: request.postResponseScript,
@@ -343,7 +263,6 @@ export default function CollectionsPage() {
         authType?: "none" | "bearer" | "basic" | "api-key" | "oauth2";
         authToken?: string;
         queryParams?: Array<{ key: string; value: string }>;
-        assertions?: RequestItem["assertions"];
         runnerAssertions?: RequestItem["runnerAssertions"];
         preRequestScript?: string;
         postResponseScript?: string;
@@ -383,7 +302,6 @@ export default function CollectionsPage() {
           authType: req.authType,
           authToken: req.authToken,
           queryParams: req.queryParams || [],
-          assertions: req.assertions,
           runnerAssertions: req.runnerAssertions,
           preRequestScript: req.preRequestScript,
           postResponseScript: req.postResponseScript,
@@ -638,12 +556,6 @@ export default function CollectionsPage() {
         }}
       />
 
-      <LegacyImportPostmanModal
-        open={postmanImportOpen}
-        onClose={() => setPostmanImportOpen(false)}
-        onImport={handleImportPostmanCollection}
-        isConnected={postmanConnected}
-      />
       <PostmanManageModal
         open={postmanManageOpen}
         onOpenChange={setPostmanManageOpen}

@@ -56,15 +56,6 @@ export interface RequestItem {
   queryParams?: Array<{ key: string; value: string }>;
   pathParams?: Array<{ key: string; value: string; enabled?: boolean }>;
   folderId?: string | null;
-  /**
-   * Legacy assertion format used by the original inline test editor.
-   * New code should use {@link runnerAssertions} (lib/test-runner/types.Assertion)
-   * which supports richer operators and JSONPath. Kept for backwards
-   * compatibility with persisted projects and the legacy UI; do not remove
-   * without a migration path. Prefer runnerAssertions for new code.
-   * @deprecated since 2024-Q4 — use runnerAssertions instead.
-   */
-  assertions?: RequestTestAssertion[];
   runnerAssertions?: import("@/lib/test-runner/types").Assertion[];
   preRequestScript?: string;
   postResponseScript?: string;

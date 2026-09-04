@@ -302,7 +302,6 @@ export function useRequestTabsState() {
         authType: tab.authType,
         authToken: tab.authToken,
         queryParams: tab.queryParams,
-        assertions: tab.assertions,
         runnerAssertions: tab.runnerAssertions,
         preRequestScript: tab.preRequestScript,
         postResponseScript: tab.postResponseScript,

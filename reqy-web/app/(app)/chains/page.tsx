@@ -44,7 +44,6 @@ export default function ChainsPage() {
         bodyType: request.bodyType ?? "json",
         authType: request.authType ?? "none",
         authToken: request.authToken ?? "",
-        assertions: request.assertions ?? [],
         runnerAssertions: request.runnerAssertions ?? [],
         preRequestScript: request.preRequestScript ?? "",
         postResponseScript: request.postResponseScript ?? "",

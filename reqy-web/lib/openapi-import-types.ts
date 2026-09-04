@@ -94,7 +94,6 @@ export interface CollectionImportData {
     authType?: "none" | "bearer" | "basic" | "api-key" | "oauth2";
     authToken?: string;
     queryParams?: Array<{ key: string; value: string }>;
-    assertions?: RequestItem["assertions"];
     runnerAssertions?: RequestItem["runnerAssertions"];
     preRequestScript?: string;
     postResponseScript?: string;

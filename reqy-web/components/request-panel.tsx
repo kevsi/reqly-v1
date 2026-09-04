@@ -15,7 +15,6 @@ import { SSEEventsModal } from "@/components/sse/sse-events-modal";
 import { buildUrl } from "@/lib/request-executor";
 import type { BodyType, AuthType, QueryParam, Header, PathParam } from "@/lib/request-executor";
 import { syncPathParams } from "@/lib/path-params";
-import type { RequestTestAssertion } from "@/lib/types";
 import type { Assertion } from "@/lib/test-runner/types";
 import { AssertionEditor } from "@/components/assertion-editor";
 import { ScriptEditor } from "@/components/script-editor";
@@ -23,7 +22,6 @@ import { KeyValueEditor } from "@/components/key-value-editor";
 import { AuthSection } from "@/components/auth-section";
 import { BodyEditor } from "@/components/body-editor";
 import { RequestPanelUrlBar } from "@/components/request-panel-url-bar";
-import { TestAssertionPanel } from "@/components/test-assertion-panel";
 import { useTranslation } from "react-i18next";
 
 interface RequestPanelProps {
@@ -36,7 +34,6 @@ interface RequestPanelProps {
   bodyType: BodyType;
   authType: AuthType;
   authToken: string;
-  assertions?: RequestTestAssertion[];
   runnerAssertions?: Assertion[];
   preRequestScript?: string;
   postResponseScript?: string;
@@ -48,11 +45,9 @@ interface RequestPanelProps {
   onBodyChange: (body: string) => void;
   onBodyTypeChange: (bodyType: BodyType) => void;
   onAuthChange: (type: AuthType, token: string) => void;
-  onAssertionsChange?: (assertions: RequestTestAssertion[]) => void;
   onRunnerAssertionsChange?: (assertions: Assertion[]) => void;
   onPreRequestScriptChange?: (script: string) => void;
   onPostResponseScriptChange?: (script: string) => void;
-  onRunTests?: () => void;
   onSend: () => Promise<void>;
   onCancel?: () => void;
   followRedirects?: boolean;
@@ -136,7 +131,6 @@ export function RequestPanel({
   bodyType,
   authType,
   authToken,
-  assertions,
   runnerAssertions,
   preRequestScript,
   postResponseScript,
@@ -148,11 +142,9 @@ export function RequestPanel({
   onBodyChange,
   onBodyTypeChange,
   onAuthChange,
-  onAssertionsChange,
   onRunnerAssertionsChange,
   onPreRequestScriptChange,
   onPostResponseScriptChange,
-  onRunTests,
   onSend,
   onCancel,
   followRedirects,
@@ -452,35 +444,6 @@ export function RequestPanel({
             onAuthChange={onAuthChange}
             environmentVariableNames={environmentVariableNames}
           />
-
-          {/* Tests */}
-          <AccordionItem value="tests" className="border border-border rounded-lg px-4">
-            <AccordionTrigger className="section-trigger">
-              <span className="flex items-center gap-2">
-                <FlaskConical className="size-3.5" />
-                {t("request.tests")}
-                {(assertions?.length ?? 0) > 0 && (
-                  <span className="text-xs font-mono text-muted-foreground">
-                    {assertions?.filter((a) => a.enabled).length ?? 0}/{assertions?.length ?? 0}
-                  </span>
-                )}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <TestAssertionPanel
-                assertions={assertions ?? []}
-                onChange={
-                  onAssertionsChange ??
-                  ((_assertions: RequestTestAssertion[]) => {
-                    console.warn(
-                      "[RequestPanel] onAssertionsChange not provided — assertion changes ignored",
-                    );
-                  })
-                }
-                onRunTests={onRunTests}
-              />
-            </AccordionContent>
-          </AccordionItem>
 
           {/* Assertions (test-runner) */}
           <AccordionItem value="assertions-runner" className="border border-border rounded-lg px-4">

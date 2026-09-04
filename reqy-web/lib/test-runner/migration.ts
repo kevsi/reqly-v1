@@ -52,19 +52,22 @@ export function legacyToRunnerAssertion(legacy: LegacyRequestTestAssertion): Ass
 export function migrateItemAssertions<
   T extends { assertions?: LegacyRequestTestAssertion[]; runnerAssertions?: Assertion[] },
 >(item: T): T {
-  if (
-    (!item.runnerAssertions || item.runnerAssertions.length === 0) &&
-    item.assertions &&
-    item.assertions.length > 0
-  ) {
-    const converted = item.assertions
-      .map(legacyToRunnerAssertion)
-      .filter((a): a is Assertion => a !== null);
+  const legacy = item.assertions;
+  if (!legacy || legacy.length === 0) return item;
 
-    return {
-      ...item,
-      runnerAssertions: converted,
-    };
-  }
-  return item;
+  // Migration en MOVE destructif (audit 2026-09-03) : l'ancienne version
+  // copiait sans effacer — le runner fusionnait alors legacy converti +
+  // runnerAssertions, évaluant chaque assertion migrée DEUX FOIS, et les
+  // requêtes ayant les deux systèmes ne migraient jamais. Désormais : fusion
+  // (append) puis effacement du champ legacy — idempotent au prochain load
+  // (le champ est vide, rien à faire).
+  const converted = legacy
+    .map(legacyToRunnerAssertion)
+    .filter((a): a is Assertion => a !== null);
+
+  return {
+    ...item,
+    runnerAssertions: [...(item.runnerAssertions ?? []), ...converted],
+    assertions: [],
+  };
 }

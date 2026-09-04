@@ -86,7 +86,6 @@ export function useRequestExecutionCore(state: RequestTabsState) {
       bodyType: (request as RequestItem).bodyType ?? "json",
       authType: (request as RequestItem).authType ?? "none",
       authToken: (request as RequestItem).authToken ?? "",
-      assertions: (request as RequestItem).assertions ?? [],
       runnerAssertions: (request as RequestItem).runnerAssertions ?? [],
       preRequestScript: (request as RequestItem).preRequestScript ?? "",
       postResponseScript: (request as RequestItem).postResponseScript ?? "",

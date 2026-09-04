@@ -530,7 +530,6 @@ export function RequestTabsManager() {
                     bodyType={activeTab.bodyType}
                     authType={activeTab.authType}
                     authToken={activeTab.authToken}
-                    assertions={activeTab.assertions}
                     runnerAssertions={activeTab.runnerAssertions}
                     preRequestScript={activeTab.preRequestScript}
                     postResponseScript={activeTab.postResponseScript}
@@ -547,7 +546,6 @@ export function RequestTabsManager() {
                     onAuthChange={(authType, authToken) =>
                       updateTab(activeTab.id, { authType, authToken })
                     }
-                    onAssertionsChange={(assertions) => updateTab(activeTab.id, { assertions })}
                     onRunnerAssertionsChange={(runnerAssertions) =>
                       updateTab(activeTab.id, { runnerAssertions })
                     }
@@ -557,7 +555,6 @@ export function RequestTabsManager() {
                     onPostResponseScriptChange={(postResponseScript) =>
                       updateTab(activeTab.id, { postResponseScript })
                     }
-                    onRunTests={sendRequest}
                     onSend={sendRequest}
                     onCancel={cancelRequest}
                     followRedirects={activeTab.followRedirects}

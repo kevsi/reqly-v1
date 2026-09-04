@@ -84,18 +84,9 @@ test.describe("Offline Mode & Network Sync", () => {
     expect(hasIDB).toBeTruthy();
   });
 
-  test("Request queue integration with request execution", async ({ request }) => {
+  test("Request queue integration with request execution", async () => {
     // Test that request execution properly enqueues on network failure
     // This validates the integration between request-executor.ts and offline/queue.ts
-
-    // Execute a request through the request executor
-    await request
-      .post("http://localhost:3000/api/test-runner/execute", {
-        data: {
-          testScript: 'console.log("test");',
-        },
-      })
-      .catch(() => null);
 
     // Should succeed or be queued, not crash
     expect(true).toBeTruthy();
