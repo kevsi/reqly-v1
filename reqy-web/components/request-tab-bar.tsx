@@ -118,6 +118,7 @@ export function RequestTabBar({
             onClick={() => onScroll("left")}
             className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors"
             title={t("runner.tabs.scrollLeft")}
+            aria-label={t("runner.tabs.scrollLeft")}
           >
             <ChevronLeft className="size-3.5" />
           </button>
@@ -194,6 +195,7 @@ export function RequestTabBar({
                 <span
                   onDoubleClick={() => startEdit(tab)}
                   title={t("runner.tabs.renameHint")}
+            aria-label={t("runner.tabs.renameHint")}
                   className="max-w-[200px] cursor-pointer truncate text-sm font-medium"
                 >
                   {tab.name}
@@ -202,6 +204,7 @@ export function RequestTabBar({
               {!tab.isSaved && (
                 <span
                   title={t("runner.tabs.unsavedHint")}
+            aria-label={t("runner.tabs.unsavedHint")}
                   className="size-1.5 rounded-full bg-warning/80 shrink-0"
                 />
               )}
@@ -229,6 +232,7 @@ export function RequestTabBar({
             onClick={() => onScroll("right")}
             className="shrink-0 flex items-center justify-center size-6 mx-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors"
             title={t("runner.tabs.scrollRight")}
+            aria-label={t("runner.tabs.scrollRight")}
           >
             <ChevronRight className="size-3.5" />
           </button>
@@ -243,6 +247,7 @@ export function RequestTabBar({
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
             title={t("runner.tabs.collections")}
+            aria-label={t("runner.tabs.collections")}
             data-testid="tabbar-collections"
           >
             <Folder className="size-3.5" />
@@ -254,6 +259,7 @@ export function RequestTabBar({
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
             title={t("runner.tabs.duplicate")}
+            aria-label={t("runner.tabs.duplicate")}
             data-testid="tabbar-duplicate"
           >
             <Copy className="size-3.5" />
@@ -265,6 +271,7 @@ export function RequestTabBar({
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
             title={t("runner.tabs.saveShortcut")}
+            aria-label={t("runner.tabs.saveShortcut")}
             data-testid="tabbar-save"
           >
             <Save className="size-3.5" />
@@ -276,6 +283,7 @@ export function RequestTabBar({
             disabled={!hasActiveTab}
             className="size-7 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
             title={t("runner.tabs.history")}
+            aria-label={t("runner.tabs.history")}
             data-testid="tabbar-history"
           >
             <Clock className="size-3.5" />
@@ -305,6 +313,7 @@ export function RequestTabBar({
                 size="icon"
                 className="size-7 text-muted-foreground/40 hover:text-foreground transition-colors"
                 title={t("runner.tabs.allTabs")}
+            aria-label={t("runner.tabs.allTabs")}
               >
                 <List className="size-3.5" />
               </Button>
@@ -333,6 +342,7 @@ export function RequestTabBar({
             onClick={onAddTab}
             className="size-7 text-muted-foreground/50 hover:text-foreground transition-colors"
             title={t("runner.tabs.newTab")}
+            aria-label={t("runner.tabs.newTab")}
             data-testid="tabbar-add-tab"
           >
             <Plus className="size-4" />

@@ -19,6 +19,8 @@ export interface SyncWsOptions {
   onError?: (err: Error) => void;
   /** Called after a successful reconnect. */
   onReconnect?: () => void;
+  /** État de la connexion WS (audit UX 2026-09-04 : badge header). */
+  onStatus?: (status: "connecting" | "open" | "error" | "closed") => void;
 }
 
 export interface SyncWsController {
@@ -66,7 +68,7 @@ async function fetchWsTicket(
 }
 
 export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
-  const { workspaceId, syncUrl, token, onChange, onError, onReconnect } = opts;
+  const { workspaceId, syncUrl, token, onChange, onError, onReconnect, onStatus } = opts;
   let ws: WebSocket | null = null;
   let connected = false;
   let disconnected = false; // true when user explicitly calls disconnect()
@@ -145,6 +147,7 @@ export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
       hasConnected = true;
       connected = true;
       reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
+      onStatus?.("open");
       if (wasReconnect) onReconnect?.();
     };
 
@@ -167,13 +170,15 @@ export function connectSyncWs(opts: SyncWsOptions): SyncWsController {
       }
     };
 
-    socket.onclose = () => {
+        onStatus?.("closed");
+socket.onclose = () => {
       connected = false;
       clearPongTimer();
       if (!disconnected) scheduleReconnect();
     };
 
     socket.onerror = () => {
+      onStatus?.("error");
       // onerror is followed by onclose; reconnect there to avoid duplicates.
     };
   }

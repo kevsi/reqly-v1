@@ -228,30 +228,6 @@ export default function CapturePage() {
     }
   }, []);
 
-  // Web : resynchronise l'état "running" avec le serveur (l'état peut avoir
-  // changé dans un autre onglet, ou après un rechargement).
-  useEffect(() => {
-    if (isTauriAvailable()) return;
-    let cancelled = false;
-    const sync = async () => {
-      try {
-        const status = await getCaptureProxyStatus();
-        if (!cancelled && status) {
-          setRunning(status.running);
-          if (status.droppedCount != null) setDroppedCount(status.droppedCount);
-        }
-      } catch {
-        // silencieux : l'état sera retenté au prochain rafraîchissement
-      }
-    };
-    void sync();
-    const timer = window.setInterval(sync, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, []);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void refresh();
@@ -288,13 +264,30 @@ export default function CapturePage() {
     };
   }, []);
 
+  // Web : polling unique (audit UX 2026-09-04 — fusion des 2 intervalles
+  // redondants 2 s + 5 s). Rafraîchit les sessions ET resynchronise l'état
+  // "running" avec le serveur (autre onglet / rechargement).
   useEffect(() => {
     if (isTauriAvailable()) return;
-    if (!running) return;
-    const id = window.setInterval(() => {
-      void refresh();
-    }, WEB_POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await getCaptureProxyStatus();
+        if (!cancelled && status) {
+          setRunning(status.running);
+          if (status.droppedCount != null) setDroppedCount(status.droppedCount);
+        }
+      } catch {
+        // silencieux : retenté au prochain tick
+      }
+      if (!cancelled) void refresh();
+    };
+    void poll();
+    const id = window.setInterval(poll, WEB_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [running, refresh]);
 
   const startProxy = async () => {

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/command";
 import { Radio, Braces, Keyboard } from "lucide-react";
 import { useRequestStore } from "@/hooks/use-request-store";
+import { useSyncStatusStore } from "@/hooks/store/sync";
 import { useShallow } from "zustand/react/shallow";
 import { useRouter } from "next/navigation";
 import { useAiSidebar } from "@/contexts/ai-sidebar-context";
@@ -37,6 +38,28 @@ import { COMMAND_PALETTE_EVENT, SHORTCUTS_MODAL_EVENT } from "@/hooks/use-shortc
 interface ApiHeaderProps {
   /** Ouvre le drawer de navigation sur mobile. */
   onOpenMobileSidebar?: () => void;
+}
+
+
+/** Indicateur d'état de sync (audit UX 2026-09-04 : les erreurs WS
+ * n'étaient visibles que dans la console). État dérivé du store. */
+function SyncStatusBadge() {
+  const wsStatus = useSyncStatusStore((s) => s.wsStatus);
+  const { t } = useTranslation();
+  // Personnels / connecté / inactif : rien à signaler.
+  if (wsStatus === "idle" || wsStatus === "open" || wsStatus === "closed") return null;
+  const label = wsStatus === "error" ? t("sync.status.error") : t("sync.status.reconnecting");
+  const color = wsStatus === "error" ? "bg-destructive" : "bg-amber-500";
+  return (
+    <span
+      className="text-muted-foreground mr-2 hidden items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium sm:inline-flex"
+      role="status"
+      aria-live="polite"
+    >
+      <span aria-hidden="true" className={cn("size-1.5 rounded-full", color)} />
+      {label}
+    </span>
+  );
 }
 
 export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
@@ -83,6 +106,7 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
 
   return (
     <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-gradient-to-r from-background via-muted/10 to-background px-3 sm:px-4 @container">
+      <SyncStatusBadge />
       {/* Menu mobile + Logo + Workspace */}
       <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
         {onOpenMobileSidebar && (

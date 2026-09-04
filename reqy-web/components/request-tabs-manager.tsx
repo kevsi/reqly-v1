@@ -66,7 +66,6 @@ export function RequestTabsManager() {
   const tabState = useRequestTabsState();
   const updateRequestById = useRequestStore((s) => s.updateRequestById);
   const onboardingCompleted = useRequestStore((s) => s.onboardingCompleted === true);
-  const completeOnboarding = useRequestStore((s) => s.completeOnboarding);
 
   const execution = useRequestTabExecution(tabState);
 

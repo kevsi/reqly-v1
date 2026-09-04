@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
+
+
 import { toast } from "@/hooks/use-toast";
 import { convertToRunnerAssertions } from "@/lib/ai-assertion-converter";
 import type { TestAssertion } from "@/src/ai/cloud-engine/actions";
 import { generateFollowUpRequest } from "@/lib/ai-request-generator";
 import { buildAiProxyPayload } from "@/lib/ai-config";
-import { headersArrayToRecord, recordToHeaderArray } from "@/lib/request-tab-utils";
+
 import { useRequestStore } from "@/hooks/use-request-store";
-import { type HttpMethod, type RequestTab } from "@/lib/request-executor";
+import { headersArrayToRecord } from "@/lib/request-tab-utils";
+import type { RequestTab } from "@/lib/request-executor";
 import type { RequestTabsState } from "@/hooks/use-request-tabs-state";
 import type { HistoryItem } from "@/hooks/use-request-store";
 

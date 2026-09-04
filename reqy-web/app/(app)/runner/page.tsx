@@ -1687,8 +1687,12 @@ export default function RunnerPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="local">Local</SelectItem>
-                      <SelectItem value="proxy">Proxy</SelectItem>
+                      <SelectItem value="local">
+                        {t("runner.runMethod.local")}
+                      </SelectItem>
+                      <SelectItem value="proxy">
+                        {t("runner.runMethod.proxy")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1941,6 +1945,15 @@ export default function RunnerPage() {
                       );
                     })}
                   </div>
+
+                  {runType === "performance" && (
+                    <div
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-600 dark:text-amber-400"
+                      role="note"
+                    >
+                      {t("runner.performanceNote")}
+                    </div>
+                  )}
 
                   {/* Filter Tabs */}
                   <Tabs value={filterTab} onValueChange={setFilterTab} className="w-full">

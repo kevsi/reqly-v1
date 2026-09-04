@@ -559,7 +559,12 @@
     "iterationsIgnored": "Ignoré : dataset actif",
     "datasetNoMatch": "Aucune colonne du dataset ne correspond aux variables {{placeholderSyntax}} des requêtes sélectionnées.",
     "previousRuns": "Runs précédents",
-    "rerun": "Relancer"
+    "rerun": "Relancer",
+    "runMethod": {
+      "local": "Via navigateur",
+      "proxy": "Via proxy backend"
+    },
+    "performanceNote": "Mode performance : les assertions, scripts et extractions de variables sont ignorés — seules les métriques (latence, débit, erreurs) sont mesurées."
   },
   "theme": {
     "label": {
@@ -1239,6 +1244,10 @@
       "description": "Vos espaces de travail sont liés à votre compte et synchronisés sur tous vos appareils.",
       "signIn": "Se connecter",
       "createAccount": "Créer un compte"
+    },
+    "status": {
+      "error": "Sync — erreur",
+      "reconnecting": "Sync — reconnexion…"
     }
   },
   "routePanel": {

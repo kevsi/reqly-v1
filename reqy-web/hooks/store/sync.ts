@@ -25,6 +25,15 @@ import { pushChanges } from "@/lib/sync-client";
 import { connectSyncWs, type SyncWsController } from "@/lib/sync/sync-ws";
 import { syncCursors } from "./persistence";
 import { WORKSPACE_PERSONAL_ID } from "./types";
+import { create } from "zustand";
+
+/** État WS de sync exposé à l'UI (badge header, audit UX 2026-09-04). */
+export const useSyncStatusStore = create<{
+  wsStatus: "connecting" | "open" | "error" | "closed" | "idle";
+}>((set) => ({
+  wsStatus: "idle" as "connecting" | "open" | "error" | "closed" | "idle",
+  set: (v: "connecting" | "open" | "error" | "closed") => set({ wsStatus: v }),
+}));
 import { useSessionStore } from "@/lib/session-store";
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -172,6 +181,9 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       onError: (err) => {
         console.warn("[sync] WS error:", err.message);
       },
+      onStatus: (status) => {
+        useSyncStatusStore.setState({ wsStatus: status });
+      },
     });
   }
 
@@ -180,6 +192,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       syncWsController.disconnect();
       syncWsController = null;
     }
+    useSyncStatusStore.setState({ wsStatus: "closed" });
   }
 
   // ── Fetch workspaces from API ──────────────────────────────────────

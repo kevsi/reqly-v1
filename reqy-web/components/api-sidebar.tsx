@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAiSidebar } from "@/contexts/ai-sidebar-context";
 import { useSessionStore } from "@/lib/session-store";
 
 const NAV_ITEMS = [
