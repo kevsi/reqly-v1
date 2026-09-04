@@ -58,7 +58,7 @@ export function useRequestTabExecution(state: RequestTabsState) {
   const { buildTabFromRequest, executeRequestWrapper, sendSpecificRequest, cancelRequest } =
     useRequestExecutionCore(state);
 
-  const { aiEngine, handleGenerateFollowUp } =
+  const { handleGenerateFollowUp } =
     useRequestAiEngine(state, buildTabFromRequest);
 
   const { runCollectionBackground, runCollection, handleBatchRunRequest } =
@@ -479,7 +479,6 @@ export function useRequestTabExecution(state: RequestTabsState) {
   }, [t]);
 
   return {
-    aiEngine,
     collections,
     history,
     variableMappings,

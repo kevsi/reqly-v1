@@ -1,18 +1,13 @@
 /**
- * Cloud engine — action vocabulary (fusion du moteur legacy `src/ai/engine`).
+ * Cloud engine — action vocabulary.
  *
- * Public API du flux « actions » REST :
- *   - Types : AIContext, AIAction, AIResponse, CurrentRequest, LastResponse,
- *     TestAssertion, KeyValue, HTTPMethod, ...
- *   - Prompts : ACTIONS_SYSTEM_PROMPT (JSON-actions) + PROMPTS.*
- *   - parseAIResponse, isValidAIResponse
- *   - dispatchAIActions (gate allowAutoApply)
- *   - proposeAssertionCorrection (read-only, aucun dispatch mutateur)
+ * Types partagés (AIContext, CurrentRequest, TestAssertion...), prompts et
+ * helper de correction d'assertions. Le protocole JSON-actions legacy
+ * (parseAIResponse + dispatchAIActions) a été retiré : l'agent utilise le
+ * function calling natif via REQLY_TOOLS (lib/llm-tools.ts).
  */
 
 export { ACTIONS_SYSTEM_PROMPT, PROMPTS } from "./prompts";
-export { parseAIResponse, isValidAIResponse } from "./parser";
-export { dispatchAIActions } from "./dispatch";
 export type {
   KeyValue,
   CurrentRequest,

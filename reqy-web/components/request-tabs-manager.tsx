@@ -34,7 +34,7 @@ import {
   type CorrectionSuggestion,
   type IncompleteReason,
 } from "@/src/ai/cloud-engine/actions/propose-correction";
-import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions";
+import { askAIText } from "@/src/ai/ask-ai-text";
 import type { TestResult } from "@/lib/types";
 import { formatDataSize } from "@/lib/network/format";
 import { useTranslation } from "react-i18next";
@@ -115,7 +115,6 @@ export function RequestTabsManager() {
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
 
   const {
-    aiEngine,
     collections,
     history,
     variableMappings,
@@ -278,13 +277,10 @@ export function RequestTabsManager() {
   // The AI is only ever asked to *suggest* a corrected assertion. Applying it
   // requires an explicit user click ("Appliquer") — we never auto-apply, which
   // respects the existing store.aiAutoApply default-off guard. The askAI fn
-  // reuses the real engine's text completion (callAITextViaStream under the hood).
+  // is a pure text completion (the suggestion is displayed, never dispatched).
   const correctionAskAI = useCallback(
-    async (prompt: string) => {
-      const ctx = aiEngine.buildContext();
-      return aiEngine.sendMessage(prompt, ACTIONS_SYSTEM_PROMPT, ctx);
-    },
-    [aiEngine],
+    async (prompt: string) => askAIText(prompt),
+    [],
   );
 
   const handleApplyCorrection = useCallback(
@@ -625,7 +621,6 @@ export function RequestTabsManager() {
                       testResults={activeTab.testResults}
                       scriptLogs={activeTab.scriptLogs}
                       isLoading={isLoading}
-                      aiIsLoading={aiEngine.isLoading}
                       onRun={sendRequest}
                       onRetry={sendRequest}
                       onRunAndSave={sendAndSave}

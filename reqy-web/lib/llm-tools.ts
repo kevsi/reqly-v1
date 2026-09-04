@@ -931,6 +931,46 @@ async function handleCreateEnvironment(args: Record<string, unknown>): Promise<T
   };
 }
 
+async function handleDeleteEnvironment(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  if (!name) {
+    return {
+      callId: "",
+      name: "delete_environment",
+      content: "",
+      error: "Le nom de l'environnement est requis.",
+    };
+  }
+
+  const store = requestStore.getState();
+  const env = store.environments.find(
+    (e) => e.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!env) {
+    return {
+      callId: "",
+      name: "delete_environment",
+      content: "",
+      error: `Environnement "${name}" introuvable.`,
+    };
+  }
+  if (store.activeEnvironmentId === env.id) {
+    return {
+      callId: "",
+      name: "delete_environment",
+      content: "",
+      error: `L'environnement "${name}" est actif — bascule d'abord sur un autre environnement.`,
+    };
+  }
+
+  requestStore.getState().deleteEnvironment(env.id);
+  return {
+    callId: "",
+    name: "delete_environment",
+    content: `Environnement "${name}" supprimé.`,
+  };
+}
+
 async function handleUpdateEnvironmentVariable(args: Record<string, unknown>): Promise<ToolResult> {
   const envName = typeof args.environment === "string" ? args.environment.trim() : "";
   const key = typeof args.key === "string" ? args.key.trim() : "";
@@ -2419,6 +2459,16 @@ export const REQLY_TOOLS: ReqlyTool[] = [
       name: { type: "string", description: "Nom de l'environnement.", required: true },
     },
     handler: handleCreateEnvironment,
+  },
+  {
+    name: "delete_environment",
+    title: "Supprimer un environnement",
+    description:
+      "Supprime un environnement par nom. Refuse si c'est l'environnement actif. Nécessite une confirmation explicite de l'utilisateur.",
+    parameters: {
+      name: { type: "string", description: "Nom de l'environnement à supprimer.", required: true },
+    },
+    handler: handleDeleteEnvironment,
   },
   {
     name: "update_environment_variable",

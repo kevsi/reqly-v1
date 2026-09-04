@@ -52,7 +52,8 @@ essentiel), assertion clé (statut / jsonPath / temps max), et ce qu'il détecte
 Couvre : nominal, erreurs 4xx/5xx plausibles, limites de taille, idempotence
 quand c'est pertinent. Priorise les 5 tests à plus forte valeur.
 Contraintes : consultatif — tu conçois, tu n'exécutes pas ; indique quel outil
-de la suite l'assistant principal devrait utiliser (run_collection, assertions).
+de la suite l'assistant principal devrait utiliser (propose_assertion_fix,
+update_request, run_collection).
 Réponds en français, concis.`,
   },
   {

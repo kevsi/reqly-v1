@@ -101,7 +101,7 @@ import {
   type CorrectionSuggestion,
 } from "@/src/ai/cloud-engine/actions/propose-correction";
 import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions/prompts";
-import { useAIEngine } from "@/src/ai/hooks/use-ai-engine";
+import { askAIText } from "@/src/ai/ask-ai-text";
 
 type RequestTestResultWithTransportError = RequestTestResult & {
   transportError?: TauriErrorPayload | null;
@@ -650,14 +650,11 @@ export default function RunnerPage() {
     handleCancel,
   } = lifecycle;
 
-  // R16: askAI bridge — same wiring as request-tabs-manager's correctionAskAI.
-  const aiEngine = useAIEngine();
+  // R16: askAI bridge — completion texte pure (le résultat est affiché dans
+  // le panneau de correction, jamais dispatché).
   const runnerAskAI = useCallback(
-    (prompt: string) => {
-      const ctx = aiEngine.buildContext();
-      return aiEngine.sendMessage(prompt, ACTIONS_SYSTEM_PROMPT, ctx);
-    },
-    [aiEngine],
+    (prompt: string) => askAIText(prompt),
+    [],
   );
 
   // R16: apply a suggested correction back onto the collection request.

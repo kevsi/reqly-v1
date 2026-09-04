@@ -1,19 +1,12 @@
 /**
  * Reqly AI module — public barrel.
  *
- * Re-exports the action-vocabulary surface (prompts, parser, dispatch) now
- * hosted in `cloud-engine/actions` so both the app and the copilot tests
- * can import from a single stable path.
+ * Types partagés + prompts du cloud-engine. Le protocole JSON-actions legacy
+ * (parseAIResponse/dispatchAIActions) a été retiré — l'agent utilise le
+ * function calling natif (REQLY_TOOLS).
  */
 
-export {
-  parseAIResponse,
-  dispatchAIActions,
-  // Nom public stable : le JSON-actions (cloud-engine/actions) garde le nom
-  // historique SYSTEM_PROMPT, distinct du persona ReqlyAI interne.
-  ACTIONS_SYSTEM_PROMPT as SYSTEM_PROMPT,
-  PROMPTS,
-} from "@/src/ai/cloud-engine/actions";
+export { ACTIONS_SYSTEM_PROMPT, PROMPTS } from "@/src/ai/cloud-engine/actions";
 
 export type {
   AIProvider,

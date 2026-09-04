@@ -18,7 +18,7 @@ interface UseRunnerDatasetArgs {
 }
 
 export function useRunnerDataset({ orderedRequests, selectedRequestIds, t }: UseRunnerDatasetArgs) {
-  const [datasetText, setDatasetText] = useState("");
+  const [, setDatasetText] = useState("");
   const [datasetRows, setDatasetRows] = useState<Record<string, string>[]>([]);
   const [datasetError, setDatasetError] = useState<string | null>(null);
   const [datasetFileName, setDatasetFileName] = useState<string | null>(null);

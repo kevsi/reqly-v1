@@ -17,27 +17,23 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAIEngine } from "@/src/ai/hooks/use-ai-engine";
+import { askAIText } from "@/src/ai/ask-ai-text";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { toast } from "@/hooks/use-toast";
 import { generateRequestFromNL, type SavableRequestItem } from "@/lib/simple-mode/nl-to-request";
-import { ACTIONS_SYSTEM_PROMPT } from "@/src/ai/cloud-engine/actions";
 
 const DRAFTS_NAME = "Drafts";
 
 /**
  * "Mode simple" — a natural-language guided request builder for non-developers.
  *
- * Reuses the EXISTING AI engine: the "Générer" action calls the engine's text
- * completion (`useAIEngine().sendMessage`, which routes through
- * `callAITextViaStream` with the configured provider) via
- * `generateRequestFromNL`. The produced args are mapped into a `RequestItem`
- * and, on "Crérer la requête", persisted via the app's existing
+ * The "Générer" action runs a text completion (`askAIText`, cloud-engine)
+ * via `generateRequestFromNL`. The produced args are mapped into a
+ * `RequestItem` and, on "Crérer la requête", persisted via the app's
  * `addRequestToCollection` path (into the Drafts collection).
  */
 export function SimpleRequestBuilder() {
   const { t } = useTranslation();
-  const { sendMessage, buildContext } = useAIEngine();
   const collections = useRequestStore((s) => s.collections);
   const addRequestToCollection = useRequestStore((s) => s.addRequestToCollection);
   const addCollection = useRequestStore((s) => s.addCollection);
@@ -57,7 +53,7 @@ export function SimpleRequestBuilder() {
     setError(null);
     setPreview(null);
     try {
-      const askAI = (prompt: string) => sendMessage(prompt, ACTIONS_SYSTEM_PROMPT, buildContext());
+      const askAI = (prompt: string) => askAIText(prompt);
       const req = await generateRequestFromNL(text, askAI);
       setPreview(req);
     } catch (e) {
@@ -65,7 +61,7 @@ export function SimpleRequestBuilder() {
     } finally {
       setLoading(false);
     }
-  }, [description, sendMessage, buildContext, t]);
+  }, [description, t]);
 
   const handleCreate = useCallback(() => {
     if (!preview) return;

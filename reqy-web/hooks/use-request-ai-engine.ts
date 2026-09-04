@@ -2,12 +2,8 @@
 
 import { useCallback, useMemo } from "react";
 import { toast } from "@/hooks/use-toast";
-import {
-  convertToRequestTestAssertions,
-  convertToRunnerAssertions,
-} from "@/lib/ai-assertion-converter";
+import { convertToRunnerAssertions } from "@/lib/ai-assertion-converter";
 import type { TestAssertion } from "@/src/ai/cloud-engine/actions";
-import { useAIEngine, type AIEngineHandlers } from "@/src/ai/hooks/use-ai-engine";
 import { generateFollowUpRequest } from "@/lib/ai-request-generator";
 import { buildAiProxyPayload } from "@/lib/ai-config";
 import { headersArrayToRecord, recordToHeaderArray } from "@/lib/request-tab-utils";
@@ -51,72 +47,6 @@ export function useRequestAiEngine(
     }
   }, [activeTab, setCurrentRequest, setLastResponse]);
 
-  const aiTabHandlers = useMemo<AIEngineHandlers>(
-    () => ({
-      setRequest: (patch) => {
-        if (!activeTab) return;
-        const tabPatch: Partial<RequestTab> = {};
-        if (patch.method) tabPatch.method = patch.method as HttpMethod;
-        if (patch.url) {
-          tabPatch.url = patch.url;
-          tabPatch.endpoint = patch.url.replace(/^https?:\/\/[^/]+/, "") || "/";
-        }
-        if (patch.headers) tabPatch.headers = recordToHeaderArray(patch.headers);
-        if (patch.params) {
-          tabPatch.queryParams = Object.entries(patch.params).map(([key, value]) => ({
-            key,
-            value: String(value),
-          }));
-        }
-        if (patch.body !== undefined) {
-          tabPatch.body =
-            typeof patch.body === "string" ? patch.body : JSON.stringify(patch.body, null, 2);
-          tabPatch.bodyType = "json";
-        }
-        updateTab(activeTab.id, tabPatch);
-        syncActiveTabToAiStore();
-      },
-      addAssertions: (aiAssertions: TestAssertion[]) => {
-        if (aiAssertions.length === 0) return;
-        const incomingTests = convertToRequestTestAssertions(aiAssertions);
-        const incomingRunner = convertToRunnerAssertions(aiAssertions);
-        setTabs((prev) =>
-          prev.map((t) =>
-            t.id === activeTabId
-              ? {
-                  ...t,
-                  assertions: [...(t.assertions ?? []), ...incomingTests],
-                  runnerAssertions: [...(t.runnerAssertions ?? []), ...incomingRunner],
-                }
-              : t,
-          ),
-        );
-        toast({
-          title: `${incomingTests.length} assertion${incomingTests.length > 1 ? "s" : ""} ajoutée${incomingTests.length > 1 ? "s" : ""}`,
-          description: "Consulte les onglets Tests et Assertions dans le panneau requête.",
-        });
-      },
-      applyFix: (patch) => {
-        if (!activeTab) return;
-        const tabPatch: Partial<RequestTab> = {};
-        if (patch.method) tabPatch.method = patch.method as HttpMethod;
-        if (patch.url) {
-          tabPatch.url = patch.url;
-          tabPatch.endpoint = patch.url.replace(/^https?:\/\/[^/]+/, "") || "/";
-        }
-        if (patch.headers) tabPatch.headers = recordToHeaderArray(patch.headers);
-        if (patch.body !== undefined) {
-          tabPatch.body =
-            typeof patch.body === "string" ? patch.body : JSON.stringify(patch.body, null, 2);
-        }
-        updateTab(activeTab.id, tabPatch);
-        syncActiveTabToAiStore();
-      },
-    }),
-    [activeTab, activeTabId, setTabs, updateTab, syncActiveTabToAiStore],
-  );
-
-  const aiEngine = useAIEngine(aiTabHandlers);
 
   const handleGenerateFollowUp = useCallback(
     async (item: HistoryItem) => {
@@ -135,9 +65,6 @@ export function useRequestAiEngine(
       try {
         const generated = await generateFollowUpRequest(item, payload);
         const aiAssertions = (generated.assertions ?? []) as TestAssertion[];
-        const incomingTests = aiAssertions.length
-          ? convertToRequestTestAssertions(aiAssertions)
-          : undefined;
         const incomingRunner = aiAssertions.length
           ? convertToRunnerAssertions(aiAssertions)
           : undefined;
@@ -151,7 +78,6 @@ export function useRequestAiEngine(
             headers: generated.headers,
             body: generated.body,
             queryParams: generated.queryParams,
-            ...(incomingTests ? { assertions: incomingTests } : {}),
             ...(incomingRunner ? { runnerAssertions: incomingRunner } : {}),
             ...(generated.preRequestScript ? { preRequestScript: generated.preRequestScript } : {}),
             ...(generated.postResponseScript
@@ -185,7 +111,6 @@ export function useRequestAiEngine(
 
    return {
      syncActiveTabToAiStore,
-     aiEngine,
      handleGenerateFollowUp,
    };
 }

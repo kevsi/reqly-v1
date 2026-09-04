@@ -57,7 +57,6 @@ export interface RequestTab {
   responseCookies?: TauriCookie[];
   responseTimings?: ResponseTimings;
   transportError?: TauriErrorPayload | null;
-  assertions?: RequestTestAssertion[];
   runnerAssertions?: Assertion[];
   preRequestScript?: string;
   postResponseScript?: string;
@@ -648,15 +647,9 @@ export const executeRequest = async (
   };
 
   let testResults: TestResult[] | undefined;
-  const runnerAssertions = context.tab.runnerAssertions ?? [];
-  const legacyAssertions = (context.tab.assertions ?? []) as import("@/lib/types").RequestTestAssertion[];
-  // Merge legacy (Tests) + runner (Assertions) pour l'affichage "Send" solo.
-  // Les Tests legacy sont convertis via legacyToRunnerAssertion afin de réutiliser le moteur unique.
-  const { legacyToRunnerAssertion } = await import("@/lib/test-runner/migration");
-  const convertedLegacy = legacyAssertions
-    .map((a) => legacyToRunnerAssertion(a as unknown as import("@/lib/test-runner/migration").LegacyRequestTestAssertion))
-    .filter((a): a is import("@/lib/test-runner/types").Assertion => a !== null);
-  const allAssertions = [...convertedLegacy, ...runnerAssertions] as import("@/lib/test-runner/types").Assertion[];
+  // Assertions runner uniquement (l'onglet "Tests" legacy a été retiré :
+  // audit 2026-09-03, migration en move destructif au chargement du store).
+  const allAssertions = (context.tab.runnerAssertions ?? []) as import("@/lib/test-runner/types").Assertion[];
   if (allAssertions.length > 0) {
     let parsedBody: unknown = responseBody ?? "";
     if (typeof responseBody === "string") {
