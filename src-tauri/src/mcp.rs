@@ -127,9 +127,7 @@ pub fn start_mcp_server(
         .arg("--port")
         .arg(server_port.to_string())
         .arg("--timeout")
-        .arg("30000")
-        .arg("--token")
-        .arg(&mcp_token);
+        .arg("30000");
 
     if cfg.allow_local_hosts {
         log::warn!(
@@ -158,10 +156,24 @@ pub fn start_mcp_server(
     // on a full pipe.
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::piped());
+    cmd.stdin(std::process::Stdio::piped());
 
     let mut child = cmd
         .spawn()
         .map_err(|e| AppError::Internal(format!("Failed to start MCP server: {}", e)))?;
+
+    // SECURITY (audit 2026-09-04) : le token part par STDIN, pas en argv —
+    // un token en ligne de commande est lisible par tout processus local via
+    // la liste des process. Le sidecar recli le lit sur stdin (timeout 5 s).
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write as _;
+        stdin
+            .write_all(mcp_token.as_bytes())
+            .map_err(|e| AppError::Internal(format!("Failed to send MCP token: {e}")))?;
+        // stdin droppé sans EOF immédiat : le sidecar a déjà lu sa ligne et
+        // continue de tourner ; le canal reste ouvert pour lui.
+        drop(stdin);
+    }
 
     // Drain stderr in a background thread so the long-lived child never blocks on a
     // full pipe, and so we can report the reason if startup fails.
@@ -388,6 +400,7 @@ mod tests {
     #[test]
     fn test_mcp_server_status_default_running_false() {
         let status = McpServerStatus {
+            token: None,
             running: false,
             port: None,
             pid: None,
@@ -400,6 +413,7 @@ mod tests {
     #[test]
     fn test_mcp_server_status_serialization() {
         let status = McpServerStatus {
+            token: None,
             running: true,
             port: Some(3311),
             pid: Some(12345),
@@ -454,6 +468,7 @@ mod tests {
     #[test]
     fn test_mcp_server_status_roundtrip() {
         let original = McpServerStatus {
+            token: None,
             running: true,
             port: Some(3311),
             pid: Some(12345),

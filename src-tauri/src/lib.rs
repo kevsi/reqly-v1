@@ -138,7 +138,6 @@ pub fn run() {
             git::commands::git_fetch,
             git::commands::git_pull,
             git::commands::git_clone,
-            git::commands::git_sync_collections,
             git::commands::git_write_collection_file,
             git::commands::git_ls_remote,
             git::commands::git_stash_save,
@@ -176,7 +175,6 @@ pub fn run() {
             // to a temp dir if it cannot be resolved).
             if let Ok(app_data_dir) = app.path().app_data_dir() {
                 crate::store::init_queue_store(app_data_dir.clone());
-                crate::store::init_session_encryption_key();
                 crate::capture::init_capture_store(app_data_dir.clone());
                 app.state::<git::commands::GitRepoState>()
                     .set_workspace_dir(app_data_dir)

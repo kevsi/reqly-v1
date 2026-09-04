@@ -1202,66 +1202,6 @@ pub async fn git_write_collection_file(
 }
 
 #[tauri::command]
-pub async fn git_sync_collections(
-    collections_json: String,
-    repo_dir: String,
-    _state: State<'_, GitRepoState>,
-) -> Result<(), AppError> {
-    let repo_path = PathBuf::from(&repo_dir);
-
-    if is_system_directory(&repo_path) {
-        return Err(AppError::InvalidInput(format!(
-            "Path '{}' is in a system directory and cannot be used for a git repository.",
-            repo_dir
-        )));
-    }
-
-    if !is_valid_git_repo(&repo_path) {
-        return Err(AppError::InvalidInput(format!(
-            "Path '{}' is not a valid git repository.",
-            repo_dir
-        )));
-    }
-
-    // Écrire les collections sur le filesystem
-    let collections_dir = PathBuf::from(&repo_dir).join("collections");
-    std::fs::create_dir_all(&collections_dir)
-        .map_err(|e| AppError::Internal(format!("Failed to create dir: {e}")))?;
-
-    // Supprimer les anciens fichiers
-    if let Ok(entries) = std::fs::read_dir(&collections_dir) {
-        for entry in entries.flatten() {
-            if entry
-                .path()
-                .extension()
-                .map(|e| e == "json")
-                .unwrap_or(false)
-            {
-                std::fs::remove_file(entry.path()).ok();
-            }
-        }
-    }
-
-    // Écrire chaque collection comme fichier JSON
-    let collections: Vec<serde_json::Value> = serde_json::from_str(&collections_json)
-        .map_err(|e| AppError::InvalidInput(format!("Invalid collections JSON: {e}")))?;
-
-    for col in &collections {
-        let name = col["name"].as_str().unwrap_or("unnamed");
-        let id = col["id"].as_str().unwrap_or("unknown");
-        let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
-        let safe_id = id.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
-        let filepath = collections_dir.join(format!("{}_{}.json", safe_name, safe_id));
-        let content =
-            serde_json::to_string_pretty(col).map_err(|e| AppError::Internal(e.to_string()))?;
-        std::fs::write(&filepath, content)
-            .map_err(|e| AppError::Internal(format!("Failed to write {filepath:?}: {e}")))?;
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn git_stash_save(
     message: Option<String>,
     state: State<'_, GitRepoState>,

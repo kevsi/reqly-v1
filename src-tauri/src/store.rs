@@ -255,23 +255,39 @@ pub fn mark_sent(id: String) -> Result<(), AppError> {
 // encrypted values become unreadable.  In that case the frontend
 // simply stores new values in plaintext (transparent fallback) until
 // the user re-saves their credentials.
-static SESSION_ENCRYPTION_KEY: OnceLock<String> = OnceLock::new();
+/// OS keychain service/entry identifiers for the secure-storage passphrase.
+const KEYCHAIN_SERVICE: &str = "reqly";
+const KEYCHAIN_ENTRY: &str = "secure-storage-passphrase";
 
-/// Initialise the session encryption passphrase.  Call from Tauri
-/// `setup` before any command runs.
-pub fn init_session_encryption_key() {
-    let _ = SESSION_ENCRYPTION_KEY.set(uuid::Uuid::new_v4().to_string());
-}
+/// Return the secure-storage passphrase, persisting it in the OS keychain
+/// (audit 2026-09-04, remplace la passphrase UUID éphémère : les secrets
+/// chiffrés survivent désormais au redémarrage). First call generates a
+/// UUIDv4 and stores it; subsequent calls (and future app launches) read it
+/// back. Falls back to an in-memory passphrase only if the OS keychain is
+/// unavailable (Linux without a secret service, CI) — same trade-off as
+/// before in that degraded case.
+static KEYCHAIN_CACHE: OnceLock<String> = OnceLock::new();
 
-/// Return the session passphrase to the renderer so it can encrypt
-/// values stored in IndexedDB.  The passphrase is held only in Rust
-/// process memory and is never written to disk.
 #[tauri::command]
 pub fn get_encryption_passphrase() -> Result<String, AppError> {
-    SESSION_ENCRYPTION_KEY
-        .get()
-        .cloned()
-        .ok_or_else(|| AppError::Internal("Session encryption key not initialised".into()))
+    if let Some(cached) = KEYCHAIN_CACHE.get() {
+        return Ok(cached.clone());
+    }
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ENTRY)
+        .map_err(|e| AppError::Internal(format!("keychain unavailable: {e}")))?;
+    let pass = match entry.get_password() {
+        Ok(p) => p,
+        Err(keyring::Error::NoEntry) => {
+            let p = uuid::Uuid::new_v4().to_string();
+            entry
+                .set_password(&p)
+                .map_err(|e| AppError::Internal(format!("keychain write failed: {e}")))?;
+            p
+        }
+        Err(e) => return Err(AppError::Internal(format!("keychain read failed: {e}"))),
+    };
+    let _ = KEYCHAIN_CACHE.set(pass.clone());
+    Ok(pass)
 }
 
 #[cfg(test)]
@@ -377,7 +393,6 @@ mod tests {
 
     #[test]
     fn smoke_session_encryption_command_is_available_after_initialisation() {
-        init_session_encryption_key();
         let first = get_encryption_passphrase().expect("session key must be available");
         let second = get_encryption_passphrase().expect("session key must remain available");
 

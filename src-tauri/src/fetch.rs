@@ -381,10 +381,28 @@ pub async fn fetch_proxy(
         })
         .unwrap_or_default();
 
+    // SECURITY (audit 2026-09-04, S4) : plafond de mémoire — une réponse
+    // géante bufferisée = OOM du process desktop. Cap 32 Mo (aligné sur le
+    // proxy web), vérifié sur Content-Length et en re-vérification après
+    // lecture (le header peut mentir).
+    const MAX_RESPONSE_BYTES: u64 = 32 * 1024 * 1024;
+    if let Some(len) = response.content_length() {
+        if len > MAX_RESPONSE_BYTES {
+            return Err(AppError::InvalidInput(format!(
+                "Response too large: {len} bytes (max {MAX_RESPONSE_BYTES})"
+            )));
+        }
+    }
+
     let transfer_start = Instant::now();
     let (body_str, encoding, response_bytes) = if is_binary_content_type(&content_type) {
         let bytes = response.bytes().await.map_err(AppError::from)?;
         let len = bytes.len() as u64;
+        if len > MAX_RESPONSE_BYTES {
+            return Err(AppError::InvalidInput(format!(
+                "Response too large: {len} bytes (max {MAX_RESPONSE_BYTES})"
+            )));
+        }
         (
             general_purpose::STANDARD.encode(&bytes),
             "base64".to_string(),
@@ -393,6 +411,11 @@ pub async fn fetch_proxy(
     } else {
         let text = response.text().await.map_err(AppError::from)?;
         let len = text.len() as u64;
+        if len > MAX_RESPONSE_BYTES {
+            return Err(AppError::InvalidInput(format!(
+                "Response too large: {len} bytes (max {MAX_RESPONSE_BYTES})"
+            )));
+        }
         // HTML entity decoding is only meaningful for HTML documents. Applying
         // it to JSON/XML/text corrupts legitimate data (e.g. `&#123;` inside a
         // JSON string becomes `{`).

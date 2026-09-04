@@ -69,6 +69,14 @@ export function registerServe(program: Command): void {
           process.exit(1);
         }
 
+        // SECURITY (audit 2026-09-04): en mode sidecar Tauri (pas de TTY), le
+        // token arrive par STDIN — un token en argv est lisible par tout
+        // processus local via la liste des process.
+        let authToken = opts.token;
+        if (!authToken && !process.stdin.isTTY) {
+          authToken = await readStdinToken();
+        }
+
         await startMcpServer({
           bundle,
           bundlePath,
@@ -78,7 +86,7 @@ export function registerServe(program: Command): void {
           allowLocalHosts,
           maxResponseSize,
           corsOrigins,
-          authToken: opts.token,
+          authToken,
           tlsCert,
           tlsKey,
           tlsCa,
@@ -90,4 +98,25 @@ export function registerServe(program: Command): void {
         process.exit(1);
       }
     });
+}
+
+/** Lit un token sur stdin (une ligne, jusqu'a EOF) — mode sidecar Tauri. */
+async function readStdinToken(): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    let data = "";
+    const timer = setTimeout(() => resolve(undefined), 5000);
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk: string) => {
+      data += chunk;
+      if (data.includes("\n")) {
+        clearTimeout(timer);
+        const firstLine = data.split("\n")[0].trim();
+        resolve(firstLine || undefined);
+      }
+    });
+    process.stdin.on("end", () => {
+      clearTimeout(timer);
+      resolve(data.trim() || undefined);
+    });
+  });
 }
