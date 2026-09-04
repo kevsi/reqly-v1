@@ -9,6 +9,7 @@ import {
   Clock,
   Columns2,
   Copy,
+  Info,
   Folder,
   List,
   Pencil,
@@ -58,6 +59,8 @@ export interface RequestTabBarProps {
   layout?: "horizontal" | "vertical";
   effectiveDirection?: "horizontal" | "vertical";
   onToggleLayout?: () => void;
+  overviewActive?: boolean;
+  onToggleOverview?: () => void;
 }
 
 export function RequestTabBar({
@@ -86,6 +89,8 @@ export function RequestTabBar({
   onRenameTab,
   layout = "horizontal",
   onToggleLayout,
+  overviewActive,
+  onToggleOverview,
 }: RequestTabBarProps) {
   const { t } = useTranslation();
   const hasActiveTab = tabs.some((t) => t.id === activeTabId);
@@ -336,6 +341,23 @@ export function RequestTabBar({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleOverview}
+            className={cn(
+              "size-7 transition-colors",
+              overviewActive
+                ? "bg-primary/10 text-foreground"
+                : "text-muted-foreground/50 hover:text-foreground",
+            )}
+            title={t("overview.title")}
+            aria-label={t("overview.title")}
+            aria-pressed={overviewActive}
+            data-testid="tabbar-overview"
+          >
+            <Info className="size-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

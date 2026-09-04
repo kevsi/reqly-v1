@@ -1,6 +1,7 @@
 "use client";
 
 import { RequestPanel } from "@/components/request-panel";
+import { RequestOverview } from "@/components/request-overview";
 import { ResponsePanel } from "@/components/response-panel";
 import { CollectionsModal } from "@/components/collections-modal";
 import { HistoryPanel } from "@/components/history-panel";
@@ -113,6 +114,8 @@ export function RequestTabsManager() {
   const isStacked = effectiveDirection === "vertical";
 
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
+  // Tab « Overview » : vue lecture-seule des métadonnées de la requête active.
+  const [overviewOpen, setOverviewOpen] = useState(false);
 
   const {
     collections,
@@ -427,6 +430,8 @@ export function RequestTabsManager() {
         <RequestTabBar
           tabs={tabs}
           activeTabId={activeTabId}
+          overviewActive={overviewOpen}
+          onToggleOverview={() => setOverviewOpen((v) => !v)}
           canScrollLeft={canScrollLeft}
           canScrollRight={canScrollRight}
           tabListRef={tabListRef}
@@ -507,6 +512,9 @@ export function RequestTabsManager() {
                     : "border-r border-border max-[916px]:border-r-0 max-[916px]:border-b",
                 )}
               >
+                {overviewOpen ? (
+                  <RequestOverview tab={activeTab} />
+                ) : (
                 <ErrorBoundary
                   fallback={
                     <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -569,6 +577,7 @@ export function RequestTabsManager() {
                     formDataKeySuggestions={formDataKeySuggestions}
                   />
                 </ErrorBoundary>
+                )}
                 {/* Payload size — real byte count of the request body */}
                 {requestByteSize > 0 && (
                   <div

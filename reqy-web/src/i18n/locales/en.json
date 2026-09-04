@@ -2629,5 +2629,17 @@
     "bulk": {
       "remove": "Remove"
     }
+  },
+  "overview": {
+    "title": "Overview",
+    "auth": "Authentication",
+    "body": "Body",
+    "queryParams": "Query params",
+    "headers": "Headers",
+    "assertions": "Active assertions",
+    "saved": "Saved in",
+    "notSaved": "Not saved",
+    "lastStatus": "Last response",
+    "none": "None"
   }
 }
