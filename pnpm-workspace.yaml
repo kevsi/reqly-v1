@@ -1,7 +1,6 @@
 packages:
   - "reqy-web"
   - "reqly-landing"
-  - "reqly-docs"
   - "recli"
   - "packages/*"
   - "sync-server"
