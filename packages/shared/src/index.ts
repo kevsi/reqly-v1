@@ -21,7 +21,6 @@ export type {
 export { parseCurlCommand, generateCurlCommand } from "./curl-parser/index.js";
 export type { ParsedCurl } from "./curl-parser/index.js";
 
-export { importOpenAPI, exportToOpenApi } from "./openapi/index.js";
 
 export {
   evaluateAssertion,
