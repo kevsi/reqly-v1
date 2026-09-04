@@ -54,6 +54,8 @@ docs/superpowers/
 # Documentation projet privée (audits, guides) — garde locale uniquement.
 docs/
 .freebuff/
+.mimosa/
+.zcode/
 
 # ── Misc temp/debug files ──────────────────────────────────────────
 test.txt
