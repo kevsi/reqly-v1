@@ -51,6 +51,8 @@ claude-chat-interface.zip
 autoresearch/
 tasks/
 docs/superpowers/
+# Documentation projet privée (audits, guides) — garde locale uniquement.
+docs/
 .freebuff/
 
 # ── Misc temp/debug files ──────────────────────────────────────────
@@ -92,4 +94,4 @@ src-tauri/resources/analyser-api/pnpm-workspace.yaml
 reqy-web/vitest-output.txt
 tmp_test.txt
 
-env/.
+env/.docs/
