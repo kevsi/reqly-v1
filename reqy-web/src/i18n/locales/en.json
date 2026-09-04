@@ -2629,13 +2629,5 @@
     "bulk": {
       "remove": "Remove"
     }
-  },
-  "onboarding": {
-    "title": "Getting started",
-    "subtitle": "{done}/{total} done — your workspace builds up as you go.",
-    "step1": "Send your first request",
-    "step2": "Add an assertion",
-    "step3": "Save into a collection",
-    "dismiss": "Skip"
   }
 }

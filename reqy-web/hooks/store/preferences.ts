@@ -6,9 +6,5 @@ export function createPreferencesMutations(commit: CommitFn) {
     commit((prev) => ({ ...prev, language }));
   };
 
-  const completeOnboarding = () => {
-    commit((prev) => ({ ...prev, onboardingCompleted: true }));
-  };
-
-  return { setLanguage, completeOnboarding };
+  return { setLanguage };
 }

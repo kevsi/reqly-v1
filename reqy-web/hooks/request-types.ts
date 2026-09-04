@@ -27,8 +27,6 @@ export type { Dataset } from "./store/types";
 import type { Language } from "@/src/i18n";
 
 export interface RequestStore {
-  /** Quick-start premier lancement vu/terminé. */
-  onboardingCompleted?: boolean;
   language: Language;
   history: HistoryItem[];
   collections: Collection[];

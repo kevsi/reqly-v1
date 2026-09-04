@@ -169,7 +169,6 @@ export async function loadFromStorage(): Promise<RequestStore> {
     const parsedLanguage = parsed.language === "en" ? "en" : "fr";
     return migrateWorkspaceIds({
       language: parsedLanguage,
-      onboardingCompleted: parsed.onboardingCompleted === true,
       history: parsed.history || [],
       collections: parsed.collections || [],
       environments: parsed.environments || defaultEnvironments,
