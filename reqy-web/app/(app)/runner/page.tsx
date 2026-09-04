@@ -61,30 +61,21 @@ import { cn } from "@/lib/utils";
 import { useRequestStore, type Collection, type RequestItem } from "@/hooks/use-request-store";
 import {
   buildIterationContexts,
-  moveItemById,
   runCollection as runCollectionEngine,
   type RunnerOptions,
 } from "@/lib/test-runner/runner";
 import {
   DndContext,
   closestCenter,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
   DragOverlay,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
-  sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { createRunnerExecutor, runRequestsConcurrent } from "@/lib/test-runner/executor";
-import { loadJsonDataset, loadCsvDataset } from "@/lib/test-runner/data-driven";
 import {
   type CollectionRunReport,
   type RequestTestResult,
@@ -104,7 +95,6 @@ import type { TFunction } from "i18next";
 import type { TauriErrorPayload } from "@/lib/tauri";
 import { toast } from "@/hooks/use-toast";
 import type { TestResult } from "@/lib/types";
-import { persistence } from "@/lib/persistence";
 import { AssertionCorrection } from "@/components/assertion-correction";
 import {
   suggestionToAssertion,
@@ -228,13 +218,6 @@ const RUNNER_KEYS = {
 
 // ── R7c: persisted run history (last 5 reports) ───────────────────────────
 
-const RUN_HISTORY_KEY = "reqly-runner-run-history";
-const RUN_HISTORY_LIMIT = 5;
-
-interface StoredRunEntry {
-  savedAt: number;
-  report: CollectionRunReport;
-}
 
 /** Same aggregation as lib/test-runner/runner.summarize (not exported there). */
 function summarizeResults(results: RequestTestResult[]) {
@@ -566,6 +549,11 @@ function SortableFolderRunnerRow({
   );
 }
 
+import { useRunnerRequests } from "./hooks/use-runner-requests";
+import { useRunnerDataset } from "./hooks/use-runner-dataset";
+import { useRunnerExtractions } from "./hooks/use-runner-extractions";
+import { useRunnerRunLifecycle } from "./hooks/use-runner-run-lifecycle";
+
 export default function RunnerPage() {
   const { t } = useTranslation();
   const {
@@ -595,58 +583,21 @@ export default function RunnerPage() {
     }
   }, [effectiveSelectedId, selectedId]);
 
-  // Feature 1: Ordered requests sequence (dnd-kit, inspiré de collections-panel)
-  const [orderedRequests, setOrderedRequests] = useState<RequestItem[]>([]);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  // Sync ordered requests when collection changes
-  useEffect(() => {
-    if (selected?.requests) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setOrderedRequests([...selected.requests]);
-    } else {
-      setOrderedRequests([]);
-    }
-  }, [selectedId, selected]);
-
-  // Selected request IDs (Checklist)
-  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (selected?.requests) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedRequestIds(new Set(selected.requests.map((r) => r.id)));
-    } else {
-      setSelectedRequestIds(new Set());
-    }
-  }, [selectedId, selected]);
-
-  // Feature 2: Folder expand/collapse state
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
-
-  const toggleFolderExpand = (folderId: string) => {
-    setExpandedFolderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      return next;
-    });
-  };
-
-  const toggleFolderRequestsSelection = (folderId: string, requestsInFolder: RequestItem[]) => {
-    const allChecked = requestsInFolder.every((r) => selectedRequestIds.has(r.id));
-    setSelectedRequestIds((prev) => {
-      const next = new Set(prev);
-      for (const r of requestsInFolder) {
-        if (allChecked) next.delete(r.id);
-        else next.add(r.id);
-      }
-      return next;
-    });
-  };
+  const {
+    orderedRequests,
+    activeDragId,
+    dndSensors,
+    selectedRequestIds,
+    setSelectedRequestIds,
+    expandedFolderIds,
+    toggleFolderExpand,
+    toggleFolderRequestsSelection,
+    handleDndStart,
+    handleDndEnd,
+    handleSelectAll,
+    handleDeselectAll,
+    handleResetSequence,
+  } = useRunnerRequests({ selectedId, selected, updateCollection });
 
   // Feature 3: Performance mode & Virtual Users
   const [runType, setRunType] = useState<"functional" | "performance">("functional");
@@ -656,112 +607,48 @@ export default function RunnerPage() {
   const [stopOnFailure, setStopOnFailure] = useState(false);
   const [delayMs, setDelayMs] = useState<number>(0);
 
-  // Feature 4: Visual Variable Extraction rules (No-code Chaining)
-  const [extractions, setExtractions] = useState<VariableExtractionRule[]>([
-    { id: "ext-1", source: "jsonPath", path: "$.token", variableName: "authToken" },
-  ]);
+  const { extractions, addExtractionRule, removeExtractionRule, updateExtractionRule } =
+    useRunnerExtractions();
 
-  const addExtractionRule = () => {
-    setExtractions((prev) => [
-      ...prev,
-      { id: `ext-${Date.now()}`, source: "jsonPath", path: "", variableName: "" },
-    ]);
-  };
+  const {
+    datasetRows,
+    datasetError,
+    datasetFileName,
+    datasetPreviewColumns,
+    datasetPreviewRows,
+    unmatchedDatasetColumns,
+    handleFileUpload,
+    handleClearDataset,
+  } = useRunnerDataset({ orderedRequests, selectedRequestIds, t });
 
-  const removeExtractionRule = (id: string) => {
-    setExtractions((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const updateExtractionRule = (id: string, patch: Partial<VariableExtractionRule>) => {
-    setExtractions((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  };
-
-  // Dataset state (R13: error / filename are read for display)
-  const [, setDatasetText] = useState("");
-  const [datasetRows, setDatasetRows] = useState<Record<string, string>[]>([]);
-  const [datasetError, setDatasetError] = useState<string | null>(null);
-  const [datasetFileName, setDatasetFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Modal & Run state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentExecutingName, setCurrentExecutingName] = useState<string | null>(null);
-  const [report, setReport] = useState<CollectionRunReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [filterTab, setFilterTab] = useState<string>("all");
-
-  // R15: completed/total counters feeding the honest "Terminée : X (n/total)" label
-  const [progressCounts, setProgressCounts] = useState<{ completed: number; total: number } | null>(
-    null,
-  );
-
-  // R7c: persisted history of the last runs (read-only reload)
-  const [runHistory, setRunHistory] = useState<StoredRunEntry[]>([]);
-  const runHistoryRef = useRef<StoredRunEntry[]>([]);
-  // True while the report view shows a reloaded historical run (read-only).
-  const [isHistoricalView, setIsHistoricalView] = useState(false);
-
-  const runAbortControllerRef = useRef<AbortController | null>(null);
-
-  // R7b: abort any in-flight run when the page unmounts
-  useEffect(
-    () => () => {
-      runAbortControllerRef.current?.abort();
-    },
-    [],
-  );
-
-  // R7a: warn before closing the tab while a run is active
-  useEffect(() => {
-    if (!isRunning) return;
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isRunning]);
-
-  // R7c: load persisted run history once the persistence layer is ready
-  useEffect(() => {
-    let cancelled = false;
-    void persistence.waitForReady().then(() => {
-      if (cancelled) return;
-      const stored = persistence.getItem<StoredRunEntry[]>(RUN_HISTORY_KEY);
-      if (Array.isArray(stored)) {
-        const entries = stored.filter((e) => e && e.report).slice(0, RUN_HISTORY_LIMIT);
-        runHistoryRef.current = entries;
-        setRunHistory(entries);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const persistRunReport = useCallback((rep: CollectionRunReport) => {
-    const entry: StoredRunEntry = { savedAt: Date.now(), report: rep };
-    const next = [entry, ...runHistoryRef.current].slice(0, RUN_HISTORY_LIMIT);
-    runHistoryRef.current = next;
-    setRunHistory(next);
-    void persistence.setItem(RUN_HISTORY_KEY, next);
-  }, []);
-
-  const loadHistoricalRun = useCallback(
-    (savedAt: string) => {
-      if (isRunning) return;
-      const entry = runHistory.find((e) => String(e.savedAt) === savedAt);
-      if (!entry) return;
-      setIsHistoricalView(true);
-      setError(null);
-      setFilterTab("all");
-      setReport(entry.report);
-      setIsModalOpen(true);
-    },
-    [isRunning, runHistory],
-  );
+  const lifecycle = useRunnerRunLifecycle();
+  const {
+    isModalOpen,
+    setIsModalOpen,
+    isRunning,
+    setIsRunning,
+    progress,
+    setProgress,
+    currentExecutingName,
+    setCurrentExecutingName,
+    report,
+    setReport,
+    error,
+    setError,
+    filterTab,
+    setFilterTab,
+    progressCounts,
+    setProgressCounts,
+    isHistoricalView,
+    setIsHistoricalView,
+    runHistory,
+    runAbortControllerRef,
+    persistRunReport,
+    loadHistoricalRun,
+    handleCancel,
+  } = lifecycle;
 
   // R16: askAI bridge — same wiring as request-tabs-manager's correctionAskAI.
   const aiEngine = useAIEngine();
@@ -800,32 +687,6 @@ export default function RunnerPage() {
   const selectedCount = selectedRequestIds.size;
   const canRun = !!selected && selectedCount > 0 && !isRunning;
 
-  // dnd-kit handlers (aligné sur collections-panel / use-request-dnd)
-  const handleDndStart = useCallback((event: DragStartEvent) => {
-    setActiveDragId(String(event.active.id));
-  }, []);
-
-  const handleDndEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      setActiveDragId(null);
-      if (!over || active.id === over.id) return;
-      const fromId = String(active.id);
-      const toId = String(over.id);
-      setOrderedRequests((prev) => {
-        const next = moveItemById(prev, fromId, toId);
-        // UX (audit 2026-09-03) : le réordonnancement était purement local —
-        // l'utilisateur croyait réorganiser sa collection, mais ni l'ordre
-        // persisté ni l'ordre de future exécution ne changeaient. On écrit
-        // l'ordre dans la collection : il survit au rechargement et sert au
-        // prochain run.
-        if (selectedId) updateCollection(selectedId, { requests: next });
-        return next;
-      });
-    },
-    [selectedId, updateCollection],
-  );
-
   const toggleRequestSelection = (id: string) => {
     setSelectedRequestIds((prev) => {
       const next = new Set(prev);
@@ -833,23 +694,6 @@ export default function RunnerPage() {
       else next.add(id);
       return next;
     });
-  };
-
-  const handleSelectAll = () => {
-    if (selected?.requests) {
-      setSelectedRequestIds(new Set(selected.requests.map((r) => r.id)));
-    }
-  };
-
-  const handleDeselectAll = () => {
-    setSelectedRequestIds(new Set());
-  };
-
-  const handleResetSequence = () => {
-    if (selected?.requests) {
-      setOrderedRequests([...selected.requests]);
-      setSelectedRequestIds(new Set(selected.requests.map((r) => r.id)));
-    }
   };
 
   const mergedEnvironment = useMemo(() => {
@@ -878,79 +722,6 @@ export default function RunnerPage() {
   }, [baseContext, datasetRows, iterationsCount]);
 
   // R13: preview of the parsed dataset (first 3 rows / first columns)
-  const datasetPreviewColumns = useMemo(
-    () => Object.keys(datasetRows[0] ?? {}).slice(0, 6),
-    [datasetRows],
-  );
-  const datasetPreviewRows = useMemo(() => datasetRows.slice(0, 3), [datasetRows]);
-
-  // R13: does any dataset column match a {{placeholder}} used by the selected requests?
-  const unmatchedDatasetColumns = useMemo(() => {
-    if (datasetRows.length === 0) return false;
-    const placeholders = new Set<string>();
-    const selectedReqs = orderedRequests.filter((r) => selectedRequestIds.has(r.id));
-    for (const req of selectedReqs) {
-      const haystack = [
-        req.url ?? "",
-        req.body ?? "",
-        Object.values(req.headers ?? {}).join(" "),
-      ].join("\n");
-      for (const m of haystack.matchAll(/\{\{(\w+)\}\}/g)) placeholders.add(m[1]);
-    }
-    if (placeholders.size === 0) return false;
-    const columns = new Set<string>();
-    for (const row of datasetRows) {
-      for (const k of Object.keys(row)) columns.add(k);
-    }
-    for (const p of placeholders) {
-      if (columns.has(p)) return false;
-    }
-    return true;
-  }, [datasetRows, orderedRequests, selectedRequestIds]);
-
-  const handleFileUpload = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      setDatasetError(null);
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const text = evt.target?.result as string;
-        setDatasetText(text);
-        setDatasetFileName(file.name);
-        try {
-          setDatasetRows(loadJsonDataset(text));
-          return;
-        } catch {
-          /* fall through */
-        }
-        try {
-          const rows = loadCsvDataset(text);
-          if (rows.length === 0) {
-            setDatasetError(t("runner.errorNoRows"));
-            return;
-          }
-          setDatasetRows(rows);
-        } catch (e) {
-          setDatasetError(e instanceof Error ? e.message : t("runner.errorParse"));
-        }
-      };
-      reader.readAsText(file);
-      e.target.value = "";
-    },
-    [t],
-  );
-
-  const handleClearDataset = useCallback(() => {
-    setDatasetText("");
-    setDatasetRows([]);
-    setDatasetError(null);
-    setDatasetFileName(null);
-  }, []);
-
-  const handleCancel = () => {
-    runAbortControllerRef.current?.abort();
-  };
 
   const handleRun = async () => {
     if (!selected) return;

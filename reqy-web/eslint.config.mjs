@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import reqlyI18nPlugin from "./eslint-plugin-reqly-i18n.mjs";
 import tseslint from "typescript-eslint";
 import reactPlugin from "eslint-plugin-react";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
@@ -12,6 +13,7 @@ export default tseslint.config(
     plugins: {
       react: reactPlugin,
       "react-hooks": reactHooksPlugin,
+      "reqly-i18n": reqlyI18nPlugin,
     },
     languageOptions: {
       globals: {
@@ -41,7 +43,10 @@ export default tseslint.config(
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
       "no-useless-escape": "warn",
-      "no-empty": "warn"
+      "no-empty": "warn",
+      // Dérive i18n (audit 2026-09-03): warn — bloque la nouvelle dérive sans
+      // forcer la migration historique d'un coup.
+      "reqly-i18n/no-hardcoded-jsx-text": "warn"
     },
   },
   {
