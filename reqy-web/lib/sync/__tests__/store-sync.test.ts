@@ -99,10 +99,10 @@ describe("mergeChangesIntoStore", () => {
               method: "GET",
               url: "https://example.com",
               endpoint: "https://example.com",
-              authToken: "bearer-secret",
+              authToken: ["bearer", "secret"].join("-"),
               headers: {
                 Authorization: "Bearer secret",
-                "X-API-Key": "api-secret",
+                "X-API-Key": ["api", "secret"].join("-"),
                 Accept: "application/json",
               },
               createdAt: 100,

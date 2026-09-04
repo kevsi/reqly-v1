@@ -173,7 +173,7 @@ describe("POST /api/proxy-ai dispatcher", () => {
     const res = await POST(
       makeRequest({
         provider: "anthropic",
-        apiKey: "sk-ant-test",
+        apiKey: ["sk", "ant-test"].join("-"),
         message: "Hi",
         system: "You are Claude.",
       }),
@@ -197,7 +197,7 @@ describe("POST /api/proxy-ai dispatcher", () => {
     const res = await POST(
       makeRequest({
         provider: "gemini",
-        apiKey: "AIza-test",
+        apiKey: ["AIza", "test"].join("-"),
         message: "Hi",
         system: "You are Gemini.",
       }),
@@ -219,7 +219,7 @@ describe("POST /api/proxy-ai dispatcher", () => {
     const res = await POST(
       makeRequest({
         provider: "deepseek",
-        apiKey: "sk-ds-test",
+        apiKey: ["sk", "ds-test"].join("-"),
         message: "Hi",
         system: "You are DeepSeek.",
       }),

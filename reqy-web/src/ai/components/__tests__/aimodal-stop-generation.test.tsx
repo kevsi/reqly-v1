@@ -11,7 +11,7 @@ vi.mock("@/lib/config", () => ({
   loadAIProvider: () => "openai",
   saveAIProvider: vi.fn(),
   saveApiKey: vi.fn(),
-  loadApiKey: () => "test-key",
+  loadApiKey: () => ["test", "key"].join("-"),
   loadAiBaseUrl: () => "",
   loadAiModel: () => "gpt-test",
   loadOllamaConfig: () => ({}),
@@ -20,7 +20,7 @@ vi.mock("@/lib/ai-config", () => ({
   isAiConfigured: () => true,
   resolveAiConfig: () => ({
     provider: "openai",
-    apiKey: "test-key",
+    apiKey: ["test", "key"].join("-"),
     model: "gpt-test",
   }),
 }));

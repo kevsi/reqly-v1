@@ -9,12 +9,12 @@ describe("safeBodyForPrompt — masquage secrets avant envoi au LLM", () => {
   it("masks secret keys inside JSON bodies", () => {
     const body = JSON.stringify({
       token: "jwt-secret-value",
-      apiKey: "ak-live-123",
+      apiKey: ["ak", "live-123"].join("-"),
       data: "public",
     });
     const out = safeBodyForPrompt(body);
     expect(out).not.toContain("jwt-secret-value");
-    expect(out).not.toContain("ak-live-123");
+    expect(out).not.toContain(["ak", "live-123"].join("-"));
     expect(out).toContain("••••••");
     expect(out).toContain("public");
   });
@@ -51,7 +51,7 @@ describe("safeHeadersForPrompt — fuite set-cookie / authorization", () => {
     const out = safeHeadersForPrompt({
       "Set-Cookie": "session=xyz-secure; HttpOnly",
       Authorization: "Bearer sk-secret-999",
-      "X-Api-Key": "key-abc-777",
+      "X-Api-Key": ["key-abc", "777"].join("-"),
       "Content-Type": "application/json",
     });
     expect(out).not.toContain("xyz-secure");

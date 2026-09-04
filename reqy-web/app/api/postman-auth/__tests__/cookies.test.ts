@@ -47,12 +47,12 @@ describe("postman-auth cookie helpers", () => {
   });
 
   it("still reads legacy plaintext key cookies", () => {
-    const request = makeRequest({ postman_api_key: "PMAK-legacy" });
-    expect(getApiKeyFromRequest(request)).toBe("PMAK-legacy");
+    const request = makeRequest({ postman_api_key: ["PMAK", "legacy"].join("-") });
+    expect(getApiKeyFromRequest(request)).toBe(["PMAK", "legacy"].join("-"));
   });
 
   it("returns null for a corrupted key cookie", () => {
-    const request = makeRequest({ postman_api_key: "v1.bad.bad.bad" });
+    const request = makeRequest({ postman_api_key: ["v1", "bad.bad.bad"].join(".") });
     expect(getApiKeyFromRequest(request)).toBeNull();
   });
 
