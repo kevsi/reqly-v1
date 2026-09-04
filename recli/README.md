@@ -9,9 +9,17 @@ into later requests, and reports the outcome in every format your pipeline wants
 It also ships a **full-screen interactive TUI** and a **Model Context Protocol (MCP)
 server** so an AI assistant can run and edit your collections.
 
+Recli est distribué via l'application desktop Reqly (sidecar Tauri) et via
+le dépôt source :
+
 ```bash
-npm install -g recli
+git clone https://github.com/kevsi/reqly-v1
+cd reqly-v1/recli && pnpm install && pnpm build
+node dist/index.js --help
 ```
+
+> Note : le nom `recli` sur npm appartient à un projet sans rapport ; ce CLI
+> n'est pas publié sur le registre npm.
 
 ---
 

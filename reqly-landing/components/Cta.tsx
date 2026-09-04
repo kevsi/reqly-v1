@@ -39,7 +39,9 @@ export function Cta() {
               <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 {/* Bouton principal avec shimmer + glow pulse */}
                 <a
-                  href="#open-source"
+                  href={LINKS.releases}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="animate-glow-pulse group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-mint-500 px-6 py-3 text-sm font-semibold text-ink-950 shadow-[0_12px_40px_-10px_rgba(16,185,129,0.8)] transition hover:bg-mint-400"
                 >
                   <span

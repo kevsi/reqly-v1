@@ -1,4 +1,5 @@
-/** Liens externes du projet — à mettre à jour si le repo ou le déploiement change. */
 export const LINKS = {
-  github: "https://github.com/kevsi/apiPlayground",
+  github: "https://github.com/kevsi/reqly-v1",
+  docs: "https://github.com/kevsi/reqly-v1/tree/main/mcp-docs",
+  releases: "https://github.com/kevsi/reqly-v1/releases",
 } as const;

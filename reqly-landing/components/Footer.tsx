@@ -95,8 +95,6 @@ export function Footer() {
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-ink-700/60 pt-6 text-xs text-zinc-600 sm:flex-row">
           <p>© {new Date().getFullYear()} Reqly. Tous droits réservés.</p>
           <p className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-mint-400" />
-            Tous les services sont opérationnels
           </p>
         </div>
       </div>

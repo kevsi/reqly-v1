@@ -1,10 +1,7 @@
 {
   "name": "recli",
   "version": "0.1.0",
-  "description": "Recli - The API testing CLI that wrecks Newman. Run, assert, chain, report.",
-  "bin": {
-    "recli": "./dist/index.js"
-  },
+  "description": "Recli \u2014 API testing CLI for Reqly (headless/CI, TUI, MCP server). Distributed via the Reqly desktop app sidecar.",
   "type": "module",
   "main": "./dist/index.js",
   "files": [
@@ -15,13 +12,10 @@
     "!dist/**/*.test.d.ts",
     "!dist/**/*.test.d.ts.map"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kevsi/apiPlayground.git"
+    "url": "git+https://github.com/kevsi/reqly-v1.git"
   },
   "homepage": "https://github.com/kevsi/apiPlayground/tree/main/recli",
   "keywords": [
