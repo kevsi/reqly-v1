@@ -1,5 +1,7 @@
 [
   { "method": "GET", "path": "/health", "framework": "gin", "auth": false },
   { "method": "GET", "path": "/users/:id", "framework": "gin", "auth": false, "params": ["id"] },
-  { "method": "POST", "path": "/users", "framework": "gin", "auth": true, "middleware": ["auth"] }
+  { "method": "POST", "path": "/admin/users", "framework": "gin", "auth": true, "middleware": ["jwtAuth"] },
+  { "method": "GET", "path": "/api/v1/admin/ping", "framework": "gin", "auth": true, "middleware": ["jwtAuth"] },
+  { "method": "GET", "path": "/api/v1/open/ping", "framework": "gin", "auth": true, "middleware": ["jwtAuth"] }
 ]

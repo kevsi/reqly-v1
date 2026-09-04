@@ -70,12 +70,14 @@ const spec = toOpenApi(result);
 
 - Express : `app.use("/api", router)` monté dans le même fichier que les routes.
 - FastAPI : `include_router(...)` cross-fichiers (imports, constantes `settings.X`, `APIRouter(prefix=...)`) résolu par un graphe de montage.
+- Gin/Echo : préfixes de groupes résolus en chaîne (`r.Group("/api")`, imbriqués inclus) ; auth requise uniquement si un middleware est réellement passé (`Group(path, mw)`, `.Use(...)`, ou handler intermédiaire entre le path et le handler final).
 
 ## Limites connues
 
 - Authentification détectée par heuristique de noms de symboles (`auth`, `jwt`, `guard`…) : faux positifs/négatifs possibles.
 - Préfixes de routers JS déclarés dans un autre fichier non résolus.
 - Manifestes détectés à la racine + 1 niveau.
+- Frameworks non supportés (hono, koa, fiber, chi…) : si leur usage est détecté mais qu'aucune route (ou seulement des routes `unknown`) n'est extraite, un warning le signale dans le rapport.
 
 ## Architecture
 

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyze } from "../src/orchestrator.ts";
+import { detectFrameworkHints } from "../src/framework-hints.ts";
 import { collectSourceFiles, parseGitignore, isGitignoreMatch } from "../src/scanner.ts";
 import { diffRoutes } from "../src/helpers.ts";
 import { toOpenApi } from "../src/formatters/openapi.ts";
@@ -201,4 +202,81 @@ test("toReqly is deterministic regardless of input order", () => {
   assert.deepEqual(reqly1, reqly2);
   assert.equal(reqly1.requests[0]!.url, "{{baseUrl}}/health");
   assert.equal(reqly1.requests[1]!.url, "{{baseUrl}}/users");
+});
+
+test("detectFrameworkHints recognizes unsupported server frameworks", () => {
+  assert.deepEqual(detectFrameworkHints('import { Hono } from "hono";'), ["hono"]);
+  assert.deepEqual(detectFrameworkHints("const app = new Koa();"), ["koa"]);
+  assert.deepEqual(detectFrameworkHints('import "github.com/go-chi/chi";'), ["chi"]);
+  assert.deepEqual(detectFrameworkHints('import "github.com/gofiber/fiber";'), ["fiber"]);
+  assert.deepEqual(detectFrameworkHints("from sanic import Sanic"), ["sanic"]);
+  assert.deepEqual(detectFrameworkHints("const express = require('express')"), []);
+});
+
+test("analyze warns when a server framework is unsupported and no routes are found", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "analyser-unsupported-"));
+  try {
+    await fs.writeFile(path.join(dir, "package.json"), '{"name":"hono-app"}', "utf8");
+    await fs.writeFile(
+      path.join(dir, "server.ts"),
+      'import { Hono } from "hono";\nconst app = new Hono();\napp.post("/login", (c) => c.json({}));\n',
+      "utf8",
+    );
+    const stub: Detector = {
+      name: "stub",
+      language: "javascript",
+      frameworks: [],
+      extensions: [".ts"],
+      canHandle: () => true,
+      rules: [],
+      assemble: () => [],
+    };
+    const result = await analyze({ rootPath: dir, detectors: [stub] });
+    assert.equal(result.routes.length, 0);
+    assert.ok(
+      result.warnings.some((w) => w.includes("hono") && w.includes("not extracted")),
+      `expected unsupported-framework warning, got: ${JSON.stringify(result.warnings)}`,
+    );
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("analyze warns when routes have unknown framework and an unsupported server is present", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "analyser-unknown-fw-"));
+  try {
+    await fs.writeFile(path.join(dir, "package.json"), '{"name":"x"}', "utf8");
+    await fs.writeFile(
+      path.join(dir, "server.ts"),
+      'import { Hono } from "hono";\nconst app = new Hono();\napp.post("/login", handler);\n',
+      "utf8",
+    );
+    const stub: Detector = {
+      name: "stub",
+      language: "javascript",
+      frameworks: [],
+      extensions: [".ts"],
+      canHandle: () => true,
+      rules: [{ id: "route", pattern: "$APP.$METHOD($PATH, $HANDLER)" }],
+      assemble: (matches) =>
+        matches.map((m) => ({
+          id: `x-${m.line}`,
+          method: "POST" as const,
+          path: "/login",
+          file: m.file,
+          line: m.line,
+          framework: "unknown",
+          language: "javascript",
+          auth: { required: false, confidence: "low" as const },
+        })),
+    };
+    const result = await analyze({ rootPath: dir, detectors: [stub] });
+    assert.ok(result.routes.length > 0);
+    assert.ok(
+      result.warnings.some((w) => w.includes("hono")),
+      `expected unsupported-framework warning, got: ${JSON.stringify(result.warnings)}`,
+    );
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });

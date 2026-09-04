@@ -15,6 +15,12 @@ const MCP_DEFAULT_PORT: u16 = 3311;
 pub struct McpProcessState {
     process: Option<Child>,
     port: Option<u16>,
+    /// Shared secret required on every HTTP request to the sidecar. Generated
+    /// per start, held in process memory only, surfaced to the renderer (which
+    /// displays it to the user so their MCP client can present it). Without it,
+    /// ANY local process — or any website via DNS-rebinding/CORS tricks —
+    /// could drive the sidecar's tools (fail-open auth in recli).
+    token: Option<String>,
 }
 
 pub type ManagedMcpState = Arc<Mutex<McpProcessState>>;
@@ -27,6 +33,8 @@ pub struct McpServerStatus {
     pub running: bool,
     pub port: Option<u16>,
     pub pid: Option<u32>,
+    /// Bearer token the MCP HTTP client must present. None when stopped.
+    pub token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -103,6 +111,14 @@ pub fn start_mcp_server(
         )));
     }
 
+    // SECURITY: the HTTP sidecar must never run without authentication.
+    // Generate a per-run bearer token and require it on every request —
+    // otherwise any local process (or a malicious website hitting
+    // http://127.0.0.1:<port>/mcp from the victim's browser) can invoke the
+    // sidecar's tools. The token is handed back to the renderer so the user
+    // can configure their MCP client with it.
+    let mcp_token = uuid::Uuid::new_v4().simple().to_string();
+
     let mut cmd = Command::new(node);
     cmd.arg(&script_path)
         .arg("serve")
@@ -111,7 +127,9 @@ pub fn start_mcp_server(
         .arg("--port")
         .arg(server_port.to_string())
         .arg("--timeout")
-        .arg("30000");
+        .arg("30000")
+        .arg("--token")
+        .arg(&mcp_token);
 
     if cfg.allow_local_hosts {
         log::warn!(
@@ -201,6 +219,7 @@ pub fn start_mcp_server(
     let pid = child.id();
     state.process = Some(child);
     state.port = Some(server_port);
+    state.token = Some(mcp_token.clone());
 
     let _ = app.emit(
         "mcp-status",
@@ -208,6 +227,7 @@ pub fn start_mcp_server(
             running: true,
             port: Some(server_port),
             pid: Some(pid),
+            token: Some(mcp_token),
         },
     );
 
@@ -244,6 +264,7 @@ pub fn stop_mcp_server(
             }
 
             state.port = None;
+            state.token = None;
 
             let _ = app.emit(
                 "mcp-status",
@@ -251,6 +272,7 @@ pub fn stop_mcp_server(
                     running: false,
                     port: None,
                     pid: None,
+                    token: None,
                 },
             );
 
@@ -272,6 +294,7 @@ pub fn get_mcp_server_status(
             _ => {
                 // Process exited, clean up
                 state.port = None;
+                state.token = None;
                 (false, None)
             }
         },
@@ -282,6 +305,7 @@ pub fn get_mcp_server_status(
         running,
         port: state.port,
         pid,
+        token: if running { state.token.clone() } else { None },
     })
 }
 

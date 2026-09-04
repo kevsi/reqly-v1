@@ -2,6 +2,7 @@ export * from "./types.ts";
 export * from "./helpers.ts";
 export * from "./ast-grep.ts";
 export * from "./scanner.ts";
+export * from "./framework-hints.ts";
 export * from "./orchestrator.ts";
 export * from "./formatters/json.ts";
 export * from "./formatters/markdown.ts";

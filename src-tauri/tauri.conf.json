@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost tauri: https://tauri.localhost http://localhost:* https: wss: https://reqly.duckdns.org wss://reqly.duckdns.org; img-src 'self' data: blob:; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests; report-uri /api/csp-reports ;"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost tauri: https://tauri.localhost http://localhost:* https: wss:; img-src 'self' data: blob:; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests;"
     }
   },
   "plugins": {

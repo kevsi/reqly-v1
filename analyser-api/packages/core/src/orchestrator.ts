@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { langForFile, runRules } from "./ast-grep.ts";
+import { detectFrameworkHints } from "./framework-hints.ts";
 import {
   collectSourceFiles,
   detectLanguages,
@@ -11,8 +12,7 @@ import {
 import { dedupeRoutes } from "./helpers.ts";
 import type { AnalysisResult, ApiRoute, AstGrepMatch, Detector, HttpMethod, RegexRule } from "./types.ts";
 
-function runRegexRules(src: string, rules: RegexRule[]): AstGrepMatch[] {
-  const out: AstGrepMatch[] = [];
+function runRegexRules(src: string, rules: RegexRule[]): AstGrepMatch[] {  const out: AstGrepMatch[] = [];
   for (const rule of rules) {
     for (const m of src.matchAll(rule.pattern)) {
       const line = src.slice(0, m.index).split("\n").length;
@@ -107,9 +107,10 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
     return true;
   });
 
-  const frameworks = new Set<string>();
-  const allRoutes: ApiRoute[] = [];
-  const seenRoutes = new Set<string>();
+    const frameworks = new Set<string>();
+    const allRoutes: ApiRoute[] = [];
+    const seenRoutes = new Set<string>();
+    const frameworkHints = new Set<string>();
 
   function methodFromFile(file: string): HttpMethod | undefined {
     const base = path.basename(file, path.extname(file)).toLowerCase();
@@ -157,6 +158,7 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
       options.onFile?.(file);
       try {
         const src = await fs.readFile(file, "utf8");
+        for (const h of detectFrameworkHints(src)) frameworkHints.add(h);
         let matches: AstGrepMatch[];
         try {
           matches = await runRules(langForFile(file, detector.language), src, detector.rules);
@@ -180,6 +182,16 @@ export async function analyze(options: AnalyzeOptions): Promise<AnalysisResult> 
     const routes = detector.assemble(matches, rootPath);
     for (const r of routes) frameworks.add(r.framework);
     allRoutes.push(...routes);
+  }
+
+  // A detected server framework that no detector supports means routes were
+  // silently missed — surface it instead of returning an empty/partial report.
+  if (frameworkHints.size > 0 && (allRoutes.length === 0 || frameworks.has("unknown"))) {
+    warnings.push(
+      `Detected HTTP server framework(s) with no supporting detector: ${[...frameworkHints]
+        .sort()
+        .join(", ")}. Routes from these frameworks are not extracted.`,
+    );
   }
 
   // Generic file-structure fallback: only when no manifest was found
