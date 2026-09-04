@@ -562,6 +562,20 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "generate_request_from_description",
+    description:
+      "Turn a plain-text description into a request definition (e.g. 'GET the latest posts from the blog API'). Optionally save it into a collection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        description: { type: "string", description: "Plain-text description of the request" },
+        collection_id: { type: "string", description: "Save the generated request into this collection" },
+        name: { type: "string", description: "Override the generated name" },
+      },
+      required: ["description"],
+    },
+  },
+  {
     name: "openapi_sync",
     description:
       "Fetch an OpenAPI spec from a live server URL (or use provided content), import as a collection, optionally diff against a baseline spec",

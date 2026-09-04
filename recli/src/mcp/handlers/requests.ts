@@ -469,3 +469,91 @@ export function handleDeleteFolder(
     content: [{ type: "text", text: JSON.stringify({ deleted: true, folder_id: folderId }) }],
   };
 }
+
+/**
+ * generate_request_from_description — plain-text description → request
+ * definition (documented in mcp-docs since the start; implementation landed
+ * 2026-09-04). Heuristic parser: method keyword + URL extraction + optional
+ * JSON body. No LLM required: deterministic, offline, fast.
+ */
+export function handleGenerateRequestFromDescription(
+  store: CollectionStore,
+  args: Record<string, unknown>,
+): CallToolResult {
+  const description = String(args.description ?? "").trim();
+  if (!description) {
+    return {
+      content: [{ type: "text", text: "Missing required field: description" }],
+      isError: true,
+    };
+  }
+
+  // 1) Method: first known HTTP verb word in the text (case-insensitive).
+  const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
+  const upper = description.toUpperCase();
+  const method =
+    METHODS.find((m) => upper.split(m).length > 1) ?? "GET";
+
+  // 2) URL: first http(s) token; sinon premier token non-verbe plausible.
+  const urlMatch = description.match(/https?:\/\/[^\s"']+/);
+  let url = urlMatch?.[0] ?? "";
+  if (!url) {
+    const tokens = description.split(/\s+/).filter(
+      (t) => !METHODS.some((m) => m === t.toUpperCase()) && /[./a-z]/i.test(t),
+    );
+    url = tokens[0] ?? "";
+    if (url && !/^https?:\/\//.test(url)) url = `https://${url}`;
+  }
+  if (!url) {
+    return {
+      content: [{ type: "text", text: "Could not infer a URL from the description" }],
+      isError: true,
+    };
+  }
+
+  // 3) Name: description condensée (max 48 chars, mots nets).
+  const rawName = args.name ? String(args.name) : description;
+  const name =
+    rawName.length > 48 ? `${rawName.slice(0, 45).trimEnd()}…` : rawName;
+
+  const requestItem: RequestItem = {
+    id: `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    method: method as RequestItem["method"],
+    url,
+    endpoint: url,
+    headers: {},
+    authType: "none",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  // 4) Sauvegarde optionnelle dans une collection.
+  const collectionId = args.collection_id ? String(args.collection_id) : undefined;
+  if (collectionId) {
+    const collection = store.getCollection(collectionId);
+    if (!collection) {
+      return {
+        content: [{ type: "text", text: `Collection not found: ${collectionId}` }],
+        isError: true,
+      };
+    }
+    store.addRequest(collectionId, requestItem);
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            request: requestItem,
+            saved: Boolean(collectionId),
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}

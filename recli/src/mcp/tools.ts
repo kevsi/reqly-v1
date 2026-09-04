@@ -15,6 +15,7 @@ import {
   handleGetCollectionTree,
   handleGetRequest,
   handleCreateRequest,
+  handleGenerateRequestFromDescription,
   handleUpdateRequest,
   handleDeleteRequest,
   handleDuplicateRequest,
@@ -88,6 +89,8 @@ export function createToolHandler(
         return handleGetCollectionTree(store, args);
       case "get_request":
         return handleGetRequest(store, args);
+      case "generate_request_from_description":
+        return handleGenerateRequestFromDescription(store, args);
       case "create_request":
         return handleCreateRequest(store, args);
       case "update_request":
