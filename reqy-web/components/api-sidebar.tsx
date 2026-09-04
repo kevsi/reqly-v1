@@ -16,6 +16,7 @@ import {
   Radio,
   Boxes,
   Activity,
+  Link2,
   LogIn,
 } from "lucide-react";
 import { AppIcon } from "@/components/app-icon";
@@ -66,6 +67,13 @@ const NAV_ITEMS = [
     fallback: "Espaces de travail",
   },
   { icon: Play, key: "sidebar.nav.runner", href: "/runner/", id: "runner", fallback: "Runner" },
+  {
+    icon: Link2,
+    key: "sidebar.nav.chains",
+    href: "/chains/",
+    id: "chains",
+    fallback: "Chaînes",
+  },
   {
     icon: Radio,
     key: "sidebar.nav.capture",

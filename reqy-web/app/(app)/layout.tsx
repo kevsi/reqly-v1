@@ -30,6 +30,7 @@ const ACTIVE_PAGE_MAP: Record<string, string> = {
   capture: "capture",
   git: "git",
   sse: "sse",
+  chains: "chains",
 };
 
 function getActivePage(pathname: string): string {

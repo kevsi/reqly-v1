@@ -201,11 +201,20 @@ export interface TransformInput {
 }
 
 /**
- * Exécute un transform utilisateur avec le même contrat que le moteur
- * (`{ request, body, state }` → corps de remplacement). Sans IO ; la limite
- * dure de 250 ms n'est appliquée que côté serveur (Node vm).
+ * Exécute un transform utilisateur (`{ request, body, state }` → corps de
+ * remplacement).
+ *
+ * 🔐 SECURITY (audit P1 2026-09-03) : plus de `new Function` dans la page —
+ * il exécutait le code dans l'origine de l'app avec accès complet à
+ * window/fetch/document.cookie/IndexedDB (où vivent les secrets chiffrés) et
+ * sans timeout. Même politique que le moteur canonique
+ * (lib/test-runner/scripts.ts) : l'exécution de JS fourni par l'utilisateur
+ * est désactivée dans le navigateur. Le test d'un transform doit passer par
+ * le serveur mock (recli), qui l'exécute dans son propre process.
  */
-export function runTransformLocal(code: string, input: TransformInput): unknown {
-  const fn = new Function("request", "body", "state", `"use strict";\n${code}`);
-  return fn(input.request, input.body, input.state);
+export function runTransformLocal(_code: string, _input: TransformInput): unknown {
+  throw new Error(
+    "L'exécution des transforms JS est désactivée dans le navigateur (sécurité). " +
+      "Testez le transform via le serveur mock (`recli mock start`) — il s'exécute dans un process séparé.",
+  );
 }

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
 import { getApiKeyFromRequest } from "../jina-auth/cookies";
+import { isPublicWebDeployment } from "@/lib/environment";
 
 const limiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
@@ -15,7 +16,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  const apiKey = getApiKeyFromRequest(req) ?? process.env.JINA_API_KEY ?? null;
+  // SECURITY (audit P2 2026-09-03) : sur un déploiement web public, la clé
+  // JINA serveur ne doit jamais être dépensée pour des appelants anonymes
+  // (facturation au token, route non authentifiée). Sans clé user, refus.
+  const userKey = getApiKeyFromRequest(req);
+  if (!userKey && isPublicWebDeployment()) {
+    return NextResponse.json(
+      { error: "API key required: configure your Jina key in Settings" },
+      { status: 401 },
+    );
+  }
+  const apiKey = userKey ?? process.env.JINA_API_KEY ?? null;
   if (!apiKey) {
     return NextResponse.json({ error: "Jina API key not configured" }, { status: 503 });
   }

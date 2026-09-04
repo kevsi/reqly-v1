@@ -304,7 +304,34 @@ async function handleGitProxy(request: NextRequest, method: "GET" | "POST") {
     );
     responseHeaders.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
-    const resBuffer = await upstreamRes.arrayBuffer();
+    // SECURITY (audit P2 2026-09-03) : la réponse upstream était bufferée sans
+    // limite (arrayBuffer) — un repo hostile pouvait faire exploser la mémoire
+    // du worker. Cap 32 MB, cohérent avec les tailles des autres proxys.
+    const MAX_GIT_RESPONSE_BYTES = 32 * 1024 * 1024;
+    let resBuffer: ArrayBuffer;
+    const contentLength = Number(upstreamRes.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_GIT_RESPONSE_BYTES) {
+      return NextResponse.json(
+        { error: "Réponse Git trop volumineuse (max 32 Mo)" },
+        { status: 413 },
+      );
+    }
+    if (upstreamRes.body) {
+      const { readWithCap } = await import("@/lib/security/streaming");
+      const { body, truncated } = await readWithCap(
+        upstreamRes.body.getReader(),
+        MAX_GIT_RESPONSE_BYTES,
+      );
+      if (truncated) {
+        return NextResponse.json(
+          { error: "Réponse Git trop volumineuse (max 32 Mo)" },
+          { status: 413 },
+        );
+      }
+      resBuffer = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer;
+    } else {
+      resBuffer = new ArrayBuffer(0);
+    }
 
     return new NextResponse(resBuffer, {
       status: upstreamRes.status,

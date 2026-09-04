@@ -575,6 +575,7 @@ export default function RunnerPage() {
     history,
     activeWorkspaceId,
     updateRequestById,
+    updateCollection,
   } = useRequestStore();
 
   const [selectedId, setSelectedId] = useState<string>("");
@@ -811,9 +812,18 @@ export default function RunnerPage() {
       if (!over || active.id === over.id) return;
       const fromId = String(active.id);
       const toId = String(over.id);
-      setOrderedRequests((prev) => moveItemById(prev, fromId, toId));
+      setOrderedRequests((prev) => {
+        const next = moveItemById(prev, fromId, toId);
+        // UX (audit 2026-09-03) : le réordonnancement était purement local —
+        // l'utilisateur croyait réorganiser sa collection, mais ni l'ordre
+        // persisté ni l'ordre de future exécution ne changeaient. On écrit
+        // l'ordre dans la collection : il survit au rechargement et sert au
+        // prochain run.
+        if (selectedId) updateCollection(selectedId, { requests: next });
+        return next;
+      });
     },
-    [],
+    [selectedId, updateCollection],
   );
 
   const toggleRequestSelection = (id: string) => {

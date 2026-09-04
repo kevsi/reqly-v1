@@ -30,7 +30,15 @@
     "copyFailed": "Impossible de copier le message.",
     "discard": "Abandonner",
     "edit": "Modifier",
-    "remove": "Supprimer"
+    "remove": "Supprimer",
+    "daysAgo": "il y a {{count}} j",
+    "hoursAgo": "il y a {{count}} h",
+    "justNow": "à l'instant",
+    "minsAgo": "il y a {{count}} min",
+    "older": "plus ancien",
+    "thisWeek": "cette semaine",
+    "today": "aujourd'hui",
+    "yesterday": "hier"
   },
   "settings": {
     "sidebar": {
@@ -159,7 +167,9 @@
         "remove": "Retirer",
         "footerCustom": "Ajoutez des modèles manuellement ou chargez-les depuis l'API.",
         "footerAnthropic": "Anthropic n'expose pas d'endpoint public. Utilisez la liste statique.",
-        "footerDefault": "Laissez vide pour utiliser le modèle par défaut."
+        "footerDefault": "Laissez vide pour utiliser le modèle par défaut.",
+        "showLess": "Afficher moins",
+        "showMore": "Afficher plus"
       }
     },
     "keyboard": {
@@ -376,7 +386,8 @@
       "graphql": "GraphQL",
       "git": "Git",
       "sse": "SSE",
-      "monitors": "Moniteurs"
+      "monitors": "Moniteurs",
+      "chains": "Chaînes"
     },
     "aiAssist": "Ask Monu IA",
     "ariaLabel": "Navigation principale",
@@ -636,7 +647,8 @@
       "filtersTitle": "Filtres & tri",
       "sortName": "Nom",
       "sortRecent": "Récents",
-      "sortRequests": "Requêtes"
+      "sortRequests": "Requêtes",
+      "sortManual": "Ordre manuel"
     },
     "selection": {
       "selectedCollections_one": "{{count}} collection",
@@ -654,7 +666,9 @@
       "noMatchDescription": "Essayez un autre terme ou effacez le filtre",
       "noCollectionsTitle": "Aucune collection",
       "noCollectionsDescription": "Créez une collection pour organiser vos requêtes API",
-      "createCollection": "Créer une collection"
+      "createCollection": "Créer une collection",
+      "hint": "Importez une collection ou créez votre première requête pour commencer.",
+      "tryDifferent": "Essayez un autre terme de recherche."
     },
     "deleteDialog": {
       "title": "Confirmer la suppression",
@@ -682,7 +696,9 @@
       "delete": "Supprimer",
       "dragLabel": "Faire glisser {{name}}",
       "loadAndSend": "Charger et envoyer",
-      "removeRequest": "Supprimer la requête"
+      "removeRequest": "Supprimer la requête",
+      "addRequestInFolder": "Ajouter une requête dans ce dossier",
+      "addSubfolder": "Ajouter un sous-dossier"
     },
     "folder": {
       "namePlaceholder": "Nom du dossier",
@@ -692,7 +708,8 @@
       "moveRequest": "Déplacer la requête vers…",
       "requestMoved": "Requête déplacée",
       "requestsReordered": "Requêtes réorganisées",
-      "foldersReordered": "Dossiers réorganisés"
+      "foldersReordered": "Dossiers réorganisés",
+      "empty": "Ce dossier est vide."
     },
     "toast": {
       "postmanImported": "Collection Postman importée : {{name}}",
@@ -714,7 +731,9 @@
       "openApiImportDetails_one": "{{count}} requête importée dans {{collections}} collection.",
       "openApiImportDetails_other": "{{count}} requêtes importées dans {{collections}} collections.",
       "exportCancelled": "Export annulé"
-    }
+    },
+    "exportChoiceDesc": "Choisissez les collections à exporter.",
+    "importChoiceDesc": "Choisissez les collections à importer."
   },
   "history": {
     "title": "Historique",
@@ -1212,7 +1231,8 @@
     "fileTooLarge": "ignoré : > {{max}} Ko",
     "fileBinary": "binaire non lisible",
     "generatingResponse": "Génération de la réponse…",
-    "hint": "Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne · ⌘I pour fermer"
+    "hint": "Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne · ⌘I pour fermer",
+    "generatingPlaceholder": "Génération en cours…"
   },
   "sync": {
     "banner": {
@@ -2064,7 +2084,10 @@
       "rules": "Règles du workspace",
       "rulesShort": "Règles",
       "permissions": "Permissions des outils",
-      "accessShort": "Accès"
+      "accessShort": "Accès",
+      "autoApplyOnDesc": "Auto : les actions non sensibles s'exécutent seules. Les actions sensibles (exécuter, supprimer) demandent toujours confirmation.",
+      "confirmationRequiredDesc": "Chaque action IA demande votre confirmation.",
+      "controlsHelp": "Auto = sans demande (sauf actions sensibles). Lot = un clic valide toute la file d'attente. Sinon chaque outil attend votre feu vert."
     },
     "steps": {
       "confirm": "Confirmer",
@@ -2105,7 +2128,10 @@
       "allow": "Toujours autoriser",
       "ask": "Demander",
       "deny": "Toujours refuser",
-      "default": "Défaut"
+      "default": "Défaut",
+      "allowAll": "Tout autoriser",
+      "help": "Autoriser = sans demande. Demander = bouton Confirmer. Refuser = bloqué. Les actions sensibles demandent toujours confirmation, même en Auto.",
+      "resetAll": "Tout demander"
     },
     "hooks": {
       "requestLabel": "Requête HTTP",

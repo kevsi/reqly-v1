@@ -30,7 +30,15 @@
     "copyFailed": "Failed to copy the message.",
     "discard": "Discard",
     "edit": "Edit",
-    "remove": "Remove"
+    "remove": "Remove",
+    "daysAgo": "{{count}}d ago",
+    "hoursAgo": "{{count}}h ago",
+    "justNow": "just now",
+    "minsAgo": "{{count}}m ago",
+    "older": "older",
+    "thisWeek": "this week",
+    "today": "today",
+    "yesterday": "yesterday"
   },
   "settings": {
     "sidebar": {
@@ -159,7 +167,9 @@
         "remove": "Remove",
         "footerCustom": "Add models manually or load them from the API.",
         "footerAnthropic": "Anthropic does not expose a public endpoint. Use the static list.",
-        "footerDefault": "Leave empty to use the default model."
+        "footerDefault": "Leave empty to use the default model.",
+        "showLess": "Show less",
+        "showMore": "Show more"
       }
     },
     "keyboard": {
@@ -376,7 +386,8 @@
       "graphql": "GraphQL",
       "git": "Git",
       "sse": "SSE",
-      "monitors": "Monitors"
+      "monitors": "Monitors",
+      "chains": "Chains"
     },
     "aiAssist": "Ask Monu AI",
     "ariaLabel": "Main navigation",
@@ -636,7 +647,8 @@
       "filtersTitle": "Filters & sort",
       "sortName": "Name",
       "sortRecent": "Recent",
-      "sortRequests": "Requests"
+      "sortRequests": "Requests",
+      "sortManual": "Manual order"
     },
     "selection": {
       "selectedCollections_one": "{{count}} collection",
@@ -654,7 +666,9 @@
       "noMatchDescription": "Try a different search term or clear the filter",
       "noCollectionsTitle": "No collections yet",
       "noCollectionsDescription": "Create a collection to organize your API requests",
-      "createCollection": "Create Collection"
+      "createCollection": "Create Collection",
+      "hint": "Import a collection or create your first request to get started.",
+      "tryDifferent": "Try a different search term."
     },
     "deleteDialog": {
       "title": "Confirm deletion",
@@ -682,7 +696,9 @@
       "delete": "Delete",
       "dragLabel": "Drag {{name}}",
       "loadAndSend": "Load & send",
-      "removeRequest": "Remove request"
+      "removeRequest": "Remove request",
+      "addRequestInFolder": "Add a request in this folder",
+      "addSubfolder": "Add a subfolder"
     },
     "folder": {
       "namePlaceholder": "Folder name",
@@ -692,7 +708,8 @@
       "moveRequest": "Move request to...",
       "requestMoved": "Request moved",
       "requestsReordered": "Requests reordered",
-      "foldersReordered": "Folders reordered"
+      "foldersReordered": "Folders reordered",
+      "empty": "This folder is empty."
     },
     "toast": {
       "postmanImported": "Postman collection imported: {{name}}",
@@ -714,7 +731,9 @@
       "openApiImportDetails_one": "{{count}} request imported into {{collections}} collection.",
       "openApiImportDetails_other": "{{count}} requests imported into {{collections}} collections.",
       "exportCancelled": "Export cancelled"
-    }
+    },
+    "exportChoiceDesc": "Choose which collections to export.",
+    "importChoiceDesc": "Choose which collections to import."
   },
   "history": {
     "title": "History",
@@ -1212,7 +1231,8 @@
     "fileTooLarge": "ignored: > {{max}} KB",
     "fileBinary": "unreadable binary",
     "generatingResponse": "Generating response…",
-    "hint": "Enter to send · Shift+Enter for a new line · ⌘I to close"
+    "hint": "Enter to send · Shift+Enter for a new line · ⌘I to close",
+    "generatingPlaceholder": "Generating…"
   },
   "sync": {
     "banner": {
@@ -2064,7 +2084,10 @@
       "rules": "Workspace rules",
       "rulesShort": "Rules",
       "permissions": "Tool permissions",
-      "accessShort": "Access"
+      "accessShort": "Access",
+      "autoApplyOnDesc": "Auto: non-sensitive actions run on their own. Sensitive actions (execute, delete) still require confirmation.",
+      "confirmationRequiredDesc": "Every AI action asks for your confirmation.",
+      "controlsHelp": "Auto = no prompts (except sensitive actions). Batch = one click approves the whole queue. Otherwise each tool waits for your go."
     },
     "steps": {
       "confirm": "Confirm",
@@ -2105,7 +2128,10 @@
       "allow": "Always allow",
       "ask": "Ask",
       "deny": "Always deny",
-      "default": "Default"
+      "default": "Default",
+      "allowAll": "Allow all",
+      "help": "Allow = no prompt. Ask = Confirm button. Deny = blocked. Sensitive actions always ask, even in Auto.",
+      "resetAll": "Ask for all"
     },
     "hooks": {
       "requestLabel": "HTTP request",

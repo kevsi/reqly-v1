@@ -63,11 +63,13 @@ export async function isOllamaHostAllowed(host: string): Promise<boolean> {
   const lower = host.toLowerCase().trim();
   if (!lower) return false;
 
-  // Ollama est un service local explicite : l'utilisateur choisit délibérément
-  // ce provider. localhost/127.0.0.1/::1 sont autorisés (usage normal).
-  // Les autres IP privées sont bloquées (SSRF).
-  if (lower === "localhost" || lower === "127.0.0.1" || lower === "0.0.0.0" || lower === "::1") {
-    return true;
+  // SECURITY (audit P2 2026-09-03) : localhost n'est autorisé QUE sur desktop.
+  // Sur un déploiement web public, cette route non authentifiée permettait à
+  // n'importe qui de faire sonder les ports loopback de l'instance serveur.
+  const { isPublicWebDeployment } = await import("@/lib/environment");
+  const localHosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
+  if (localHosts.includes(lower)) {
+    return !isPublicWebDeployment();
   }
 
   if (isIP(lower) && isBlockedIp(lower)) return false;

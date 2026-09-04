@@ -4,7 +4,7 @@ import { createRateLimiter } from "@/lib/rate-limiter";
 import { runCollection } from "@/lib/test-runner/runner";
 import { toJUnitXml } from "@/lib/test-runner/junit-export";
 import { loadJsonDataset, loadCsvDataset } from "@/lib/test-runner/data-driven";
-import { isPublicWebDeployment } from "@/lib/environment";
+import { isPublicWebDeployment, isOriginAllowedForDesktopCSRF } from "@/lib/environment";
 import type { Collection, RequestItem } from "@/hooks/request-types";
 
 async function proxyFetch(
@@ -83,6 +83,11 @@ export async function POST(req: NextRequest) {
       { error: "Test runner is not available on web deployment. Use the desktop application." },
       { status: 403 },
     );
+  }
+
+  // 🔐 SECURITY (audit 2026-09-03): CSRF guard desktop.
+  if (!isOriginAllowedForDesktopCSRF(req.headers.get("origin"))) {
+    return NextResponse.json({ error: "Cross-origin request rejected" }, { status: 403 });
   }
 
   const rateKey = getRateLimitKey(req);

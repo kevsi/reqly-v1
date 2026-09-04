@@ -1,15 +1,17 @@
 /**
  * POST /api/test-runner/execute
  *
- * @deprecated Ce endpoint n'est pas appelé depuis l'UI React.
- * Il est uniquement couvert par des tests e2e (tests/e2e/scripts-assertions.spec.ts,
- * tests/e2e/offline-sync.spec.ts). Conservé car le moteur canonique
+ * @deprecated Ce endpoint n'est appelé nulle part dans l'UI React. Il ne sert
+ * que d'assistant aux tests e2e (tests/e2e/scripts-assertions.spec.ts,
+ * tests/e2e/offline-sync.spec.ts). Le moteur canonique
  * `lib/test-runner/runner.ts` n'exécute pas de scripts côté serveur
- * (la route canonique `/api/test-runner/run` tourne avec `disableScripts: true`),
- * il ne peut donc pas remplacer ce contrat. Le contexte sandbox est durci pour
- * refléter la politique FORBIDDEN_GLOBALS du moteur canonique.
+ * (`disableScripts: true` sur /api/test-runner/run).
  *
- * Execute test scripts for a captured request/response
+ * 🔐 SECURITY (audit P0 2026-09-03) : désactivé par défaut. L'exécution de
+ * JS fournie par le client est une surface RCE (le sandbox node:vm d'origine
+ * était contournable par this.constructor.constructor — PoC exécuté).
+ * Réactivable UNIQUEMENT pour les runs e2e locaux via
+ * REQLY_ENABLE_TEST_SCRIPT_EXECUTION=true.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -60,11 +62,23 @@ const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 10 });
 export async function POST(request: NextRequest) {
   try {
     // 🔐 SECURITY: Block arbitrary-script execution on public web deployment.
-    // This endpoint runs client-supplied JS in a vm sandbox (CPU DoS risk).
     if (isPublicWebDeployment()) {
       return NextResponse.json(
         { error: "Test runner is not available on web deployment. Use the desktop application." },
         { status: 403 },
+      );
+    }
+
+    // 🔐 SECURITY (audit P0): cette route n'a aucun appelant produit — c'est
+    // une surface RCE potentielle. Désactivée par défaut ; uniquement les
+    // runs e2e locaux la réactivent explicitement.
+    if (process.env.REQLY_ENABLE_TEST_SCRIPT_EXECUTION !== "true") {
+      return NextResponse.json(
+        {
+          error:
+            "Test script execution is disabled. This endpoint is deprecated and has no product caller; set REQLY_ENABLE_TEST_SCRIPT_EXECUTION=true for local e2e runs only.",
+        },
+        { status: 404 },
       );
     }
 

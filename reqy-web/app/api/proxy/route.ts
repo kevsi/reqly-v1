@@ -15,7 +15,7 @@ import { readWithCap } from "@/lib/security/streaming";
 import { resolveCached } from "@/lib/security/dns-cache";
 import { captureRequest, captureResponse, recordCapturedRequest } from "@/lib/capture-middleware";
 import { requireCaptureUserId, CaptureAuthError } from "@/lib/capture-auth";
-import { isPublicWebDeployment } from "@/lib/environment";
+import { isPublicWebDeployment, isOriginAllowedForDesktopCSRF } from "@/lib/environment";
 import { getRateLimitKey as sharedRateLimitKey } from "../proxy-ai/lib/rate-limit";
 import net, { isIP } from "node:net";
 import tls from "node:tls";
@@ -196,6 +196,17 @@ function sanitizeUrlForDebug(url: URL): string {
 }
 
 export async function POST(request: NextRequest) {
+  // 🔐 SECURITY (audit 2026-09-03) : garde CSRF desktop. Sans auth en mode
+  // desktop, la frontière de confiance est l'origine : un POST cross-origin
+  // d'un site visité par l'utilisateur (text/plain = pas de preflight) ne
+  // doit jamais atteindre ce proxy. Origin absente = appel non-navigateur.
+  if (
+    !isPublicWebDeployment() &&
+    !isOriginAllowedForDesktopCSRF(request.headers.get("origin"))
+  ) {
+    return NextResponse.json({ error: "Cross-origin request rejected" }, { status: 403 });
+  }
+
   // 🔐 SECURITY: on a public web deployment this endpoint must never act as an
   // unauthenticated open proxy. Authenticate up front (mirrors the capture
   // routes) and reuse the resolved user id for capture attribution below.

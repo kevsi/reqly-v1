@@ -41,7 +41,16 @@ export function TransformTester({ code, method, path, sampleBody }: TransformTes
       });
       setOutput(typeof result === "string" ? result : JSON.stringify(result, null, 2));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Security policy (audit P1 2026-09-03): user-supplied JS transforms no
+      // longer run in the page origin (they had full access to cookies and
+      // IndexedDB). The catch renders the guidance instead of a raw stack.
+      setError(
+        err instanceof Error && err.message.includes("désactivée")
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
     } finally {
       setRunning(false);
     }

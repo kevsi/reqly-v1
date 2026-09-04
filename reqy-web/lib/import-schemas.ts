@@ -98,9 +98,20 @@ export const postmanImportResponseSchema = z.object({
 })
 
 export const githubImportBodySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().optional(),
+  // SECURITY (audit P1 2026-09-03) : owner/repo/branch étaient interpolés bruts
+  // dans les URLs api.github.com — "../../" traversait la normalisation WHATWG
+  // vers n'importe quel endpoint avec le token serveur. Cadrage strict.
+  owner: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}[A-Za-z0-9])?$/, "owner GitHub invalide"),
+  repo: z.string().min(1).max(100).regex(/^[A-Za-z0-9._-]+$/, "nom de repo GitHub invalide"),
+  branch: z
+    .string()
+    .max(255)
+    .regex(/^[A-Za-z0-9._/-]+$/, "branche GitHub invalide")
+    .optional(),
   githubToken: z.string().optional(),
 })
 

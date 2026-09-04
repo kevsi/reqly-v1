@@ -63,9 +63,20 @@ vi.mock("node:net", async (importOriginal) => {
 import { POST } from "../route";
 
 function makeRequest(payload: unknown) {
+  // Fix (audit 2026-09-03) : la route lit request.body (cap stream) AVANT le
+  // fallback json() — le mock n'exposait pas de body, tous les tests
+  // renvoyaient INVALID_JSON. On fournit un ReadableStream du payload.
+  const serialized = JSON.stringify(payload);
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(serialized));
+      controller.close();
+    },
+  });
   return {
     json: async () => payload,
     headers: new Headers(),
+    body,
   } as unknown as NextRequest;
 }
 

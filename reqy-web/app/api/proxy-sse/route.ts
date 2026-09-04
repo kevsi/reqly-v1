@@ -5,6 +5,7 @@ import { getServerEnv } from "@/lib/env";
 import { isIP } from "node:net";
 import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
 import { rateLimiter, getRateLimitKey } from "../proxy-ai/lib/rate-limit";
+import { isPublicWebDeployment, isOriginAllowedForDesktopCSRF } from "@/lib/environment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +82,14 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 async function handleSSEProxy(request: NextRequest, method: string): Promise<Response> {
+  // 🔐 SECURITY (audit 2026-09-03): CSRF guard desktop — même frontière que /api/proxy.
+  if (
+    !isPublicWebDeployment() &&
+    !isOriginAllowedForDesktopCSRF(request.headers.get("origin"))
+  ) {
+    return new Response(JSON.stringify({ error: "Cross-origin request rejected", code: "CSRF_BLOCKED" }), { status: 403, headers: { "Content-Type": "application/json" } });
+  }
+
   // ── Rate limiting (defence-in-depth against open-proxy abuse) ──────────
   const rateKey = getRateLimitKey(request);
   const { allowed, resetAt } = await rateLimiter.check(`proxy-sse:${rateKey}`);

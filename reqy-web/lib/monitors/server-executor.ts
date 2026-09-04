@@ -1,10 +1,14 @@
 import { isBlockedIp, isIP, isPrivateHost } from "@/lib/security/ssrf";
 import { resolveCached } from "@/lib/security/dns-cache";
+import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
 
 /**
  * Executor HTTP côté serveur pour les monitors cloud (route cron).
  * Reproduit la garde SSRF du proxy existant : hôte privé rejeté + vérification
- * de l'IP résolue (anti DNS-rebinding) via le cache DNS partagé.
+ * de l'IP résolue (anti DNS-rebinding) via le cache DNS partagé, et PINNING
+ * de l'IP validée dans le fetch (audit P2 2026-09-03 : sans pinning, le fetch
+ * re-résolvait le DNS à la connexion — un rebinding entre la garde et la
+ * frappe atteignait une IP privée).
  */
 export interface ServerExecuteInput {
   method: string;
@@ -61,6 +65,15 @@ export async function executeMonitorRequestServer(
   }
 
   // ── Exécution ─────────────────────────────────────────────────────────
+  // P2 fix (audit 2026-09-03) : IP validée PINNÉE dans le fetch — le DNS n'est
+  // plus re-résolu à la connexion, la fenêtre de rebinding est fermée.
+  let pinned;
+  try {
+    pinned = await createPinnedDispatcher(input.url);
+  } catch {
+    throw new MonitorRequestError("Hôte privé/interne interdit", "ssrf");
+  }
+
   const startedAt = Date.now();
   const controller = new AbortController();
   const timeoutMs = input.timeoutMs ?? 10_000;
@@ -76,6 +89,7 @@ export async function executeMonitorRequestServer(
       redirect: "manual",
       signal: controller.signal,
       cache: "no-store",
+      ...(pinned ? { dispatcher: pinned } : {}),
     });
     const bodyText = (await res.text()).slice(0, 2048);
     const headersLower: Record<string, string> = {};
@@ -98,5 +112,6 @@ export async function executeMonitorRequestServer(
     );
   } finally {
     clearTimeout(timer);
+    pinned?.close().catch(() => undefined);
   }
 }

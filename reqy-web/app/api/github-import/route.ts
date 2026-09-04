@@ -23,7 +23,6 @@ import {
 
 const MAX_FILES = 200;
 const GITHUB_API_BASE = "https://api.github.com";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const FETCH_TIMEOUT = 15000;
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 20 });
@@ -50,7 +49,12 @@ const LANGUAGE_EXTENSION_MAP_FETCH: Record<string, string[]> = {
 };
 
 function getGithubHeaders(token?: string) {
-  const authToken = token?.trim() || GITHUB_TOKEN;
+  // SECURITY (audit P1 2026-09-03) : le token d'env GITHUB_TOKEN n'est plus
+  // JAMAIS utilisé ici. Avant, `token || GITHUB_TOKEN` attachait le secret
+  // serveur à des requêtes d'appelants anonymes — n'importe qui pouvait faire
+  // lire au serveur les repos privés accessibles à ce token. Seul le token
+  // fourni explicitement par l'appelant (cookie OAuth ou champ) est utilisé.
+  const authToken = token?.trim();
   const headers: Record<string, string> = {
     Accept: "application/vnd.github.v3+json",
     "User-Agent": "api-playground",

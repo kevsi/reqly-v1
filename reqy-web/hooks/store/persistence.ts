@@ -195,6 +195,21 @@ export async function loadFromStorage(): Promise<RequestStore> {
     });
   } catch (e) {
     console.warn("Migration failed:", e);
+    // UX (audit 2026-09-03) : ce fallback réinitialisait le store SANS le dire
+    // — l'utilisateur perdait ses collections silencieusement. Avertir
+    // explicitement ; les données restent récupérables depuis le sync-server
+    // au prochain pull si le workspace est synchronisé.
+    try {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({
+        title: "Données locales illisibles",
+        description:
+          "Le stockage local était corrompu et a été réinitialisé. Si un workspace synchronisé est actif, vos collections seront restaurées à la prochaine synchronisation.",
+        variant: "destructive",
+      });
+    } catch {
+      // toast indisponible au boot très précoce — console seulement
+    }
     return await loadFallback();
   }
 }
