@@ -14,6 +14,8 @@ import sync from "./routes/sync.js";
 import hooklet from "./routes/hooklet.js";
 import hookletHooks from "./routes/hooklet-hooks.js";
 import admin from "./routes/admin.js";
+import monitors from "./routes/monitors.js";
+import { startMonitorScheduler } from "./monitors-runner.js";
 import { handleWsUpgradeFactory, SYNC_WS_AUTH_PROTOCOL } from "./routes/ws.js";
 import { closeAll } from "./ws-hub.js";
 import { parseOrigins } from "./cors.js";
@@ -121,12 +123,16 @@ app.use("/api/hooks/*", rateLimitMiddleware(hookLimiter));
 // push) — same budget as the rest of the authenticated API.
 app.use("/api/hooklet/*", rateLimitMiddleware(apiLimiter));
 
+// Server-side monitors (CRUD + runs). Execution itself is local, scheduled.
+app.use("/api/monitors/*", rateLimitMiddleware(apiLimiter));
+
 app.route("/api/workspaces", workspaces);
 app.route("/api/memberships", memberships);
 app.route("/api/auth", auth);
 app.route("/api/sync", sync);
 app.route("/api/hooklet", hooklet);
 app.route("/api/hooks", hookletHooks);
+app.route("/api/monitors", monitors);
 // Admin surface: shared-secret bearer, stricter limiter.
 app.use("/api/admin/*", rateLimitMiddleware(authLimiter));
 app.route("/api/admin", admin);
@@ -152,6 +158,9 @@ const node = serve(
   },
   (info) => {
     console.log(`[reqly-sync] listening on http://${info.address}:${info.port}`);
+    // Scheduler des monitors serveur : démarre avec l'HTTP listener,
+    // après une migration DB réussie.
+    startMonitorScheduler();
   },
 );
 

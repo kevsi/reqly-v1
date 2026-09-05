@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Clock,
+  Cloud,
   FileDown,
   History,
   Pencil,
@@ -46,12 +47,24 @@ import {
   type MonitorRunRecord,
 } from "@/lib/monitors/types";
 import { useMonitors } from "@/hooks/use-monitors";
+import { useSessionStore } from "@/lib/session-store";
+import {
+  isServerMonitorSyncAvailable,
+  pushMonitorToServer,
+  deleteMonitorFromServer,
+} from "@/lib/monitors/server-sync";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const K = {
   title: "monitors.title",
   subtitle: "monitors.subtitle",
   newMonitor: "monitors.new",
+  serverSync: "monitors.serverSync",
+  serverSyncTitle: "monitors.serverSyncTitle",
+  serverSyncOn: "monitors.serverSyncOn",
+  serverSyncOff: "monitors.serverSyncOff",
+  serverSyncNeedsAuth: "monitors.serverSyncNeedsAuth",
+  serverSyncError: "monitors.serverSyncError",
   generate: "monitors.generate",
   runNow: "monitors.runNow",
   emptyTitle: "monitors.empty.title",
@@ -158,6 +171,49 @@ export function MonitorsPage() {
   const [historyTarget, setHistoryTarget] = useState<Monitor | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Monitor | null>(null);
+  const [serverBusyId, setServerBusyId] = useState<string | null>(null);
+  const sessionToken = useSessionStore((s) => s.token);
+
+  /** Active/désactive l'exécution côté sync-server. */
+  async function toggleServerSync(monitor: Monitor, enabled: boolean) {
+    if (!enabled) {
+      if (monitor.serverId) {
+        try {
+          await deleteMonitorFromServer(monitor.serverId, sessionToken);
+        } catch {
+          // Le serveur peut être injoignable : on retire la copie locale quand même.
+        }
+      }
+      updateMonitor(monitor.id, { serverId: undefined });
+      toast({ title: t(K.serverSyncOff) });
+      return;
+    }
+
+    if (!isServerMonitorSyncAvailable() || !sessionToken) {
+      toast({ title: t(K.serverSyncNeedsAuth), variant: "destructive" });
+      return;
+    }
+    setServerBusyId(monitor.id);
+    try {
+      const info = await pushMonitorToServer(monitor, sessionToken);
+      updateMonitor(monitor.id, { serverId: info.id });
+      toast({ title: t(K.serverSyncOn) });
+    } catch (error) {
+      toast({
+        title: t(K.serverSyncError, { error: error instanceof Error ? error.message : String(error) }),
+        variant: "destructive",
+      });
+    } finally {
+      setServerBusyId(null);
+    }
+  }
+
+  /** Repousse la définition au serveur après une édition. */
+  function resyncAfterEdit(monitorId: string, data: Partial<Monitor>) {
+    const current = monitors.find((m) => m.id === monitorId);
+    if (!current?.serverId || !sessionToken) return;
+    void pushMonitorToServer({ ...current, ...data }, sessionToken).catch(() => undefined);
+  }
 
   function openCreate() {
     const firstCollection = collections[0];
@@ -243,7 +299,9 @@ export function MonitorsPage() {
               now={now}
               lastRun={historyByMonitor.get(monitor.id)?.[0]}
               nextRunAt={nextRunAt[monitor.id]}
+              serverBusy={serverBusyId === monitor.id}
               onToggle={(enabled) => updateMonitor(monitor.id, { enabled })}
+              onToggleServer={(enabled) => void toggleServerSync(monitor, enabled)}
               onRun={() => void runNow(monitor.id)}
               onEdit={() => openEdit(monitor)}
               onDelete={() => setDeleteTarget(monitor)}
@@ -263,6 +321,7 @@ export function MonitorsPage() {
               addMonitor(data);
             } else if (editor.id) {
               updateMonitor(editor.id, data);
+              resyncAfterEdit(editor.id, data);
             }
             setEditor(null);
           }}
@@ -367,7 +426,9 @@ function MonitorCard({
   now,
   lastRun,
   nextRunAt,
+  serverBusy,
   onToggle,
+  onToggleServer,
   onRun,
   onEdit,
   onDelete,
@@ -377,7 +438,9 @@ function MonitorCard({
   now: number;
   lastRun?: MonitorRunRecord;
   nextRunAt?: number;
+  serverBusy: boolean;
   onToggle: (enabled: boolean) => void;
+  onToggleServer: (enabled: boolean) => void;
   onRun: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -420,6 +483,21 @@ function MonitorCard({
         </Badge>
       )}
       <Switch checked={monitor.enabled} onCheckedChange={onToggle} aria-label={monitor.name} />
+      <div className="flex shrink-0 items-center gap-1" title={t(K.serverSyncTitle)}>
+        <Cloud
+          aria-hidden="true"
+          className={cn(
+            "size-3.5",
+            monitor.serverId ? "text-primary" : "text-muted-foreground/40",
+          )}
+        />
+        <Switch
+          checked={!!monitor.serverId}
+          disabled={serverBusy}
+          onCheckedChange={onToggleServer}
+          aria-label={t(K.serverSync)}
+        />
+      </div>
       <div className="flex shrink-0 items-center gap-0.5">
         <Button type="button" variant="ghost" size="icon" className="size-7" onClick={onRun} aria-label={t(K.runNow, { defaultValue: "Exécuter maintenant" })} title={t(K.runNow, { defaultValue: "Exécuter maintenant" })}>
           <Play aria-hidden="true" className="size-3.5" />

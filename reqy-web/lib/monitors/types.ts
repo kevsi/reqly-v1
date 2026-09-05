@@ -49,6 +49,8 @@ export interface Monitor {
   /** Webhook générique : POST JSON sur chaque transition fail/degraded/recovered. */
   webhookUrl?: string;
   requests: MonitorHttpRequest[];
+  /** Identifiant de la copie serveur (exécution côté sync-server). Absent = local uniquement. */
+  serverId?: string;
   createdAt: number;
   updatedAt: number;
 }

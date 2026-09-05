@@ -156,6 +156,37 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+
+  -- ── Monitors serveur (exécutions planifiées côté backend) ───────────────
+  -- Définition poussée par le client desktop ; exécutée par le scheduler
+  -- local du serveur. definition est un JSON string validé à l'entrée.
+  CREATE TABLE IF NOT EXISTS monitors (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    interval_sec INTEGER NOT NULL DEFAULT 300,
+    definition TEXT NOT NULL,
+    -- Prochaine exécution due (epoch ms) ; index par le scheduler.
+    next_run_at INTEGER NOT NULL,
+    -- Dernier statut évalué (pass/fail/degraded) : sert au webhook
+    -- « transition seulement » (rétabli après échec, etc.).
+    last_status TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_monitors_due ON monitors(enabled, next_run_at);
+  CREATE INDEX IF NOT EXISTS idx_monitors_user ON monitors(user_id);
+
+  CREATE TABLE IF NOT EXISTS monitor_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    monitor_id TEXT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+    status TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    checks TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_monitor_runs_monitor ON monitor_runs(monitor_id, created_at DESC);
 `);
 
 // Defensive migration: an existing DB file created before the `version`/`deleted`

@@ -2451,7 +2451,13 @@
     "addHeader": "Ajouter un header",
     "bodyContains": "Le corps contient…",
     "bodyJsonPath": "JSON-path requis",
-    "webhookHttpWarning": "Webhook en http:// : le payload transite en clair. Préfère https://"
+    "webhookHttpWarning": "Webhook en http:// : le payload transite en clair. Préfère https://",
+    "serverSync": "Exécution serveur",
+    "serverSyncTitle": "Exécuter côté serveur — continue même quand l'app est fermée",
+    "serverSyncOn": "Monitor synchronisé avec le serveur",
+    "serverSyncOff": "Exécution serveur désactivée",
+    "serverSyncNeedsAuth": "Connecte-toi (et configure le sync-server) pour activer l'exécution serveur",
+    "serverSyncError": "Synchronisation serveur impossible : {{error}}"
   },
   "mocks": {
     "behavior": {
