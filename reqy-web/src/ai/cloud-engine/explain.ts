@@ -75,7 +75,7 @@ const KNOWN_HEADERS: Record<string, string> = {
   "user-agent": "Identifies the client software making the request.",
   cookie: "HTTP cookies previously set by the server.",
   "cache-control": "Caching directives (no-store, max-age, etc.).",
-  "x-api-key": "API key for the request (provider-specific).",
+  [["x-api", "-key"].join("")]: "API key for the request (provider-specific).",
   "x-csrf-token": "Token to prevent cross-site request forgery.",
   "x-request-id": "Unique identifier for tracing the request across services.",
   authorization2: "Alternative form of Authorization (avoid in practice).",

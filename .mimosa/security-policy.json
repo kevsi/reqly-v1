@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "threatModel": {
+    "inherit": true,
+    "assets": [],
+    "attackerControlledInputs": [],
+    "trustBoundaries": [],
+    "securityInvariants": [],
+    "exclusions": []
+  },
+  "network": {
+    "allowedProtocols": [
+      "https:",
+      "http:"
+    ],
+    "allowedHosts": [
+      "api.github.com",
+      "github.com",
+      "raw.githubusercontent.com",
+      "objects.githubusercontent.com"
+    ],
+    "blockPrivateNetworks": true,
+    "maxRedirects": 0
+  },
+  "command": {
+    "forbidShell": true,
+    "allowedBinaries": []
+  },
+  "path": {
+    "allowedWriteRoots": [],
+    "requireBasename": true
+  },
+  "data": {
+    "allowedSortFields": [],
+    "requireOwnerScope": true
+  }
+}

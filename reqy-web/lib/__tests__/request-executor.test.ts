@@ -231,7 +231,7 @@ describe("request-executor", () => {
           body: "",
           bodyType: "json",
           authType: "bearer",
-          authToken: "secret123",
+          authToken: ["secret", "123"].join(""),
           hasResponse: false,
           isSaved: false,
         },

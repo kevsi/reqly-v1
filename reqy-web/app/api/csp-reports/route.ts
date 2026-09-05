@@ -69,15 +69,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In production, forward to an external monitoring service if configured.
-    // Example: send to Sentry, Datadog, or a dedicated CSP dashboard.
-    // if (process.env.CSP_WEBHOOK_URL) {
-    //   await fetch(process.env.CSP_WEBHOOK_URL, {
-    //     method: "POST",
-    //     body: JSON.stringify(report),
-    //     headers: { "Content-Type": "application/json" },
-    //   })
-    // }
+    // En production, un service externe (Sentry, Datadog, dashboard CSP)
+    // peut être branché ici — passer obligatoirement par le guard SSRF
+    // partagé (lib/server/safe-fetch) avant toute requête sortante.
 
     return new NextResponse(null, { status: 204 });
   } catch {

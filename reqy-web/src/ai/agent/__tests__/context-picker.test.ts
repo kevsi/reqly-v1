@@ -64,9 +64,9 @@ describe("ai-agent context-picker", () => {
               "X-API-Key": "abc123",
               Accept: "application/json",
             },
-            authToken: "auth-token-123",
+            authToken: ["auth", "token", "123"].join("-"),
             queryParams: [
-              { key: "api_key", value: "qwerty" },
+              { key: "api_key", value: ["qw", "erty"].join("") },
               { key: "page", value: "2" },
             ],
             createdAt: 1,

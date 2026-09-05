@@ -17,10 +17,22 @@ export async function requireCaptureUserId(request: NextRequest): Promise<string
     throw new CaptureAuthError("Authentication service unavailable", 503);
   }
 
+  // SSRF guard : l'URL de sync vient de l'environnement — on force le
+  // protocole HTTP(S) et un hôte présent avant toute requête sortante.
+  let meUrl: URL;
+  try {
+    meUrl = new URL(`${syncUrl}/api/auth/me`);
+  } catch {
+    throw new CaptureAuthError("Authentication service unavailable", 503);
+  }
+  if (meUrl.protocol !== "https:" && meUrl.protocol !== "http:") {
+    throw new CaptureAuthError("Authentication service unavailable", 503);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
   try {
-    const response = await fetch(`${syncUrl}/api/auth/me`, {
+    const response = await fetch(meUrl.toString(), {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
       cache: "no-store",

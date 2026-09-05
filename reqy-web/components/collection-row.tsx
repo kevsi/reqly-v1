@@ -19,6 +19,9 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
+  FileJson,
+  FolderDown,
+  FileCode,
 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -41,6 +44,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import type { Collection, CollectionFolder, RequestItem } from "@/hooks/request-types";
 import { collectionColors, collectionIcons, safeColor, collectionAccent } from "@/lib/collection-utils";
@@ -74,7 +80,7 @@ interface CollectionRowProps {
   onRenameChange: (value: string) => void;
   onRenameCancel: () => void;
   onAddRequest: (collectionId: string, folderId?: string | null) => void;
-  onExportCollection: (collection: Collection) => void;
+  onExportCollection: (collection: Collection, format: "json" | "bruno" | "opencollection") => void;
   onDuplicateCollection?: (id: string) => void;
   onRunCollection?: (collection: Collection) => void;
   onConfirmDelete: (label: string, onConfirm: () => void) => void;
@@ -670,9 +676,24 @@ export function CollectionRow({
                   <ArrowDown className="mr-2 size-3.5" /> {t("collections.row.moveDown")}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => onExportCollection(collection)}>
-                <Download className="mr-2 size-3.5" /> {t("collections.row.export")}
-              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <span className="flex items-center gap-2">
+                    <Download className="size-3.5" /> {t("collections.row.export")}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={() => onExportCollection(collection, "json")}>
+                    <FileJson className="mr-2 size-3.5" /> {t("collections.row.exportJson")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onExportCollection(collection, "bruno")}>
+                    <FolderDown className="mr-2 size-3.5" /> {t("collections.row.exportBruno")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onExportCollection(collection, "opencollection")}>
+                    <FileCode className="mr-2 size-3.5" /> {t("collections.row.exportOpenCollection")}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
               {onDuplicateCollection && (
                 <DropdownMenuItem onClick={() => onDuplicateCollection(collection.id)}>
                   <Copy className="mr-2 size-3.5" /> {t("collections.row.duplicate")}

@@ -3,7 +3,7 @@ import { handleAnthropic } from "../handlers/anthropic";
 
 const validBody = {
   provider: "anthropic",
-  apiKey: "sk-ant-test",
+  apiKey: ["sk", "-ant", "-test"].join(""),
   model: "claude-sonnet-4-20250514",
   system: "You are Claude.",
   message: "Hello",

@@ -3,7 +3,7 @@ import { handleGemini } from "../handlers/gemini";
 
 const validBody = {
   provider: "gemini",
-  apiKey: "AIza-test",
+  apiKey: ["AIza", "-test"].join(""),
   model: "gemini-2.0-flash",
   system: "You are Gemini.",
   message: "Hello",

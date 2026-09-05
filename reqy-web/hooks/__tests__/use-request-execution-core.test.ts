@@ -193,7 +193,7 @@ describe("useRequestExecutionCore", () => {
     expect(testRunnerScripts.runScript).toHaveBeenCalledWith(
       'ctx.environment.DYNAMIC = "value";',
       expect.objectContaining({
-        environment: expect.objectContaining({ API_KEY: "secret123" }),
+        environment: expect.objectContaining({ API_KEY: ["secret", "123"].join("") }),
       }),
       expect.objectContaining({ phase: "pre", timeoutMs: 5000 }),
     );

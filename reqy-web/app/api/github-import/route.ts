@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
+import { assertGithubUrl, safeFetch } from "@/lib/server/safe-fetch";
 import {
   formatZodError,
   githubImportBodySchema,
@@ -26,6 +27,30 @@ const GITHUB_API_BASE = "https://api.github.com";
 const FETCH_TIMEOUT = 15000;
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 20 });
+
+/** owner/repo GitHub : alphanumériques + tirets/points/underscores uniquement. */
+const GITHUB_OWNER_REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
+// Contrôle construit dynamiquement : no-control-regex refuse le littéral \u0000.
+const NUL = String.fromCharCode(0);
+const CONTROL_CHARS_RE = new RegExp(`[\\r\\n${NUL}]`);
+
+/** Rejette les segments vides, traversaux (`..`) ou à caractères de contrôle. */
+function assertSafePathSegment(raw: string, label: string): string {
+  if (!raw || raw.trim() !== raw || CONTROL_CHARS_RE.test(raw) || raw.includes("..")) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return raw;
+}
+
+/** Chemin de fichier GitHub : segments encodés individuellement. */
+function encodeGithubFilePath(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => assertSafePathSegment(segment, "path"))
+    .map(encodeURIComponent)
+    .join("/");
+}
 
 function getRateLimitKey(request: NextRequest): string {
   if (process.env.TRUSTED_PROXY === "true") {
@@ -88,13 +113,22 @@ export async function POST(request: NextRequest) {
     const githubCookieToken = request.cookies.get("github_token")?.value;
     const token = githubToken?.trim() || githubCookieToken;
 
-    const defaultBranch = branch || (await getDefaultBranch(owner, repo, token));
+    // Validation AVANT toute requête sortante : owner/repo stricts, le
+    // chemin est reconstruit segment par segment (anti-traversal).
+    const safeOwner = assertSafePathSegment(owner, "owner");
+    const safeRepo = assertSafePathSegment(repo, "repo");
+    if (!GITHUB_OWNER_REPO_RE.test(safeOwner) || !GITHUB_OWNER_REPO_RE.test(safeRepo)) {
+      return NextResponse.json({ message: "Invalid owner or repository name" }, { status: 400 });
+    }
+
+    const defaultBranch = branch || (await getDefaultBranch(safeOwner, safeRepo, token));
 
     // 1. Fetch Git Tree (all paths instantly)
-    const treeUrl = `${GITHUB_API_BASE}/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
+    const safeBranch = assertSafePathSegment(defaultBranch, "branch");
+    const treeUrl = `${GITHUB_API_BASE}/repos/${safeOwner}/${safeRepo}/git/trees/${encodeURIComponent(safeBranch)}?recursive=1`;
     const treeController = new AbortController();
     const treeTimeout = setTimeout(() => treeController.abort(), FETCH_TIMEOUT);
-    const treeRes = await fetch(treeUrl, {
+    const treeRes = await safeFetch(assertGithubUrl(treeUrl), {
       headers: getGithubHeaders(token),
       signal: treeController.signal,
     }).finally(() => clearTimeout(treeTimeout));
@@ -312,12 +346,20 @@ async function getDefaultBranch(
   repo: string,
   githubToken?: string,
 ): Promise<string> {
+  const safeOwner = assertSafePathSegment(owner, "owner");
+  const safeRepo = assertSafePathSegment(repo, "repo");
+  if (!GITHUB_OWNER_REPO_RE.test(safeOwner) || !GITHUB_OWNER_REPO_RE.test(safeRepo)) {
+    throw new Error("Repository not found or access denied");
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-  const res = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, {
-    headers: getGithubHeaders(githubToken),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
+  const res = await safeFetch(
+    assertGithubUrl(`${GITHUB_API_BASE}/repos/${safeOwner}/${safeRepo}`),
+    {
+      headers: getGithubHeaders(githubToken),
+      signal: controller.signal,
+    },
+  ).finally(() => clearTimeout(timeout));
   if (!res.ok) {
     if (res.status === 403) throw new Error("GitHub access denied or rate limit reached");
     throw new Error("Repository not found or access denied");
@@ -333,10 +375,15 @@ async function fetchFileContentRaw(
   path: string,
   githubToken?: string,
 ): Promise<string | undefined> {
-  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+  const safeOwner = assertSafePathSegment(owner, "owner");
+  const safeRepo = assertSafePathSegment(repo, "repo");
+  if (!GITHUB_OWNER_REPO_RE.test(safeOwner) || !GITHUB_OWNER_REPO_RE.test(safeRepo)) {
+    return undefined;
+  }
+  const url = `${GITHUB_API_BASE}/repos/${safeOwner}/${safeRepo}/contents/${encodeGithubFilePath(path)}?ref=${encodeURIComponent(branch)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-  const res = await fetch(url, {
+  const res = await safeFetch(assertGithubUrl(url), {
     headers: getGithubHeaders(githubToken),
     signal: controller.signal,
   }).finally(() => clearTimeout(timeout));

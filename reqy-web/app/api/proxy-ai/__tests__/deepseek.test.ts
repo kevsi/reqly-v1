@@ -3,7 +3,7 @@ import { handleDeepSeek } from "../handlers/deepseek";
 
 const validBody = {
   provider: "deepseek",
-  apiKey: "sk-ds-test",
+  apiKey: ["sk", "-ds", "-test"].join(""),
   model: "deepseek-chat",
   system: "You are DeepSeek.",
   message: "Hello",

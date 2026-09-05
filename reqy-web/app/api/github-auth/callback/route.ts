@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter } from "@/lib/rate-limiter";
 import { getRateLimitKey } from "@/app/api/proxy-ai/lib/rate-limit";
+import { assertGithubUrl, safeFetch } from "@/lib/server/safe-fetch";
 
 const rateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const tokenResponse = await fetch(TOKEN_URL, {
+    const tokenResponse = await safeFetch(assertGithubUrl(TOKEN_URL), {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
     // Fetch GitHub user profile
     let githubUser: { id: number; login: string; email: string | null; name: string | null };
     try {
-      const userResponse = await fetch("https://api.github.com/user", {
+      const userResponse = await safeFetch(assertGithubUrl("https://api.github.com/user"), {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
     let email = githubUser.email;
     if (!email) {
       try {
-        const emailsResponse = await fetch("https://api.github.com/user/emails", {
+        const emailsResponse = await safeFetch(assertGithubUrl("https://api.github.com/user/emails"), {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: "application/json",
@@ -153,19 +154,24 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const syncResponse = await fetch(`${SYNC_URL.replace(/\/$/, "")}/api/auth/oauth-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: "github",
-          providerId: String(githubUser.id),
-          email,
-          name: githubUser.name || githubUser.login,
-          // The sync-server validates this token against api.github.com/user
-          // before issuing a session.
-          accessToken,
-        }),
-      });
+      // L'URL de sync vient de l'environnement : safeFetch impose
+      // http/https, un hôte public et refuse localhost/privé/réservé.
+      const syncResponse = await safeFetch(
+        `${SYNC_URL.replace(/\/$/, "")}/api/auth/oauth-login`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: "github",
+            providerId: String(githubUser.id),
+            email,
+            name: githubUser.name || githubUser.login,
+            // The sync-server validates this token against api.github.com/user
+            // before issuing a session.
+            accessToken,
+          }),
+        },
+      );
 
       if (!syncResponse.ok) {
         const err = await syncResponse.json().catch(() => ({}));

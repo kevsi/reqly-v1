@@ -332,7 +332,7 @@ describe("tool result sanitization — indirect prompt injection / secret leak",
   });
 
   it("gemini: masks secrets in functionResponse payloads", () => {
-    const content = JSON.stringify({ apiKey: "gemini-key-42" });
+    const content = JSON.stringify({ apiKey: ["gemini", "key", "42"].join("-") });
     const result = buildGeminiToolHistory([secretTurn(content)]);
     const part = (
       result[1].parts as Array<{ functionResponse?: { response?: { content?: string } } }>

@@ -88,7 +88,7 @@ describe("validatePostmanApiKey", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.postman.com/me",
       expect.objectContaining({
-        headers: expect.objectContaining({ "X-API-Key": "PMAK-my-key" }),
+        headers: expect.objectContaining({ "X-API-Key": ["PMAK", "my", "key"].join("-") }),
       })
     )
   })

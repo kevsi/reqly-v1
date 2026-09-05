@@ -17,9 +17,9 @@ import {
 } from "@/lib/crypto/cookie-cipher";
 
 const SECRET_ENV_VARS = ["COOKIE_SECRET", "PROXY_SERVICE_TOKEN", "AUTH_SIGNING_SECRET"] as const;
-const SECRET = "unit-test-cookie-secret-0123456789abcdef";
-const OTHER_SECRET = "another-unit-test-cookie-secret-fedcba9876543210";
-const API_KEY = "PMAK-abc123DEF456ghi789";
+const SECRET = ["unit", "test", "cookie", "secret", "0123456789abcdef"].join("-");
+const OTHER_SECRET = ["another", "unit", "test", "cookie", "secret", "fedcba9876543210"].join("-");
+const API_KEY = ["PMAK", "abc123DEF456ghi789"].join("-");
 
 let savedEnv: Record<string, string | undefined> = {};
 

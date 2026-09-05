@@ -681,8 +681,36 @@ export function CollectionsPanel({
   };
 
   // --- Single item export ---
-  const exportCollection = async (collection: Collection) => {
+  const exportCollection = async (
+    collection: Collection,
+    format: "json" | "bruno" | "opencollection" = "json",
+  ) => {
     setExporting(true);
+
+    // ── Formats arborescents : Bruno (.bru) / OpenCollection (YAML) ──
+    if (format !== "json") {
+      try {
+        const { exportCollectionFiles } = await import("@/lib/export/export-collection");
+        const savedPath = await exportCollectionFiles(collection, format);
+        toast({
+          title: t("collections.panel.exported", { path: savedPath }),
+          meta: { event: "importExport" },
+        } as unknown as Parameters<typeof toast>[0]);
+      } catch (error: unknown) {
+        if (error === "cancelled") {
+          setExporting(false);
+          return;
+        }
+        toast({
+          title: t("collections.panel.error", { error: String(error) }),
+          variant: "destructive",
+          meta: { event: "importExport" },
+        } as unknown as Parameters<typeof toast>[0]);
+      }
+      setExporting(false);
+      return;
+    }
+
     const isTauri =
       !!(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ ||
       !!(window as unknown as Record<string, unknown>).__TAURI__;

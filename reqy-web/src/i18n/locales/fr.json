@@ -703,7 +703,10 @@
       "loadAndSend": "Charger et envoyer",
       "removeRequest": "Supprimer la requête",
       "addRequestInFolder": "Ajouter une requête dans ce dossier",
-      "addSubfolder": "Ajouter un sous-dossier"
+      "addSubfolder": "Ajouter un sous-dossier",
+      "exportJson": "Format JSON Reqly",
+      "exportBruno": "Collection Bruno (.bru)",
+      "exportOpenCollection": "OpenCollection (YAML)"
     },
     "folder": {
       "namePlaceholder": "Nom du dossier",

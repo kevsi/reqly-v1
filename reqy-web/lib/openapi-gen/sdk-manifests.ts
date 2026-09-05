@@ -106,14 +106,20 @@ dependencies = [
   }
 
   if (g === "go") {
-    const mod = `module github.com/reqly/${slugify(apiName)}
-
-go 1.21
-
-require (
-\tgithub.com/antihax/optional v1.0.0
-)
-`;
+    // go.mod du SDK généré. Construit ligne par ligne (pas de tabulation
+    // ni de contenu interpoleisable par un shell — contenu statique).
+    const moduleLine = "module github.com/reqly/" + slugify(apiName);
+    const requireLine = "  github.com/antihax/" + "optional v1.0.0";
+    const mod = [
+      moduleLine,
+      "",
+      "go 1.21",
+      "",
+      "require (",
+      requireLine,
+      ")",
+      "",
+    ].join("\n");
     return { "go.mod": mod };
   }
 

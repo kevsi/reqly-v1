@@ -127,6 +127,7 @@ const ALLOWED_IDENTICAL = new Set([
   "Modules",
   "Messages",
   "WebSocket",
+  "OpenCollection (YAML)",
   "Navigation",
   "Notifications",
   "Nullable",
