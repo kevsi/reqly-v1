@@ -20,6 +20,7 @@
     "allow-fetch-proxy",
     "allow-analyze-backend",
     "allow-export-json",
+    "allow-export-files",
     "allow-open-external",
     "allow-start-capture-proxy",
     "allow-stop-capture-proxy",

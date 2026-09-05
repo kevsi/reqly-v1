@@ -21,7 +21,7 @@ use crate::capture::{
     set_bandwidth_limit, start_capture_proxy, stop_capture_proxy, ManagedCaptureProxyState,
 };
 use crate::fetch::{fetch_proxy, SharedClient};
-use crate::open::{export_json, open_external, save_file};
+use crate::open::{export_files, export_json, open_external, save_file};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -110,6 +110,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             fetch_proxy,
             export_json,
+            export_files,
             open_external,
             analyzer::analyze_backend,
             start_capture_proxy,

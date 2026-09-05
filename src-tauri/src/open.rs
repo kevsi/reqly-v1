@@ -181,6 +181,63 @@ pub fn export_json(
     }
 }
 
+/// Écrit une arborescence de fichiers texte (collections Bruno /
+/// OpenCollection) dans un dossier choisi par l'utilisateur.
+///
+/// Chaque entrée de `files` est (chemin_relatif, contenu). Les chemins
+/// absolus, traversaux (`..`) et vides sont refusés — même validation que
+/// save_file, appliquée au chemin relatif avant jointure à la racine.
+#[tauri::command]
+pub fn export_files(
+    app: AppHandle,
+    root_name: String,
+    files: Vec<(String, String)>,
+) -> Result<String, AppError> {
+    if root_name.trim().is_empty()
+        || root_name.contains("..")
+        || root_name.contains('/')
+        || root_name.contains('\\')
+    {
+        return Err(AppError::InvalidInput(
+            "Nom de dossier racine invalide".into(),
+        ));
+    }
+    if files.is_empty() {
+        return Err(AppError::InvalidInput("Aucun fichier à exporter".into()));
+    }
+    for (rel, _) in &files {
+        let p = std::path::Path::new(rel);
+        if rel.trim().is_empty() || p.is_absolute() || contains_parent_dir(p) {
+            return Err(AppError::InvalidInput(format!(
+                "Chemin de fichier invalide : {}",
+                rel
+            )));
+        }
+    }
+
+    let folder: Option<FilePath> = app.dialog().file().blocking_pick_folder();
+    let root = folder
+        .ok_or(AppError::Cancelled)?
+        .into_path()
+        .map_err(|e| AppError::InvalidInput(format!("Invalid folder path: {}", e)))?;
+    let target_root = root.join(&root_name);
+
+    std::fs::create_dir_all(&target_root)
+        .map_err(|e| AppError::Io(format!("Impossible de créer le dossier : {}", e)))?;
+
+    for (rel, content) in &files {
+        let path = target_root.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| AppError::Io(format!("Impossible de créer le dossier : {}", e)))?;
+        }
+        std::fs::write(&path, content.as_bytes())
+            .map_err(|e| AppError::Io(format!("Écriture impossible ({}): {}", rel, e)))?;
+    }
+
+    Ok(target_root.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub fn open_external(url: String) -> Result<(), AppError> {
     // SECURITY FIX H4: Whitelist allowed URL schemes to prevent RCE via file://, ms-settings:, etc.

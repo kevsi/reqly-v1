@@ -16,6 +16,11 @@ description = "Allows the export_json command"
 commands.allow = ["export_json"]
 
 [[permission]]
+identifier = "allow-export-files"
+description = "Allows the export_files command"
+commands.allow = ["export_files"]
+
+[[permission]]
 identifier = "allow-open-external"
 description = "Allows the open_external command"
 commands.allow = ["open_external"]
