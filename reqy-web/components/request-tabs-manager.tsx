@@ -513,12 +513,7 @@ export function RequestTabsManager() {
                 )}
               >
                 {overviewOpen ? (
-                  <RequestOverview
-                    tab={activeTab}
-                    onRun={() => void sendRequest()}
-                    onSave={saveActiveTab}
-                    onOpenHistory={() => setHistoryOpen(true)}
-                  />
+                  <RequestOverview tab={activeTab} />
                 ) : (
                 <ErrorBoundary
                   fallback={

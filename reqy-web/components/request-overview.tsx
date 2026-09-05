@@ -11,7 +11,7 @@
  */
 
 import { useTranslation } from "react-i18next";
-import { Clock, Copy, FileText, Folder, History, KeyRound, ListFilter, Play, Save, Zap } from "lucide-react";
+import { Clock, Copy, FileText, Folder, History, KeyRound, ListFilter, Zap } from "lucide-react";
 import type { RequestTab } from "@/lib/request-executor";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { getMethodPanelClass } from "@/lib/http-method-colors";
@@ -69,12 +69,9 @@ function Row({ icon: Icon, label, children }: {
 
 export interface RequestOverviewProps {
   tab: RequestTab;
-  onRun: () => void;
-  onSave: () => void;
-  onOpenHistory: () => void;
 }
 
-export function RequestOverview({ tab, onRun, onSave, onOpenHistory }: RequestOverviewProps) {
+export function RequestOverview({ tab }: RequestOverviewProps) {
   const { t } = useTranslation();
   const collections = useRequestStore((s) => s.collections);
   const history = useRequestStore((s) => s.history);
@@ -131,34 +128,6 @@ export function RequestOverview({ tab, onRun, onSave, onOpenHistory }: RequestOv
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Actions rapides */}
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t(K.actions)}>
-        <button
-          type="button"
-          onClick={onRun}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"
-        >
-          <Play aria-hidden="true" className="size-3.5" />
-          {t(K.run)}
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-accent"
-        >
-          <Save aria-hidden="true" className="size-3.5" />
-          {t(K.save)}
-        </button>
-        <button
-          type="button"
-          onClick={onOpenHistory}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-accent"
-        >
-          <History aria-hidden="true" className="size-3.5" />
-          {t(K.history)}
-        </button>
       </div>
 
       {/* Requête */}
