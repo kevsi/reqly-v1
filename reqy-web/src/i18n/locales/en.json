@@ -2640,6 +2640,17 @@
     "saved": "Saved in",
     "notSaved": "Not saved",
     "lastStatus": "Last response",
-    "none": "None"
+    "none": "None",
+    "actions": "Actions",
+    "run": "Run",
+    "save": "Save",
+    "history": "History",
+    "copied": "URL copied",
+    "sectionRequest": "Request",
+    "sectionOrg": "Organization & activity",
+    "runs": "Executions",
+    "lastRun": "Last run",
+    "neverRun": "Never executed",
+    "environment": "Active environment"
   }
 }
