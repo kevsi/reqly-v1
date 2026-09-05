@@ -87,6 +87,9 @@ jobs:
           # inaperçu derrière le health check. Ici chaque étape est visible.
           DEPLOY_SCRIPT='set -e
             export PATH=/home/ubuntu/.nvm/versions/node/v24.18.1/bin:$PATH
+            # CI=true : pnpm >= 12 purge un node_modules incompatible sans
+            # demander confirmation (sinon ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+            export CI=true
             echo "user=$(whoami) node=$(node --version 2>&1) pnpm=$(pnpm --version 2>&1)"
             cd /home/ubuntu/reqly-v1
             git pull --ff-only --quiet
