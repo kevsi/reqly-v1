@@ -65,14 +65,16 @@ jobs:
               line=$(aws ssm get-command-invocation \
                 --command-id "$cid" \
                 --instance-id "$INSTANCE_ID" \
-                --query "[Status, StandardOutputContent]" --output text 2>/dev/null || true)
+                --query "[Status, StandardOutputContent, StandardErrorContent]" --output text 2>/dev/null || true)
               # --output text sépare les champs par tabulation.
-              local st out
+              local st out err
               st="${line%%	*}"
-              out="${line#*	}"
+              local rest="${line#*	}"
+              out="${rest%%	*}"
+              err="${rest#*	}"
               case "$st" in
-                Success) echo "$out"; return 0 ;;
-                Failed|Cancelled|TimedOut) echo "$out" >&2; return 1 ;;
+                Success) echo "$out"; [ -n "$err" ] && [ "$err" != "$out" ] && echo "$err"; return 0 ;;
+                Failed|Cancelled|TimedOut) echo "$out" >&2; echo "$err" >&2; return 1 ;;
               esac
             done
             echo "SSM command timed out after 10 min (last status: $st)" >&2
