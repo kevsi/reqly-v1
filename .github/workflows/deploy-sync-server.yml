@@ -57,7 +57,7 @@ jobs:
 
           wait_ssm() {
             local cid="$1"
-            for i in $(seq 1 60); do
+            for i in $(seq 1 120); do
               sleep 5
               # get-command-invocation: statut d'une commande précise sur
               # l'instance — permissions simples (ssm:GetCommandInvocation).
@@ -75,20 +75,29 @@ jobs:
                 Failed|Cancelled|TimedOut) echo "$out" >&2; return 1 ;;
               esac
             done
-            echo "SSM command timed out after 5 min (last status: $st)" >&2
+            echo "SSM command timed out after 10 min (last status: $st)" >&2
             return 1
           }
 
+          # Étapes de build INLINE (plus de blind spot) : le script serveur
+          # rebuild-restart.sh est untracked et sa sortie était tronquée par
+          # la limite SSM (24 Ko) — un build silencieux en échec passait
+          # inaperçu derrière le health check. Ici chaque étape est visible.
           DEPLOY_SCRIPT='set -e
             export PATH=/home/ubuntu/.nvm/versions/node/v24.18.1/bin:$PATH
             cd /home/ubuntu/reqly-v1
-            git pull --ff-only
-            git log -1 --oneline
-            bash /home/ubuntu/rebuild-restart.sh'
+            git pull --ff-only --quiet
+            echo "HEAD: $(git log -1 --oneline)"
+            cd sync-server
+            pnpm install --frozen-lockfile --silent
+            pnpm build
+            systemctl restart reqly-sync
+            sleep 2
+            systemctl is-active reqly-sync'
 
           echo "--- deploy ---"
           CID=$(run_ssm "$(printf '%s' "$DEPLOY_SCRIPT" | base64 -w0)")
-          wait_ssm "$CID" | tail -40 || exit 1
+          wait_ssm "$CID" | tail -80 || exit 1
 
           echo "--- health check ---"
           HEALTH_SCRIPT='curl -sS --max-time 10 http://localhost:4000/health; echo; systemctl is-active reqly-sync'
