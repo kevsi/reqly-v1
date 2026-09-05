@@ -63,6 +63,9 @@
     "allow-get-encryption-passphrase",
     "allow-start-device-flow",
     "allow-poll-device-token",
-    "allow-start-github-oauth-server"
+    "allow-start-github-oauth-server",
+    "allow-ws-connect",
+    "allow-ws-send",
+    "allow-ws-close"
   ]
 }

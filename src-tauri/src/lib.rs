@@ -12,6 +12,7 @@ mod mcp;
 mod oauth;
 mod open;
 mod store;
+mod websocket;
 #[cfg(feature = "ts-export")]
 mod ts_bindings;
 
@@ -105,6 +106,7 @@ pub fn run() {
         )))
         .manage::<mcp::ManagedMcpState>(Arc::new(Mutex::new(mcp::McpProcessState::default())))
         .manage::<git::commands::GitRepoState>(git::commands::GitRepoState::new())
+        .manage::<websocket::WsConnections>(websocket::WsConnections::default())
         .invoke_handler(tauri::generate_handler![
             fetch_proxy,
             export_json,
@@ -159,6 +161,9 @@ pub fn run() {
             oauth::start_device_flow_cmd,
             oauth::poll_device_token_cmd,
             oauth::start_github_oauth_server,
+            websocket::ws_connect,
+            websocket::ws_send,
+            websocket::ws_close,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

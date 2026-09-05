@@ -47,6 +47,7 @@ tauri-plugin-notification = "2"
 open = "5.3"
 base64 = "0.22"
 tiny_http = "0.12"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
 hyper = { version = "1", features = ["http2", "client"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"

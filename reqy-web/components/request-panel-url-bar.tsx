@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Terminal, Code, Copy, Check, Loader2, Play, Braces, X, Route, Square, Radio } from "lucide-react";
+import { Terminal, Code, Copy, Check, Loader2, Play, Braces, X, Route, Square, Radio, Cable } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeUrl as canonicalNormalizeUrl } from "@/lib/request-executor";
 import type { HttpMethod } from "@/lib/types";
@@ -44,6 +44,8 @@ export interface RequestPanelUrlBarProps {
   hasUrl: boolean;
   /** Ouvre le modal de flux SSE live sur l'URL courante. */
   onOpenSseStream?: () => void;
+  /** Ouvre le modal WebSocket live sur l'URL courante. */
+  onOpenWebsocket?: () => void;
 }
 
 export function RequestPanelUrlBar({
@@ -69,6 +71,7 @@ export function RequestPanelUrlBar({
   urlAutocompleteGroups,
   hasUrl,
   onOpenSseStream,
+  onOpenWebsocket,
 }: RequestPanelUrlBarProps) {
   const { t } = useTranslation();
   const [exportFormat, setExportFormat] = useState<"curl" | "fetch">("curl");
@@ -230,6 +233,19 @@ ${bodyPart}})
               title={t("sse.openStream")}
             >
               <Radio className="size-3.5" />
+            </Button>
+          )}
+          {/* WebSocket live sur l'URL courante */}
+          {onOpenWebsocket && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 sm:h-7 sm:w-7 p-0 text-muted-foreground/50 hover:text-foreground"
+              onClick={onOpenWebsocket}
+              disabled={!hasUrl}
+              title={t("websocket.openStream")}
+            >
+              <Cable className="size-3.5" />
             </Button>
           )}
           {curlImportOpen && (

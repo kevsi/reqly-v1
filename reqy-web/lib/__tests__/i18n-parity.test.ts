@@ -125,6 +125,8 @@ const ALLOWED_IDENTICAL = new Set([
   "Middleware",
   "Module {{name}}",
   "Modules",
+  "Messages",
+  "WebSocket",
   "Navigation",
   "Notifications",
   "Nullable",

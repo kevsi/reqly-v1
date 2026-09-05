@@ -26,7 +26,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Radio, Braces, Keyboard } from "lucide-react";
+import { Radio, Braces, Keyboard, Cable } from "lucide-react";
 import { useRequestStore } from "@/hooks/use-request-store";
 import { useSyncStatusStore } from "@/hooks/store/sync";
 import { useShallow } from "zustand/react/shallow";
@@ -163,6 +163,16 @@ export function ApiHeader({ onOpenMobileSidebar }: ApiHeaderProps) {
               >
                 <Radio className="mr-2 size-4" />
                 <span>{t("header.openSSE")}</span>
+              </CommandItem>
+
+              <CommandItem
+                onSelect={() => {
+                  setSearchOpen(false);
+                  router.push("/websocket");
+                }}
+              >
+                <Cable className="mr-2 size-4" />
+                <span>{t("header.openWebsocket")}</span>
               </CommandItem>
 
               <CommandItem

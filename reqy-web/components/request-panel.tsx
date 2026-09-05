@@ -11,6 +11,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { SSEEventsModal } from "@/components/sse/sse-events-modal";
+import { WebSocketModal } from "@/components/websocket/websocket-modal";
 
 import { buildUrl } from "@/lib/request-executor";
 import type { BodyType, AuthType, QueryParam, Header, PathParam } from "@/lib/request-executor";
@@ -158,6 +159,7 @@ export function RequestPanel({
 }: RequestPanelProps) {
   const { t } = useTranslation();
   const [sseModalOpen, setSseModalOpen] = useState(false);
+  const [wsModalOpen, setWsModalOpen] = useState(false);
   // Sync path params when URL changes - auto-add/remove :param patterns
   // Uses a ref to track the last synced URL so we don't loop.
   const lastSyncedUrlRef = useRef(url);
@@ -333,10 +335,23 @@ export function RequestPanel({
           followRedirects={followRedirects}
           onFollowRedirectsChange={onFollowRedirectsChange}
           onOpenSseStream={() => setSseModalOpen(true)}
+          onOpenWebsocket={() => setWsModalOpen(true)}
         />
         <SSEEventsModal
           open={sseModalOpen}
           onOpenChange={setSseModalOpen}
+          target={{
+            url: buildUrl(url, queryParams, pathParams),
+            headers: headers
+              .filter((h) => h.enabled !== false && h.key.trim())
+              .map((h) => ({ key: h.key.trim(), value: h.value })),
+            authType,
+            authToken,
+          }}
+        />
+        <WebSocketModal
+          open={wsModalOpen}
+          onOpenChange={setWsModalOpen}
           target={{
             url: buildUrl(url, queryParams, pathParams),
             headers: headers

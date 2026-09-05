@@ -240,3 +240,19 @@ commands.allow = ["git_write_collection_file"]
 identifier = "allow-git-ls-remote"
 description = "Allows the git_ls_remote command"
 commands.allow = ["git_ls_remote"]
+
+# ── WebSocket client ─────────────────────────────────────────────────────
+[[permission]]
+identifier = "allow-ws-connect"
+description = "Allows the ws_connect command"
+commands.allow = ["ws_connect"]
+
+[[permission]]
+identifier = "allow-ws-send"
+description = "Allows the ws_send command"
+commands.allow = ["ws_send"]
+
+[[permission]]
+identifier = "allow-ws-close"
+description = "Allows the ws_close command"
+commands.allow = ["ws_close"]
