@@ -67,6 +67,21 @@ jobs:
           # (paquets cassés « held ») — un seul des deux suffit pour Tauri.
           sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev
 
+      # macOS x86_64 est cross-compilé depuis un runner arm64 (macos-latest).
+      # openssl-sys (tiré par git2 → libgit2-sys/libssh2-sys) réclame alors un
+      # OpenSSL x86_64 introuvable sur l'image (brew natif = arm64) : on
+      # installe Homebrew Intel sous Rosetta + openssl@3 x86_64, et on pointe
+      # OPENSSL_DIR dessus pour tout le job.
+      - name: Install x86_64 OpenSSL (macOS cross-compile)
+        if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
+        run: |
+          softwareupdate --install-rosetta --agree-to-license || true
+          if [ ! -x /usr/local/bin/brew ]; then
+            NONINTERACTIVE=1 arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          fi
+          arch -x86_64 /usr/local/bin/brew install openssl@3
+          echo "OPENSSL_DIR=/usr/local/opt/openssl@3" >> "$GITHUB_ENV"
+
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
