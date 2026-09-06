@@ -13,7 +13,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const src = path.join(root, "analyser-api");
 const dest = path.join(root, "src-tauri", "resources", "analyser-api");
 
-const PACKAGES = ["core", "detector-js", "detector-rust", "detector-python", "detector-go", "cli"];
+const PACKAGES = [
+  "core",
+  "detector-js",
+  "detector-rust",
+  "detector-python",
+  "detector-go",
+  "detector-php",
+  "cli",
+];
 
 if (!existsSync(src)) {
   throw new Error(`analyser-api workspace not found at ${src}`);

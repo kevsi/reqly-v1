@@ -7,7 +7,7 @@
     "frontendDist": "../reqy-web/out",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm --dir reqy-web dev",
-    "beforeBuildCommand": "node ../scripts/prepare-analyser-sidecar.mjs && pnpm generate"
+    "beforeBuildCommand": "node scripts/prepare-analyser-sidecar.mjs && pnpm generate"
   },
   "app": {
     "windows": [
