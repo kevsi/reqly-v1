@@ -69,18 +69,27 @@ jobs:
 
       # macOS x86_64 est cross-compilé depuis un runner arm64 (macos-latest).
       # openssl-sys (tiré par git2 → libgit2-sys/libssh2-sys) réclame alors un
-      # OpenSSL x86_64 introuvable sur l'image (brew natif = arm64) : on
-      # installe Homebrew Intel sous Rosetta + openssl@3 x86_64, et on pointe
-      # OPENSSL_DIR dessus pour tout le job.
+      # OpenSSL x86_64 introuvable sur l'image (brew natif = arm64). Homebrew
+      # Intel sous Rosetta s'est révélé bloquant en CI (brew update interminable)
+      # : on compile OpenSSL depuis les sources — ./Configure darwin64-x86_64-cc
+      # cross-compile via clang -arch x86_64, sans Rosetta ni brew.
+      # OPENSSL_STATIC=1 : lien statique, aucune dépendance dylib à l'exécution.
       - name: Install x86_64 OpenSSL (macOS cross-compile)
         if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
+        timeout-minutes: 20
         run: |
-          softwareupdate --install-rosetta --agree-to-license || true
-          if [ ! -x /usr/local/bin/brew ]; then
-            NONINTERACTIVE=1 arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          fi
-          arch -x86_64 /usr/local/bin/brew install openssl@3
-          echo "OPENSSL_DIR=/usr/local/opt/openssl@3" >> "$GITHUB_ENV"
+          set -euo pipefail
+          OPENSSL_VERSION=3.4.1
+          PREFIX="$RUNNER_TEMP/openssl-x86_64"
+          curl -fsSL -o "$RUNNER_TEMP/openssl.tar.gz" \
+            "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz"
+          tar -xzf "$RUNNER_TEMP/openssl.tar.gz" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/openssl-${OPENSSL_VERSION}"
+          ./Configure darwin64-x86_64-cc no-tests --prefix="$PREFIX" --openssldir="$PREFIX/ssl"
+          make -j"$(sysctl -n hw.ncpu)"
+          make install_sw
+          echo "OPENSSL_DIR=$PREFIX" >> "$GITHUB_ENV"
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
