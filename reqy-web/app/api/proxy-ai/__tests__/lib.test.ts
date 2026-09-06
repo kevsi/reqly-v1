@@ -19,9 +19,9 @@ import {
   buildOpenAIToolHistory,
   buildAnthropicToolHistory,
   buildGeminiToolHistory,
-} from "../lib/tool-history";
-import { tryParseGeminiError } from "../lib/tool-history";
-import type { PreviousTurn } from "../lib/tool-history";
+} from "@/src/ai/lib/tool-history";
+import { tryParseGeminiError } from "@/src/ai/lib/tool-history";
+import type { PreviousTurn } from "@/src/ai/lib/tool-history";
 
 describe("structuredError", () => {
   it("returns a JSON response with error and code", async () => {

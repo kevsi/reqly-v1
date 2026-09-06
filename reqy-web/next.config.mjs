@@ -3,13 +3,19 @@ import path from "path"
 import withBundleAnalyzer from "@next/bundle-analyzer"
 
 const AUTH_SIGNING_SECRET = process.env.AUTH_SIGNING_SECRET
+// L'export desktop (BUILD_TARGET=desktop) exclut les routes API serveur
+// (build-desktop.mjs) : AUTH_SIGNING_SECRET, secret de session du backend,
+// n'y est jamais lu. Le check de prod ne s'applique qu'au build web.
+const IS_DESKTOP_BUILD = process.env.BUILD_TARGET === "desktop";
 if (!AUTH_SIGNING_SECRET || AUTH_SIGNING_SECRET.length < 32) {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" && !IS_DESKTOP_BUILD) {
     throw new Error(
       "[env:build] AUTH_SIGNING_SECRET is required in production. Set it in .env.local",
-    )
+    );
   }
-  console.warn('AUTH_SIGNING_SECRET is not set. Using insecure default for development only.')
+  if (!IS_DESKTOP_BUILD) {
+    console.warn('AUTH_SIGNING_SECRET is not set. Using insecure default for development only.');
+  }
 }
 
 // Allow the configured sync backend as a `connect-src` target. In dev it is

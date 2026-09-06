@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { structuredError } from "../lib/errors";
-import { buildAnthropicToolHistory } from "../lib/tool-history";
-import type { PreviousTurn } from "../lib/tool-history";
+import { buildAnthropicToolHistory } from "@/src/ai/lib/tool-history";
+import type { PreviousTurn } from "@/src/ai/lib/tool-history";
 
 export interface AnthropicBody {
   provider: string;

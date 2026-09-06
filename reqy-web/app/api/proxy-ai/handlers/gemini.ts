@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { structuredError } from "../lib/errors";
-import { buildGeminiToolHistory, tryParseGeminiError } from "../lib/tool-history";
-import type { PreviousTurn } from "../lib/tool-history";
+import { buildGeminiToolHistory, tryParseGeminiError } from "@/src/ai/lib/tool-history";
+import type { PreviousTurn } from "@/src/ai/lib/tool-history";
 
 export interface GeminiBody {
   provider: string;

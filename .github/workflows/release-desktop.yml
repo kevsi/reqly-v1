@@ -63,7 +63,9 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev
+          # libappindicator3-dev ET libayatana-appindicator3-dev se chevauchent
+          # (paquets cassés « held ») — un seul des deux suffit pour Tauri.
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

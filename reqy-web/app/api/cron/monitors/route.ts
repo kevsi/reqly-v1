@@ -16,7 +16,7 @@ import {
   executeMonitorRequestServer,
   MonitorRequestError,
 } from "@/lib/monitors/server-executor";
-import { sendMonitorWebhookServer } from "@/lib/monitors/alerts";
+import { sendMonitorWebhookServer } from "@/lib/monitors/alerts-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

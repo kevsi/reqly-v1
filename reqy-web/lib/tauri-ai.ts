@@ -10,7 +10,7 @@ import {
   buildAnthropicToolHistory,
   buildGeminiToolHistory,
   type PreviousTurn,
-} from "@/app/api/proxy-ai/lib/tool-history";
+} from "@/src/ai/lib/tool-history";
 
 export const PROVIDER_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",

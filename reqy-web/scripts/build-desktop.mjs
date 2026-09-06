@@ -4,11 +4,12 @@
 // Responsibilities:
 //   1. Set BUILD_TARGET=desktop so next.config.mjs enables `output: 'export'`
 //      and skips `headers()`.
-//   2. Exclude `app/api/workspaces` from the desktop build. These routes are
-//      pure proxies to NEXT_PUBLIC_SYNC_URL; the desktop frontend calls
-//      SYNC_URL directly (lib/workspace-api.ts). Next static export cannot run
-//      API route handlers, and the `[id]` dynamic segments cannot be exported,
-//      so the whole workspace API tree is moved aside during the build.// 3. Patch each remaining `app/api/**/route.ts` so the `dynamic` export is a
+//   2. Exclude the whole `app/api` tree from the desktop build. The desktop
+//      frontend calls SYNC_URL directly (lib/workspace-api.ts) or Tauri
+//      commands (fetch_proxy) — it uses no Next route at all. Next static
+//      export cannot run API route handlers, and the `[id]` dynamic segments
+//      cannot be exported, so the whole API tree is moved aside (outside
+//      reqy-web, see apiBackupDir below) during the build.// 3. Patch each remaining `app/api/**/route.ts` so the `dynamic` export is a
 //      string literal Next.js 16 can statically analyze (`force-dynamic` ->
 //      `force-static`), then restore originals in `finally`.
 // 4. Build + deploy recli (dist + prod node_modules) into src-tauri/resources
@@ -25,8 +26,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 const apiDir = path.resolve("app/api");
-const workspacesApiDir = path.resolve("app/api/workspaces");
-const workspacesBackupDir = path.resolve("app/api/_workspaces.disabled");
+// La copie de secours vit HORS de reqy-web (racine du monorepo) : le tsconfig
+// de reqy-web inclut "**/*.ts" relativement à son propre dossier, une copie
+// sous app/ serait donc type-checkée pendant le build alors que ses imports
+// "@/app/api/..." n'existent plus à cet emplacement (l'arbre est déplacé) —
+// d'où des erreurs de type fantômes. Hors de reqy-web, elle est invisible
+// pour tsc, Next et webpack.
+const apiBackupDir = path.resolve("..", ".api-desktop-backup");
 const DYNAMIC_RE = /export const dynamic\s*=\s*['"]force-dynamic["'];?/;
 const DESKTOP_VALUE = "export const dynamic = 'force-static';";
 
@@ -36,19 +42,24 @@ function removeDirRobust(dir) {
 
 // Copy-based exclusion: duplicate the tree to a backup, then delete the source.
 // Copy tolerates read locks; delete retries in case a transient lock remains.
-function excludeWorkspaces() {
-  if (!fs.existsSync(workspacesApiDir)) return false;
-  if (fs.existsSync(workspacesBackupDir)) removeDirRobust(workspacesBackupDir);
-  fs.cpSync(workspacesApiDir, workspacesBackupDir, { recursive: true });
-  removeDirRobust(workspacesApiDir);
+// TOUT app/api est exclu (pas seulement workspaces) : le desktop n'appelle
+// aucune route Next — les API sont des proxys serveur ; le client desktop
+// passe par Tauri (fetch_proxy) ou SYNC_URL directement. Les routes à
+// segments dynamiques ([id]) sont de toute façon incompatibles avec
+// output:export.
+function excludeApi() {
+  if (!fs.existsSync(apiDir)) return false;
+  if (fs.existsSync(apiBackupDir)) removeDirRobust(apiBackupDir);
+  fs.cpSync(apiDir, apiBackupDir, { recursive: true });
+  removeDirRobust(apiDir);
   return true;
 }
 
-function restoreWorkspaces() {
-  if (!fs.existsSync(workspacesBackupDir)) return;
-  if (fs.existsSync(workspacesApiDir)) removeDirRobust(workspacesApiDir);
-  fs.cpSync(workspacesBackupDir, workspacesApiDir, { recursive: true });
-  removeDirRobust(workspacesBackupDir);
+function restoreApi() {
+  if (!fs.existsSync(apiBackupDir)) return;
+  if (fs.existsSync(apiDir)) removeDirRobust(apiDir);
+  fs.cpSync(apiBackupDir, apiDir, { recursive: true });
+  removeDirRobust(apiBackupDir);
 }
 
 function findRouteFiles(dir, results = []) {
@@ -64,10 +75,10 @@ function findRouteFiles(dir, results = []) {
   return results;
 }
 
-const workspacesExcluded = excludeWorkspaces();
-if (workspacesExcluded) {
+const apiExcluded = excludeApi();
+if (apiExcluded) {
   console.log(
-    "[build-desktop] Excluded app/api/workspaces from desktop export (uses SYNC_URL directly)",
+    "[build-desktop] Excluded app/api from desktop export (desktop: Tauri commands + SYNC_URL, no Next routes)",
   );
 }
 
@@ -139,18 +150,12 @@ for (const dir of [".next", "out"]) {
   }
 }
 
-const routeFiles = findRouteFiles(apiDir);
-if (routeFiles.length === 0) {
-  console.error("[build-desktop] No route.ts files found in app/api/");
-  process.exit(1);
-}
-
 // The web build keeps the root layout dynamic for nonce propagation. Tauri is
 // a static export, so patch that layout for this build and restore it in finally.
 const layoutFile = path.resolve("app/layout.tsx");
-const filesToPatch = fs.existsSync(layoutFile) ? [...routeFiles, layoutFile] : routeFiles;
+const filesToPatch = fs.existsSync(layoutFile) ? [layoutFile] : [];
 console.log(
-  `[build-desktop] Patching ${filesToPatch.length} files (dynamic: force-dynamic → force-static)`,
+  `[build-desktop] Patching ${filesToPatch.length} layout file(s) (dynamic: force-dynamic → force-static)`,
 );
 
 // Snapshot originals so we can restore even if the build crashes.
@@ -184,10 +189,10 @@ try {
   for (const [file, content] of backups) {
     fs.writeFileSync(file, content);
   }
-  console.log("[build-desktop] Restored route files to original state");
-  if (workspacesExcluded) {
-    restoreWorkspaces();
-    console.log("[build-desktop] Restored app/api/workspaces");
+  console.log("[build-desktop] Restored layout files to original state");
+  if (apiExcluded) {
+    restoreApi();
+    console.log("[build-desktop] Restored app/api");
   }
 }
 

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { structuredError } from "../lib/errors";
 import { passthroughSSE } from "../lib/sse";
-import { buildOpenAIToolHistory } from "../lib/tool-history";
-import type { PreviousTurn } from "../lib/tool-history";
+import { buildOpenAIToolHistory } from "@/src/ai/lib/tool-history";
+import type { PreviousTurn } from "@/src/ai/lib/tool-history";
 
 export interface DeepSeekBody {
   provider: string;

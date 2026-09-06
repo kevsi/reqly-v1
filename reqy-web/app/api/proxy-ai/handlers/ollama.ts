@@ -3,8 +3,8 @@ import { structuredError } from "../lib/errors";
 import { passthroughSSE } from "../lib/sse";
 import { isOllamaHostAllowed } from "../lib/url-utils";
 import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
-import { buildOpenAIToolHistory } from "../lib/tool-history";
-import type { PreviousTurn } from "../lib/tool-history";
+import { buildOpenAIToolHistory } from "@/src/ai/lib/tool-history";
+import type { PreviousTurn } from "@/src/ai/lib/tool-history";
 
 export interface OllamaBody {
   provider: string;
