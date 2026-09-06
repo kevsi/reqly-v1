@@ -51,6 +51,16 @@ description = "Allows the stop_capture_https_proxy command"
 commands.allow = ["stop_capture_https_proxy"]
 
 [[permission]]
+identifier = "allow-grpc-list-services"
+description = "Allows the grpc_list_services command"
+commands.allow = ["grpc_list_services"]
+
+[[permission]]
+identifier = "allow-grpc-call"
+description = "Allows the grpc_call command"
+commands.allow = ["grpc_call"]
+
+[[permission]]
 identifier = "allow-start-mcp-server"
 description = "Allows the start_mcp_server command"
 commands.allow = ["start_mcp_server"]

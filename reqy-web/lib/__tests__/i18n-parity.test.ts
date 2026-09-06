@@ -130,6 +130,7 @@ const ALLOWED_IDENTICAL = new Set([
   "OpenCollection (YAML)",
   "p95",
   "p99",
+  "{{count}} message(s)",
   "Navigation",
   "Notifications",
   "Nullable",

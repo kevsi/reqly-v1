@@ -9,6 +9,7 @@ pub mod capture_https;
 mod error;
 mod fetch;
 pub mod git;
+pub mod grpc;
 mod mcp;
 mod oauth;
 mod open;
@@ -107,6 +108,7 @@ pub fn run() {
             capture::CaptureProxyState::default(),
         )))
         .manage::<ManagedHttpsProxyState>(Arc::new(Mutex::new(None)))
+        .manage::<grpc::GrpcDescriptorState>(grpc::GrpcDescriptorState::default())
         .manage::<mcp::ManagedMcpState>(Arc::new(Mutex::new(mcp::McpProcessState::default())))
         .manage::<git::commands::GitRepoState>(git::commands::GitRepoState::new())
         .manage::<websocket::WsConnections>(websocket::WsConnections::default())
@@ -126,6 +128,8 @@ pub fn run() {
             capture_https::get_capture_ca_info,
             capture_https::start_capture_https_proxy,
             capture_https::stop_capture_https_proxy,
+            grpc::grpc_list_services,
+            grpc::grpc_call,
             git::commands::git_init,
             git::commands::git_open,
             git::commands::git_status,

@@ -423,8 +423,61 @@ export async function stopCaptureHttpsProxy(): Promise<void> {
   }
 }
 
+// ── gRPC (desktop uniquement) ───────────────────────────────────────────────
+
+export interface GrpcMethodInfo {
+  name: string;
+  serverStreaming: boolean;
+  inputExample: unknown;
+}
+
+export interface GrpcServiceInfo {
+  name: string;
+  methods: GrpcMethodInfo[];
+}
+
+export interface GrpcCallResult {
+  status: string;
+  grpcStatusCode: string;
+  grpcMessage: string;
+  headers: Array<[string, string]>;
+  responses: unknown[];
+  durationMs: number;
+}
+
+/** Découvre les services d'une cible gRPC via la réflexion serveur. */
+export async function grpcListServices(url: string): Promise<GrpcServiceInfo[]> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    return await invoke<GrpcServiceInfo[]>("grpc_list_services", { url });
+  } catch (e) {
+    throw new Error(formatErrorMessage(e), { cause: e });
+  }
+}
+
+/** Exécute un appel gRPC (unary ou server-streaming). */
+export async function grpcCall(
+  url: string,
+  method: string,
+  payloadJson: string,
+  metadata: Array<[string, string]> = [],
+): Promise<GrpcCallResult> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    return await invoke<GrpcCallResult>("grpc_call", {
+      url,
+      method,
+      payloadJson,
+      metadata,
+    });
+  } catch (e) {
+    throw new Error(formatErrorMessage(e), { cause: e });
+  }
+}
+
 /** Stops the capture proxy. */
-export async function stopCaptureProxy(): Promise<void> {  if (isTauriAvailable()) {
+export async function stopCaptureProxy(): Promise<void> {
+  if (isTauriAvailable()) {
     const { invoke } = await import("@tauri-apps/api/core");
     try {
       await invoke("stop_capture_proxy");

@@ -443,7 +443,8 @@
     "toggleAiSidebarClose": "Fermer l'assistant IA",
     "toggleAiSidebarOpen": "Ouvrir l'assistant IA (Cmd+I)",
     "keyboardShortcuts": "Raccourcis clavier",
-    "shortcutsGroup": "Aide"
+    "shortcutsGroup": "Aide",
+    "openGrpc": "Ouvrir le panneau gRPC"
   },
   "language": {},
   "runner": {
@@ -2702,5 +2703,26 @@
     "lastRun": "Dernière exécution",
     "neverRun": "Jamais exécutée",
     "environment": "Environnement actif"
+  },
+  "grpc": {
+    "subtitle": "Découvrez les services via la réflexion et appelez-les sans .proto",
+    "statusIdle": "Inactif",
+    "statusError": "Erreur",
+    "loading": "Découverte…",
+    "ready": "Prêt",
+    "noServices": "Aucun service déclaré (réflexion absente ou vide)",
+    "discover": "Découvrir",
+    "method": "Méthode",
+    "selectMethod": "Choisir une méthode…",
+    "metadata": "Métadonnées",
+    "metadataName": "Nom",
+    "metadataValue": "Valeur",
+    "metadataAdd": "Ajouter une métadonnée",
+    "metadataEmpty": "Aucune métadonnée",
+    "payload": "Message d'entrée (JSON)",
+    "send": "Envoyer",
+    "ok": "OK",
+    "failed": "Échec (code {{code}})",
+    "messagesCount": "{{count}} message(s)"
   }
 }

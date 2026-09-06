@@ -443,7 +443,8 @@
     "toggleAiSidebarClose": "Close AI assistant",
     "toggleAiSidebarOpen": "Open AI assistant (Cmd+I)",
     "keyboardShortcuts": "Keyboard shortcuts",
-    "shortcutsGroup": "Help"
+    "shortcutsGroup": "Help",
+    "openGrpc": "Open gRPC Panel"
   },
   "language": {},
   "runner": {
@@ -2702,5 +2703,26 @@
     "lastRun": "Last run",
     "neverRun": "Never executed",
     "environment": "Active environment"
+  },
+  "grpc": {
+    "subtitle": "Discover services via reflection and call them without .proto",
+    "statusIdle": "Idle",
+    "statusError": "Error",
+    "loading": "Discovering…",
+    "ready": "Ready",
+    "noServices": "No service declared (missing or empty reflection)",
+    "discover": "Discover",
+    "method": "Method",
+    "selectMethod": "Pick a method…",
+    "metadata": "Metadata",
+    "metadataName": "Name",
+    "metadataValue": "Value",
+    "metadataAdd": "Add metadata",
+    "metadataEmpty": "No metadata",
+    "payload": "Input message (JSON)",
+    "send": "Send",
+    "ok": "OK",
+    "failed": "Failed (code {{code}})",
+    "messagesCount": "{{count}} message(s)"
   }
 }

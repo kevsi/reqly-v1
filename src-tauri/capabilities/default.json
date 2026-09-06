@@ -27,6 +27,8 @@
     "allow-get-capture-ca-info",
     "allow-start-capture-https-proxy",
     "allow-stop-capture-https-proxy",
+    "allow-grpc-list-services",
+    "allow-grpc-call",
     "allow-start-mcp-server",
     "allow-stop-mcp-server",
     "allow-get-mcp-server-status",
