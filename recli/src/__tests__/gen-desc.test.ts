@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { handleGenerateRequestFromDescription } from "../mcp/handlers/requests.js";
-import type { CollectionStore } from "../store.js";
+import type { CollectionStore } from "../mcp/store.js";
 
 function makeStore(): CollectionStore {
   return {

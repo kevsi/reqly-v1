@@ -81,6 +81,20 @@ if (workspacesExcluded) {
 function deployRecliForDesktop() {
   const root = path.resolve("..");
   const target = path.resolve(root, "src-tauri", "resources", "recli");
+
+  // recli tsc résout @reqly/shared via son dist/ — sur un checkout CI frais
+  // le workspace n'est pas encore compilé, il faut builder shared d'abord.
+  console.log("[build-desktop] Building @reqly/shared...");
+  const shared = spawnSync("pnpm", ["--filter", "@reqly/shared", "build"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+    env: process.env,
+  });
+  if (shared.status !== 0) {
+    console.warn("[build-desktop] @reqly/shared build failed — recli échouera aussi");
+  }
+
   console.log("[build-desktop] Building recli...");
   const build = spawnSync("pnpm", ["--dir", "recli", "build"], {
     cwd: root,
