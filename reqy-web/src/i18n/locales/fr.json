@@ -565,7 +565,18 @@
       "local": "Via navigateur",
       "proxy": "Via proxy backend"
     },
-    "performanceNote": "Mode performance : les assertions, scripts et extractions de variables sont ignorés — seules les métriques (latence, débit, erreurs) sont mesurées."
+    "performanceNote": "Mode performance : les assertions, scripts et extractions de variables sont ignorés — seules les métriques (latence, débit, erreurs) sont mesurées.",
+    "perfSingleStage": "Stage unique : {{vus}} VUs pendant {{sec}} s",
+    "perfCustomize": "Personnaliser les stages",
+    "perfStageDuration": "Durée du stage en secondes",
+    "perfStageVus": "Utilisateurs virtuels du stage",
+    "perfStageAdd": "Ajouter un stage",
+    "perfStagesReset": "Revenir au stage unique",
+    "perfP95": "p95",
+    "perfP99": "p99",
+    "perfTotalRequests": "Requêtes totales",
+    "perfAssertions": "Assertions",
+    "perfPerRequest": "Par requête"
   },
   "theme": {
     "label": {

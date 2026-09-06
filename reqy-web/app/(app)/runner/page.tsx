@@ -29,6 +29,7 @@ import {
   Activity,
   Sparkles,
   History,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,8 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { createRunnerExecutor, runRequestsConcurrent } from "@/lib/test-runner/executor";
+import { createRunnerExecutor } from "@/lib/test-runner/executor";
+import { runPerformanceStages, type PerfStage } from "@/lib/test-runner/perf-runner";
 import {
   type CollectionRunReport,
   type RequestTestResult,
@@ -210,6 +212,18 @@ function formatActual(v: unknown): string {
 const RUNNER_KEYS = {
   viewProgress: "runner.viewProgress",
   lastCompleted: "runner.lastCompleted",
+  perfSingleStage: "runner.perfSingleStage",
+  perfCustomize: "runner.perfCustomize",
+  perfStageDuration: "runner.perfStageDuration",
+  perfStageVus: "runner.perfStageVus",
+  perfStageAdd: "runner.perfStageAdd",
+  perfStagesReset: "runner.perfStagesReset",
+  perfP95: "runner.perfP95",
+  perfP99: "runner.perfP99",
+  perfTotalRequests: "runner.perfTotalRequests",
+  perfAssertions: "runner.perfAssertions",
+  perfPerRequest: "runner.perfPerRequest",
+  perfStagesTitle: "runner.perfStagesTitle",
   cumulativeDuration: "runner.cumulativeDuration",
   iterationsIgnored: "runner.iterationsIgnored",
   datasetNoMatch: "runner.datasetNoMatch",
@@ -603,6 +617,8 @@ export default function RunnerPage() {
   const [runType, setRunType] = useState<"functional" | "performance">("functional");
   const [runMethod, setRunMethod] = useState<"local" | "proxy">("local");
   const [virtualUsers, setVirtualUsers] = useState<number>(10);
+  // Stages de charge personnalisés. Vide = stage unique {10 s, virtualUsers}.
+  const [perfStages, setPerfStages] = useState<PerfStage[]>([]);
   const [iterationsCount, setIterationsCount] = useState<number>(1);
   const [stopOnFailure, setStopOnFailure] = useState(false);
   const [delayMs, setDelayMs] = useState<number>(0);
@@ -745,65 +761,75 @@ export default function RunnerPage() {
 
     try {
       if (runType === "performance") {
-        // Feature 3: Performance Stress / Concurrent Load Engine
-        const startTime = Date.now();
-        const requestInputs = filteredRequests.map((r) => ({
+        // Moteur de charge par stages : chaque VU rejoue la liste en boucle
+        // pendant la durée du stage ; assertions évaluées sur chaque réponse.
+        const stages: PerfStage[] =
+          perfStages.length > 0 ? perfStages : [{ durationSec: 10, targetVus: virtualUsers }];
+        const plannedMs = stages.reduce((sum, s) => sum + s.durationSec, 0) * 1000;
+        const perfStart = Date.now();
+
+        const requestSpecs = filteredRequests.map((r) => ({
+          id: r.id,
+          name: r.name,
           method: r.method,
           url: r.url,
           headers: r.headers ?? {},
           body: r.body,
+          assertions: r.runnerAssertions,
         }));
 
-        // Run requests concurrently with bounded worker pool matching Virtual Users
-        const concurrentResults = await runRequestsConcurrent(requestInputs, {
-          workspaceId: activeWorkspaceId,
+        const stagesReport = await runPerformanceStages(requestSpecs, {
+          stages,
+          execute: createRunnerExecutor({
+            workspaceId: activeWorkspaceId,
+            signal: controller.signal,
+            serverSide: runMethod === "local",
+          }),
           signal: controller.signal,
-          concurrency: virtualUsers,
-          serverSide: runMethod === "local",
-          // R12: same progression state as the functional mode
-          onRequestDone: (completed, total) => {
+          onProgress: (completed) => {
             if (!controller.signal.aborted) {
-              setProgress(Math.round((completed / Math.max(1, total)) * 100));
-              // Concurrent completions can't be attributed to a specific
-              // request — never display an arbitrary name as "completed".
+              // Durée planifiée = progression (le volume total est variable,
+              // donc pas de compteur X/N — la barre suffit).
+              void completed;
+              const pct = Math.min(95, Math.round(((Date.now() - perfStart) / plannedMs) * 100));
+              setProgress(pct);
               setCurrentExecutingName(null);
-              setProgressCounts({ completed, total });
             }
           },
         });
 
+        const startTime = perfStart;
         const endTime = Date.now();
         const totalTimeMs = Math.max(1, endTime - startTime);
-        const latencies = concurrentResults
-          .filter((r) => r.ok)
-          .map((r) => (r.ok ? r.response.responseTimeMs : 0));
-
-        const avgLatency =
-          latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
-        const minLatency = latencies.length > 0 ? Math.min(...latencies) : 0;
-        const maxLatency = latencies.length > 0 ? Math.max(...latencies) : 0;
-        const errorCount = concurrentResults.filter(
-          (r) => !r.ok || (r.ok && r.response.statusCode >= 400),
-        ).length;
+        const { totalRequests, failedRequests } = stagesReport;
 
         const perfReport: PerformanceReport = {
-          throughputRps: Number(((concurrentResults.length / totalTimeMs) * 1000).toFixed(1)),
-          avgLatencyMs: Math.round(avgLatency),
-          minLatencyMs: Math.round(minLatency),
-          maxLatencyMs: Math.round(maxLatency),
-          errorRatePercent: Number(((errorCount / concurrentResults.length) * 100).toFixed(1)),
-          virtualUsers,
+          throughputRps: stagesReport.throughputRps,
+          avgLatencyMs: stagesReport.avgMs,
+          minLatencyMs: stagesReport.minMs,
+          maxLatencyMs: stagesReport.maxMs,
+          errorRatePercent: totalRequests
+            ? Number(((failedRequests / totalRequests) * 100).toFixed(1))
+            : 0,
+          virtualUsers: stagesReport.peakVus,
+          stagesReport,
         };
 
-        const mappedResults: RequestTestResult[] = concurrentResults.map((res, i) => ({
-          requestId: filteredRequests[i].id,
-          requestName: filteredRequests[i].name,
-          status: res.ok && res.response.statusCode < 400 ? "pass" : "fail",
-          statusCode: res.ok ? res.response.statusCode : 0,
-          responseTimeMs: res.ok ? res.response.responseTimeMs : 0,
+        const mappedResults: RequestTestResult[] = stagesReport.perRequest.map((stats) => ({
+          requestId: stats.requestId,
+          requestName: stats.name,
+          // En charge, statut agrégé : échec si au moins une exécution a
+          // échoué (réseau ou >= 400) ou une assertion a échoué.
+          status: stats.errors === 0 && stats.assertionsFailed === 0 ? "pass" : "fail",
+          statusCode: undefined,
+          responseTimeMs: stats.avgMs,
           assertionResults: [],
-          error: res.ok ? undefined : res.error,
-          responseBodyExcerpt: res.ok ? excerptResponseBody(res.response.body) : undefined,
+          error:
+            stats.errors > 0
+              ? `${stats.errors}/${stats.count} exécution(s) en échec`
+              : stats.assertionsFailed > 0
+                ? `${stats.assertionsFailed} assertion(s) en échec`
+                : undefined,
         }));
 
         const finalReport: CollectionRunReport = {
@@ -1433,7 +1459,9 @@ export default function RunnerPage() {
                         Virtual Users (Concurrent Workers)
                       </span>
                       <span className="font-mono font-bold text-foreground">
-                        {virtualUsers} VUs
+                        {perfStages.length > 0
+                          ? `pic ${Math.max(...perfStages.map((s) => s.targetVus))} VUs`
+                          : `${virtualUsers} VUs`}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1453,6 +1481,114 @@ export default function RunnerPage() {
                         </button>
                       ))}
                     </div>
+
+                    {/* Stages de charge : durée × VUs, exécutés séquentiellement */}
+                    {perfStages.length === 0 ? (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-muted-foreground">
+                          {t(RUNNER_KEYS.perfSingleStage, {
+                            defaultValue: "Stage unique : {{vus}} VUs pendant {{sec}} s",
+                            vus: virtualUsers,
+                            sec: 10,
+                          })}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[11px]"
+                          onClick={() =>
+                            setPerfStages([{ durationSec: 10, targetVus: virtualUsers }])
+                          }
+                        >
+                          {t(RUNNER_KEYS.perfCustomize, { defaultValue: "Personnaliser les stages" })}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 pt-1">
+                        {perfStages.map((stage, index) => (
+                          <div key={index} className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground w-10 shrink-0">
+                              #{index + 1}
+                            </span>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={600}
+                              value={stage.durationSec}
+                              onChange={(e) =>
+                                setPerfStages((prev) =>
+                                  prev.map((s, i) =>
+                                    i === index
+                                      ? { ...s, durationSec: Math.max(1, Number(e.target.value) || 1) }
+                                      : s,
+                                  ),
+                                )
+                              }
+                              className="h-6 w-20 text-[11px] font-mono"
+                              aria-label={t(RUNNER_KEYS.perfStageDuration, { defaultValue: "Durée du stage en secondes" })}
+                            />
+                            <span className="text-muted-foreground shrink-0">s ×</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={200}
+                              value={stage.targetVus}
+                              onChange={(e) =>
+                                setPerfStages((prev) =>
+                                  prev.map((s, i) =>
+                                    i === index
+                                      ? { ...s, targetVus: Math.max(1, Number(e.target.value) || 1) }
+                                      : s,
+                                  ),
+                                )
+                              }
+                              className="h-6 w-16 text-[11px] font-mono"
+                              aria-label={t(RUNNER_KEYS.perfStageVus, { defaultValue: "Utilisateurs virtuels du stage" })}
+                            />
+                            <span className="text-muted-foreground shrink-0">VUs</span>
+                            <button
+                              type="button"
+                              onClick={() => setPerfStages((prev) => prev.filter((_, i) => i !== index))}
+                              className="ml-auto text-muted-foreground/50 hover:text-destructive"
+                              aria-label={t("common.remove", { defaultValue: "Retirer" })}
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        <div className="flex items-center gap-2 pt-0.5">
+                          {perfStages.length < 10 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[11px]"
+                              onClick={() =>
+                                setPerfStages((prev) => [
+                                  ...prev,
+                                  {
+                                    durationSec: 10,
+                                    targetVus: prev[prev.length - 1]?.targetVus ?? virtualUsers,
+                                  },
+                                ])
+                              }
+                            >
+                              {t(RUNNER_KEYS.perfStageAdd, { defaultValue: "Ajouter un stage" })}
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[11px] text-muted-foreground"
+                            onClick={() => setPerfStages([])}
+                          >
+                            {t(RUNNER_KEYS.perfStagesReset, { defaultValue: "Revenir au stage unique" })}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1858,7 +1994,7 @@ export default function RunnerPage() {
                       Concurrents)
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-4 pb-4">
+                  <CardContent className="px-4 pb-4 space-y-3">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                       <div className="p-3 bg-card rounded-lg border">
                         <span className="text-[11px] text-muted-foreground block">Throughput</span>
@@ -1901,6 +2037,106 @@ export default function RunnerPage() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Détails du moteur par stages (absents des rapports historiques) */}
+                    {report.performanceReport.stagesReport && (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                          <div className="p-3 bg-card rounded-lg border">
+                            <span className="text-[11px] text-muted-foreground block">
+                              {t(RUNNER_KEYS.perfTotalRequests, { defaultValue: "Requêtes totales" })}
+                            </span>
+                            <span className="text-sm font-bold font-mono text-foreground block">
+                              {report.performanceReport.stagesReport.totalRequests}{" "}
+                              <span className="text-[10px] text-muted-foreground">
+                                ({report.performanceReport.stagesReport.failedRequests} KO)
+                              </span>
+                            </span>
+                          </div>
+                          <div className="p-3 bg-card rounded-lg border">
+                            <span className="text-[11px] text-muted-foreground block">
+                              {t(RUNNER_KEYS.perfP95, { defaultValue: "p95" })}
+                            </span>
+                            <span className="text-xl font-bold font-mono text-foreground">
+                              {report.performanceReport.stagesReport.p95Ms}{" "}
+                              <span className="text-xs">ms</span>
+                            </span>
+                          </div>
+                          <div className="p-3 bg-card rounded-lg border">
+                            <span className="text-[11px] text-muted-foreground block">
+                              {t(RUNNER_KEYS.perfP99, { defaultValue: "p99" })}
+                            </span>
+                            <span className="text-xl font-bold font-mono text-foreground">
+                              {report.performanceReport.stagesReport.p99Ms}{" "}
+                              <span className="text-xs">ms</span>
+                            </span>
+                          </div>
+                          <div className="p-3 bg-card rounded-lg border">
+                            <span className="text-[11px] text-muted-foreground block">
+                              {t(RUNNER_KEYS.perfAssertions, { defaultValue: "Assertions" })}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-sm font-bold font-mono block mt-1",
+                                report.performanceReport.stagesReport.assertionSummary.failed > 0
+                                  ? "text-destructive"
+                                  : "text-success",
+                              )}
+                            >
+                              {report.performanceReport.stagesReport.assertionSummary.passed}/
+                              {report.performanceReport.stagesReport.assertionSummary.total}
+                            </span>
+                          </div>
+                        </div>
+
+                        {report.performanceReport.stagesReport.perRequest.length > 0 && (
+                          <div className="rounded-lg border bg-card overflow-hidden">
+                            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b">
+                              {t(RUNNER_KEYS.perfPerRequest, { defaultValue: "Par requête" })}
+                            </div>
+                            <div className="max-h-48 overflow-y-auto scrollbar-discreet">
+                              <table className="w-full text-[11px]">
+                                <thead>
+                                  <tr className="text-muted-foreground text-left">
+                                    <th className="px-3 py-1 font-medium">Requête</th>
+                                    <th className="px-2 py-1 font-medium text-right">Exec</th>
+                                    <th className="px-2 py-1 font-medium text-right">KO</th>
+                                    <th className="px-2 py-1 font-medium text-right">Moy.</th>
+                                    <th className="px-3 py-1 font-medium text-right">p95</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {report.performanceReport.stagesReport.perRequest.map((stats) => (
+                                    <tr key={stats.requestId} className="border-t">
+                                      <td className="px-3 py-1 font-mono truncate max-w-40">
+                                        {stats.name}
+                                      </td>
+                                      <td className="px-2 py-1 text-right font-mono">
+                                        {stats.count}
+                                      </td>
+                                      <td
+                                        className={cn(
+                                          "px-2 py-1 text-right font-mono",
+                                          stats.errors > 0 && "text-destructive font-bold",
+                                        )}
+                                      >
+                                        {stats.errors}
+                                      </td>
+                                      <td className="px-2 py-1 text-right font-mono">
+                                        {stats.avgMs} ms
+                                      </td>
+                                      <td className="px-3 py-1 text-right font-mono">
+                                        {stats.p95Ms} ms
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               )}

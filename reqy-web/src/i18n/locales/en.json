@@ -565,7 +565,18 @@
       "local": "Via browser",
       "proxy": "Via backend proxy"
     },
-    "performanceNote": "Performance mode: assertions, scripts and variable extractions are ignored — only metrics (latency, throughput, errors) are measured."
+    "performanceNote": "Performance mode: assertions, scripts and variable extractions are ignored — only metrics (latency, throughput, errors) are measured.",
+    "perfSingleStage": "Single stage: {{vus}} VUs for {{sec}}s",
+    "perfCustomize": "Customize stages",
+    "perfStageDuration": "Stage duration in seconds",
+    "perfStageVus": "Stage virtual users",
+    "perfStageAdd": "Add a stage",
+    "perfStagesReset": "Back to single stage",
+    "perfP95": "p95",
+    "perfP99": "p99",
+    "perfTotalRequests": "Total requests",
+    "perfAssertions": "Assertions",
+    "perfPerRequest": "Per request"
   },
   "theme": {
     "label": {

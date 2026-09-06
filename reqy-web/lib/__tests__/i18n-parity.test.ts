@@ -128,6 +128,8 @@ const ALLOWED_IDENTICAL = new Set([
   "Messages",
   "WebSocket",
   "OpenCollection (YAML)",
+  "p95",
+  "p99",
   "Navigation",
   "Notifications",
   "Nullable",

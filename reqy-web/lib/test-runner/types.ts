@@ -53,6 +53,12 @@ export interface PerformanceReport {
   maxLatencyMs: number;
   errorRatePercent: number;
   virtualUsers: number;
+  /**
+   * Rapport détaillé du moteur par stages (perf-runner). Optionnel : les
+   * rapports persistés avant l'introduction des stages n'en ont pas — le
+   * dashboard doit rester lisible sans.
+   */
+  stagesReport?: import("./perf-runner").PerfStagesReport;
 }
 
 export interface CollectionRunReport {
