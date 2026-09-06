@@ -27,7 +27,6 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -507,6 +506,7 @@ export function CollectionRow({
     onFolderMoveUp,
     onFolderMoveDown,
     onAddFolder,
+    onAddRequest,
     expandedFolderIds,
     toggleFolderExpand,
     t,

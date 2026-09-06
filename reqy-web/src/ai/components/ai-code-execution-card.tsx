@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Play, ShieldCheck, X } from "lucide-react";
+import { Loader2, Play, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";

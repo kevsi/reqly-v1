@@ -13,11 +13,9 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Plus, Layers, Import, Loader2 } from "lucide-react";
 import { methodBadge } from "@/lib/http-method-colors";
 import { cn, downloadJson } from "@/lib/utils";
 
-import { Button } from "@/components/ui/button";
 
 import { toast } from "@/hooks/use-toast";
 
@@ -148,7 +146,7 @@ export function CollectionsPanel({
   const [semanticResults, setSemanticResults] = useState<Set<string> | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importing, setImporting] = useState(false);
+  const [_importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<Set<string>>(new Set());
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());

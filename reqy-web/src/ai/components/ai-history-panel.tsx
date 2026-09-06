@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Plus, Trash2, MessageSquare, Clock } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { cn } from "@/lib/utils";
 import type { ConversationSession } from "@/src/ai/components/ai-sidebar-types";
 
@@ -14,7 +15,7 @@ interface AiHistoryPanelProps {
   onNewSession: () => void;
 }
 
-function formatRelative(dateStr: string, t: (key: string, options?: any) => string): string {
+function formatRelative(dateStr: string, t: TFunction): string {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
@@ -30,7 +31,7 @@ function formatRelative(dateStr: string, t: (key: string, options?: any) => stri
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
 }
 
-function groupLabel(dateStr: string, t: (key: string, options?: any) => string): string {
+function groupLabel(dateStr: string, t: TFunction): string {
   const d = new Date(dateStr);
   const now = new Date();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

@@ -33,7 +33,6 @@ import { emptyUsage, addUsage } from "@/src/ai/agent/usage";
 import { createDefaultCommands, type SlashCommandContext } from "@/src/ai/agent/commands";
 import { extractTextToolCalls, stripToolCallText } from "@/src/ai/agent/text-tools";
 import type { AgentMode, ContextAttachment, AgentUsage } from "@/src/ai/agent/types";
-import type { ParsedCodeRequest } from "@/src/ai/agent/code-request";
 import { persistence } from "@/lib/persistence";
 import { useAiFileAttachments } from "@/src/ai/hooks/use-ai-file-attachments";
 import { useAiCodeExecution } from "@/src/ai/hooks/use-ai-code-execution";
@@ -120,7 +119,7 @@ export function useAiSidebarChat() {
   const [attachments, setAttachments] = useState<ContextAttachment[]>([]);
 
   // Sub-hooks modulaires (fichiers joints et exécution de code)
-  const { files, setFiles, attachFiles, removeFile, clearFiles } = useAiFileAttachments();
+  const { files, setFiles, attachFiles, removeFile } = useAiFileAttachments();
   const [sessionUsage, setSessionUsage] = useState<AgentUsage>(emptyUsage());
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [rulesPanelOpen, setRulesPanelOpen] = useState(false);
@@ -1066,7 +1065,7 @@ export function useAiSidebarChat() {
         setEditingText("");
       }
     },
-    [isLoading, pathname, autoApply, attachments, files, gatedExecute, forceScrollToBottom],
+    [isLoading, pathname, autoApply, attachments, files, gatedExecute, forceScrollToBottom, setFiles],
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -1131,7 +1130,7 @@ export function useAiSidebarChat() {
     setPendingPlan(null);
     setFiles([]);
     pendingPlanRef.current = null;
-  }, []);
+  }, [setFiles]);
 
   const runSlashCommand = useCallback(
     (name: string, args: string) => {

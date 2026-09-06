@@ -58,8 +58,10 @@ export function AiProviderModal({
   currentBaseUrl,
   onSave,
   onDelete,
-  isActiveProvider = false,
-  onSetActive,
+  // isActiveProvider / onSetActive : réserves pour un futur bouton
+  // « définir comme fournisseur actif » — préfixés pour le linter.
+  isActiveProvider: _isActiveProvider = false,
+  onSetActive: _onSetActive,
 }: AiProviderModalProps) {
   const provider = providerInfo.value;
   const isCustom = provider === "custom";

@@ -23,7 +23,7 @@ export function useRequestAiEngine(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   buildTabFromRequest: (request: any) => Partial<RequestTab>,
 ) {
-  const { activeTab, activeTabId, setTabs, updateTab, setGeneratingFollowUpId, setHistoryOpen } =
+  const { activeTab, updateTab, setGeneratingFollowUpId, setHistoryOpen } =
     state;
 
   const { setCurrentRequest, setLastResponse } = useRequestStore();

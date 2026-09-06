@@ -101,7 +101,6 @@ export function AiPermissionsPopover({ onClose }: Props) {
   };
 
   const handleResetAll = () => {
-    const next: Record<string, ToolPermission> = {};
     for (const tool of REQLY_TOOLS) {
       savePermission(tool.name, "ask" as ToolPermission);
       // on supprime la clé pour revenir au défaut, mais on garde ask pour feedback visuel

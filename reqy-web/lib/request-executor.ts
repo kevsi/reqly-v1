@@ -1,5 +1,5 @@
-import type { HttpMethod, RequestTestAssertion, TestResult, AssertionType } from "@/lib/types";
-export type { HttpMethod, RequestTestAssertion, TestResult } from "@/lib/types";
+import type { HttpMethod, TestResult, AssertionType } from "@/lib/types";
+export type { HttpMethod, RequestTestAssertion, TestResult } from "@/lib/types";  // RequestTestAssertion : réexport consommé
 import type { Assertion, AssertionResult, RequestResponse } from "@/lib/test-runner/types";
 import { evaluateAssertions } from "@/lib/test-runner/assertions";
 import { interpolate, replaceLocalhostPort, parseJsonSafe } from "@/lib/utils";
