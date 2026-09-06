@@ -385,9 +385,46 @@ export async function getCaptureProxyStatus(): Promise<{
   };
 }
 
+// ── Capture HTTPS (MITM) — desktop uniquement ──────────────────────────────
+
+export interface CaptureCaInfo {
+  path: string;
+  exists: boolean;
+}
+
+/** Infos sur la CA de capture : chemin du certificat à installer + présence. */
+export async function getCaptureCaInfo(): Promise<CaptureCaInfo | null> {
+  if (!isTauriAvailable()) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    return await invoke<CaptureCaInfo>("get_capture_ca_info");
+  } catch (e) {
+    throw new Error(formatErrorMessage(e), { cause: e });
+  }
+}
+
+/** Démarre le listener d'interception HTTPS (tunnels CONNECT). */
+export async function startCaptureHttpsProxy(port: number): Promise<string> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    return await invoke<string>("start_capture_https_proxy", { port });
+  } catch (e) {
+    throw new Error(formatErrorMessage(e), { cause: e });
+  }
+}
+
+/** Arrête le listener d'interception HTTPS. */
+export async function stopCaptureHttpsProxy(): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    await invoke("stop_capture_https_proxy");
+  } catch (e) {
+    throw new Error(formatErrorMessage(e), { cause: e });
+  }
+}
+
 /** Stops the capture proxy. */
-export async function stopCaptureProxy(): Promise<void> {
-  if (isTauriAvailable()) {
+export async function stopCaptureProxy(): Promise<void> {  if (isTauriAvailable()) {
     const { invoke } = await import("@tauri-apps/api/core");
     try {
       await invoke("stop_capture_proxy");

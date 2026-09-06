@@ -48,6 +48,8 @@ open = "5.3"
 base64 = "0.22"
 tiny_http = "0.12"
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+rcgen = "0.13"
+httparse = "1"
 hyper = { version = "1", features = ["http2", "client"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
@@ -57,5 +59,8 @@ git2 = { version = "0.19", features = ["vendored-libgit2"] }
 dotenvy = "0.15"
 
 [dev-dependencies]
-tauri = { version = "2.11.1", features = ["test"] }
 tempfile = "3"
+tokio = { version = "1", features = ["rt", "macros", "net", "io-util", "time"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+base64 = "0.22"

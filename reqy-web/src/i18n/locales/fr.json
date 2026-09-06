@@ -2403,7 +2403,10 @@
     "timestamp": "Horodatage",
     "title": "Capture",
     "trafficList": "Liste du trafic",
-    "transferError": "Erreur de transfert"
+    "transferError": "Erreur de transfert",
+    "mitmToggle": "Intercepter le HTTPS (MITM)",
+    "caTitle": "Certificat Reqly — installation unique requise",
+    "caHint": "Installez ce certificat dans votre magasin « Autorités de certification racines de confiance » (Windows : double-clic sur le fichier → Installer le certificat → Magasin de l'utilisateur actuel → Autorités de certification racines de confiance). Les navigateurs doivent être configurés pour utiliser le proxy 127.0.0.1 sur ce port."
   },
   "requestUnsaved": {
     "title": "Modifications non enregistrées",

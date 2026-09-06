@@ -23,6 +23,9 @@ vi.mock("@/lib/tauri", () => ({
   stopCaptureProxy: (...a: unknown[]) => hoisted.stopCaptureProxy(...a),
   clearCapturedSessions: (...a: unknown[]) => hoisted.clearCapturedSessions(...a),
   setBandwidthLimit: vi.fn(),
+  getCaptureCaInfo: vi.fn(async () => ({ path: "C:\\test\\ca-cert.pem", exists: true })),
+  startCaptureHttpsProxy: vi.fn(async () => "127.0.0.1:8080"),
+  stopCaptureHttpsProxy: vi.fn(async () => undefined),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({

@@ -33,6 +33,7 @@ import {
   Sparkles,
   Terminal,
   AlertTriangle,
+  Shield,
 } from "lucide-react";
 import { useRequestStore } from "@/hooks/use-request-store";
 import {
@@ -42,6 +43,10 @@ import {
   getCaptureProxyStatus,
   startCaptureProxy,
   stopCaptureProxy,
+  startCaptureHttpsProxy,
+  stopCaptureHttpsProxy,
+  getCaptureCaInfo,
+  type CaptureCaInfo,
   clearCapturedSessions,
   deleteCapturedSession,
   formatErrorMessage,
@@ -179,6 +184,10 @@ export default function CapturePage() {
 
   const [port, setPort] = useState<number>(8080);
   const [running, setRunning] = useState(false);
+  const [mitmEnabled, setMitmEnabled] = useState(false);
+  const [runningHttps, setRunningHttps] = useState(false);
+  const [caInfo, setCaInfo] = useState<CaptureCaInfo | null>(null);
+  const [caCopied, setCaCopied] = useState(false);
   const [sessions, setSessions] = useState<CapturedSummary[]>([]);
   const [statusById, setStatusById] = useState<Record<string, number | null>>({});
   const [selected, setSelected] = useState<CapturedRequest | null>(null);
@@ -188,6 +197,15 @@ export default function CapturePage() {
   const [collectionName, setCollectionName] = useState<string>("");
   const [savedName, setSavedName] = useState<string | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  // CA de capture : générée au premier accès pour que le certificat à
+  // installer existe, même avant le premier démarrage du proxy.
+  useEffect(() => {
+    if (!isTauriAvailable()) return;
+    getCaptureCaInfo()
+      .then(setCaInfo)
+      .catch(() => undefined);
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState<string | null>(null);
@@ -294,7 +312,14 @@ export default function CapturePage() {
     setError(null);
     setBusy(true);
     try {
-      await startCaptureProxy(port);
+      if (mitmEnabled) {
+        // Listener MITM : CONNECT (HTTPS déchiffré) + HTTP en clair sur le
+        // même port — tiny_http n'est pas démarré dans ce mode.
+        await startCaptureHttpsProxy(port);
+        setRunningHttps(true);
+      } else {
+        await startCaptureProxy(port);
+      }
       setRunning(true);
       setDroppedCount(0);
       setSessions([]);
@@ -313,7 +338,12 @@ export default function CapturePage() {
     setError(null);
     setBusy(true);
     try {
-      await stopCaptureProxy();
+      if (runningHttps) {
+        await stopCaptureHttpsProxy();
+        setRunningHttps(false);
+      } else {
+        await stopCaptureProxy();
+      }
       setRunning(false);
       await refresh();
     } catch (e) {
@@ -719,6 +749,19 @@ export default function CapturePage() {
                       </button>
                     ))}
                   </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={mitmEnabled}
+                      disabled={running}
+                      onChange={(e) => setMitmEnabled(e.target.checked)}
+                      className="accent-primary"
+                      aria-label={t("capturePage.mitmToggle")}
+                    />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {t("capturePage.mitmToggle")}
+                    </span>
+                  </label>
                 </>
               )}
               <div className="flex items-center gap-2 ml-auto">
@@ -754,6 +797,42 @@ export default function CapturePage() {
                 )}
               </div>
             </div>
+
+            {/* Interception HTTPS : certificat CA à installer */}
+            {isTauriAvailable() && (mitmEnabled || runningHttps) && (
+              <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <Shield className="size-3.5" />
+                    {t("capturePage.caTitle")}
+                  </span>
+                  {caInfo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!caInfo) return;
+                        navigator.clipboard.writeText(caInfo.path).then(() => {
+                          setCaCopied(true);
+                          setTimeout(() => setCaCopied(false), 1500);
+                        }).catch(() => undefined);
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {caCopied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+                      {t("common.copy")}
+                    </button>
+                  )}
+                </div>
+                {caInfo && (
+                  <code className="block text-[11px] font-mono text-muted-foreground break-all">
+                    {caInfo.path}
+                  </code>
+                )}
+                <p className="text-[11px] text-muted-foreground/80">
+                  {t("capturePage.caHint")}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

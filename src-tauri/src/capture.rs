@@ -36,7 +36,7 @@ const SENSITIVE_HEADER_PREFIXES: &[&str] = &[
     "credentials",
 ];
 
-fn redact_headers(headers: &[(String, String)]) -> Vec<(String, String)> {
+pub(crate) fn redact_headers(headers: &[(String, String)]) -> Vec<(String, String)> {
     headers
         .iter()
         .filter(|(k, _)| {
@@ -94,7 +94,7 @@ fn is_blocked_metadata_ip(ip: IpAddr) -> bool {
 /// endpoint de métadonnées cloud (`is_blocked_metadata_ip`). Un échec de
 /// résolution n'est pas traité comme un blocage : reqwest signalera l'erreur
 /// au moment de l'envoi réel.
-async fn block_metadata_targets(url: &reqwest::Url) -> Result<(), AppError> {
+pub(crate) async fn block_metadata_targets(url: &reqwest::Url) -> Result<(), AppError> {
     let host = url
         .host_str()
         .ok_or_else(|| AppError::InvalidInput("Invalid URL: missing host".into()))?
@@ -125,7 +125,7 @@ async fn block_metadata_targets(url: &reqwest::Url) -> Result<(), AppError> {
 
 /// Nombre maximal de sessions gardées en mémoire + sur disque (les plus
 /// anciennes sont évincées). 2000 = quelques Mo de JSON, limite raisonnable.
-const MAX_CAPTURED_SESSIONS: usize = 2000;
+pub(crate) const MAX_CAPTURED_SESSIONS: usize = 2000;
 
 #[derive(Default)]
 pub struct CaptureProxyState {

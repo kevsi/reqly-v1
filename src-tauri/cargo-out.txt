@@ -1,0 +1,9 @@
+
+running 4 tests
+test capture_https::tests::parses_connect_authorities ... ok
+test capture_https::tests::rejects_unsafe_pem_blocks ... ok
+test capture_https::tests::issues_leaf_certificates_per_host ... ok
+test capture_https::tests::generates_and_persists_a_ca ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.03s
+

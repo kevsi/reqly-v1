@@ -2403,7 +2403,10 @@
     "timestamp": "Timestamp",
     "title": "Capture",
     "trafficList": "Traffic list",
-    "transferError": "Transfer error"
+    "transferError": "Transfer error",
+    "mitmToggle": "Intercept HTTPS (MITM)",
+    "caTitle": "Reqly certificate — one-time installation required",
+    "caHint": "Install this certificate into your Trusted Root Certification Authorities store (Windows: double-click the file → Install Certificate → Current User → Trusted Root Certification Authorities). Browsers must be configured to use the 127.0.0.1 proxy on this port."
   },
   "requestUnsaved": {
     "title": "Unsaved changes",

@@ -4,7 +4,8 @@ use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
 mod analyzer;
-mod capture;
+pub mod capture;
+pub mod capture_https;
 mod error;
 mod fetch;
 pub mod git;
@@ -20,6 +21,7 @@ use crate::capture::{
     clear_captured_sessions, delete_captured_session, get_captured_session, list_captured_sessions,
     set_bandwidth_limit, start_capture_proxy, stop_capture_proxy, ManagedCaptureProxyState,
 };
+use crate::capture_https::ManagedHttpsProxyState;
 use crate::fetch::{fetch_proxy, SharedClient};
 use crate::open::{export_files, export_json, open_external, save_file};
 
@@ -104,6 +106,7 @@ pub fn run() {
         .manage::<ManagedCaptureProxyState>(Arc::new(Mutex::new(
             capture::CaptureProxyState::default(),
         )))
+        .manage::<ManagedHttpsProxyState>(Arc::new(Mutex::new(None)))
         .manage::<mcp::ManagedMcpState>(Arc::new(Mutex::new(mcp::McpProcessState::default())))
         .manage::<git::commands::GitRepoState>(git::commands::GitRepoState::new())
         .manage::<websocket::WsConnections>(websocket::WsConnections::default())
@@ -120,6 +123,9 @@ pub fn run() {
             delete_captured_session,
             clear_captured_sessions,
             set_bandwidth_limit,
+            capture_https::get_capture_ca_info,
+            capture_https::start_capture_https_proxy,
+            capture_https::stop_capture_https_proxy,
             git::commands::git_init,
             git::commands::git_open,
             git::commands::git_status,
