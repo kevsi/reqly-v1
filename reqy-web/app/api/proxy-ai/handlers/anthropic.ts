@@ -11,6 +11,8 @@ export interface AnthropicBody {
   message?: string;
   tools?: Record<string, unknown>[];
   previousTurns?: PreviousTurn[];
+  /** Tours des messages précédents (mémoire inter-messages), AVANT le message courant. */
+  historyTurns?: PreviousTurn[];
 }
 
 export interface ExtraOptions {
@@ -27,6 +29,7 @@ export async function handleAnthropic(
   const message = body.message ?? "";
   const tools = Array.isArray(body.tools) ? (body.tools as Record<string, unknown>[]) : undefined;
   const previousTurns = body.previousTurns as PreviousTurn[] | undefined;
+  const historyTurns = body.historyTurns as PreviousTurn[] | undefined;
 
   if (!apiKey) {
     return structuredError("Missing API key", "MISSING_API_KEY", 400);
@@ -58,7 +61,11 @@ export async function handleAnthropic(
       model,
       max_tokens: 4096,
       system,
-      messages: [{ role: "user", content: message }, ...buildAnthropicToolHistory(previousTurns)],
+      messages: [
+        { role: "user", content: message },
+        ...buildAnthropicToolHistory(historyTurns),
+        ...buildAnthropicToolHistory(previousTurns),
+      ],
       ...(anthropicTools?.length ? { tools: anthropicTools } : {}),
     }),
   });

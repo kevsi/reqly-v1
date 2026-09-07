@@ -17,6 +17,8 @@ export interface OllamaBody {
   tools?: Record<string, unknown>[];
   tool_choice?: string | Record<string, unknown>;
   previousTurns?: PreviousTurn[];
+  /** Tours des messages précédents (mémoire inter-messages), AVANT le message courant. */
+  historyTurns?: PreviousTurn[];
 }
 
 export interface ExtraOptions {
@@ -35,6 +37,7 @@ export async function handleOllama(
   const tools = Array.isArray(body.tools) ? (body.tools as Record<string, unknown>[]) : undefined;
   const toolChoice = body.tool_choice as string | Record<string, unknown> | undefined;
   const previousTurns = body.previousTurns as PreviousTurn[] | undefined;
+  const historyTurns = body.historyTurns as PreviousTurn[] | undefined;
 
   const port =
     typeof body.port === "string"
@@ -73,6 +76,7 @@ export async function handleOllama(
         { role: "system", content: system },
         { role: "user", content: message },
         // Round-trip `reasoning_content` si un tour en contient (qwen3 thinking…).
+        ...buildOpenAIToolHistory(historyTurns, { includeReasoning: true }),
         ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
       ],
     }),

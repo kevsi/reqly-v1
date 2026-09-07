@@ -417,6 +417,7 @@ export function useAiSidebarChat() {
             ? "Auto-approuver : tu peux exécuter les outils sans redemander, sauf si une permission l'interdit."
             : "Avant toute action destructive, demande une confirmation explicite.",
           "IMPORTANT — anti-hallucination : ne jamais prétendre qu'une action a été effectuée sans l'avoir réellement exécutée via un outil. Si tu ne sais pas, appelle l'outil approprié (get_request_context, execute_request, etc.). Ne jamais inventer de status code, durée, ou contenu de réponse.",
+          "IMPORTANT — continuité : la conversation est EN COURS. Les tours d'outils déjà exécutés figurent dans l'historique des messages (assistant tool_calls + résultats). Consulte-les AVANT d'agir : ne salue plus, ne te présente plus, ne propose pas une action déjà réalisée (ex. recréer une collection qui existe déjà) et référence par son nom ce qui a déjà été créé. Si une étape a échoué, corrige la cause au lieu de rejouer à l'identique.",
           noRequestNote,
           "Réponds en français. Sois concis et actionnable.",
         ].filter(Boolean).join("\n\n");
@@ -428,11 +429,22 @@ export function useAiSidebarChat() {
           priorMessages = priorMessages.slice(0, -1);
         }
 
+        // ── Mémoire d'actions inter-messages ──
+        // Chaque message assistant conserve les tours d'outils réellement
+        // exécutés (create_collection, create_request…). On les reconstruit
+        // ici et on les envoie au provider comme VRAI historique de messages
+        // (assistant tool_calls + résultats tool) placé AVANT le message
+        // courant — le modèle sait ainsi ce qui a déjà été fait, sans quoi
+        // il re-crée des collections et redemande la même action.
+        const historyTurns = priorMessages
+          .flatMap((m) => m.turns ?? [])
+          .slice(-40); // cap : ~40 tours couvrent largement une session utile
+
         // Filtrer les messages assistant qui contiennent des résumés d'outils
-        // non vérifiés (risque d'hallucination ré-injectée). On ne garde que
-        // les 4 derniers messages pertinents pour garder le contexte léger.
+        // non vérifiés (risque d'hallucination ré-injectée). La vérité terrain
+        // transite désormais par historyTurns — le texte sert de fil narratif.
         const transcript = priorMessages
-          .slice(-8)
+          .slice(-16)
           .filter((m) => {
             if (m.role !== "assistant") return true;
             const text = m.content || "";
@@ -446,7 +458,7 @@ export function useAiSidebarChat() {
           })
           .map((m) => {
             const role = m.role === "user" ? "Utilisateur" : "Assistant";
-            const text = (m.content || "").slice(0, 1500);
+            const text = (m.content || "").slice(0, 3000);
             return text ? `${role}: ${text}` : "";
           })
           .filter(Boolean)
@@ -520,6 +532,7 @@ export function useAiSidebarChat() {
             tools: retriedWithoutTools ? undefined : REQLY_TOOLS,
             tool_choice: retriedWithoutTools ? undefined : "auto",
             previousTurns: previousTurns.length > 0 ? [...previousTurns] : undefined,
+            historyTurns: historyTurns.length > 0 ? [...historyTurns] : undefined,
           };
 
           let stream = streamLLM(opts);
@@ -982,6 +995,10 @@ export function useAiSidebarChat() {
               content: finalText,
               steps: [...steps],
               artifacts: extracted.artifacts.length > 0 ? extracted.artifacts : undefined,
+              // Mémoire d'actions : les tool calls + résultats de CE send sont
+              // conservés sur le message pour alimenter l'historique multi-tours
+              // du PROCHAIN envoi (mémoire inter-messages, pas seulement intra).
+              turns: previousTurns.length > 0 ? [...previousTurns] : undefined,
               phase: "done",
             };
           } else {
@@ -990,6 +1007,7 @@ export function useAiSidebarChat() {
               content: finalText,
               steps: [...steps],
               artifacts: extracted.artifacts.length > 0 ? extracted.artifacts : undefined,
+              turns: previousTurns.length > 0 ? [...previousTurns] : undefined,
               phase: "done",
             });
           }

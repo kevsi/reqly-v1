@@ -7,7 +7,7 @@
  * build desktop échoue sur `node:crypto`. Le navigateur, lui, poste son
  * webhook directement (sendMonitorWebhook dans alerts.ts).
  */
-import { buildAlertPayload, type MonitorAlertPayload } from "./shared";
+import type { MonitorAlertPayload } from "./shared";
 import { createPinnedDispatcher } from "@/lib/security/pinned-dispatcher";
 
 const WEBHOOK_TIMEOUT_MS = 5000;

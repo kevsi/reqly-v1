@@ -280,6 +280,11 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
   const previousTurns = Array.isArray(payload.previousTurns)
     ? (payload.previousTurns as PreviousTurn[])
     : undefined;
+  // Mémoire inter-messages : tours des messages PRÉCÉDENTS de la
+  // conversation, insérés AVANT le message courant chez chaque provider.
+  const historyTurns = Array.isArray(payload.historyTurns)
+    ? (payload.historyTurns as PreviousTurn[])
+    : undefined;
 
   let url: string;
   let body: Record<string, unknown>;
@@ -300,7 +305,11 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
         model,
         max_tokens: 4096,
         system,
-        messages: [{ role: "user", content: message }, ...buildAnthropicToolHistory(previousTurns)],
+        messages: [
+          { role: "user", content: message },
+          ...buildAnthropicToolHistory(historyTurns),
+          ...buildAnthropicToolHistory(previousTurns),
+        ],
         stream: false,
         ...(anthropicTools?.length ? { tools: anthropicTools } : {}),
       };
@@ -327,6 +336,7 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
         system_instruction: { parts: [{ text: system }] },
         contents: [
           { role: "user", parts: [{ text: message }] },
+          ...buildGeminiToolHistory(historyTurns),
           ...buildGeminiToolHistory(previousTurns),
         ],
         ...(geminiTools?.length ? { tools: geminiTools } : {}),
@@ -344,6 +354,7 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
           { role: "system", content: system },
           { role: "user", content: message },
           // Round-trip `reasoning_content` (qwen3 thinking…) — inerte si absent.
+          ...buildOpenAIToolHistory(historyTurns, { includeReasoning: true }),
           ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
         ],
         stream: false,
@@ -365,6 +376,7 @@ export async function callAiProxyTauri(payload: Record<string, unknown>): Promis
           // Round-trip `reasoning_content` (DeepSeek reasoner / thinking via
           // openrouter, custom, grok...). Champ ajouté uniquement s'il existe
           // dans le tour → inerte pour les modèles sans reasoning.
+          ...buildOpenAIToolHistory(historyTurns, { includeReasoning: true }),
           ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
         ],
         stream: false,

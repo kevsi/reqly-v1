@@ -16,6 +16,8 @@ export interface OpenAICompatBody {
   tools?: Record<string, unknown>[];
   tool_choice?: string | Record<string, unknown>;
   previousTurns?: PreviousTurn[];
+  /** Tours des messages précédents (mémoire inter-messages), AVANT le message courant. */
+  historyTurns?: PreviousTurn[];
   openaiUrl?: string;
 }
 
@@ -64,6 +66,7 @@ export async function handleOpenAICompat(
   const tools = Array.isArray(body.tools) ? (body.tools as Record<string, unknown>[]) : undefined;
   const toolChoice = body.tool_choice as string | Record<string, unknown> | undefined;
   const previousTurns = body.previousTurns as PreviousTurn[] | undefined;
+  const historyTurns = body.historyTurns as PreviousTurn[] | undefined;
 
   if (!apiKey) {
     return structuredError("Missing API key", "MISSING_API_KEY", 400);
@@ -111,6 +114,7 @@ export async function handleOpenAICompat(
         // Round-trip `reasoning_content` (DeepSeek reasoner / thinking via
         // openrouter, custom, grok...). Le champ n'est ajouté que si le tour
         // en contient réellement, donc inerte pour les modèles sans reasoning.
+        ...buildOpenAIToolHistory(historyTurns, { includeReasoning: true }),
         ...buildOpenAIToolHistory(previousTurns, { includeReasoning: true }),
       ],
     }),

@@ -13,6 +13,8 @@ export interface GeminiBody {
   stream?: boolean;
   tools?: Record<string, unknown>[];
   previousTurns?: PreviousTurn[];
+  /** Tours des messages précédents (mémoire inter-messages), AVANT le message courant. */
+  historyTurns?: PreviousTurn[];
 }
 
 export interface ExtraOptions {
@@ -106,6 +108,7 @@ export async function handleGemini(
   const message = body.message ?? "";
   const tools = Array.isArray(body.tools) ? (body.tools as Record<string, unknown>[]) : undefined;
   const previousTurns = body.previousTurns as PreviousTurn[] | undefined;
+  const historyTurns = body.historyTurns as PreviousTurn[] | undefined;
 
   if (!apiKey) {
     return structuredError("Missing API key", "MISSING_API_KEY", 400);
@@ -147,7 +150,11 @@ export async function handleGemini(
     signal: extra.signal,
     body: JSON.stringify({
       system_instruction: { parts: [{ text: system }] },
-      contents: [{ parts: [{ text: message }] }, ...buildGeminiToolHistory(previousTurns)],
+      contents: [
+        { parts: [{ text: message }] },
+        ...buildGeminiToolHistory(historyTurns),
+        ...buildGeminiToolHistory(previousTurns),
+      ],
       ...(geminiTools?.length ? { tools: geminiTools } : {}),
     }),
   });

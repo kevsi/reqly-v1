@@ -69,6 +69,15 @@ export interface StreamLLMOptions {
     assistantToolCalls: ToolCall[];
     toolResults: ToolResult[];
   }>;
+  /**
+   * Tours d'outils des messages PRÉCÉDENTS de la conversation (mémoire
+   * inter-messages). Passés au provider AVANT le message courant — distinct
+   * de `previousTurns` qui ne couvre que le send en cours.
+   */
+  historyTurns?: Array<{
+    assistantToolCalls: ToolCall[];
+    toolResults: ToolResult[];
+  }>;
   /** Chunks RAG (résultats de recherche sémantique) injectés dans le prompt. */
   retrievedChunks?: RetrievedChunk[];
   /** Override du prompt système (défaut: SYSTEM_PROMPT). */
@@ -170,6 +179,7 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
           tools: openAITools,
           tool_choice: opts.tool_choice,
           previousTurns: opts.previousTurns,
+          historyTurns: opts.historyTurns,
         }),
         opts.signal,
       );
@@ -210,6 +220,10 @@ async function* streamLLMInternal(opts: StreamLLMOptions): AsyncIterable<LLMToke
 
   if (opts.previousTurns && opts.previousTurns.length > 0) {
     body.previousTurns = opts.previousTurns;
+  }
+
+  if (opts.historyTurns && opts.historyTurns.length > 0) {
+    body.historyTurns = opts.historyTurns;
   }
 
   const res = await fetch("/api/proxy-ai", {

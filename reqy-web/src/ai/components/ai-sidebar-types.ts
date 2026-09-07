@@ -37,6 +37,21 @@ export interface Artifact {
  */
 export type ChatMessagePhase = "tool_calling" | "awaiting_response" | "streaming" | "done";
 
+/**
+ * Un tour d'outils exécuté par l'assistant : les appels émis et leurs
+ * résultats. Même forme que `PreviousTurn` côté providers (llm-tools) —
+ * conservé sur le message assistant pour reconstruire la mémoire
+ * inter-messages (sinon le modèle ne sait pas ce qu'il a déjà fait au tour
+ * précédent : créations dupliquées, re-salutations…).
+ */
+export interface ChatMessageTurn {
+  assistantToolCalls: Array<{ id: string; name: string; arguments: string }>;
+  /** Même forme que ToolResult (llm-tools) : { callId, name, content, error? }. */
+  toolResults: Array<{ callId: string; name: string; content: string; error?: string }>;
+  /** `reasoning_content` (DeepSeek thinking) — round-trip obligatoire. */
+  reasoningContent?: string;
+}
+
 export interface ChatMessage {
   /** Identifiant stable utilisé comme key React (généré à l'envoi si absent). */
   id?: string;
@@ -48,6 +63,8 @@ export interface ChatMessage {
   files?: FileAttachment[];
   /** Artefacts extraits de la réponse assistant (cartes + panneau aperçu). */
   artifacts?: Artifact[];
+  /** Tours d'outils exécutés pour produire ce message (mémoire d'actions). */
+  turns?: ChatMessageTurn[];
   commandName?: string;
   usage?: AgentUsage;
   /** Phase de rendu du message assistant (voir `ChatMessagePhase`). */

@@ -38,6 +38,10 @@ const PROVIDERS_WITH_API_KEY = new Set([
 
 const MAX_PREVIOUS_TURNS = 5;
 const MAX_PREVIOUS_TURNS_BYTES = 200 * 1024;
+// Mémoire inter-messages : plus large que le send courant (toute la
+// conversation), mais plafonnée pour borner le payload chez les providers.
+const MAX_HISTORY_TURNS = 40;
+const MAX_HISTORY_TURNS_BYTES = 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const rateKey = getRateLimitKey(req);
@@ -105,6 +109,40 @@ export async function POST(req: NextRequest) {
     return structuredError(
       `Previous turns exceed maximum size of ${MAX_PREVIOUS_TURNS_BYTES} bytes`,
       "PREVIOUS_TURNS_TOO_LARGE",
+      413,
+    );
+  }
+
+  const historyTurns = Array.isArray(body.historyTurns) ? body.historyTurns : [];
+  if (historyTurns.length > MAX_HISTORY_TURNS) {
+    return structuredError(
+      `Too many history turns: maximum allowed is ${MAX_HISTORY_TURNS}`,
+      "TOO_MANY_HISTORY_TURNS",
+      400,
+    );
+  }
+  const historyBytes = historyTurns.reduce((sum: number, turn) => {
+    if (typeof turn !== "object" || turn === null) return sum;
+    const t = turn as {
+      assistantToolCalls?: Array<{ arguments?: unknown }>;
+      toolResults?: Array<{ content?: unknown; error?: unknown }>;
+      reasoningContent?: unknown;
+    };
+    let bytes = 0;
+    for (const c of Array.isArray(t.assistantToolCalls) ? t.assistantToolCalls : []) {
+      bytes += typeof c?.arguments === "string" ? c.arguments.length : 0;
+    }
+    for (const r of Array.isArray(t.toolResults) ? t.toolResults : []) {
+      bytes += typeof r?.content === "string" ? r.content.length : 0;
+      bytes += typeof r?.error === "string" ? r.error.length : 0;
+    }
+    bytes += typeof t.reasoningContent === "string" ? t.reasoningContent.length : 0;
+    return sum + bytes;
+  }, 0);
+  if (historyBytes > MAX_HISTORY_TURNS_BYTES) {
+    return structuredError(
+      `History turns exceed maximum size of ${MAX_HISTORY_TURNS_BYTES} bytes`,
+      "HISTORY_TURNS_TOO_LARGE",
       413,
     );
   }
